@@ -6,12 +6,258 @@
 
 新线程启动时按顺序做：
 
-1. 阅读 `G:\Codex\program\AGENT.MD`。
+1. 阅读 `G:\Codex\program\rfc-rag-agent\AGENT.MD`。
 2. 如果项目目录已经创建，继续阅读项目内的 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
 3. 检查当前目录结构和 Git 状态，确认用户已有改动，不要覆盖用户工作。
 4. 根据本文件里的路线，判断当前处于哪个阶段，再继续推进。
 
 本文件的作用不是一次性定死所有细节，而是给“从零搭建堆石混凝土问答 Agent”提供稳定方向。
+
+## 协作与教学原则
+
+本项目是用户的第一个完整工程项目。后续开发不能只“把代码写出来”，还要让用户真正理解项目为什么这样设计、代码怎样运行、面试时怎样讲清楚。
+
+默认协作方式：
+
+- 每推进一个功能，都先说明本步骤解决的业务问题、在 RAG 链路中的位置，以及为什么现在做它。
+- 解释关键代码时，用清晰中文讲清楚输入、处理过程、输出和边界条件。
+- 任何新名词第一次出现时，都要立刻用初学者能理解的方式解释，并结合本项目举例。不要假设用户已经知道 REST、HTTP、CI、ORM、向量库、embedding、chunk、schema、依赖注入等概念。
+- 遇到专业概念时，必须结合本项目解释。例如用“堆石混凝土资料片段”解释 chunk，用“问题和资料的语义距离”解释 embedding。
+- 如果连续出现多个新名词，先逐个短解释，再继续讲主线，避免概念堆叠。
+- 新词解释优先采用“是什么 -> 在本项目哪里出现 -> 有什么作用 -> 面试怎么说”的顺序。
+- 不把复杂概念一次性堆给用户。优先按“能跑通 -> 能理解 -> 能优化 -> 能面试表达”的顺序推进。
+- 每个阶段完成后，给出一段面试表达：这个阶段做了什么、为什么这么设计、可能被追问什么。
+- 重要技术选择要说明取舍。例如为什么第一阶段用 SQLite 而不是 PostgreSQL，为什么先做关键词检索再做向量检索。
+- 对高频面试点保持敏感，包括 FastAPI 分层、Pydantic 校验、数据库建模、文本切分、向量检索、召回与重排、引用溯源、拒答机制、评测指标和工程化部署。
+- 如果发现当前实现只是 demo，要明确指出离真实工程还差什么，并给出下一步最小改进。
+
+面试官视角的讲解模板：
+
+```text
+本步骤目标：
+新词解释：
+核心原理：
+在本项目中的实现：
+为什么不采用更复杂方案：
+常见面试追问：
+用户应该能说出的回答：
+```
+
+后续回答用户时，默认带有互联网大厂面试官视角：不仅关注功能是否可用，也关注模块边界、可维护性、可测试性、数据可信度、异常处理和可解释性。
+
+## 阶段开发与线程策略
+
+后续开发采用“一个大阶段一个主线程，一个大阶段一个分支”的方式推进。
+
+建议阶段分支命名：
+
+```text
+codex/phase-0-health-api
+codex/phase-1-document-ingestion
+codex/phase-2-vector-search
+codex/phase-3-cited-chat
+codex/phase-4-source-management
+codex/phase-5-frontend
+codex/phase-6-evaluation
+codex/phase-7-agent-tools
+```
+
+协作规则：
+
+- 同一阶段内尽量保持同一个线程，保证上下文连续。
+- 进入下一个大阶段时，新开线程，先阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md` 和 `docs/data_sources.md`。
+- 每个阶段结束时，必须更新 `README.md` 和 `docs/progress.md`。
+- 如果阶段改变了系统结构，也要更新 `docs/architecture.md`。
+- 阶段结束记录必须包含：完成内容、验证方式、遗留问题、下一阶段任务、面试表达。
+
+## Obsidian 知识库规则
+
+本项目必须维护一个 Obsidian 知识库，用来沉淀每个阶段的工程知识、面试知识和项目决策。
+
+知识库目录：
+
+```text
+obsidian-vault/
+```
+
+维护原则：
+
+- 每个阶段结束时，必须在 Obsidian 知识库中新增或更新对应阶段笔记。
+- 每个重要知识点都要单独成文，不要只写在阶段总结里。
+- 每个知识点必须标明：所属阶段、对应代码或文档位置、解决的问题、在项目中的作用、面试追问。
+- 每个知识点必须使用 Obsidian 双链连接到阶段页和分类页，例如 `[[阶段 0 - FastAPI 工程底座]]`、`[[后端工程]]`。
+- 阶段页要反向列出本阶段新增的知识点，方便复习。
+- 分类页要按主题收集知识点，例如后端工程、API 设计、配置管理、测试与验证、RAG 链路、数据工程、评测体系。
+- 如果某个知识点跨阶段复用，不要复制多份；更新原知识点，并在新阶段页中链接它。
+- 知识点表达要面向“以后面试能讲清楚”，避免只记录命令或流水账。
+- 如果阶段中出现新名词，要优先判断是否需要新增知识点笔记；至少要在相关知识点中解释它第一次出现时的含义和项目例子。
+
+推荐知识点模板：
+
+```text
+---
+stage:
+category:
+location:
+purpose:
+---
+
+# 知识点标题
+
+所属阶段：[[阶段 X - 阶段名称]]
+所属分类：[[分类名称]]
+相关位置：代码文件或文档路径
+
+## 它解决什么问题
+
+## 在本项目中怎么用
+
+## 新词解释
+
+## 为什么这样设计
+
+## 面试可能怎么问
+
+## 你应该怎么回答
+
+## 相关双链
+```
+
+## 参考项目：Quivr
+
+本项目整体工程框架参考本地 Quivr 项目：
+
+```text
+G:\Codex\program\quivr
+```
+
+Quivr 是一个成熟的 RAG core 项目，定位是把文件导入、解析、切分、向量化、检索、问答、引用来源、工作流配置等能力封装成可复用的“第二大脑”核心库。本项目不是复制 Quivr 代码，而是学习它的 RAG 工程拆分思路，并结合“水利工程堆石混凝土技术”这个垂直领域重新实现。
+
+新线程如果涉及架构设计、文档导入、检索、问答、工具调用或评测，应优先参考 Quivr 的相关模块，再判断本项目是否需要采用、简化或调整。
+
+### 从 Quivr 学到的核心框架
+
+Quivr 的关键结构：
+
+```text
+Brain
+  统一封装文件、storage、processor、vector store、embedder、LLM、chat history 和 RAG 问答
+
+storage
+  管理原始文件来源，例如本地文件、透明存储等
+
+processor
+  根据文件类型选择解析器，把 PDF/TXT/Markdown 等文件处理成 Document/chunk
+
+splitter
+  控制 chunk_size 和 chunk_overlap
+
+vector store
+  保存向量索引，默认可用 FAISS，也可以替换其他向量库
+
+LLMEndpoint
+  封装不同模型供应商和模型参数
+
+RetrievalConfig / IngestionConfig / WorkflowConfig
+  用配置控制导入、检索、rerank、历史过滤、问题重写、生成回答等流程
+
+RAG pipeline
+  典型流程是 filter_history -> rewrite -> retrieve -> generate_rag
+
+response metadata
+  回答不仅有 answer，还包含 citations、sources、followup_questions 等元数据
+```
+
+这些名词在本项目中的对应理解：
+
+```text
+Brain
+  Quivr 中的知识库对象。本项目后续可以对应为 KnowledgeBase 或 Corpus，不一定直接命名为 Brain。
+
+storage
+  原始资料存储。本项目会对应 data/raw、documents 表、source registry。
+
+processor
+  文件解析器。本项目会对应 ingestion/parser、cleaner、splitter。
+
+splitter
+  文本切分器。本项目会把堆石混凝土资料切成可检索、可引用的 chunk。
+
+vector store
+  向量库。本项目阶段 2 再接入 FAISS/Chroma 等。
+
+LLMEndpoint
+  模型调用封装。本项目会对应 ChatModelProvider 和 EmbeddingProvider，优先支持国产 OpenAI-compatible API。
+
+workflow
+  可配置流程。本项目早期先写清晰 service，等 RAG 稳定后再考虑复杂 workflow 或 Agent 工具编排。
+```
+
+### 本项目如何参考 Quivr
+
+参考方向：
+
+- 学习 Quivr 的“导入 -> 解析 -> 切分 -> 向量化 -> 检索 -> 生成回答 -> 返回来源”主链路。
+- 学习 Quivr 把 storage、processor、vector store、LLM endpoint 分开的模块边界。
+- 学习 Quivr 通过配置对象控制 ingestion 和 retrieval，而不是把参数散落在业务代码中。
+- 学习 Quivr 对多文件格式的 processor registry 思路，后续支持 Markdown/TXT/PDF/HTML 时可以借鉴。
+- 学习 Quivr 的 response metadata 思路，让回答天然携带 citations、sources、followup_questions 等结构。
+- 学习 Quivr 的 examples 和 tests 组织方式：核心能力要有最小示例和自动化测试。
+- 学习 Quivr 的工具扩展方向，例如 web search、tools、workflow，但本项目要等 RAG 稳定后再做 Agent 化。
+
+本项目不直接照搬：
+
+- 不直接复制 Quivr 代码。
+- 不一开始引入 LangGraph、复杂 workflow 或多工具调用。
+- 不默认绑定 OpenAI；本项目要优先支持国产大模型和 OpenAI-compatible API。
+- 不做通用 second brain，而是聚焦堆石混凝土和水利工程资料。
+- 不只依赖向量库保存内容；本项目必须同时保存 SQLite 元数据，方便引用溯源、质量检查和错误排查。
+
+### 当前对齐情况
+
+阶段 0 当前已对齐 Quivr 的工程思想：
+
+- 有清晰入口：`app/main.py`。
+- 有 API 分层：`app/api/health.py`。
+- 有 schema 分层：`app/schemas/health.py`。
+- 有集中配置：`app/core/config.py`。
+- 有自动化测试：`tests/test_health.py`。
+- 有文档和知识库沉淀：`README.md`、`docs/progress.md`、`obsidian-vault/`。
+
+阶段 0 尚未实现 Quivr 的 RAG 核心链路，这是正常的。后续阶段按以下方式逐步对齐：
+
+```text
+阶段 1
+  对齐 Quivr storage / processor / splitter 的思想
+  实现本地 Markdown/TXT 导入、清洗、chunk 切分、SQLite 元数据保存和关键词检索
+
+阶段 2
+  对齐 Quivr vector store / embedder 的思想
+  接入 embedding provider 和向量检索
+
+阶段 3
+  对齐 Quivr RAG pipeline / LLMEndpoint / response metadata 的思想
+  实现引用式问答、来源返回和拒答机制
+
+阶段 4
+  对齐 Quivr storage 扩展和 source 管理思想
+  建立公开资料采集、source registry、原文保存和去重机制
+
+阶段 6
+  借鉴 Quivr 的测试组织，补充检索与问答评测集
+
+阶段 7
+  借鉴 Quivr workflow/tools 思路，再做 Agent 工具调用
+```
+
+### 使用 Quivr 作为参考时的规则
+
+- 先理解 Quivr 的设计意图，再决定本项目是否需要采用。
+- 优先学习模块边界、数据流、配置方式和测试思路，不机械复制代码。
+- 每次借鉴 Quivr 的设计，都要说明本项目为什么采用、为什么简化、为什么调整。
+- 如果 Quivr 的实现与本项目垂直领域目标冲突，以本项目目标为准。
+- 如果新增架构明显参考 Quivr，必须在 `docs/architecture.md` 或 Obsidian 对应知识点中记录。
+- 面试表达时可以说“参考成熟 RAG 项目的工程拆分思路”，但要能讲清楚本项目自己的领域改造：国产模型、堆石混凝土资料、引用溯源、拒答机制和评测体系。
 
 ## 项目定位
 

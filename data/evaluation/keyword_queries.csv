@@ -1,0 +1,16 @@
+query_id,question,query,top_k,expected_title_terms,expected_content_terms,expected_source_types,notes
+construction_quality,堆石混凝土施工质量如何控制？,施工质量 堆石混凝土,8,堆石混凝土及堆石混凝土大坝|Quality Control and Instrumentation|compaction detection|Construction information management,,local_file|institutional_access_pdf|metadata_record,检查中文施工质量问题能否命中质量控制或密实度检测相关资料
+filling_capacity_cn,自密实混凝土填充堆石体空隙如何评价？,填充能力 自密实混凝土 堆石体,8,Filling Capacity|自密实混凝土充填堆石体|Filling Process,,local_file|open_access_pdf|metadata_record,检查中文填充能力和英文 filling capacity 的同义召回
+filling_capacity_en,How is filling capacity evaluated in rock-filled concrete?,filling capacity rock-filled concrete,8,Filling Capacity|filling capacity analysis,,local_file|open_access_pdf|metadata_record,检查英文填充能力主题
+thermal_control,堆石混凝土温升和水化热如何控制？,水化热 温升 堆石混凝土,8,绝热温升|Adiabatic Temperature Rise|Temperature Field|temperature,,local_file|open_access_pdf|metadata_record,检查中文温控词能否命中中英文温度场资料
+elastic_modulus,堆石混凝土弹性模量有哪些研究？,弹性模量 rock-filled concrete,8,elastic modulus|Elastic Modulus,,open_access_pdf|metadata_record,检查中文弹性模量与英文 elastic modulus 混合查询
+seismic_behavior,堆石混凝土坝抗震性能如何？,抗震 seismic behavior rock-filled concrete dam,8,Seismic Behavior|seismic analysis,,open_access_pdf|metadata_record,检查抗震/地震/seismic 同义词
+review_overview,堆石混凝土大坝综述和发展前景有哪些？,堆石混凝土 综述 next generation,8,Brief Review|Comprehensive insights|Research on Rock-Filled Concrete Dams: a Review,,local_file|open_access_pdf|metadata_record,检查综述类资料召回
+mesoscopic_modeling,堆石混凝土细观数值模拟有哪些方法？,细观 数值 模拟 堆石混凝土,8,Mesoscopic|meso-scale|3D mesoscopic|Lattice Boltzmann,,open_access_pdf|metadata_record,检查中文细观/数值/模拟到英文 mesoscopic/simulation 的召回
+cold_joint_shear,堆石混凝土层间冷缝剪切性能如何？,层间 冷缝 shear rock-filled concrete,8,cold joints|shear,,metadata_record,检查冷缝/层间/剪切主题
+peridynamics,rock-filled concrete peridynamics 全尺度细观模拟,peridynamics rock-filled concrete,8,Peridynamics|Full-Scale micromechanical,,open_access_pdf,检查英文专有方法 Peridynamics
+construction_management,RFC 大坝施工信息管理系统有哪些资料？,CIM4R construction information management,8,Construction information management system,,metadata_record,检查施工信息管理题录
+compactness_detection,堆石混凝土密实度检测有哪些方法？,密实度 检测 堆石混凝土,8,密实度检测|compaction detection|On-site experiment methods,,local_file|metadata_record,检查密实度/检测/compaction detection 主题
+dam_type_design,堆石混凝土大坝有哪些坝型设计？,堆石混凝土 大坝 坝型,8,Study on rock-fill concrete dam|Design of RFC|Rock-Filled Concrete Dam,,local_file|institutional_access_pdf|metadata_record,检查坝型和设计章节
+recycled_aggregate,再生骨料自密实堆石混凝土有哪些研究？,recycled aggregate self-compacting rock-filled concrete,8,Recycled Aggregates|recycled aggregate,,metadata_record,检查再生骨料方向
+quality_control_en,What quality control and instrumentation methods are used for RFC dams?,quality control instrumentation RFC dam,8,Quality Control and Instrumentation,,metadata_record,检查英文质量控制查询
