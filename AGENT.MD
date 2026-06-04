@@ -123,6 +123,142 @@ purpose:
 ## 相关双链
 ```
 
+## 参考项目：Quivr
+
+本项目整体工程框架参考本地 Quivr 项目：
+
+```text
+G:\Codex\program\quivr
+```
+
+Quivr 是一个成熟的 RAG core 项目，定位是把文件导入、解析、切分、向量化、检索、问答、引用来源、工作流配置等能力封装成可复用的“第二大脑”核心库。本项目不是复制 Quivr 代码，而是学习它的 RAG 工程拆分思路，并结合“水利工程堆石混凝土技术”这个垂直领域重新实现。
+
+新线程如果涉及架构设计、文档导入、检索、问答、工具调用或评测，应优先参考 Quivr 的相关模块，再判断本项目是否需要采用、简化或调整。
+
+### 从 Quivr 学到的核心框架
+
+Quivr 的关键结构：
+
+```text
+Brain
+  统一封装文件、storage、processor、vector store、embedder、LLM、chat history 和 RAG 问答
+
+storage
+  管理原始文件来源，例如本地文件、透明存储等
+
+processor
+  根据文件类型选择解析器，把 PDF/TXT/Markdown 等文件处理成 Document/chunk
+
+splitter
+  控制 chunk_size 和 chunk_overlap
+
+vector store
+  保存向量索引，默认可用 FAISS，也可以替换其他向量库
+
+LLMEndpoint
+  封装不同模型供应商和模型参数
+
+RetrievalConfig / IngestionConfig / WorkflowConfig
+  用配置控制导入、检索、rerank、历史过滤、问题重写、生成回答等流程
+
+RAG pipeline
+  典型流程是 filter_history -> rewrite -> retrieve -> generate_rag
+
+response metadata
+  回答不仅有 answer，还包含 citations、sources、followup_questions 等元数据
+```
+
+这些名词在本项目中的对应理解：
+
+```text
+Brain
+  Quivr 中的知识库对象。本项目后续可以对应为 KnowledgeBase 或 Corpus，不一定直接命名为 Brain。
+
+storage
+  原始资料存储。本项目会对应 data/raw、documents 表、source registry。
+
+processor
+  文件解析器。本项目会对应 ingestion/parser、cleaner、splitter。
+
+splitter
+  文本切分器。本项目会把堆石混凝土资料切成可检索、可引用的 chunk。
+
+vector store
+  向量库。本项目阶段 2 再接入 FAISS/Chroma 等。
+
+LLMEndpoint
+  模型调用封装。本项目会对应 ChatModelProvider 和 EmbeddingProvider，优先支持国产 OpenAI-compatible API。
+
+workflow
+  可配置流程。本项目早期先写清晰 service，等 RAG 稳定后再考虑复杂 workflow 或 Agent 工具编排。
+```
+
+### 本项目如何参考 Quivr
+
+参考方向：
+
+- 学习 Quivr 的“导入 -> 解析 -> 切分 -> 向量化 -> 检索 -> 生成回答 -> 返回来源”主链路。
+- 学习 Quivr 把 storage、processor、vector store、LLM endpoint 分开的模块边界。
+- 学习 Quivr 通过配置对象控制 ingestion 和 retrieval，而不是把参数散落在业务代码中。
+- 学习 Quivr 对多文件格式的 processor registry 思路，后续支持 Markdown/TXT/PDF/HTML 时可以借鉴。
+- 学习 Quivr 的 response metadata 思路，让回答天然携带 citations、sources、followup_questions 等结构。
+- 学习 Quivr 的 examples 和 tests 组织方式：核心能力要有最小示例和自动化测试。
+- 学习 Quivr 的工具扩展方向，例如 web search、tools、workflow，但本项目要等 RAG 稳定后再做 Agent 化。
+
+本项目不直接照搬：
+
+- 不直接复制 Quivr 代码。
+- 不一开始引入 LangGraph、复杂 workflow 或多工具调用。
+- 不默认绑定 OpenAI；本项目要优先支持国产大模型和 OpenAI-compatible API。
+- 不做通用 second brain，而是聚焦堆石混凝土和水利工程资料。
+- 不只依赖向量库保存内容；本项目必须同时保存 SQLite 元数据，方便引用溯源、质量检查和错误排查。
+
+### 当前对齐情况
+
+阶段 0 当前已对齐 Quivr 的工程思想：
+
+- 有清晰入口：`app/main.py`。
+- 有 API 分层：`app/api/health.py`。
+- 有 schema 分层：`app/schemas/health.py`。
+- 有集中配置：`app/core/config.py`。
+- 有自动化测试：`tests/test_health.py`。
+- 有文档和知识库沉淀：`README.md`、`docs/progress.md`、`obsidian-vault/`。
+
+阶段 0 尚未实现 Quivr 的 RAG 核心链路，这是正常的。后续阶段按以下方式逐步对齐：
+
+```text
+阶段 1
+  对齐 Quivr storage / processor / splitter 的思想
+  实现本地 Markdown/TXT 导入、清洗、chunk 切分、SQLite 元数据保存和关键词检索
+
+阶段 2
+  对齐 Quivr vector store / embedder 的思想
+  接入 embedding provider 和向量检索
+
+阶段 3
+  对齐 Quivr RAG pipeline / LLMEndpoint / response metadata 的思想
+  实现引用式问答、来源返回和拒答机制
+
+阶段 4
+  对齐 Quivr storage 扩展和 source 管理思想
+  建立公开资料采集、source registry、原文保存和去重机制
+
+阶段 6
+  借鉴 Quivr 的测试组织，补充检索与问答评测集
+
+阶段 7
+  借鉴 Quivr workflow/tools 思路，再做 Agent 工具调用
+```
+
+### 使用 Quivr 作为参考时的规则
+
+- 先理解 Quivr 的设计意图，再决定本项目是否需要采用。
+- 优先学习模块边界、数据流、配置方式和测试思路，不机械复制代码。
+- 每次借鉴 Quivr 的设计，都要说明本项目为什么采用、为什么简化、为什么调整。
+- 如果 Quivr 的实现与本项目垂直领域目标冲突，以本项目目标为准。
+- 如果新增架构明显参考 Quivr，必须在 `docs/architecture.md` 或 Obsidian 对应知识点中记录。
+- 面试表达时可以说“参考成熟 RAG 项目的工程拆分思路”，但要能讲清楚本项目自己的领域改造：国产模型、堆石混凝土资料、引用溯源、拒答机制和评测体系。
+
 ## 项目定位
 
 暂定项目名：
