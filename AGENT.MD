@@ -21,6 +21,52 @@
 RFC-RAG-Agent
 ```
 
+## GitHub 仓库信息
+
+本项目已经连接到 GitHub。
+
+```text
+GitHub 仓库: https://github.com/CxcTHU/rfc-rag-agent
+仓库名: CxcTHU/rfc-rag-agent
+可见性: private
+默认分支: main
+本地路径: G:\Codex\program\rfc-rag-agent
+远程名称: origin
+远程地址: https://github.com/CxcTHU/rfc-rag-agent.git
+```
+
+新线程如果需要确认连接状态，进入项目目录后检查：
+
+```powershell
+git status -sb
+git remote -v
+```
+
+正常状态应显示：
+
+```text
+main...origin/main
+origin https://github.com/CxcTHU/rfc-rag-agent.git
+```
+
+以后新增功能时，优先从 `main` 新建功能分支，例如：
+
+```text
+feature/health-api
+feature/document-ingestion
+feature/vector-search
+feature/cited-chat
+```
+
+如果用户需要同时推进多个功能，可以把新分支派生到新的 Git worktree。新的 worktree 应放在项目目录外，例如：
+
+```text
+G:\Codex\program\rfc-rag-agent-health
+G:\Codex\program\rfc-rag-agent-ingestion
+```
+
+不要把 worktree 创建在 `G:\Codex\program\rfc-rag-agent` 内部，避免目录嵌套混乱。
+
 中文定位：
 
 ```text
@@ -818,16 +864,18 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
+项目目录和 GitHub 仓库已经创建完成。
+
 下一步最适合做：
 
 ```text
-创建 G:\Codex\program\rfc-rag-agent
-初始化 FastAPI 项目骨架
+在 G:\Codex\program\rfc-rag-agent 初始化 FastAPI 项目骨架
 实现 GET /health
-创建 README.md、.env.example、docs/progress.md
+补充 requirements.txt 或 pyproject.toml
+补充最小测试
+更新 README.md 和 docs/progress.md
 ```
 
 第一步不要急着爬虫，也不要急着接大模型。
 
 先把可持续扩展的工程地基搭好。
-
