@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     app_env: str = "development"
     database_url: str = "sqlite:///./data/app.sqlite"
+    raw_data_dir: str = "data/raw"
 
     chat_model_provider: str = ""
     chat_model_name: str = ""

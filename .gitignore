@@ -21,6 +21,7 @@ data/raw/
 data/processed/
 data/indexes/
 data/exports/
+data/fulltext/
 *.sqlite
 *.db
 
