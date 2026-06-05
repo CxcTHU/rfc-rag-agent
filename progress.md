@@ -184,11 +184,46 @@
   - `findings.md` modified
   - `progress.md` modified
 
+### Phase 6: 阶段收尾文档、Obsidian、提交与 tag
+- **Status:** complete
+- **Started:** 2026-06-05
+- Phase 目标：
+  - 同步阶段 5 文档、知识库和后续默认路线。
+  - 创建阶段 5 最终功能提交。
+  - 创建 `phase-5-complete` tag 并确认指向最终功能提交。
+- Actions taken:
+  - 更新 `README.md`，说明阶段 5 前端工作台、启动方式、测试数量和阶段 5 面试表达。
+  - 更新 `docs/progress.md`，新增阶段 5 完成记录、验证结果、遗留问题、下一阶段任务和面试表达。
+  - 更新 `docs/architecture.md`，新增阶段 5 前端总体框架、目录结构、数据流和设计边界。
+  - 更新 `docs/data_sources.md`，说明 source registry 在前端中的展示和操作入口。
+  - 更新 `AGENT.MD`，把后续默认起点校准为阶段 6：检索优化与评测。
+  - 更新本地 Obsidian 知识库：首页、阶段索引、阶段 5 页面、前端工程分类和阶段 5 知识点。
+  - 运行阶段收尾全量测试：126 passed。
+  - 创建阶段最终功能提交 `8c885e6cc714cc985933438697a7eb2523b26722`。
+  - 创建 `phase-5-complete` tag，并确认 tag 指向阶段最终功能提交。
+- Files created/modified:
+  - `README.md` modified
+  - `docs/progress.md` modified
+  - `docs/architecture.md` modified
+  - `docs/data_sources.md` modified
+  - `AGENT.MD` modified
+  - `obsidian-vault/首页.md` modified locally
+  - `obsidian-vault/阶段索引.md` modified locally
+  - `obsidian-vault/分类索引.md` modified locally
+  - `obsidian-vault/阶段/阶段 5 - 前端界面.md` modified locally
+  - `obsidian-vault/分类/前端工程.md` created locally
+  - `obsidian-vault/知识点/FastAPI 静态前端入口.md` created locally
+  - `obsidian-vault/知识点/前端 API 契约与工作台.md` created locally
+  - `obsidian-vault/知识点/浏览器验证.md` created locally
+  - `task_plan.md` modified
+  - `findings.md` modified
+  - `progress.md` modified
+
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 0 complete，当前分支 `codex/phase-5-frontend` |
-| Where am I going? | 阶段 5 前端界面：来源/资料工作台、聊天问答、引用侧栏、检索片段、sync/reindex、浏览器验证、文档收尾 |
-| What's the goal? | 让非技术用户能通过浏览器查看资料、管理来源、提问并核验引用 |
-| What have I learned? | 现有 API 已足够支撑第一版前端；阶段 5 应薄前端、重展示和交互，不搬运后端业务规则 |
-| What have I done? | 改线程名、确认阶段 4 tag、创建阶段 5 分支、阅读文档和 API schema、重写三份 planning 文件 |
+| Where am I? | Phase 6 complete，当前分支 `codex/phase-5-frontend` |
+| Where am I going? | 阶段 5 已完成；下一大阶段是阶段 6 检索优化与评测 |
+| What's the goal? | 已完成阶段 5 前端界面：来源/资料工作台、聊天问答、引用侧栏、检索片段、sync/reindex、浏览器验证、文档收尾 |
+| What have I learned? | 现有 API 足够支撑第一版前端；薄前端能让用户看见 RAG 链路，同时保持后端业务边界清楚 |
+| What have I done? | 完成静态前端入口、工作台、来源/资料展示、chunk 查看、检索、聊天引用侧栏、sync/reindex 入口、浏览器验证、全量测试 126 passed、文档和 Obsidian 收尾、提交与 tag |

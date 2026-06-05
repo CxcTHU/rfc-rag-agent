@@ -1141,7 +1141,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3、阶段 4 和阶段 5 已完成。阶段 5 当前在 `codex/phase-5-frontend` 分支完成开发和验证，等待阶段收尾提交与 tag。
+阶段 0、阶段 1、阶段 2、阶段 3、阶段 4 和阶段 5 已完成。阶段 5 当前在 `codex/phase-5-frontend` 分支完成开发、验证、提交和 tag。
 
 阶段 4 最终提交和 tag：
 
@@ -1173,6 +1173,15 @@ app/frontend/static/styles.css
 触发单条 source reindex
 浏览器桌面和移动视口验证
 ```
+
+阶段 5 最终功能提交和 tag：
+
+```text
+commit: 8c885e6cc714cc985933438697a7eb2523b26722
+tag: phase-5-complete
+```
+
+不要移动 `phase-5-complete`。如果阶段 5 后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
 当前最权威的进度依据是：
 

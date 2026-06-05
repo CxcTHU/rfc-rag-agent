@@ -20,7 +20,9 @@
 
 阶段 4 tag：`phase-4-complete`，已推送到 GitHub，并指向上述提交。
 
-阶段 5 完成后会创建 tag：`phase-5-complete`。
+阶段 5 最终功能提交：`8c885e6cc714cc985933438697a7eb2523b26722`。
+
+阶段 5 tag：`phase-5-complete`，指向上述提交。
 
 下一阶段准备进入：阶段 6，检索优化与评测。
 
