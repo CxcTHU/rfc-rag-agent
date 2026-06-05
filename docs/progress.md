@@ -2,15 +2,17 @@
 
 ## 最新状态：2026-06-05
 
-当前阶段：阶段 4，数据采集与来源管理已完成。下一步准备进入阶段 5：前端界面。
+当前阶段：阶段 5，前端界面已完成。下一步准备进入阶段 6：检索优化与评测。
 
 当前关键证据：
 
 - `task_plan.md` 当前阶段为 `Phase 6 complete`，阶段 4 已完成。
-- 当前分支：`codex/phase-4-source-management`。
+- 当前分支：`codex/phase-5-frontend`。
 - 阶段 3 tag：`phase-3-complete -> 7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954`，未移动。
 - 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 - 阶段 4 tag：`phase-4-complete -> b044459b9b8c2153e9225daa55af5d82cdcdb282`。
+- 阶段 5 最终功能提交：`8c885e6cc714cc985933438697a7eb2523b26722`。
+- 阶段 5 tag：`phase-5-complete -> 8c885e6cc714cc985933438697a7eb2523b26722`。
 - 阶段 4 分支和 tag 已推送到 GitHub。
 - `sources` 来源登记表已实现。
 - `SourceRepository` 和 `SourceRegistryService` 已实现。
@@ -35,14 +37,89 @@
 - 向量检索评测：11/15 通过。
 - 关键词 baseline：15/15 通过。
 - Chat 评测：6/6 通过。
-- 全量测试：123 个测试通过。
+- 前端工作台已实现：来源管理、资料列表、chunk 查看、关键词/向量检索、聊天问答、引用来源侧栏、source sync 和 source reindex 入口。
+- 浏览器验证：桌面加载 sources=125、documents=136、chunks=997；移动视口 390x844 无横向溢出。
+- 全量测试：126 个测试通过。
 
 下一步：
 
-- 阶段 4 分支 `codex/phase-4-source-management` 已完成核心开发与验证。
-- 阶段 4 已创建 `phase-4-complete` tag，tag 指向阶段 4 最终功能提交。
-- 下一阶段进入阶段 5：前端界面。
-- 阶段 5 建议做资料管理界面、聊天界面、引用来源侧栏和 source registry 可视化入口。
+- 阶段 5 分支 `codex/phase-5-frontend` 已完成核心开发与验证。
+- 阶段 5 已创建 `phase-5-complete` tag，tag 指向阶段 5 最终功能提交。
+- 下一阶段进入阶段 6：检索优化与评测。
+- 阶段 6 建议做混合检索、rerank、评测计划、错误案例分析和指标对比。
+
+## 2026-06-05 阶段 5 完成记录：前端界面
+
+当前分支：`codex/phase-5-frontend`
+
+当前阶段：阶段 5 已完成。下一步准备进入阶段 6：检索优化与评测。
+
+阶段最终功能提交：`8c885e6cc714cc985933438697a7eb2523b26722`
+
+阶段 tag：`phase-5-complete`，已指向阶段最终功能提交。
+
+已完成：
+
+- 使用 Planning with Files 维护阶段 5 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 确认阶段 4 已完成，且 `phase-4-complete` tag 指向 `b044459b9b8c2153e9225daa55af5d82cdcdb282`，未移动已有阶段 tag。
+- 新增 `app/api/frontend.py`，提供 `GET /` 前端入口和 `/favicon.ico` 空响应。
+- 在 `app/main.py` 中注册 frontend router，并挂载 `/static` 静态资源。
+- 新增 `app/frontend/index.html`、`app/frontend/static/styles.css`、`app/frontend/static/app.js`。
+- 前端工作台展示 sources、documents、状态、可信度、全文权限、年份、分类、URL/DOI 和 chunk 数量。
+- 支持来源关键词、状态和全文权限筛选。
+- 支持查看 document chunks。
+- 支持关键词检索和向量检索。
+- 支持调用 `POST /chat` 提问，展示 answer、citations、sources、refused、retrieval_mode 和模型信息。
+- 支持引用来源侧栏，展示 document title、chunk、score、source_path 和片段内容。
+- 支持 source sync 操作入口和单条 source reindex 操作入口。
+- 新增 `tests/test_frontend_app.py`，验证首页、静态资源、favicon 和关键前端入口。
+
+阶段 5 设计结论：
+
+- 第一版前端采用 FastAPI 静态文件 + 原生 HTML/CSS/JS，不引入 Node/React 构建链。
+- 前端是薄展示层，只调用现有 API，不重写来源治理、检索或问答业务逻辑。
+- 首页直接是 RAG 工作台，不做营销 landing page。
+- sources 和 documents 并列展示，帮助用户理解“来源治理”和“已入库内容”不是同一层。
+- reindex 操作会提示必要时刷新向量索引，避免用户误以为 reindex 自动提升语义检索质量。
+
+验证结果：
+
+- `python -m pytest tests\test_frontend_app.py -q`：3 个测试通过。
+- `python -m pytest tests\test_frontend_app.py tests\test_sources_api.py tests\test_documents_api.py -q`：9 个测试通过。
+- `python -m pytest tests\test_frontend_app.py tests\test_chat_api.py tests\test_answer_service.py -q`：14 个测试通过。
+- `python -m pytest tests\test_frontend_app.py tests\test_search_api.py tests\test_vector_search_api.py tests\test_documents_api.py tests\test_sources_api.py -q`：13 个测试通过。
+- 浏览器验证桌面页面：sources=125、documents=136、chunks=997。
+- 浏览器验证来源筛选：`temperature` -> `7 / 125`。
+- 浏览器验证 chunk 查看：document 1 显示 1 个 chunk。
+- 浏览器验证关键词检索：`filling capacity` 返回 5 条结果。
+- 浏览器验证聊天：问题 `What affects filling capacity in rock-filled concrete?` 返回回答和 5 条引用。
+- 浏览器验证 reindex 错误处理：不存在 source 返回可理解错误。
+- 浏览器验证移动视口：390x844 下无横向溢出。
+- `python -m pytest -q`：126 个测试通过。
+
+遗留问题：
+
+- 阶段 5 使用原生前端，适合当前最小工作台；如果后续交互复杂度提高，可迁移到 React/Next.js。
+- 浏览器验证没有执行真实 source reindex 成功路径，避免验证时改动资料库；已验证入口和错误处理。
+- 当前没有上传界面；阶段 5 优先完成资料查看、来源管理、检索和问答。
+- 当前没有后台任务队列，source sync/reindex 仍是同步请求。
+
+下一阶段任务：
+
+- 阶段 6 进入检索优化与评测。
+- 建议建立 `docs/evaluation_plan.md`。
+- 继续复用关键词、向量、chat 评测集，补充错误案例分析。
+- 优先考虑混合检索、rerank、真实 embedding 或 query expansion。
+
+面试表达：
+
+```text
+阶段 5 我补齐了 RAG 系统的前端工作台。
+
+我没有只做聊天框，而是把 sources、documents、chunks、search 和 chat 都串到一个界面里。用户可以先看资料来源是否可信、是否允许保存全文、是否已经入库，再查看资料片段、执行检索，最后通过聊天界面看到回答和引用来源侧栏。
+
+技术上我采用 FastAPI 静态文件加原生 HTML/CSS/JS，避免在当前 Python 项目里过早引入复杂构建链。前端只负责展示、筛选和调用 API，来源治理、检索和问答仍放在后端 service。阶段 5 通过了浏览器验证和 126 个自动化测试，为后续检索优化和 Agent 工具调用提供了可操作入口。
+```
 
 ## 2026-06-05 阶段 4 完成记录：数据采集与来源管理
 

@@ -16,6 +16,7 @@
 -> 组织上下文
 -> 大模型回答
 -> 返回答案和引用来源
+-> 前端工作台展示和操作
 ```
 
 ## 初始分层
@@ -27,6 +28,7 @@ Service 层：导入、切分、检索、问答业务逻辑
 DB 层：文档、chunk、问答日志元数据
 Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
 Model Provider 层：聊天模型和 embedding 模型适配
+Frontend 层：来源、资料、检索、问答和引用来源展示
 ```
 
 ## 第一阶段原则
@@ -1000,5 +1002,127 @@ sources 表可创建
 sources API 可查询、同步和 reindex
 来源评测脚本可运行
 documents/search/vector/chat 测试不被破坏
+全量自动化测试通过
+```
+
+## 阶段 5 总体框架
+
+阶段 5 的目标是把阶段 1-4 的后端能力变成非技术用户可操作的浏览器工作台：
+
+```text
+FastAPI
+-> GET /
+-> app/frontend/index.html
+-> app/frontend/static/app.js
+-> 调用 sources/documents/search/chat API
+-> 浏览器展示来源、资料、片段、检索结果、回答和引用
+```
+
+阶段 5 不做：
+
+- Agent 工具调用。
+- 复杂 LangGraph workflow。
+- 登录系统。
+- 部署平台优化。
+- 检索质量优化。
+
+这些内容放到阶段 6 和阶段 7。
+
+### 前端目录
+
+```text
+app/
+  api/
+    frontend.py
+  frontend/
+    index.html
+    static/
+      app.js
+      styles.css
+```
+
+`app/api/frontend.py` 提供：
+
+```text
+GET /
+GET /favicon.ico
+```
+
+`app/main.py` 使用 `StaticFiles` 挂载：
+
+```text
+/static -> app/frontend/static
+```
+
+### 前端数据流
+
+```text
+页面加载
+-> GET /health
+-> GET /sources
+-> GET /documents
+-> 渲染概览指标、来源表、资料表
+```
+
+来源管理：
+
+```text
+GET /sources
+-> 浏览器端关键词 / 状态 / 全文权限筛选
+-> sources 表格
+```
+
+资料管理：
+
+```text
+GET /documents
+-> documents 表格
+-> 点击 chunks
+-> GET /documents/{document_id}/chunks
+-> chunks 面板
+```
+
+检索：
+
+```text
+POST /search 或 POST /search/vector
+-> result cards
+```
+
+问答：
+
+```text
+POST /chat
+-> answer
+-> citations
+-> sources sidebar
+```
+
+来源操作：
+
+```text
+POST /sources/sync
+POST /sources/{source_id}/reindex
+```
+
+### 前端设计边界
+
+- 前端只负责展示、筛选、发起 API 请求和反馈状态。
+- 来源去重、可信度、权限、reindex、检索和问答仍由后端 service 负责。
+- 第一版使用原生 HTML/CSS/JS，避免阶段 5 过早引入 Node 构建链。
+- 首页就是工作台，不做 landing page。
+- 桌面和移动视口都要保持可读，不出现横向溢出。
+
+### 阶段 5 完成标准
+
+```text
+GET / 可访问
+静态 CSS/JS 可访问
+sources 和 documents 可展示
+document chunks 可查看
+keyword/vector search 可触发
+chat 可触发并展示引用来源
+source sync/reindex 有操作入口和反馈
+浏览器桌面与移动视口验证通过
 全量自动化测试通过
 ```
