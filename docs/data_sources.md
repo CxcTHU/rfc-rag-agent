@@ -148,3 +148,28 @@ POST /sources/{source_id}/reindex
 - `documents/chunks` 管“这条资料实际进入 RAG 检索后的正文和片段”。
 - `fulltext_permission` 与 `trust_level` 分开记录，避免把版权/授权问题和来源质量混在一起。
 - 对受限全文，保留题录、摘要、合法来源链接和本地授权路径，不公开分发全文。
+
+## 前端展示入口
+
+阶段 5 已新增前端工作台：
+
+```text
+GET /
+```
+
+来源相关界面能力：
+
+- 查看 `sources` 列表。
+- 按关键词、状态、全文保存权限筛选来源。
+- 查看来源可信度、全文权限、年份、分类、URL/DOI 和 `document_id`。
+- 触发 `POST /sources/sync` 同步现有来源文件。
+- 触发 `POST /sources/{source_id}/reindex` 重新导入单条来源。
+
+资料相关界面能力：
+
+- 查看 `documents` 列表。
+- 查看每篇资料的 chunk 数量。
+- 点击资料查看 `documents/{document_id}/chunks`。
+- 在聊天引用侧栏中核验回答依据的具体 chunk。
+
+阶段 5 的界面不改变数据来源合规边界：受限全文仍不公开分发，前端只展示本地系统已登记或已导入的来源和片段。

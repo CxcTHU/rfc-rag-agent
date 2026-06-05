@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RFC RAG 工作台</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell" data-app-shell>
+      <section class="workspace-band">
+        <div class="workspace-header">
+          <div>
+            <p class="eyebrow">RFC-RAG-Agent</p>
+            <h1>堆石混凝土资料工作台</h1>
+          </div>
+          <div class="header-actions">
+            <div class="status-strip" aria-live="polite">
+              <span data-api-status>连接中</span>
+            </div>
+            <button class="secondary-button" type="button" data-sync-sources>同步来源</button>
+            <button class="command-button" type="button" data-refresh-all>刷新</button>
+          </div>
+        </div>
+
+        <div class="summary-grid" aria-label="资料库概览">
+          <div class="metric-tile">
+            <span class="metric-label">来源</span>
+            <strong data-metric="sourcesTotal">0</strong>
+          </div>
+          <div class="metric-tile">
+            <span class="metric-label">已收集</span>
+            <strong data-metric="sourcesCollected">0</strong>
+          </div>
+          <div class="metric-tile">
+            <span class="metric-label">已入库</span>
+            <strong data-metric="sourcesImported">0</strong>
+          </div>
+          <div class="metric-tile">
+            <span class="metric-label">资料</span>
+            <strong data-metric="documentsTotal">0</strong>
+          </div>
+          <div class="metric-tile">
+            <span class="metric-label">片段</span>
+            <strong data-metric="chunksTotal">0</strong>
+          </div>
+        </div>
+
+        <section class="toolbar-band" aria-label="来源筛选">
+          <label>
+            <span>关键词</span>
+            <input type="search" data-source-filter placeholder="题名 / DOI / URL" />
+          </label>
+          <label>
+            <span>状态</span>
+            <select data-status-filter>
+              <option value="">全部</option>
+              <option value="candidate">candidate</option>
+              <option value="collected">collected</option>
+              <option value="imported">imported</option>
+              <option value="duplicate">duplicate</option>
+              <option value="rejected">rejected</option>
+            </select>
+          </label>
+          <label>
+            <span>全文权限</span>
+            <select data-permission-filter>
+              <option value="">全部</option>
+              <option value="open_access">open_access</option>
+              <option value="institutional_access">institutional_access</option>
+              <option value="metadata_only">metadata_only</option>
+              <option value="unknown">unknown</option>
+            </select>
+          </label>
+        </section>
+
+        <div class="content-grid">
+          <section class="data-panel" aria-labelledby="sources-title">
+            <div class="panel-heading">
+              <h2 id="sources-title">来源</h2>
+              <span data-sources-count>0</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>题名</th>
+                    <th>状态</th>
+                    <th>可信度</th>
+                    <th>权限</th>
+                    <th>年份</th>
+                    <th>分类</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody data-sources-body>
+                  <tr>
+                    <td colspan="7" class="empty-cell">加载中</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="data-panel" aria-labelledby="documents-title">
+            <div class="panel-heading">
+              <h2 id="documents-title">资料</h2>
+              <span data-documents-count>0</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>题名</th>
+                    <th>类型</th>
+                    <th>文件</th>
+                    <th>状态</th>
+                    <th>片段</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody data-documents-body>
+                  <tr>
+                    <td colspan="6" class="empty-cell">加载中</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <div class="operations-grid">
+          <section class="data-panel" aria-labelledby="search-title">
+            <div class="panel-heading">
+              <h2 id="search-title">检索</h2>
+              <span data-search-count>0</span>
+            </div>
+            <form class="search-form" data-search-form>
+              <label class="question-field">
+                <span>查询</span>
+                <input type="search" data-search-query placeholder="filling capacity" required />
+              </label>
+              <div class="chat-controls">
+                <label>
+                  <span>模式</span>
+                  <select data-search-mode>
+                    <option value="keyword">keyword</option>
+                    <option value="vector">vector</option>
+                  </select>
+                </label>
+                <label>
+                  <span>数量</span>
+                  <input type="number" min="1" max="50" value="5" data-search-top-k />
+                </label>
+                <button class="command-button" type="submit">检索</button>
+              </div>
+            </form>
+            <div class="result-list" data-search-results>
+              <div class="empty-state">暂无结果</div>
+            </div>
+          </section>
+
+          <section class="data-panel" aria-labelledby="chunks-title">
+            <div class="panel-heading">
+              <h2 id="chunks-title">片段</h2>
+              <span data-chunks-count>0</span>
+            </div>
+            <div class="chunk-list" data-chunks-list>
+              <div class="empty-state">未选择资料</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="answer-grid">
+          <section class="data-panel" aria-labelledby="chat-title">
+            <div class="panel-heading">
+              <h2 id="chat-title">问答</h2>
+              <span data-chat-mode>auto</span>
+            </div>
+            <form class="chat-form" data-chat-form>
+              <label class="question-field">
+                <span>问题</span>
+                <textarea
+                  data-chat-question
+                  rows="4"
+                  placeholder="堆石混凝土和自密实混凝土有什么关系？"
+                  required
+                ></textarea>
+              </label>
+              <div class="chat-controls">
+                <label>
+                  <span>召回数</span>
+                  <input type="number" min="1" max="50" value="5" data-chat-top-k />
+                </label>
+                <label>
+                  <span>检索</span>
+                  <select data-chat-retrieval-mode>
+                    <option value="auto">auto</option>
+                    <option value="vector">vector</option>
+                    <option value="keyword">keyword</option>
+                  </select>
+                </label>
+                <label>
+                  <span>分数</span>
+                  <input type="number" min="0" step="0.05" value="0" data-chat-min-score />
+                </label>
+                <button class="command-button" type="submit" data-chat-submit>提问</button>
+              </div>
+            </form>
+            <article class="answer-box" data-answer-box>
+              <div class="empty-state">暂无回答</div>
+            </article>
+          </section>
+
+          <aside class="data-panel" aria-labelledby="citations-title">
+            <div class="panel-heading">
+              <h2 id="citations-title">引用</h2>
+              <span data-citations-count>0</span>
+            </div>
+            <div class="citation-list" data-citations-list>
+              <div class="empty-state">暂无引用</div>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

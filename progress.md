@@ -2,218 +2,184 @@
 
 ## Session: 2026-06-05
 
-### Phase 0: 阶段 4 启动与规划文件校准
+### Phase 0: 阶段 5 启动与规划文件校准
 - **Status:** complete
 - **Started:** 2026-06-05
+- Phase 目标：
+  - 从阶段 4 已完成并合并到主线的状态出发，建立阶段 5 的正确工作起点。
+  - 确认 tag、分支、文档和 API 现状。
+  - 将 Planning with Files 三份文件重写为阶段 5 工作记忆。
 - Actions taken:
-  - 使用 Codex 线程工具确认并重设当前线程标题为 `阶段4-数据采集与来源管理`。
-  - 检查当前 goal，确认本线程需要持续推进阶段 4 到完整完成。
-  - 确认当前分支为 `codex/phase-4-source-management`。
-  - 确认当前工作区干净。
-  - 确认 `phase-3-complete` tag 指向 `7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954`，且不移动该 tag。
-  - 确认当前 HEAD 为 `70cc39825d71aeb3efd8eea530c0d2c414444725`，阶段 4 分支从阶段 3 完成后的文档/流程状态切出。
+  - 使用 Codex 线程工具将当前线程标题修改为 `阶段5-前端界面`。
+  - 尝试创建 goal 时发现当前线程已有 goal，因此继续沿用当前目标推进。
+  - 使用 Planning with Files 技能并阅读其规则。
   - 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-  - 阅读 `docs/corpus_pipeline.md` 和 `docs/source_catalog.md`，确认已有公开资料候选、全文 manifest 和 metadata-first 管道。
-  - 按 Planning with Files 要求读取旧 `task_plan.md`、`findings.md`、`progress.md`。
-  - 运行 Planning with Files session catchup 脚本，未发现需要同步的额外上下文。
-  - 阅读 `app/db/models.py`、`app/db/repositories.py`、`app/services/source_collection.py`、`scripts/import_fulltext.py`、`scripts/collect_metadata_corpus.py`、`app/main.py` 和 `tests/test_source_collection.py`。
-  - 查看 `data/fulltext_manifest.csv`、`data/source_candidates.csv`、`data/metadata/rfc_papers_metadata.csv` 的表头与样例行。
-  - 将阶段 3 planning 文件重写为阶段 4 planning 文件。
+  - 阅读旧 `task_plan.md`、`findings.md`、`progress.md`，确认它们仍记录阶段 4 工作记忆。
+  - 确认 `main` 当前 HEAD 为 `beff907 merge phase 4 source management`。
+  - 确认 `phase-4-complete` 指向 `b044459b9b8c2153e9225daa55af5d82cdcdb282`。
+  - 确认工作区启动时干净。
+  - 创建并切换到 `codex/phase-5-frontend` 分支。
+  - 梳理阶段 5 需要调用的 API schema：sources、documents、search、vector search、chat。
+  - 将 `task_plan.md`、`findings.md`、`progress.md` 重写为阶段 5 工作记忆。
+  - 将 Phase 0 标记为 complete，下一步进入 Phase 1：前端架构与 API 契约。
 - Files created/modified:
-  - `task_plan.md` rewritten for Stage 4
-  - `findings.md` rewritten for Stage 4
-  - `progress.md` rewritten for Stage 4
+  - `task_plan.md` rewritten for Stage 5
+  - `findings.md` rewritten for Stage 5
+  - `progress.md` rewritten for Stage 5
 
-### Current Evidence
+## Current Evidence
 | Item | Evidence | Status |
 |------|----------|--------|
-| Thread title | `阶段4-数据采集与来源管理` | pass |
-| Branch | `codex/phase-4-source-management` | pass |
-| Phase 3 tag | `phase-3-complete -> 7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954` | pass |
-| Existing tests from phase 3 | `docs/progress.md` records `106 passed` | historical pass |
-| Source code baseline | `source_collection.py`, `collect_metadata_corpus.py`, `import_fulltext.py` inspected | pass |
-| Planning with Files | `task_plan.md`, `findings.md`, `progress.md` now describe Stage 4 | pass |
+| Thread title | `阶段5-前端界面` | pass |
+| Branch | `codex/phase-5-frontend` | pass |
+| Main status | `main -> beff907 merge phase 4 source management` | pass |
+| Phase 4 tag | `phase-4-complete -> b044459b9b8c2153e9225daa55af5d82cdcdb282` | pass |
+| Existing tests from phase 4 | `docs/progress.md` records `123 passed` | historical pass |
+| Planning with Files | `task_plan.md`, `findings.md`, `progress.md` now describe Stage 5 | pass |
 
 ## Test Results
 | Test | Input | Expected | Actual | Status |
 |------|-------|----------|--------|--------|
-| phase 0 git status check | branch/status inspection | on phase 4 branch, no user changes overwritten | `codex/phase-4-source-management` | pass |
-| phase 3 tag check | tag inspection | `phase-3-complete` remains on phase 3 final functional commit | `7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954` | pass |
-| planning file calibration | inspect rewritten files | reflect Stage 4 goal, phases, decisions and progress | Stage 4 files written | pass |
-| source repository tests | `python -m pytest tests\test_source_repository.py -q` | pass | 4 passed | pass |
-| source db compile | `python -m py_compile app\db\models.py app\db\repositories.py tests\test_source_repository.py` | pass | pass | pass |
-| existing db/repository regression | `python -m pytest tests\test_db_models.py tests\test_repositories.py -q` | pass | 5 passed | pass |
-| source registry service first run | `python -m pytest tests\test_source_registry_service.py -q` | pass | 1 failed, 4 passed | fail |
-| source registry service after fix | `python -m pytest tests\test_source_registry_service.py tests\test_source_repository.py -q` | pass | 9 passed | pass |
-| source registry compile | `python -m py_compile app\services\source_registry.py tests\test_source_registry_service.py` | pass | pass | pass |
-| source collection regression | `python -m pytest tests\test_source_collection.py -q` | pass | 9 passed | pass |
-| sync sources first run | `python -m pytest tests\test_sync_sources.py -q` | pass | 1 failed, 2 passed | fail |
-| sync sources after fix | `python -m pytest tests\test_sync_sources.py tests\test_source_registry_service.py -q` | pass | 8 passed | pass |
-| sync sources compile | `python -m py_compile app\services\source_registry.py scripts\sync_sources.py tests\test_sync_sources.py` | pass | pass | pass |
-| phase 3 source tests | `python -m pytest tests\test_sync_sources.py tests\test_source_registry_service.py tests\test_source_repository.py -q` | pass | 12 passed | pass |
-| real source sync smoke | `python scripts\sync_sources.py` | sync existing project source files | total=283, created=125, updated=132, duplicates=26 | pass |
-| real sources distribution | SQLite query over `sources` | source counts and distributions available | sources=125; status candidate=8/collected=117; permission institutional_access=2/metadata_only=110/open_access=10/unknown=3 | pass |
-| sources API tests | `python -m pytest tests\test_sources_api.py -q` | pass | 3 passed | pass |
-| source management combined tests | `python -m pytest tests\test_source_repository.py tests\test_source_registry_service.py tests\test_sync_sources.py tests\test_sources_api.py -q` | pass | 15 passed | pass |
-| sources API compile | `python -m py_compile app\api\sources.py app\schemas\source.py app\services\source_registry.py app\main.py tests\test_sources_api.py tests\test_sync_sources.py` | pass | pass | pass |
-| documents/chat API regression | `python -m pytest tests\test_documents_api.py tests\test_chat_api.py -q` | pass | 9 passed | pass |
-| source evaluation tests | `python -m pytest tests\test_evaluate_sources.py -q` | pass | 2 passed | pass |
-| source evaluation compile | `python -m py_compile scripts\evaluate_sources.py tests\test_evaluate_sources.py` | pass | pass | pass |
-| real source evaluation | `python scripts\evaluate_sources.py --out data\evaluation\source_registry_metrics.csv` | source metrics written | total_sources=125; linked_documents=0; merged_duplicates=14 | pass |
-| full pytest regression | `python -m pytest -q` | all tests pass | 123 passed | pass |
-| keyword evaluation regression | `python scripts\evaluate_keyword_search.py --queries data\evaluation\keyword_queries.csv --out data\evaluation\keyword_results.csv` | evaluation pass | 15/15 passed | pass |
-| vector evaluation regression | `python scripts\evaluate_vector_search.py --queries data\evaluation\keyword_queries.csv --out data\evaluation\vector_results.csv --keyword-results data\evaluation\keyword_results.csv --skip-index-build` | evaluation baseline remains acceptable | 11/15 passed; keyword baseline 15/15 | pass |
-| chat evaluation regression | `python scripts\evaluate_chat.py --queries data\evaluation\chat_queries.csv --out data\evaluation\chat_results.csv` | chat evaluation pass | 6/6 passed; refused=1; citation_failures=0 | pass |
-| phase 6 full pytest regression | `python -m pytest -q` | all tests pass after docs and knowledge-base updates | 123 passed | pass |
-| phase 6 source evaluation | `python scripts\evaluate_sources.py --out data\evaluation\source_registry_metrics.csv` | source metrics remain stable | total_sources=125; linked_documents=0; merged_duplicates=14 | pass |
-| phase 6 keyword evaluation | `python scripts\evaluate_keyword_search.py --queries data\evaluation\keyword_queries.csv --out data\evaluation\keyword_results.csv` | keyword baseline remains stable | 15/15 passed | pass |
-| phase 6 vector evaluation | `python scripts\evaluate_vector_search.py --queries data\evaluation\keyword_queries.csv --out data\evaluation\vector_results.csv --keyword-results data\evaluation\keyword_results.csv --skip-index-build` | vector baseline remains stable | 11/15 passed; keyword baseline 15/15 | pass |
-| phase 6 chat evaluation | `python scripts\evaluate_chat.py --queries data\evaluation\chat_queries.csv --out data\evaluation\chat_results.csv` | chat baseline remains stable | 6/6 passed; refused=1; citation_failures=0 | pass |
+| phase 4 tag check | `git show phase-4-complete` | points to phase 4 final functional commit | `b044459b9b8c2153e9225daa55af5d82cdcdb282` | pass |
+| branch check | `git switch -c codex/phase-5-frontend` | new phase 5 branch | switched successfully | pass |
+| planning calibration | inspect rewritten files | reflect Stage 5 goal, phases, decisions and progress | files written | pass |
+| frontend entry tests | `.venv\Scripts\python.exe -m pytest tests\test_frontend_app.py -q` | frontend index and static JS served | 2 passed | pass |
+| phase 2 frontend and API tests | `.venv\Scripts\python.exe -m pytest tests\test_frontend_app.py tests\test_sources_api.py tests\test_documents_api.py -q` | frontend, sources API and documents API pass | 9 passed | pass |
+| phase 3 chat frontend tests | `.venv\Scripts\python.exe -m pytest tests\test_frontend_app.py tests\test_chat_api.py tests\test_answer_service.py -q` | frontend chat shell and chat API pass | 14 passed | pass |
+| phase 4 operation frontend tests | `.venv\Scripts\python.exe -m pytest tests\test_frontend_app.py tests\test_search_api.py tests\test_vector_search_api.py tests\test_documents_api.py tests\test_sources_api.py -q` | frontend operation shell and related APIs pass | 13 passed | pass |
+| phase 5 full regression | `.venv\Scripts\python.exe -m pytest -q` | all tests pass | 126 passed | pass |
+| browser desktop load | Browser at `http://127.0.0.1:8000` | page loads real data | sources=125, documents=136, chunks=997 | pass |
+| browser source filter | type `temperature` | filtered sources update | `7 / 125` | pass |
+| browser chunks view | click document 1 chunks | chunks panel updates | 1 chunk shown | pass |
+| browser search | query `filling capacity` | results render | 5 results | pass |
+| browser chat | ask filling capacity question | answer and citations render | answer shown, 5 citations | pass |
+| browser reindex error | request missing source reindex | readable error shown | `Source not-a-real-source was not found.` | pass |
+| browser mobile layout | resize 390x844 | no horizontal overflow | `scrollWidth=clientWidth=390` | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
 |-----------|-------|---------|------------|
-| 2026-06-05 | 当前 planning 文件仍记录阶段 3 内容 | 1 | 按用户新要求先用 Planning with Files 重写为阶段 4 流程文件 |
-| 2026-06-05 | `derive_status()` 对已有 `local_path` 的 institutional PDF 仍返回默认 `candidate` | 1 | 调整状态判断顺序，让 `downloaded`、`saved` 或已有本地路径的来源返回 `collected` |
-| 2026-06-05 | `tests/test_sync_sources.py` 在 session 关闭后访问 SQLAlchemy source 对象属性，触发 detached instance | 1 | 在 session 内提前取出断言需要的字段，再关闭 session |
-| 2026-06-05 | 新增 reindex 辅助函数时意外打断 `read_metadata_card()` 的 return 逻辑，导致 metadata cards 读取为 0 | 1 | 补回字段组装和 `return SourceCandidate(...)`，组合测试恢复 15 passed |
+| 2026-06-05 | `create_goal` reported an existing thread goal | 1 | Treat current active goal as authoritative and continue work |
+| 2026-06-05 | 旧 planning 文件仍记录阶段 4 内容 | 1 | 重写为阶段 5 工作记忆 |
 
-### Phase 1: source registry 数据模型与仓储
+### Phase 1: 前端架构与 API 契约
 - **Status:** complete
 - **Started:** 2026-06-05
+- Phase 目标：
+  - 明确阶段 5 前端如何接入现有 FastAPI 后端。
+  - 建立前端入口和静态资源挂载。
+  - 为后续来源、资料、检索和聊天界面提供可复用 API 客户端基础。
 - Actions taken:
-  - 在 `app/db/models.py` 中新增 `Source` SQLAlchemy 模型，对应 `sources` 表。
-  - 为 `Document` 新增 `sources` 关系，为 `Source` 新增可选 `document` 关系。
-  - `sources` 表新增基础来源字段、治理字段和归一化去重字段。
-  - 在 `app/db/repositories.py` 中新增 `SourceCreate`。
-  - 新增 `SourceRepository`，支持 create、update、save/upsert、按 id 查询、按 `source_id` 查询、按 DOI/URL/title 重复键查询、列表和计数。
-  - 新增 `tests/test_source_repository.py`，验证来源保存、更新、重复键查询、列表/计数和 document 关联。
-  - 运行 Phase 1 聚焦测试、编译检查和旧数据库仓储回归。
+  - 阅读 `app/main.py`、`app/api/sources.py`、`app/api/documents.py`、`app/api/search.py`、`app/api/chat.py` 和 `pyproject.toml`。
+  - 确认现有 API 已覆盖阶段 5 需要的来源、资料、检索和聊天能力。
+  - 决定阶段 5 采用 FastAPI 静态文件 + 原生 HTML/CSS/JS，不引入 Node/React 构建链。
+  - 新增 `app/api/frontend.py`，通过 `GET /` 返回前端首页。
+  - 新增 `app/frontend/index.html`、`app/frontend/static/styles.css`、`app/frontend/static/app.js`。
+  - 在 `app/main.py` 中注册 frontend router，并挂载 `/static`。
+  - 新增 `tests/test_frontend_app.py`，验证首页和静态 JS 可访问。
+  - 运行前端入口测试，结果为 2 passed。
 - Files created/modified:
-  - `app/db/models.py` modified
-  - `app/db/repositories.py` modified
-  - `tests/test_source_repository.py` created
-  - `task_plan.md` modified
-  - `findings.md` modified
-  - `progress.md` modified
-
-### Phase 2: 来源归一化、去重与治理规则
-- **Status:** complete
-- **Started:** 2026-06-05
-- Actions taken:
-  - 新增 `app/services/source_registry.py`。
-  - 定义 `SourceRegistryService`、`SourceRegistryResult`、`SourceRegistrySummary`。
-  - 新增 `candidate_to_source_create()`，把采集层 `SourceCandidate` 转换为数据库层 `SourceCreate`。
-  - 新增 `normalize_url()`，配合已有 `normalize_doi()` 和 `normalize_title()` 形成三层去重键。
-  - 实现 DOI、URL、标题优先级去重。
-  - 实现重复来源合并，保留更完整的 PDF URL、摘要、分类、发现渠道、引用数、权限和状态。
-  - 实现 `derive_trust_level()`、`derive_fulltext_permission()`、`derive_status()`。
-  - 新增 `tests/test_source_registry_service.py`，覆盖 URL 归一化、候选转换、DOI/URL/标题去重、合并和权限/可信度/状态规则。
-  - 首次测试发现已有本地路径的 institutional PDF 仍被默认状态识别为 `candidate`；已修复为 `collected`。
-  - 运行 Phase 2 聚焦测试、Phase 1 仓储测试和旧 source collection 回归。
-- Files created/modified:
-  - `app/services/source_registry.py` created
-  - `tests/test_source_registry_service.py` created
-  - `task_plan.md` modified
-  - `findings.md` modified
-  - `progress.md` modified
-
-### Phase 3: 从现有 CSV / manifest / metadata corpus 导入来源
-- **Status:** complete
-- **Started:** 2026-06-05
-- Actions taken:
-  - 扩展 `app/services/source_registry.py`，新增现有来源文件读取函数。
-  - 新增 `read_existing_source_candidates()`，支持合并读取 source candidates CSV、fulltext manifest、metadata CSV 和 metadata cards。
-  - 新增 `read_metadata_cards()` 和 `read_metadata_card()`，支持从 `data/imports/metadata_corpus/*.md` 解析题录来源。
-  - 新增 `scripts/sync_sources.py`，默认同步项目现有来源文件到 `sources` 表。
-  - `scripts/sync_sources.py` 支持 `--candidate-csv`、`--fulltext-manifest`、`--metadata-csv`、`--metadata-cards-dir` 和 `--no-defaults`。
-  - 新增 `tests/test_sync_sources.py`，覆盖 metadata card 解析、CSV/manifest/card 同步、重复导入幂等和默认路径过滤。
-  - 首次同步脚本测试发现 session 关闭后访问 SQLAlchemy 对象属性导致 detached instance；已改为在 session 内取值。
-  - 运行脚本测试、服务测试、仓储测试和编译检查。
-  - 使用真实项目数据运行 `scripts/sync_sources.py`，本地 `sources` 表已同步 125 条来源记录。
-- Files created/modified:
-  - `app/services/source_registry.py` modified
-  - `scripts/sync_sources.py` created
-  - `tests/test_sync_sources.py` created
-  - `task_plan.md` modified
-  - `findings.md` modified
-  - `progress.md` modified
-
-### Phase 4: 重新索引入口与来源管理 API
-- **Status:** complete
-- **Started:** 2026-06-05
-- Actions taken:
-  - 在 `SourceRegistryService` 中新增 `reindex_source()`。
-  - 新增 `SourceReindexResult`、`SourceNotFoundError`、`SourceReindexError`。
-  - 新增 metadata-only 来源的 metadata card 生成能力。
-  - reindex 复用 `IngestionService.import_document()`，导入成功后更新 `sources.document_id` 和 `status=imported`。
-  - 新增 `app/schemas/source.py`。
-  - 新增 `app/api/sources.py`。
-  - 在 `app/main.py` 注册 sources router。
-  - 新增 `tests/test_sources_api.py`，覆盖来源同步、列表、详情、metadata reindex 和缺失 source 404。
-  - 组合测试发现 `read_metadata_card()` 被 reindex 辅助函数打断；已补回 return 逻辑并通过回归。
-  - 运行 sources API 测试、source 管理组合测试、编译检查和 documents/chat API 回归。
-- Files created/modified:
-  - `app/services/source_registry.py` modified
-  - `app/schemas/source.py` created
-  - `app/api/sources.py` created
+  - `app/api/frontend.py` created
+  - `app/frontend/index.html` created
+  - `app/frontend/static/styles.css` created
+  - `app/frontend/static/app.js` created
+  - `tests/test_frontend_app.py` created
   - `app/main.py` modified
-  - `tests/test_sources_api.py` created
   - `task_plan.md` modified
   - `findings.md` modified
   - `progress.md` modified
 
-### Phase 5: 阶段 4 测试、评测脚本与回归验证
+### Phase 2: 资料与来源管理界面
 - **Status:** complete
 - **Started:** 2026-06-05
+- Phase 目标：
+  - 让用户打开首页后直接看到来源和资料的真实状态。
+  - 将 `sources` 与 `documents` 两条后端链路接入前端。
+  - 提供基本筛选，支撑后续 reindex 和引用核验。
 - Actions taken:
-  - 新增 `scripts/evaluate_sources.py`，用于统计来源登记库的 smoke 指标。
-  - 新增 `tests/test_evaluate_sources.py`，覆盖来源指标统计和 CSV 输出。
-  - 运行来源评测脚本，生成 `data/evaluation/source_registry_metrics.csv`。
-  - 运行 source evaluation 聚焦测试和编译检查。
-  - 运行 `python -m pytest -q` 全量测试，确认 123 passed。
-  - 运行关键词、向量和 chat 评测，确认阶段 4 未破坏阶段 1-3 检索与引用问答链路。
+  - 扩展 `app/frontend/index.html`，新增概览指标、来源筛选栏、sources 表格和 documents 表格。
+  - 扩展 `app/frontend/static/styles.css`，增加工作台布局、指标卡、筛选工具栏、数据表格和移动端响应式规则。
+  - 扩展 `app/frontend/static/app.js`，新增前端状态、sources/documents 加载、指标计算、来源筛选和表格渲染。
+  - 更新 `tests/test_frontend_app.py`，检查 sources/documents 容器和 JS 数据加载入口。
+  - 运行 `tests/test_frontend_app.py`、`tests/test_sources_api.py`、`tests/test_documents_api.py`，结果为 9 passed。
 - Files created/modified:
-  - `scripts/evaluate_sources.py` created
-  - `tests/test_evaluate_sources.py` created
-  - `data/evaluation/source_registry_metrics.csv` created
-  - `data/evaluation/keyword_results.csv` regenerated
-  - `data/evaluation/vector_results.csv` regenerated
-  - `data/evaluation/chat_results.csv` regenerated
+  - `app/frontend/index.html` modified
+  - `app/frontend/static/styles.css` modified
+  - `app/frontend/static/app.js` modified
+  - `tests/test_frontend_app.py` modified
   - `task_plan.md` modified
   - `findings.md` modified
   - `progress.md` modified
 
-### Phase 6: 阶段收尾文档、Obsidian、提交与 tag
+### Phase 3: 聊天问答界面与引用来源侧栏
 - **Status:** complete
 - **Started:** 2026-06-05
+- Phase 目标：
+  - 让用户能通过前端调用引用式问答链路。
+  - 展示回答、引用编号、拒答状态和模型信息。
+  - 在侧栏中展示可核验的引用来源片段。
 - Actions taken:
-  - 更新 `README.md`，把当前阶段、测试数量、来源管理脚本、sources API 和阶段 4 面试表达校准为最新状态。
-  - 更新 `docs/progress.md`，新增阶段 4 完成记录、验证结果、遗留问题、下一阶段任务和面试表达。
-  - 更新 `docs/architecture.md`，新增阶段 4 source registry 架构、`sources` 表、去重策略、权限字段、状态字段、同步脚本、API、reindex 和来源评测说明。
-  - 更新 `docs/data_sources.md` 和 `docs/corpus_pipeline.md`，说明 CSV、manifest、metadata corpus、`sources` 表与 `documents/chunks` 的关系。
-  - 更新 `AGENT.MD`，把后续默认起点从阶段 4 校准为阶段 5 前端界面。
-  - 更新本地 Obsidian 知识库：首页、阶段索引、阶段 4 页面、分类页和阶段 4 知识点。
-  - 运行阶段收尾验证：全量测试、source evaluation、keyword evaluation、vector evaluation、chat evaluation。
-  - 创建阶段最终提交 `b044459b9b8c2153e9225daa55af5d82cdcdb282`。
-  - 创建 `phase-4-complete` tag，并确认 tag 指向阶段最终提交。
-  - 将阶段 4 分支和 `phase-4-complete` tag 推送到 GitHub。
+  - 扩展 `app/frontend/index.html`，新增问答表单、回答区域和引用侧栏。
+  - 扩展 `app/frontend/static/styles.css`，新增聊天表单、回答面板、拒答提示和引用卡片样式。
+  - 扩展 `app/frontend/static/app.js`，新增 `submitChat()`、`renderAnswer()`、`renderCitations()`。
+  - 更新 `tests/test_frontend_app.py`，增加 chat form、citations list、`/chat` 和 `renderCitations` 断言。
+  - 运行 `tests/test_frontend_app.py`、`tests/test_chat_api.py`、`tests/test_answer_service.py`，结果为 14 passed。
 - Files created/modified:
-  - `README.md` modified
-  - `docs/progress.md` modified
-  - `docs/architecture.md` modified
-  - `docs/data_sources.md` modified
-  - `docs/corpus_pipeline.md` modified
-  - `AGENT.MD` modified
-  - `obsidian-vault/首页.md` modified locally
-  - `obsidian-vault/阶段索引.md` modified locally
-  - `obsidian-vault/阶段/阶段 4 - 数据采集与来源管理.md` modified locally
-  - `obsidian-vault/分类/*.md` modified locally
-  - `obsidian-vault/知识点/Source Registry 来源登记库.md` created locally
-  - `obsidian-vault/知识点/来源去重与归一化.md` created locally
-  - `obsidian-vault/知识点/全文保存权限与可信度评级.md` created locally
-  - `obsidian-vault/知识点/Source Reindex 重新索引入口.md` created locally
-  - `obsidian-vault/知识点/来源登记库评测.md` created locally
+  - `app/frontend/index.html` modified
+  - `app/frontend/static/styles.css` modified
+  - `app/frontend/static/app.js` modified
+  - `tests/test_frontend_app.py` modified
+  - `task_plan.md` modified
+  - `findings.md` modified
+  - `progress.md` modified
+
+### Phase 4: 检索片段查看、source sync 与 reindex 操作
+- **Status:** complete
+- **Started:** 2026-06-05
+- Phase 目标：
+  - 让前端从展示界面升级为可操作工作台。
+  - 提供关键词/向量检索、document chunks 查看、source sync 和 source reindex 操作入口。
+  - 对操作结果和错误状态给出清楚反馈。
+- Actions taken:
+  - 扩展 `app/frontend/index.html`，新增检索面板和 chunks 面板。
+  - 扩展 sources 表格，新增单条 reindex 操作按钮。
+  - 扩展 documents 表格，新增 chunks 查看按钮。
+  - 扩展 `app/frontend/static/styles.css`，新增操作面板、结果卡片、chunk 卡片和行内按钮样式。
+  - 扩展 `app/frontend/static/app.js`，新增 `submitSearch()`、`renderSearchResults()`、`viewDocumentChunks()`、`renderChunks()`、`syncSources()`、`reindexSource()`。
+  - 使用事件委托处理动态表格按钮。
+  - 更新 `tests/test_frontend_app.py`，增加检索、chunks、sync 和 reindex 入口断言。
+  - 运行前端、search、vector search、documents、sources API 相关测试，结果为 13 passed。
+- Files created/modified:
+  - `app/frontend/index.html` modified
+  - `app/frontend/static/styles.css` modified
+  - `app/frontend/static/app.js` modified
+  - `tests/test_frontend_app.py` modified
+  - `task_plan.md` modified
+  - `findings.md` modified
+  - `progress.md` modified
+
+### Phase 5: 前端测试、浏览器验证与体验修正
+- **Status:** complete
+- **Started:** 2026-06-05
+- Phase 目标：
+  - 用自动化测试和真实浏览器确认阶段 5 前端可运行、可操作、可读。
+  - 验证 sources、documents、chunks、search、chat 和 reindex 错误处理。
+  - 检查桌面和移动视口基本布局。
+- Actions taken:
+  - 发现浏览器自动请求 `/favicon.ico` 导致 404，新增 `GET /favicon.ico` 返回 204，并补充测试。
+  - 启动本地服务 `http://127.0.0.1:8000`。
+  - 浏览器打开首页并截图检查。
+  - 桌面视口验证真实数据加载：sources=125、documents=136、chunks=997。
+  - 验证来源筛选：输入 `temperature` 后显示 `7 / 125`。
+  - 验证 document chunks：点击 document 1 的 chunks 按钮后显示 1 个 chunk。
+  - 验证关键词检索：`filling capacity` 返回 5 条结果。
+  - 验证聊天问答：问题 `What affects filling capacity in rock-filled concrete?` 返回回答和 5 条引用。
+  - 验证 reindex 错误处理：不存在 source 返回可理解错误。
+  - 移动视口 390x844 验证无横向溢出。
+  - 运行全量测试，结果为 126 passed。
+- Files created/modified:
+  - `app/api/frontend.py` modified
+  - `tests/test_frontend_app.py` modified
   - `task_plan.md` modified
   - `findings.md` modified
   - `progress.md` modified
@@ -221,8 +187,8 @@
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 6 complete，当前分支 `codex/phase-4-source-management` |
-| Where am I going? | 阶段 4 已完成并推送到 GitHub；下一大阶段是阶段 5 前端界面 |
-| What's the goal? | 完成阶段 4 数据采集与来源管理：source registry、去重、权限、状态、导入、reindex、API/脚本、测试和文档收尾 |
-| What have I learned? | 来源治理需要和检索内容分层；`sources` 负责候选、权限、可信度、状态和去重，`documents/chunks` 负责可检索正文或题录卡片；阶段收尾必须同步 README、docs、AGENT 和 Obsidian |
-| What have I done? | 改线程名、确认分支/tag、用 Planning with Files 重写阶段 4 工作记忆；完成 `sources` 表、`SourceRepository`、`SourceRegistryService`、来源归一化/去重/权限/可信度/状态规则、`scripts/sync_sources.py`、sources API、source reindex、`scripts/evaluate_sources.py`、对应测试、阶段文档和 Obsidian 收尾；全量测试 123 passed |
+| Where am I? | Phase 0 complete，当前分支 `codex/phase-5-frontend` |
+| Where am I going? | 阶段 5 前端界面：来源/资料工作台、聊天问答、引用侧栏、检索片段、sync/reindex、浏览器验证、文档收尾 |
+| What's the goal? | 让非技术用户能通过浏览器查看资料、管理来源、提问并核验引用 |
+| What have I learned? | 现有 API 已足够支撑第一版前端；阶段 5 应薄前端、重展示和交互，不搬运后端业务规则 |
+| What have I done? | 改线程名、确认阶段 4 tag、创建阶段 5 分支、阅读文档和 API schema、重写三份 planning 文件 |

@@ -14,13 +14,15 @@
 
 ## 当前阶段
 
-阶段 4：数据采集与来源管理已完成，当前分支为 `codex/phase-4-source-management`。
+阶段 5：前端界面已完成，当前分支为 `codex/phase-5-frontend`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
 阶段 4 tag：`phase-4-complete`，已推送到 GitHub，并指向上述提交。
 
-下一阶段准备进入：阶段 5，前端界面。
+阶段 5 完成后会创建 tag：`phase-5-complete`。
+
+下一阶段准备进入：阶段 6，检索优化与评测。
 
 当前已经实现：
 
@@ -56,8 +58,10 @@
 - `GET /sources`、`GET /sources/{source_id}`、`POST /sources/sync`、`POST /sources/{source_id}/reindex`
 - `scripts/evaluate_sources.py` 来源登记库评测脚本
 - `data/evaluation/source_registry_metrics.csv` 来源治理指标
+- FastAPI 静态前端入口：`GET /`
+- 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量检索、引用式问答、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 123 个自动化测试
+- 126 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -126,7 +130,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-123 passed
+126 passed
 ```
 
 当前测试覆盖：
@@ -157,6 +161,7 @@ python -m pytest
 - 来源归一化、DOI/URL/标题三层去重、可信度和权限治理
 - source sync 脚本、sources API、source reindex
 - source registry 评测脚本
+- 前端首页、静态资源挂载和工作台入口
 
 ## 向量索引与检索
 
@@ -301,6 +306,41 @@ POST /sources/{source_id}/reindex
 
 阶段 4 不做 Agent 工具调用、不做复杂 LangGraph workflow、不做前端界面。当前重点是让资料来源可靠、可去重、可追溯、可重新导入，为阶段 5 前端和后续 Agent 工具调用打基础。
 
+## 前端工作台
+
+阶段 5 新增浏览器界面：
+
+```text
+GET /
+```
+
+前端入口由 FastAPI 直接提供，静态文件位于：
+
+```text
+app/frontend/
+```
+
+当前工作台支持：
+
+- 查看来源总数、已收集来源、已入库来源、资料数和 chunk 总数。
+- 查看 sources 列表，并按关键词、状态、全文权限筛选。
+- 查看 documents 列表和每篇资料的 chunk 数量。
+- 查看指定 document 的 chunks。
+- 使用关键词检索或向量检索查看召回片段。
+- 调用 `/chat` 提问，展示回答、引用编号、模型信息和引用来源侧栏。
+- 触发 source sync。
+- 触发单条 source reindex，并在失败时展示可理解错误。
+
+启动服务后访问：
+
+```powershell
+python -m uvicorn app.main:app --reload
+```
+
+```text
+http://127.0.0.1:8000
+```
+
 ## Obsidian 知识库
 
 本项目维护了一个可直接用 Obsidian 打开的知识库：
@@ -332,6 +372,7 @@ rfc-rag-agent/
     api/
       chat.py
       documents.py
+      frontend.py
       health.py
       search.py
       sources.py
@@ -353,6 +394,11 @@ rfc-rag-agent/
       retrieval/
       source_registry.py
       source_collection.py
+    frontend/
+      index.html
+      static/
+        app.js
+        styles.css
   data/
     evaluation/
     imports/
@@ -429,3 +475,11 @@ rfc-rag-agent/
 我新增 `sources` 表作为 source registry，把公开资料候选、PDF manifest、题录 CSV 和 metadata cards 统一登记起来。`SourceRegistryService` 负责把采集候选转换成数据库记录，并按 DOI、URL、标题归一化做三层去重；同时维护 `trust_level`、`fulltext_permission` 和 `status`，区分来源是否可信、能否保存全文、处于候选还是已收集状态。
 
 为了让来源能重新进入 RAG 链路，我新增了 source reindex 入口：已有本地文件的来源可以重新导入原文，metadata-only 来源可以重新生成题录卡片后导入 `documents/chunks`。同时提供 `scripts/sync_sources.py`、`/sources` API 和 `scripts/evaluate_sources.py`，保证来源治理既能批量同步，也能被后续前端或 Agent 工具调用复用。阶段 4 全量测试 123 个通过，关键词、向量和 chat 评测保持阶段 3 基线。
+
+## 阶段 5 面试表达
+
+阶段 5 我补齐了 RAG 系统的前端工作台，而不是只做一个聊天框。
+
+我采用 FastAPI 静态文件提供第一版前端，避免在当前 Python 项目里过早引入复杂前端构建链。页面直接接入已有 sources、documents、search、vector search 和 chat API，展示来源治理状态、资料列表、chunk 片段、检索结果、问答回答和引用来源侧栏。
+
+这样设计的重点是让非技术用户能看见 RAG 链路：source 是资料来源治理，documents/chunks 是已入库内容，chat 的 citations 可以追溯到具体 chunk。阶段 5 还提供 source sync 和 reindex 操作入口，并通过浏览器验证桌面和移动视口，最终全量测试 126 个通过。

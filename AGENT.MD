@@ -1141,7 +1141,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3 和阶段 4 已完成。阶段 4 当前在 `codex/phase-4-source-management` 分支完成开发、验证、提交、tag 和 GitHub 推送。
+阶段 0、阶段 1、阶段 2、阶段 3、阶段 4 和阶段 5 已完成。阶段 5 当前在 `codex/phase-5-frontend` 分支完成开发和验证，等待阶段收尾提交与 tag。
 
 阶段 4 最终提交和 tag：
 
@@ -1153,31 +1153,53 @@ remote branch: origin/codex/phase-4-source-management
 
 不要移动 `phase-4-complete`。如果阶段 4 后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
+阶段 5 已实现前端工作台：
+
+```text
+GET /
+app/frontend/index.html
+app/frontend/static/app.js
+app/frontend/static/styles.css
+```
+
+阶段 5 前端能力：
+
+```text
+查看 sources 和 documents
+查看 document chunks
+执行 keyword/vector search
+调用 POST /chat 并展示引用来源侧栏
+触发 source sync
+触发单条 source reindex
+浏览器桌面和移动视口验证
+```
+
 当前最权威的进度依据是：
 
 ```text
 docs/progress.md
 ```
 
-下一步最适合进入阶段 5：前端界面。
+下一步最适合进入阶段 6：检索优化与评测。
 
-建议从阶段 4 分支完成提交/合并后，新开阶段 5 分支：
+建议从阶段 5 分支完成提交/合并后，新开阶段 6 分支：
 
 ```text
-codex/phase-5-frontend
+codex/phase-6-evaluation
 ```
 
-阶段 5 的第一批最小任务：
+阶段 6 的第一批最小任务：
 
 ```text
 阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md 和 docs/data_sources.md
-确认阶段 4 的 sources 表、SourceRegistryService、scripts/sync_sources.py、sources API、reindex 和 evaluate_sources.py 已可用
-设计前端信息架构：资料库、来源管理、聊天、引用来源侧栏和检索片段查看
-优先实现非技术用户能理解的资料/来源查看界面
-把 GET /sources、POST /sources/{source_id}/reindex、POST /chat 串进前端工作流
-补充前端使用说明、必要测试和 Obsidian 知识点
+确认阶段 5 的前端工作台、sources/documents/search/chat/reindex 入口和浏览器验证记录已可用
+设计检索优化与评测计划：混合检索、rerank、真实 embedding 或 query expansion 的优先级
+补充 docs/evaluation_plan.md
+扩展评测指标：Recall@K、Citation Accuracy、Faithfulness、Answer Coverage、Refusal Quality
+建立错误案例分析表，记录关键词/向量/chat 的失败样例和改进前后对比
+优先保证评测可重复，再逐步优化召回质量
 ```
 
-阶段 5 仍不要急着做 Agent 工具调用。
+阶段 6 仍不要急着做 Agent 工具调用。
 
-阶段 4 已经把“资料来源、题录、PDF manifest、权限、可信度、状态和 reindex 入口”稳定管理起来。阶段 5 的重点是让非技术用户能通过界面查看来源、触发导入、提问并核验引用，为后续 Agent 化打基础。
+阶段 5 已经让非技术用户能通过界面查看来源、资料、chunk、检索结果和引用式问答。阶段 6 的重点是让系统质量能被量化证明：哪些问题召回对了、哪些引用可靠、哪些回答忠实、哪些拒答合理，并把优化前后的指标写进 README 和进度文档。
