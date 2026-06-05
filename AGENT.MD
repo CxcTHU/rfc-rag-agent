@@ -69,7 +69,7 @@ codex/phase-7-agent-tools
 
 - 同一阶段内尽量保持同一个线程，保证上下文连续。
 - 进入下一个大阶段时，新开线程，先阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md` 和 `docs/data_sources.md`。
-- 阶段结束记录必须包含：完成内容、验证方式、遗留问题、下一阶段任务、面试表达。
+- 阶段结束记录必须包含：完成内容、验证方式、遗留问题、下一阶段任务、面试表达、阶段提交号和阶段 tag。
 
 阶段完成收尾清单：
 
@@ -80,8 +80,9 @@ codex/phase-7-agent-tools
 - 自动判断并更新 `docs/architecture.md`：如果阶段改变了模块边界、数据流、数据库表、API、检索链路或部署结构，必须同步更新；如果不需要改，也要说明原因。
 - 自动判断并更新 `AGENT.MD`：如果阶段经验改变了后续 agent 的工作规则、阶段路线、教学要求、避坑规则或推荐下一步，必须同步更新；如果不需要改，也要说明原因。
 - 自动更新 Obsidian 知识库：阶段页、阶段索引、首页、分类页和重要知识点笔记要与实际进度一致。
+- 阶段完成并通过验证后，必须在阶段最终提交上创建阶段 tag，命名格式为 `phase-X-complete`，例如 `phase-3-complete`。tag 必须指向该阶段的最终功能提交；如果之后只是补充流程规则或文档修正，不要把阶段 tag 移到这些后续提交上。最终回复必须说明提交号和 tag 名称；如果暂时不能创建 tag，必须说明原因和补救动作。
 
-阶段收尾回复必须明确说明这五项的检查结果，避免代码已进入新阶段而入口文档仍停留在旧阶段。
+阶段收尾回复必须明确说明这些检查结果，避免代码已进入新阶段而入口文档仍停留在旧阶段，也避免阶段已经提交但没有可追踪的版本标签。
 
 ## Obsidian 知识库规则
 
@@ -231,16 +232,20 @@ workflow
 
 ### 当前对齐情况
 
-阶段 0 当前已对齐 Quivr 的工程思想：
+阶段 0 到阶段 4 当前已逐步对齐 Quivr 的工程思想：
 
 - 有清晰入口：`app/main.py`。
-- 有 API 分层：`app/api/health.py`。
-- 有 schema 分层：`app/schemas/health.py`。
+- 有 API 分层：`app/api/health.py`、`app/api/documents.py`、`app/api/search.py`、`app/api/chat.py`。
+- 有 schema 分层：`app/schemas/health.py`、`app/schemas/document.py`、`app/schemas/search.py`、`app/schemas/chat.py`。
 - 有集中配置：`app/core/config.py`。
-- 有自动化测试：`tests/test_health.py`。
+- 有导入、检索、生成和评测 service 分层。
+- 有 `EmbeddingProvider` 和 `ChatModelProvider` 两类 provider 抽象。
+- 有 response metadata：`citations`、`sources`、`refused`、`model_provider`、`model_name`。
+- 有 source registry：`sources` 表、`SourceRegistryService`、来源同步脚本、sources API 和 reindex 入口。
+- 有自动化测试和评测脚本。
 - 有文档和知识库沉淀：`README.md`、`docs/progress.md`、`obsidian-vault/`。
 
-阶段 0 尚未实现 Quivr 的 RAG 核心链路，这是正常的。后续阶段按以下方式逐步对齐：
+阶段 4 已实现来源治理层。后续阶段按以下方式继续对齐：
 
 ```text
 阶段 1
@@ -252,12 +257,12 @@ workflow
   接入 embedding provider 和向量检索
 
 阶段 3
-  对齐 Quivr RAG pipeline / LLMEndpoint / response metadata 的思想
-  实现引用式问答、来源返回和拒答机制
+  已对齐 Quivr RAG pipeline / LLMEndpoint / response metadata 的思想
+  已实现引用式问答、来源返回和拒答机制
 
 阶段 4
-  对齐 Quivr storage 扩展和 source 管理思想
-  建立公开资料采集、source registry、原文保存和去重机制
+  已对齐 Quivr storage 扩展和 source 管理思想
+  已建立 source registry、来源去重、可信度、全文权限、状态、同步脚本、sources API 和 reindex 入口
 
 阶段 6
   借鉴 Quivr 的测试组织，补充检索与问答评测集
@@ -1006,17 +1011,20 @@ POST /chat
 
 ```text
 建立 source registry
-小规模爬取公开网页
+同步现有公开资料候选、PDF manifest 和题录语料
 去重
-保存原文和元数据
+保存来源元数据、可信度、全文权限和状态
 支持重新索引
 ```
 
 完成标准：
 
 ```text
-至少收集 30 到 80 条高质量公开资料
-每条资料都有来源记录
+sources 表可管理至少 30 到 80 条高质量公开资料来源
+每条资料都有来源记录、可信度、全文权限和状态
+支持从现有 CSV / manifest / metadata corpus 同步
+支持按 DOI / URL / 标题去重
+支持来源重新索引到 documents/chunks
 ```
 
 ### 阶段 5：前端界面
@@ -1133,7 +1141,17 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1 和阶段 2 已完成。阶段 1 已合并到 `main`，阶段 2 当前在 `codex/phase-2-vector-search` 分支完成开发和验证。
+阶段 0、阶段 1、阶段 2、阶段 3 和阶段 4 已完成。阶段 4 当前在 `codex/phase-4-source-management` 分支完成开发、验证、提交、tag 和 GitHub 推送。
+
+阶段 4 最终提交和 tag：
+
+```text
+commit: b044459b9b8c2153e9225daa55af5d82cdcdb282
+tag: phase-4-complete
+remote branch: origin/codex/phase-4-source-management
+```
+
+不要移动 `phase-4-complete`。如果阶段 4 后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
 当前最权威的进度依据是：
 
@@ -1141,25 +1159,25 @@ source = 回答依据，必须能追溯到标题和 URL
 docs/progress.md
 ```
 
-下一步最适合进入阶段 3：引用式问答。
+下一步最适合进入阶段 5：前端界面。
 
-建议从阶段 2 分支完成提交/合并后，新开阶段 3 分支：
+建议从阶段 4 分支完成提交/合并后，新开阶段 5 分支：
 
 ```text
-codex/phase-3-cited-chat
+codex/phase-5-frontend
 ```
 
-阶段 3 的第一批最小任务：
+阶段 5 的第一批最小任务：
 
 ```text
 阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md 和 docs/data_sources.md
-确认阶段 2 的 EmbeddingProvider、chunk_embeddings、VectorIndexService、POST /search/vector 和向量检索评测已可用
-设计 ChatModelProvider 抽象，优先支持国产 OpenAI-compatible API
-实现最小引用式问答链路：问题 -> 检索 chunks -> 组织上下文 -> 生成回答 -> 返回来源
-实现资料不足时的拒答机制
-补充 chat API 测试和引用来源测试
+确认阶段 4 的 sources 表、SourceRegistryService、scripts/sync_sources.py、sources API、reindex 和 evaluate_sources.py 已可用
+设计前端信息架构：资料库、来源管理、聊天、引用来源侧栏和检索片段查看
+优先实现非技术用户能理解的资料/来源查看界面
+把 GET /sources、POST /sources/{source_id}/reindex、POST /chat 串进前端工作流
+补充前端使用说明、必要测试和 Obsidian 知识点
 ```
 
-阶段 3 不要急着做 Agent 工具调用。
+阶段 5 仍不要急着做 Agent 工具调用。
 
-先把“回答必须基于召回资料并能返回来源”这件事稳定跑通，再进入后续来源管理、前端和 Agent 化。
+阶段 4 已经把“资料来源、题录、PDF manifest、权限、可信度、状态和 reindex 入口”稳定管理起来。阶段 5 的重点是让非技术用户能通过界面查看来源、触发导入、提问并核验引用，为后续 Agent 化打基础。

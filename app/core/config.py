@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     chat_model_name: str = ""
     chat_model_api_key: str = ""
     chat_model_base_url: str = ""
+    chat_model_temperature: float = 0.2
+    chat_model_timeout_seconds: float = 30.0
 
     embedding_provider: str = ""
     embedding_model_name: str = ""

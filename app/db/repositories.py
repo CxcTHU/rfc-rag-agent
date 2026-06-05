@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Chunk, ChunkEmbedding, Document
+from app.db.models import Chunk, ChunkEmbedding, Document, QuestionAnswerLog, Source
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,49 @@ class ChunkEmbeddingCreate:
     dimension: int
     embedding: Sequence[float]
     content_hash: str
+
+
+@dataclass(frozen=True)
+class QuestionAnswerLogCreate:
+    question: str
+    answer: str
+    retrieved_chunk_ids: Sequence[int]
+    citations: Sequence[int]
+    model_provider: str
+    model_name: str
+    retrieval_mode: str
+    refused: bool
+    refusal_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class SourceCreate:
+    source_id: str
+    title: str
+    normalized_title: str
+    authors: str | None = None
+    year: str | None = None
+    venue: str | None = None
+    category: str | None = None
+    discovered_via: str | None = None
+    doi: str | None = None
+    normalized_doi: str | None = None
+    url: str | None = None
+    normalized_url: str | None = None
+    pdf_url: str | None = None
+    abstract: str | None = None
+    keywords: str | None = None
+    language: str | None = None
+    citation_count: int | None = None
+    source_type: str = "candidate"
+    trust_level: str = "unknown"
+    access_rights: str = "unknown"
+    fulltext_permission: str = "unknown"
+    license_or_terms: str | None = None
+    local_path: str | None = None
+    status: str = "candidate"
+    notes: str | None = None
+    document_id: int | None = None
 
 
 class DocumentRepository:
@@ -176,6 +219,132 @@ class ChunkEmbeddingRepository:
         return self.db.scalar(statement) or 0
 
 
+class SourceRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def create_source(self, source_data: SourceCreate, commit: bool = True) -> Source:
+        source = Source(**source_data.__dict__)
+        self.db.add(source)
+        if commit:
+            self.db.commit()
+            self.db.refresh(source)
+        return source
+
+    def update_source(
+        self,
+        source: Source,
+        source_data: SourceCreate,
+        commit: bool = True,
+    ) -> Source:
+        for field, value in source_data.__dict__.items():
+            setattr(source, field, value)
+        if commit:
+            self.db.commit()
+            self.db.refresh(source)
+        return source
+
+    def save_source(self, source_data: SourceCreate, commit: bool = True) -> Source:
+        existing_source = self.get_by_source_id(source_data.source_id)
+        if existing_source is not None:
+            return self.update_source(existing_source, source_data, commit=commit)
+        return self.create_source(source_data, commit=commit)
+
+    def get_by_id(self, source_pk: int) -> Source | None:
+        statement = select(Source).where(Source.id == source_pk)
+        return self.db.scalar(statement)
+
+    def get_by_source_id(self, source_id: str) -> Source | None:
+        statement = select(Source).where(Source.source_id == source_id)
+        return self.db.scalar(statement)
+
+    def find_duplicate(
+        self,
+        normalized_doi: str | None = None,
+        normalized_url: str | None = None,
+        normalized_title: str | None = None,
+        exclude_source_id: str | None = None,
+    ) -> Source | None:
+        duplicate_fields = [
+            (Source.normalized_doi, normalized_doi),
+            (Source.normalized_url, normalized_url),
+            (Source.normalized_title, normalized_title),
+        ]
+        for column, value in duplicate_fields:
+            if not value:
+                continue
+            statement = select(Source).where(column == value).order_by(Source.id)
+            if exclude_source_id is not None:
+                statement = statement.where(Source.source_id != exclude_source_id)
+            duplicate = self.db.scalar(statement)
+            if duplicate is not None:
+                return duplicate
+        return None
+
+    def list_sources(
+        self,
+        status: str | None = None,
+        fulltext_permission: str | None = None,
+    ) -> list[Source]:
+        statement = select(Source).order_by(Source.id)
+        if status is not None:
+            statement = statement.where(Source.status == status)
+        if fulltext_permission is not None:
+            statement = statement.where(Source.fulltext_permission == fulltext_permission)
+        return list(self.db.scalars(statement).all())
+
+    def count_sources(
+        self,
+        status: str | None = None,
+        fulltext_permission: str | None = None,
+    ) -> int:
+        statement = select(func.count(Source.id))
+        if status is not None:
+            statement = statement.where(Source.status == status)
+        if fulltext_permission is not None:
+            statement = statement.where(Source.fulltext_permission == fulltext_permission)
+        return self.db.scalar(statement) or 0
+
+
+class QuestionAnswerLogRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def save_log(
+        self,
+        log_data: QuestionAnswerLogCreate,
+        commit: bool = True,
+    ) -> QuestionAnswerLog:
+        log = QuestionAnswerLog(
+            question=log_data.question,
+            answer=log_data.answer,
+            retrieved_chunk_ids=serialize_int_list(log_data.retrieved_chunk_ids),
+            citations=serialize_int_list(log_data.citations),
+            model_provider=log_data.model_provider,
+            model_name=log_data.model_name,
+            retrieval_mode=log_data.retrieval_mode,
+            refused=log_data.refused,
+            refusal_reason=log_data.refusal_reason,
+        )
+        self.db.add(log)
+        if commit:
+            self.db.commit()
+            self.db.refresh(log)
+        return log
+
+    def get_by_id(self, log_id: int) -> QuestionAnswerLog | None:
+        statement = select(QuestionAnswerLog).where(QuestionAnswerLog.id == log_id)
+        return self.db.scalar(statement)
+
+    def list_logs(self) -> list[QuestionAnswerLog]:
+        statement = select(QuestionAnswerLog).order_by(QuestionAnswerLog.id)
+        return list(self.db.scalars(statement).all())
+
+    def count_logs(self) -> int:
+        statement = select(func.count(QuestionAnswerLog.id))
+        return self.db.scalar(statement) or 0
+
+
 def serialize_embedding(embedding: Sequence[float]) -> str:
     return json.dumps([float(value) for value in embedding], separators=(",", ":"))
 
@@ -185,3 +354,14 @@ def deserialize_embedding(embedding_json: str) -> list[float]:
     if not isinstance(values, list):
         raise ValueError("embedding_json must contain a JSON list")
     return [float(value) for value in values]
+
+
+def serialize_int_list(values: Sequence[int]) -> str:
+    return json.dumps([int(value) for value in values], separators=(",", ":"))
+
+
+def deserialize_int_list(values_json: str) -> list[int]:
+    values = json.loads(values_json)
+    if not isinstance(values, list):
+        raise ValueError("values_json must contain a JSON list")
+    return [int(value) for value in values]

@@ -1,0 +1,7 @@
+query_id,question,top_k,retrieval_mode,min_score,expected_refused,require_sources,require_citations,expected_source_title_terms,expected_source_content_terms,forbidden_answer_terms,notes
+rfc_concept,What is rock-filled concrete?,5,keyword,0,no,yes,yes,Rock|堆石,rock-filled|rock fill|堆石,,Concept question should return an answer with traceable sources.
+construction_quality,How is construction quality controlled in rock-filled concrete?,5,keyword,0,no,yes,yes,Quality|Construction|施工,rock-filled|concrete|construction,,Construction and quality-control question.
+thermal_control,What does thermal control focus on for rock-filled concrete dams?,5,keyword,0,no,yes,yes,Thermal|Temperature|温,thermal|temperature|hydration heat|温升,,Temperature-control question.
+filling_capacity,What affects filling capacity in rock-filled concrete?,5,keyword,0,no,yes,yes,Filling|Self-Compacting|填充,filling capacity|flowability|self-compacting|填充,,Filling and SCC question.
+engineering_case,Give an engineering application example for rock-filled concrete dams.,5,keyword,0,no,yes,yes,Dam|Construction|工程,dam|construction|application|大坝,,Engineering application question.
+unsupported,zqxjvblorptasticprotocol,5,keyword,0,yes,no,no,,,zqxjvblorptasticprotocol,Synthetic out-of-corpus token should be refused.

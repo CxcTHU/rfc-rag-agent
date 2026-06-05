@@ -4,6 +4,7 @@
 
 ```text
 资料来源
+-> source registry 登记与治理
 -> 导入或爬取
 -> 文本抽取
 -> 清洗
@@ -24,6 +25,7 @@ API 层：FastAPI 路由
 Schema 层：Pydantic 请求和响应模型
 Service 层：导入、切分、检索、问答业务逻辑
 DB 层：文档、chunk、问答日志元数据
+Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
 Model Provider 层：聊天模型和 embedding 模型适配
 ```
 
@@ -501,5 +503,502 @@ vector search: 11/15 passed
 能通过 POST /search/vector 返回来源、标题、片段和 score
 能复用关键词评测集输出向量检索评测结果
 关键词 baseline 仍可用
+全量自动化测试通过
+```
+
+## 阶段 3 总体框架
+
+阶段 3 的目标是打通第一条最小引用式问答链路：
+
+```text
+用户问题
+-> CitationAnswerService
+-> VectorSearchService 或 KeywordSearchService
+-> prompt_builder 组织上下文和来源编号
+-> ChatModelProvider 生成回答
+-> extract_citations 过滤引用
+-> ChatResponse 返回答案、来源和拒答状态
+-> qa_logs 保存问答记录
+```
+
+本阶段参考 Quivr 的 `LLMEndpoint`、RAG prompt、source index 和 response metadata 思路，但继续保持轻量 service 分层，不引入 LangGraph 或复杂 Agent workflow。
+
+```text
+Quivr LLMEndpoint          -> 本项目 ChatModelProvider
+Quivr combine_documents    -> 本项目 prompt_builder / ContextSource
+Quivr ParsedRAGResponse    -> 本项目 CitationAnswerResult / ChatResponse
+Quivr RAGResponseMetadata  -> 本项目 citations / sources / model_provider / model_name / refused
+```
+
+阶段 3 不做：
+
+- Agent 工具调用。
+- 多轮聊天历史。
+- 复杂 LangGraph workflow。
+- 真实模型质量优化。
+- rerank 或混合检索优化。
+
+这些内容放到阶段 4 以后逐步处理。
+
+### Generation 层
+
+阶段 3 新增 `app/services/generation/`：
+
+```text
+app/services/generation/
+  chat_model.py       ChatModelProvider、deterministic provider、OpenAI-compatible provider
+  prompt_builder.py   ContextSource、RagPrompt、build_rag_prompt()
+  answer_service.py   CitationAnswerService、引用提取、拒答和日志写入
+```
+
+为什么新增 generation 层：
+
+- 阶段 1/2 已经有 ingestion 和 retrieval。
+- 阶段 3 需要独立承接 prompt、模型调用和答案生成。
+- API 层不应该直接写检索、prompt 和模型调用细节。
+
+### ChatModelProvider
+
+`ChatModelProvider` 是聊天模型适配接口：
+
+```text
+messages -> ChatModelResult(answer, provider, model_name, raw_response)
+```
+
+当前实现：
+
+- `DeterministicChatModelProvider`：用于本地开发和自动化测试。
+- `OpenAICompatibleChatModelProvider`：预留国产大模型或兼容 OpenAI `/chat/completions` 的真实调用边界。
+
+配置项：
+
+```text
+CHAT_MODEL_PROVIDER
+CHAT_MODEL_NAME
+CHAT_MODEL_API_KEY
+CHAT_MODEL_BASE_URL
+CHAT_MODEL_TEMPERATURE
+CHAT_MODEL_TIMEOUT_SECONDS
+```
+
+### RAG prompt/context builder
+
+`prompt_builder.py` 把检索结果转成模型可读上下文：
+
+```text
+SearchResultLike
+-> ContextSource(source_id, chunk_id, document_title, content, score, ...)
+-> RagPrompt(messages, context_text, sources)
+```
+
+来源编号规则：
+
+- 每次回答内部从 `[1]` 开始编号。
+- `source_id` 是本次回答的局部编号，不等于数据库 `chunk_id`。
+- API 返回的 `sources` 保存 `source_id -> chunk_id` 的映射。
+
+prompt 约束：
+
+- 只基于给定资料回答。
+- 回答中引用来源编号。
+- 资料不足时拒答。
+- 区分事实、推断和工程风险。
+- 明确系统不替代规范审查、工程设计和专家判断。
+
+### CitationAnswerService
+
+`CitationAnswerService` 是阶段 3 的核心编排层：
+
+```text
+answer(question, top_k, retrieval_mode, min_score)
+```
+
+职责：
+
+- 校验问题和参数。
+- 根据 `retrieval_mode` 检索 chunks。
+- `auto` 模式先向量检索，失败后关键词回退。
+- 资料为空或低于 `min_score` 时拒答。
+- 调用 `build_rag_prompt()`。
+- 调用 `ChatModelProvider.generate()`。
+- 从答案中提取 `[1]`、`[2]` 这类 citations。
+- 只保留本次 sources 中存在的 citations。
+- 返回 `CitationAnswerResult`。
+- 默认保存 `qa_logs`。
+
+返回结构：
+
+```text
+question
+answer
+citations
+sources
+refused
+refusal_reason
+retrieval_mode
+model_provider
+model_name
+```
+
+### Chat API
+
+阶段 3 新增：
+
+```text
+POST /chat
+```
+
+请求结构 `ChatRequest`：
+
+```text
+question
+top_k
+retrieval_mode: auto | vector | keyword
+min_score
+```
+
+响应结构 `ChatResponse`：
+
+```text
+question
+answer
+citations
+sources
+refused
+refusal_reason
+retrieval_mode
+model_provider
+model_name
+```
+
+`ChatSourceItem` 包含：
+
+```text
+source_id
+document_id
+document_title
+source_type
+source_path
+file_name
+chunk_id
+chunk_index
+heading_path
+content
+score
+```
+
+API 层保持薄封装：
+
+- 用 Pydantic 校验请求。
+- 用 `Depends(...)` 注入数据库、chat provider、embedding provider。
+- 调用 `CitationAnswerService`。
+- 把内部结果映射成对外响应。
+
+### QA 日志
+
+阶段 3 新增 `qa_logs` 表，对应 `QuestionAnswerLog`：
+
+```text
+qa_logs
+  id
+  question
+  answer
+  retrieved_chunk_ids
+  citations
+  model_provider
+  model_name
+  retrieval_mode
+  refused
+  refusal_reason
+  created_at
+```
+
+设计原则：
+
+- 记录排查需要的信息。
+- 不保存 API key。
+- 不保存 `ChatModelResult.raw_response`。
+- `retrieved_chunk_ids` 和 `citations` 当前用 Text 保存 JSON 整数列表，后续迁移 PostgreSQL 时可升级为 JSON 字段。
+- `CitationAnswerService` 默认写日志，测试或批处理可以用 `log_answers=False` 关闭。
+
+### 评测策略
+
+阶段 3 新增：
+
+```text
+data/evaluation/chat_queries.csv
+scripts/evaluate_chat.py
+data/evaluation/chat_results.csv
+```
+
+评测指标：
+
+- 是否返回答案。
+- 是否按预期拒答。
+- 是否返回 sources。
+- citations 是否能映射到 sources。
+- 期望来源是否命中。
+- 答案是否包含明显不在资料中的禁止词。
+
+当前结果：
+
+```text
+chat evaluation: 6/6 passed
+keyword baseline: 15/15 passed
+vector evaluation: 11/15 passed
+full tests: 106 passed
+```
+
+### 阶段 3 完成标准
+
+```text
+ChatModelProvider 可替换
+RAG prompt 可构造
+AnswerService 可返回 answer/citations/sources/refused/model 信息
+POST /chat 可调用
+资料不足时拒答
+问答日志可追踪
+chat 评测脚本可运行
+旧关键词和向量评测仍可运行
+全量自动化测试通过
+```
+
+## 阶段 4 总体框架
+
+阶段 4 的目标是补齐资料来源治理层，让“有哪些资料来源、是否可信、能否保存全文、是否已经入库”这些问题有统一答案。
+
+```text
+公开资料候选 / PDF manifest / metadata CSV / metadata cards
+-> SourceRegistryService
+-> DOI / URL / 标题归一化
+-> SourceRepository
+-> sources 表
+-> sync_sources.py 或 sources API
+-> reindex_source()
+-> IngestionService
+-> documents/chunks
+-> 后续向量索引刷新
+```
+
+阶段 4 不做：
+
+- Agent 工具调用。
+- 复杂 LangGraph workflow。
+- 前端界面。
+- 大规模爬虫。
+- 检索召回质量优化。
+
+这些内容放到阶段 5 以后逐步处理。
+
+### Source Registry 层
+
+阶段 4 新增 `app/services/source_registry.py`：
+
+```text
+SourceCandidate
+-> candidate_to_source_create()
+-> normalize_doi / normalize_url / normalize_title
+-> derive_trust_level()
+-> derive_fulltext_permission()
+-> derive_status()
+-> SourceRepository
+-> sources
+```
+
+这个 service 位于“采集候选”和“数据库来源表”之间。它的作用不是下载更多论文，而是把已有来源变成可治理、可查询、可去重、可重新导入的结构化记录。
+
+### sources 表
+
+阶段 4 新增 `sources` 表：
+
+```text
+sources
+  id
+  source_id
+  title
+  normalized_title
+  authors
+  year
+  venue
+  category
+  discovered_via
+  doi
+  normalized_doi
+  url
+  normalized_url
+  pdf_url
+  abstract
+  keywords
+  language
+  citation_count
+  source_type
+  trust_level
+  access_rights
+  fulltext_permission
+  license_or_terms
+  local_path
+  status
+  notes
+  document_id
+  created_at
+  updated_at
+```
+
+`sources.document_id` 可为空。这样一条来源可以先被登记为 `candidate` 或 `collected`，等用户确认或前端触发后，再通过 reindex 导入到 `documents/chunks`。
+
+`sources` 和 `documents/chunks` 的关系：
+
+```text
+sources
+  管来源、权限、状态、可信度、重复合并和 reindex 入口
+
+documents/chunks
+  管已经入库、可检索、可引用的正文或题录卡片
+```
+
+### 去重策略
+
+阶段 4 使用三层去重：
+
+```text
+DOI -> URL -> 标题
+```
+
+设计原因：
+
+- DOI 是论文最稳定标识，优先级最高。
+- URL 可以识别网页、期刊页面、PDF 链接和题录页面。
+- 标题归一化用于没有 DOI/URL 的题录或历史资料卡。
+
+重复来源不会简单丢弃。当前策略是把更完整的字段合并到已有来源，并在 `notes` 中记录 `merged_duplicate_source_id=...`，方便后续审计。
+
+### 可信度与权限
+
+阶段 4 将可信度和全文保存权限分开：
+
+```text
+trust_level
+  来源可靠程度，例如 high / medium / low。
+
+fulltext_permission
+  本项目能否保存全文，例如 open_access / institutional_access / metadata_only / unknown。
+```
+
+这样设计是为了避免把两个问题混在一起：一篇期刊论文可能很可信，但项目只能保存题录；一份开放 PDF 可以保存全文，但仍需要记录来源和许可。
+
+### 来源状态
+
+阶段 4 使用固定字符串表达来源生命周期：
+
+```text
+candidate
+collected
+imported
+duplicate
+rejected
+```
+
+含义：
+
+- `candidate`：已发现但未收集原文。
+- `collected`：已有本地路径、题录卡片或可用来源信息。
+- `imported`：已经通过 reindex 进入 `documents/chunks`。
+- `duplicate`：被识别为重复来源。
+- `rejected`：因不相关、质量低或权限不合适而拒绝。
+
+### 来源同步脚本
+
+阶段 4 新增：
+
+```text
+scripts/sync_sources.py
+```
+
+默认读取：
+
+```text
+data/source_candidates.csv
+data/fulltext_manifest.csv
+data/metadata/rfc_papers_metadata.csv
+data/imports/metadata_corpus/*.md
+```
+
+真实同步结果：
+
+```text
+total=283
+created=125
+updated=132
+duplicates=26
+```
+
+脚本是幂等的：重复运行不会重复创建同一来源，而是更新已有来源或合并重复来源。
+
+### 来源管理 API
+
+阶段 4 新增：
+
+```text
+GET /sources
+GET /sources/{source_id}
+POST /sources/sync
+POST /sources/{source_id}/reindex
+```
+
+API 层保持薄封装：
+
+- 用 Pydantic schema 校验和组织响应。
+- 用 repository 查询来源。
+- 用 `SourceRegistryService` 执行 reindex。
+- 把找不到来源映射成 404，把无法导入映射成可理解的 400。
+
+### 重新索引
+
+`reindex_source()` 的最小流程：
+
+```text
+source_id
+-> 查询 sources
+-> 如果 local_path 存在，导入原文件
+-> 如果是 metadata-only，生成 metadata card 后导入
+-> IngestionService.import_document()
+-> 更新 sources.document_id
+-> 更新 sources.status=imported
+```
+
+阶段 4 先提供入口，不做后台任务队列。后续前端可以把 reindex 做成按钮，Agent 工具阶段也可以把它包装成受控工具。
+
+### 来源评测
+
+阶段 4 新增：
+
+```text
+scripts/evaluate_sources.py
+data/evaluation/source_registry_metrics.csv
+```
+
+当前指标：
+
+```text
+total_sources=125
+linked_documents=0
+merged_duplicates=14
+status=candidate:8;collected:117
+fulltext_permission=institutional_access:2;metadata_only:110;open_access:10;unknown:3
+trust_level=high:125
+```
+
+`linked_documents=0` 表示当前 source registry 已登记来源，但尚未对真实库逐条执行 reindex。这个状态是可接受的，因为阶段 4 的目标是提供登记、治理和入口；批量导入或前端触发可在后续阶段继续推进。
+
+### 阶段 4 完成标准
+
+```text
+sources 表可创建
+来源可以从现有 CSV / manifest / metadata corpus 同步
+来源可按 DOI / URL / 标题去重
+可信度、全文权限和状态字段可用
+sources API 可查询、同步和 reindex
+来源评测脚本可运行
+documents/search/vector/chat 测试不被破坏
 全量自动化测试通过
 ```

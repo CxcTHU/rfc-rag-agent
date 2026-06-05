@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -36,6 +36,57 @@ class Document(Base):
         cascade="all, delete-orphan",
         order_by="Chunk.chunk_index",
     )
+    sources: Mapped[list["Source"]] = relationship(
+        back_populates="document",
+        order_by="Source.id",
+    )
+
+
+class Source(Base):
+    __tablename__ = "sources"
+    __table_args__ = (
+        UniqueConstraint("source_id", name="uq_sources_source_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    source_id: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_title: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    authors: Mapped[str | None] = mapped_column(Text, nullable=True)
+    year: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    venue: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    discovered_via: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    doi: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    normalized_doi: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    normalized_url: Mapped[str | None] = mapped_column(String(1000), nullable=True, index=True)
+    pdf_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    abstract: Mapped[str | None] = mapped_column(Text, nullable=True)
+    keywords: Mapped[str | None] = mapped_column(Text, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    citation_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_type: Mapped[str] = mapped_column(String(100), nullable=False, default="candidate")
+    trust_level: Mapped[str] = mapped_column(String(50), nullable=False, default="unknown", index=True)
+    access_rights: Mapped[str] = mapped_column(String(100), nullable=False, default="unknown")
+    fulltext_permission: Mapped[str] = mapped_column(String(50), nullable=False, default="unknown", index=True)
+    license_or_terms: Mapped[str | None] = mapped_column(Text, nullable=True)
+    local_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="candidate", index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    document: Mapped[Document | None] = relationship(back_populates="sources")
 
 
 class Chunk(Base):
@@ -96,3 +147,19 @@ class ChunkEmbedding(Base):
     )
 
     chunk: Mapped[Chunk] = relationship(back_populates="embeddings")
+
+
+class QuestionAnswerLog(Base):
+    __tablename__ = "qa_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    retrieved_chunk_ids: Mapped[str] = mapped_column(Text, nullable=False)
+    citations: Mapped[str] = mapped_column(Text, nullable=False)
+    model_provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    retrieval_mode: Mapped[str] = mapped_column(String(50), nullable=False)
+    refused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    refusal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
