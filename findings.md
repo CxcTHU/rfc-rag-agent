@@ -1,83 +1,221 @@
 # Findings & Decisions
 
 ## Requirements
-- 用户要求正式进入阶段 2 开发。
-- 用户要求先尝试修改当前线程名称，已完成，标题为 `阶段2-Embedding 与向量检索`。
-- 用户要求参照 Quivr 项目拆分阶段 2 开发任务。
-- 用户要求使用 `planning-with-files` 生成阶段 2 规划文件。
-- 用户要求完成第一个开发任务。
+- 用户要求正式进入阶段 3 开发。
+- 用户要求先修改当前线程名称，已完成，标题为 `阶段3-引用式问答`。
+- 用户要求根据 `AGENT.MD` 和相关项目内容推进。
+- 用户要求参考 Quivr 的架构，但不能机械复制。
+- 用户要求使用 `planning-with-files` 撰写阶段 3 的流程规划。
+- 用户强调规划要详细、可操作。
 
-## Research Findings
-- 本项目阶段 1 已完成并合并到 `main`，当前分支为 `codex/phase-2-vector-search`。
-- 阶段 1 已有 `documents` 和 `chunks` 两张主表，已有 ingestion service 与关键词检索 `/search`。
-- 本地数据库当前记录过 136 篇 documents 和 997 个 chunks，适合先用 SQLite 保存向量并进行线性相似度检索。
-- Quivr 的 `Brain` 将文件处理、embedder、vector_db、retriever 分离。
-- Quivr 默认使用 FAISS 构建本地向量库；序列化结构中也预留 PGVector 配置。
-- 本地 Quivr core 未发现 Chroma 的实际默认使用。
-- Quivr 测试使用 `InMemoryVectorStore` 和 deterministic fake embedding，说明测试不应依赖真实模型 API。
+## Current Project Findings
+- 当前分支已从 `main` 新建并切换到 `codex/phase-3-cited-chat`。
+- 阶段 0、阶段 1、阶段 2 已完成；`main`、`origin/main` 和 `codex/phase-2-vector-search` 曾指向同一个 `phase-2-complete` 提交。
+- 当前本地数据库状态：
+  - `documents`: 136
+  - `chunks`: 997
+  - `chunk_embeddings`: 997
+  - `source_type`: `local_file=10`、`open_access_pdf=10`、`institutional_access_pdf=1`、`metadata_record=115`
+- 当前接口：
+  - `GET /health`
+  - `POST /documents/import`
+  - `GET /documents`
+  - `GET /documents/{document_id}/chunks`
+  - `POST /search`
+  - `POST /search/vector`
+- 当前检索评测：
+  - 关键词 baseline：15/15 通过。
+  - 向量检索：11/15 通过。
+  - 向量检索失败样例：`filling_capacity_en`、`mesoscopic_modeling`、`peridynamics`、`construction_management`。
+- 当前全量测试：`python -m pytest -q` 为 63 passed。
+
+## Quivr Research Findings
+- Quivr 的 `Brain` 统一持有 storage、embedder、vector store、LLM 和 chat history。
+- Quivr 的问答入口包括 `ask_streaming()`、`aask()`、`ask()`，最终返回 `ParsedRAGResponse`。
+- Quivr 的 `LLMEndpoint` 封装模型供应商、模型名称、base URL、API key、上下文长度、输出长度和 function calling 能力。
+- Quivr 默认 RAG workflow 是：
+  - `START`
+  - `filter_history`
+  - `rewrite`
+  - `retrieve`
+  - `generate_rag`
+  - `END`
+- Quivr 的普通 RAG 实现 `QuivrQARAG` 把流程拆成：
+  - 过滤聊天历史。
+  - 生成 standalone question。
+  - 从 vector store 检索 docs。
+  - `combine_documents()` 格式化上下文并给每个 doc 加 index。
+  - 使用 `RAG_ANSWER_PROMPT` 约束模型只基于 context 回答。
+  - 使用 `parse_response()` 提取 answer、citations、followup_questions、sources。
+- Quivr 的 `RAG_ANSWER_PROMPT` 重点规则：
+  - 回答要使用 markdown。
+  - 只使用提供的 context。
+  - 如果无法基于 context 和引用来源回答，就说没有答案。
+  - 如果 context 有冲突，要指出冲突。
+- Quivr 的 `DEFAULT_DOCUMENT_PROMPT` 会给每个文档加入 `Source: {index}`，便于模型引用来源。
+- Quivr 的 `cited_answer` 模型要求输出：
+  - `answer`
+  - `citations`
+  - `followup_questions`
+- Quivr 的 `RAGResponseMetadata` 包含：
+  - `citations`
+  - `followup_questions`
+  - `sources`
+  - `metadata_model`
+  - `workflow_step`
+  - `langchain_metadata`
+- Quivr 测试中使用 fake LLM 和 deterministic fake embedding，说明本项目阶段 3 也应优先保证测试不依赖真实模型。
 
 ## Technical Decisions
 | Decision | Rationale |
 |----------|-----------|
-| 第一开发任务是 Embedding Provider 抽象 | 这是向量索引和语义检索的上游依赖，且能单独测试 |
-| 增加 deterministic embedding provider | 保证无 API key、无网络、无外部向量库时仍可稳定测试 |
-| 暂不直接引入 FAISS/Chroma | 阶段 2 初期重点是跑通 embedding -> 保存 -> 相似度检索主链路 |
-| 保留 SQLite documents/chunks 为主数据源 | 后续迁移到 FAISS/Chroma/PGVector 时只需重建索引 |
-| 新词解释加入每个 Phase 验收项 | 仅写在 AGENT.MD 里仍可能执行遗漏，放进任务清单能在每次阶段收尾时强制检查 |
-| `chunk_embeddings` 用唯一约束避免重复索引 | 同一个 chunk 使用同一个 provider/model 只保留一条向量，重复构建时更新旧记录 |
-| 向量检索新增独立入口 `POST /search/vector` | 保留阶段 1 `/search` 关键词检索 baseline，后续可以直接对比两条检索链路 |
-| `VectorSearchService` 跳过 stale embedding | 避免 chunk 文本已经变化但向量还没重建时返回解释不一致的检索结果 |
-| 向量检索评测复用 `keyword_queries.csv` | 保证关键词 baseline 和向量检索使用同一批问题，比较口径一致 |
-| `scripts/evaluate_vector_search.py` 默认检查并补齐向量索引 | 避免因为忘记构建 `chunk_embeddings` 而把空结果误判为检索失败 |
-| `VectorIndexService` 改为按 batch 提交数据库写入 | 减少大量 chunk 首次索引时的磁盘提交次数，避免评测脚本长时间卡住 |
+| 阶段 3 新增 `app/services/generation/` | 阶段 1 是 ingestion，阶段 2 是 retrieval，阶段 3 需要 generation 层承接 prompt、模型调用和答案生成 |
+| 定义 `ChatModelProvider` | 借鉴 Quivr `LLMEndpoint`，让问答业务不直接绑定某个国产模型或 OpenAI-compatible API |
+| 先实现 deterministic chat provider | 自动化测试不能依赖真实 API key、网络和模型随机输出 |
+| 预留 OpenAI-compatible provider | 用户当前主要使用国产模型 key，很多国产模型提供 OpenAI-compatible 接口 |
+| 阶段 3 不引入 LangGraph | Quivr 的 LangGraph workflow 很强，但本项目现在先做单轮引用式问答，复杂 workflow 留到阶段 7 |
+| 第一版不做聊天历史 | 阶段 3 最小目标是单轮“检索 -> 回答 -> 引用 -> 拒答”，多轮历史会增加复杂度 |
+| 默认向量检索，必要时关键词回退 | 既复用阶段 2，又避免 deterministic 向量检索的 4 个失败样例导致问答链路不可用 |
+| 引用编号采用 `[1] [2]` 文本格式 | 比 function calling 更通用，更适合不同国产模型；后续可升级为结构化输出 |
+| 拒答判断放在 service 层 | 不能只靠 prompt 约束模型；工程层要在资料不足时主动阻止硬编 |
+| `sources` 返回完整 chunk 元数据 | 回答引用必须能追溯到标题、来源路径、chunk_id 和 chunk_index |
+| 阶段 3 新增 chat 评测集 | 问答质量不能只靠肉眼演示，需要固定问题集验证引用和拒答 |
+| `ChatMessage` 只允许 `system/user/assistant` 三种 role | 对齐常见 chat completions 接口，避免后续 prompt 里混入未定义角色 |
+| `OpenAICompatibleChatModelProvider` 使用标准库 `urllib` | 当前项目没有运行时 HTTP 客户端依赖，先避免额外依赖膨胀 |
+| `ContextSource` 作为 prompt builder 的来源结构 | 把检索结果和给模型看的来源编号绑定起来，后续 citations 才能追溯 |
+| Prompt 中同时包含英文规则和中文免责声明 | 模型接口通常能处理英文规则，中文免责声明贴近本项目用户和面试表达 |
+| `CitationAnswerService` 返回结构化 dataclass | 比直接返回字符串更适合后续 API schema，能够同时携带 answer、citations、sources、refused 和模型信息 |
+| `retrieval_mode` 支持 `auto/vector/keyword` | 第一版既能指定检索方式，也能在默认模式下自动从向量检索回退到关键词检索 |
+| citations 在 service 层做白名单过滤 | 模型答案中的引用必须属于本次 prompt builder 生成的 sources，不能引用不存在的编号 |
+| `POST /chat` 作为阶段 3 的外部问答入口 | 让前端或调用方不需要知道内部检索、prompt 和 provider 细节，只使用稳定 API |
+| Chat schema 与 service result 分层 | `CitationAnswerResult` 是内部结构，`ChatResponse` 是对外协议，避免内部实现细节直接泄漏给 API 用户 |
+| 空白问题在 `ChatRequest` 中校验为 422 | 输入格式问题属于请求校验错误，符合 FastAPI/Pydantic 的语义 |
+| 本阶段落地 `qa_logs` 表 | 阶段 3 已有 `/chat`，问答结果需要可追踪，方便定位检索、引用、拒答和模型配置问题 |
+| `qa_logs` 使用 JSON 字符串保存 id 列表 | 当前项目尚未引入复杂 JSON 列或迁移工具，用 Text 存储整数列表更轻量且易测试 |
+| 不记录 `raw_response` | 原始模型响应可能包含敏感 provider trace，日志只保存 question、answer、source ids、citations 和模型元信息 |
+| `scripts/evaluate_chat.py` 复用 `CitationAnswerService` | 评测真实问答链路，而不是绕过 service 直接测检索或 prompt |
+| Chat 评测默认关闭 QA 日志 | 避免批量评测污染 `qa_logs`；需要时可通过 `--log-answers` 显式打开 |
+| Chat 评测结果写入 CSV | 方便阶段收尾文档、Obsidian 和后续横向对比使用 |
+| `AGENT.MD` 需要同步阶段 3 完成状态 | 新线程会优先读取 `AGENT.MD`，如果不更新会误判还需进入阶段 3 |
+| Obsidian 知识点需要单独成文 | 阶段 3 新增 ChatModelProvider、RAG prompt、引用、拒答、Chat API、QA 日志和评测，都是后续面试可讲的独立点 |
+
+## Planned File Changes
+| Area | Planned Files |
+|------|---------------|
+| Chat model provider | `app/services/generation/chat_model.py`, `tests/test_chat_model_provider.py` |
+| Prompt/context builder | `app/services/generation/prompt_builder.py`, `tests/test_prompt_builder.py` |
+| Answer service | `app/services/generation/answer_service.py`, `tests/test_answer_service.py` |
+| API/schema | `app/api/chat.py`, `app/schemas/chat.py`, `app/main.py`, `tests/test_chat_api.py` |
+| Optional QA logging | `app/db/models.py`, `app/db/repositories.py`, `tests/test_chat_logging.py` |
+| Evaluation | `data/evaluation/chat_queries.csv`, `scripts/evaluate_chat.py`, `data/evaluation/chat_results.csv`, `tests/test_evaluate_chat.py` |
+| Documentation | `README.md`, `docs/progress.md`, `docs/architecture.md`, `docs/stage3_learning_notes.md`, `AGENT.MD` if needed |
+| Obsidian | `obsidian-vault/阶段/阶段 3 - 引用式问答.md`, related category pages and knowledge notes |
 
 ## Term Explanations
 | Term | Explanation |
 |------|-------------|
-| `EmbeddingProvider` | embedding 模型提供者，负责把问题或 chunk 文本转成向量；本项目放在 `app/services/retrieval/embedding.py` |
-| `Protocol` | Python 的接口约定，用来表达“只要对象有这些方法，就能当作这个类型使用” |
-| deterministic embedding | 确定性 embedding，同样输入永远生成同样向量，适合测试和无 API key 开发 |
-| `hash` | 内容指纹，把文本算成固定字符串；本项目用它判断 chunk 内容是否变化 |
-| API key | 调用云端模型服务的密钥；阶段 2 初期不用真实 key，避免开发被外部服务卡住 |
-| 归一化 | 把向量长度缩放到 1，方便后续用余弦相似度比较语义距离 |
-| `chunk_embeddings` | chunk 向量表，保存每个资料片段对应的 embedding、模型信息和内容指纹 |
-| `unique constraint` | 数据库唯一约束，保证同一个 chunk/provider/model 组合不会保存重复向量 |
-| `upsert` | 有记录就更新、没记录就插入；本项目 repository 的 `save_embedding()` 采用这个行为 |
-| `embedding_json` | 用 JSON 文本保存向量数字列表，便于 SQLite 早期开发和后续迁移 |
-| `VectorIndexService` | 向量索引构建服务，扫描 chunks、调用 embedding provider、写入 `chunk_embeddings` |
-| batch | 批次，把多个 chunk 分组处理，避免一次调用处理过多文本 |
-| stale embedding | 过期向量，表示 chunk 内容或向量维度变了，需要重新生成 embedding |
-| idempotent | 幂等，重复运行同一操作不会产生重复或错误结果；本项目索引脚本重复运行会跳过未变化 chunks |
-| CLI script | 命令行脚本，例如 `scripts/build_vector_index.py`，用于在终端触发索引构建 |
-| `VectorSearchService` | 向量检索服务，把用户问题转成 query embedding，再和 `chunk_embeddings` 中保存的 chunk embedding 比较相似度 |
-| query embedding | 用户问题对应的向量；本项目在 `VectorSearchService.search()` 中调用 `embed_query()` 生成 |
-| cosine similarity | 余弦相似度，用两个向量夹角衡量接近程度；越接近 1 表示方向越像，越适合排在前面 |
-| dot product | 点积，余弦相似度计算中的基础步骤，可以理解为两个向量逐项相乘再求和 |
-| `score` | 检索相关性分数；向量检索中表示 query embedding 与 chunk embedding 的余弦相似度 |
-| baseline | 对照基线；本项目里阶段 1 的 `/search` 关键词检索是后续评估向量检索是否变好的对照组 |
-| evaluation script | 评测脚本，用固定问题集自动运行检索并输出结果；本项目新增 `scripts/evaluate_vector_search.py` |
-| Recall@K | 检索评测指标，表示前 K 条结果中是否召回了期望资料；本项目用 `top_k` 和 `hit_rank` 近似记录 |
-| failure case | 失败样例，表示某条评测问题没有命中期望资料；本轮向量检索有 4 条 `keyword_only_pass` |
-| keyword_only_pass | 关键词检索命中但向量检索未命中；说明当前 deterministic 向量检索在这类问题上弱于 baseline |
-| batch commit | 批量提交，把一批数据库写入一起确认保存；本项目用于加速 `VectorIndexService` 写入 `chunk_embeddings` |
+| `ChatModelProvider` | 聊天模型提供者，负责把 prompt 发给模型并拿回回答；类似阶段 2 的 `EmbeddingProvider` |
+| `OpenAI-compatible API` | 兼容 OpenAI 请求格式的模型接口，很多国产模型也支持这种格式 |
+| `prompt` | 给模型的指令和上下文组合；阶段 3 用它要求模型只基于资料回答 |
+| `context` | 本次回答允许使用的资料片段集合，来自关键词或向量检索结果 |
+| `citation` | 引用编号，表示答案中的某句话依据哪个资料片段 |
+| `source` | 来源信息，包括文档标题、来源路径、chunk 编号和片段内容 |
+| `refusal` | 拒答机制，资料不足时明确告诉用户“当前资料库没有足够依据” |
+| `function calling` | 让模型按工具或结构化函数参数输出；Quivr 用它提取 `cited_answer`，本项目第一版先不依赖 |
+| `metadata` | 回答正文之外的结构化信息，例如 citations、sources、model_name、refused |
+| `workflow` | 多步骤流程编排；Quivr 用 LangGraph 表示，阶段 3 暂时用普通 service 串联 |
+| `standalone question` | 脱离聊天历史也能理解的问题；Quivr 会改写问题，本项目第一版先不做 |
+| `QA log` | 问答日志，记录问题、答案、召回片段和模型信息，方便后续排查 |
+| `role` | 聊天消息角色，例如 system 表示系统规则，user 表示用户问题，assistant 表示模型回复 |
+| `temperature` | 控制模型回答随机性的参数；阶段 3 默认较低，让回答更稳定 |
+| `timeout` | 模型请求最长等待时间，避免外部 API 卡住整个服务 |
+| `ContextSource` | 给模型看的上下文来源条目，包含 source_id、文档标题、chunk_id、片段内容和 score |
+| `RagPrompt` | prompt builder 的输出，包含 messages、context_text 和 sources |
+| 上下文截断 | 控制每个 chunk 和总上下文长度，避免 prompt 太长 |
+| `CitationAnswerService` | 阶段 3 的问答编排服务，把检索、上下文组织、模型调用、引用提取和拒答串起来 |
+| `retrieval_mode` | 检索模式，当前支持 `auto`、`vector`、`keyword`；`auto` 会先尝试向量检索，再关键词回退 |
+| `min_score` | 最低相关性阈值，低于阈值的检索结果会被过滤，过滤后无结果则拒答 |
+| `refused` | 问答结果里的布尔字段，表示本次是否因为资料不足而拒答 |
+| `used_retrieval_mode` | 实际使用的检索模式，例如自动模式下最终可能是 `vector`、`keyword` 或 `none` |
+| `ChatRequest` | `/chat` 的请求结构，包含 question、top_k、retrieval_mode 和 min_score |
+| `ChatResponse` | `/chat` 的响应结构，包含 answer、citations、sources、refused 和模型信息 |
+| `ChatSourceItem` | `/chat` 返回的单个来源结构，描述一个可追溯的 chunk 来源 |
+| 依赖注入 | FastAPI 的 `Depends(...)` 机制，本项目用它把数据库、聊天模型 provider 和 embedding provider 交给路由函数 |
+| 422 | 请求体验证错误，通常由 Pydantic schema 校验触发，例如空白 question 或非法 retrieval_mode |
+| `qa_logs` | 问答日志表，记录每次问答的问题、答案、引用、召回 chunk、检索模式、模型信息和拒答状态 |
+| `QuestionAnswerLog` | SQLAlchemy 模型，对应数据库中的 `qa_logs` 表 |
+| `QuestionAnswerLogRepository` | 保存和读取问答日志的 repository，避免 service 直接拼数据库操作 |
+| 可观测性 | 系统能被排查和复盘的能力；本阶段体现为保存 QA 日志，后续可用于评测和问题定位 |
+| `raw_response` | 模型供应商返回的原始响应，可能含 trace 或敏感字段，本项目日志不保存它 |
+| `chat_queries.csv` | 阶段 3 chat 评测问题集，定义问题、期望是否拒答、是否要求 sources/citations 和来源期望词 |
+| `chat_results.csv` | chat 评测输出结果，记录每个问题是否通过、答案、sources 数量、citations 校验和模型信息 |
+| `ExpectedChatQuery` | `evaluate_chat.py` 中的评测输入结构，对应 `chat_queries.csv` 的一行 |
+| `EvaluatedChatResult` | `evaluate_chat.py` 中的评测输出结构，对应 `chat_results.csv` 的一行 |
+| `citations_valid` | 评测指标，表示答案中的引用编号是否都能映射到本次返回的 sources |
+| 阶段收尾 | 每个大阶段结束时同步 README、progress、architecture、AGENT 和 Obsidian，保证代码状态和文档入口一致 |
+| Obsidian 双链 | Obsidian 的内部链接形式，例如 `[[阶段 3 - 引用式问答]]`，用于把阶段、分类和知识点互相连接 |
 
 ## Issues Encountered
 | Issue | Resolution |
 |-------|------------|
-| `Sequence` 重复导入 | 删除 `typing.Sequence`，统一使用 `collections.abc.Sequence` |
-| `def batched[T]` 是 Python 3.12 才支持的泛型语法 | 改成 Python 3.11 可用的 `TypeVar` 写法，符合项目 `requires-python >=3.11` |
-| 首次运行 `scripts/evaluate_vector_search.py` 超时 | 发现索引写入已完成但脚本未及时输出；将索引构建保存逻辑改为 batch commit 后重跑成功 |
+| 当前 planning 文件还是阶段 2 记忆 | 已按 `planning-with-files` 重写为阶段 3 规划 |
+| Quivr RAG 架构较复杂，直接照搬会过重 | 只借鉴 LLMEndpoint、prompt、source 编号和 response metadata，不引入 LangGraph |
+| deterministic provider 初版回显完整 RAG prompt，误把上下文里的 `[2]` 当作答案引用 | 改为只提取用户问题本体，避免测试答案被 prompt 上下文污染 |
+
+## Implementation Findings
+- Phase 1 已新增 `app/services/generation/chat_model.py`，形成 generation 层入口。
+- `DeterministicChatModelProvider` 可以在没有 API key 的情况下返回稳定答案，适合后续 AnswerService 和 Chat API 测试。
+- `OpenAICompatibleChatModelProvider` 已具备最小真实调用边界：向 `{base_url}/chat/completions` 发送 `model/messages/temperature`。
+- 当前不在测试中真实调用外部模型，只验证配置边界和 OpenAI-compatible 响应解析。
+- `.env.example` 已补充 `CHAT_MODEL_TEMPERATURE` 和 `CHAT_MODEL_TIMEOUT_SECONDS`。
+- Phase 2 已新增 `app/services/generation/prompt_builder.py`，可以把关键词或向量检索结果转成带 `[1]`、`[2]` 编号的 RAG prompt。
+- Prompt builder 会保留每个来源的标题、来源类型、路径、文件名、chunk_id、chunk_index、heading_path、score 和内容。
+- Prompt builder 会在 system prompt 中明确“不替代规范审查、工程设计和专家判断”。
+- Phase 3 已新增 `app/services/generation/answer_service.py`，形成最小问答链路：检索 chunks -> 构造 RAG prompt -> 调用 ChatModelProvider -> 提取 citations -> 返回结构化结果。
+- `CitationAnswerService.answer()` 会校验 `question`、`top_k`、`retrieval_mode` 和 `min_score`，避免无效输入进入检索和模型调用。
+- `retrieval_mode="auto"` 会先调用 `VectorSearchService`，如果没有可用结果，再调用 `KeywordSearchService` 回退。
+- 资料不足时返回统一拒答文案：`当前资料库中没有找到足够可靠的依据。`
+- `extract_citations()` 只保留本次 sources 允许的编号，并去重保序；模型输出不存在的 `[99]` 会被过滤掉。
+- `DeterministicChatModelProvider` 已新增问题提取逻辑，避免把完整上下文里的来源编号误带进答案。
+- Phase 4 已新增 `app/schemas/chat.py` 和 `app/api/chat.py`，对外提供 `POST /chat`。
+- `ChatRequest` 会把 question 去掉首尾空白，并在空白问题时返回 422。
+- `/chat` 会通过依赖注入拿到数据库、`ChatModelProvider` 和 `EmbeddingProvider`，然后调用 `CitationAnswerService`。
+- `ChatResponse` 会返回 answer、citations、sources、refused、refusal_reason、retrieval_mode、model_provider 和 model_name。
+- `tests/test_chat_api.py` 覆盖了正常问答、auto 模式关键词回退、资料不足拒答、空白问题 422 和非法 retrieval_mode 422。
+- Phase 5 已新增 `QuestionAnswerLog` 模型，对应 `qa_logs` 表。
+- `QuestionAnswerLogRepository` 可以保存、查询和统计问答日志，并用 JSON 字符串保存 retrieved_chunk_ids 和 citations。
+- `CitationAnswerService` 默认会在成功问答和拒答后写入一条 QA 日志。
+- QA 日志记录 question、answer、retrieved_chunk_ids、citations、model_provider、model_name、retrieval_mode、refused、refusal_reason 和 created_at。
+- QA 日志不保存 `ChatModelResult.raw_response`，测试已覆盖包含 `secret-api-key` 的 raw_response 不会进入日志字段。
+- Phase 6 已新增 `scripts/evaluate_chat.py`、`data/evaluation/chat_queries.csv` 和 `data/evaluation/chat_results.csv`。
+- Chat 评测覆盖 6 类问题：概念、施工/质量控制、温控、填充能力、工程案例和无依据问题。
+- Chat 评测当前使用 deterministic chat provider 和 keyword retrieval，重点验证完整问答链路、sources、citations、拒答和明显硬编词检查。
+- 当前真实数据库评测结果：chat 6/6 passed；关键词 15/15 passed；向量 11/15 passed。
+- 调整无依据评测问题时发现，英文常见词问题容易被关键词检索误召回，因此第一版用合成单词稳定验证拒答机制。
+- Phase 7 已更新 `README.md`、`docs/progress.md`、`docs/architecture.md` 和 `AGENT.MD`。
+- Phase 7 已更新 Obsidian 首页、阶段索引、阶段 3 页面、5 个分类页和 7 个知识点页面。
+- 阶段 3 的文档收尾结论是：阶段 3 已完成，下一阶段应进入阶段 4 数据采集与来源管理。
 
 ## Resources
 - `AGENT.MD`
 - `README.md`
 - `docs/progress.md`
 - `docs/architecture.md`
-- `data/evaluation/keyword_queries.csv`
+- `docs/data_sources.md`
+- `task_plan.md`
+- `progress.md`
 - `G:\Codex\program\quivr\core\quivr_core\brain\brain.py`
 - `G:\Codex\program\quivr\core\quivr_core\brain\brain_defaults.py`
+- `G:\Codex\program\quivr\core\quivr_core\llm\llm_endpoint.py`
+- `G:\Codex\program\quivr\core\quivr_core\rag\quivr_rag.py`
+- `G:\Codex\program\quivr\core\quivr_core\rag\quivr_rag_langgraph.py`
+- `G:\Codex\program\quivr\core\quivr_core\rag\prompts.py`
+- `G:\Codex\program\quivr\core\quivr_core\rag\utils.py`
+- `G:\Codex\program\quivr\core\quivr_core\rag\entities\models.py`
 - `G:\Codex\program\quivr\core\quivr_core\rag\entities\config.py`
-- `G:\Codex\program\quivr\core\tests\test_brain.py`
+- `G:\Codex\program\quivr\core\tests\test_quivr_rag.py`
+- `G:\Codex\program\quivr\core\tests\test_llm_endpoint.py`
+- `G:\Codex\program\quivr\core\tests\conftest.py`
 
 ## Visual/Browser Findings
 - 未使用浏览器或视觉检查。

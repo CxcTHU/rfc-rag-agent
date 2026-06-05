@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Chunk, ChunkEmbedding, Document
+from app.db.models import Chunk, ChunkEmbedding, Document, QuestionAnswerLog
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,19 @@ class ChunkEmbeddingCreate:
     dimension: int
     embedding: Sequence[float]
     content_hash: str
+
+
+@dataclass(frozen=True)
+class QuestionAnswerLogCreate:
+    question: str
+    answer: str
+    retrieved_chunk_ids: Sequence[int]
+    citations: Sequence[int]
+    model_provider: str
+    model_name: str
+    retrieval_mode: str
+    refused: bool
+    refusal_reason: str | None = None
 
 
 class DocumentRepository:
@@ -176,6 +189,45 @@ class ChunkEmbeddingRepository:
         return self.db.scalar(statement) or 0
 
 
+class QuestionAnswerLogRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def save_log(
+        self,
+        log_data: QuestionAnswerLogCreate,
+        commit: bool = True,
+    ) -> QuestionAnswerLog:
+        log = QuestionAnswerLog(
+            question=log_data.question,
+            answer=log_data.answer,
+            retrieved_chunk_ids=serialize_int_list(log_data.retrieved_chunk_ids),
+            citations=serialize_int_list(log_data.citations),
+            model_provider=log_data.model_provider,
+            model_name=log_data.model_name,
+            retrieval_mode=log_data.retrieval_mode,
+            refused=log_data.refused,
+            refusal_reason=log_data.refusal_reason,
+        )
+        self.db.add(log)
+        if commit:
+            self.db.commit()
+            self.db.refresh(log)
+        return log
+
+    def get_by_id(self, log_id: int) -> QuestionAnswerLog | None:
+        statement = select(QuestionAnswerLog).where(QuestionAnswerLog.id == log_id)
+        return self.db.scalar(statement)
+
+    def list_logs(self) -> list[QuestionAnswerLog]:
+        statement = select(QuestionAnswerLog).order_by(QuestionAnswerLog.id)
+        return list(self.db.scalars(statement).all())
+
+    def count_logs(self) -> int:
+        statement = select(func.count(QuestionAnswerLog.id))
+        return self.db.scalar(statement) or 0
+
+
 def serialize_embedding(embedding: Sequence[float]) -> str:
     return json.dumps([float(value) for value in embedding], separators=(",", ":"))
 
@@ -185,3 +237,14 @@ def deserialize_embedding(embedding_json: str) -> list[float]:
     if not isinstance(values, list):
         raise ValueError("embedding_json must contain a JSON list")
     return [float(value) for value in values]
+
+
+def serialize_int_list(values: Sequence[int]) -> str:
+    return json.dumps([int(value) for value in values], separators=(",", ":"))
+
+
+def deserialize_int_list(values_json: str) -> list[int]:
+    values = json.loads(values_json)
+    if not isinstance(values, list):
+        raise ValueError("values_json must contain a JSON list")
+    return [int(value) for value in values]

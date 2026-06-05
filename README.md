@@ -14,9 +14,9 @@
 
 ## 当前阶段
 
-阶段 2：Embedding 与向量检索已完成，当前分支为 `codex/phase-2-vector-search`。
+阶段 3：引用式问答已完成，当前分支为 `codex/phase-3-cited-chat`。
 
-下一阶段准备进入：阶段 3，引用式问答。
+下一阶段准备进入：阶段 4，数据采集与来源管理。
 
 当前已经实现：
 
@@ -39,8 +39,15 @@
 - `POST /search/vector` 向量检索 API
 - `scripts/evaluate_vector_search.py` 向量检索评测脚本
 - `data/evaluation/vector_results.csv` 向量检索评测结果
+- `ChatModelProvider` 聊天模型抽象，支持 deterministic provider 和 OpenAI-compatible provider
+- RAG prompt/context builder，把检索结果组织成带 `[1]`、`[2]` 编号的上下文
+- `CitationAnswerService` 最小引用式问答链路
+- `POST /chat` 引用式问答 API
+- `qa_logs` 问答日志表和最小可观测性
+- `scripts/evaluate_chat.py` 问答评测脚本
+- `data/evaluation/chat_queries.csv` 和 `data/evaluation/chat_results.csv`
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 63 个自动化测试
+- 106 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -52,12 +59,12 @@
 3. `docs/architecture.md`
 4. `docs/data_sources.md`
 
-阶段 2 的开发记忆和学习笔记：
+阶段 3 的开发记忆和学习笔记：
 
 - `task_plan.md`
 - `findings.md`
 - `progress.md`
-- `docs/stage2_learning_notes.md`
+- `docs/stage3_learning_notes.md`
 
 ## 本地启动
 
@@ -106,7 +113,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-63 passed
+106 passed
 ```
 
 当前测试覆盖：
@@ -126,6 +133,12 @@ python -m pytest
 - vector index service
 - vector search service 和 API
 - vector search evaluation script
+- ChatModelProvider 和 OpenAI-compatible 响应解析
+- RAG prompt/context builder
+- CitationAnswerService
+- Chat API
+- QA logging
+- Chat evaluation script
 - source collection 资料发现与过滤
 
 ## 向量索引与检索
@@ -158,9 +171,63 @@ python scripts/evaluate_vector_search.py
 ```text
 keyword baseline: 15/15 passed
 vector search: 11/15 passed
+chat evaluation: 6/6 passed
 ```
 
 说明：当前向量检索使用 deterministic embedding，主要用于稳定开发和自动化测试，不代表真实语义 embedding 的最终效果。后续接入真实 embedding 模型或混合检索后，应继续复用同一评测集对比。
+
+## 引用式问答
+
+阶段 3 的最小问答链路是：
+
+```text
+用户问题
+-> 检索 chunks
+-> 组织 RAG 上下文和来源编号
+-> 调用 ChatModelProvider
+-> 返回 answer、citations、sources、refused 和 model 信息
+-> 写入 qa_logs
+```
+
+调用 `/chat` 示例：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/chat `
+  -ContentType "application/json" `
+  -Body '{"question":"What affects filling capacity in rock-filled concrete?","top_k":5,"retrieval_mode":"auto"}'
+```
+
+响应字段要点：
+
+- `answer`：回答正文。
+- `citations`：答案中使用的来源编号，例如 `[1]`。
+- `sources`：每个来源编号对应的文档、chunk、片段内容和 score。
+- `refused`：资料不足时为 `true`。
+- `refusal_reason`：拒答原因。
+- `retrieval_mode`：实际使用的检索模式，可能是 `vector`、`keyword` 或 `none`。
+- `model_provider` / `model_name`：本次回答使用的聊天模型信息。
+
+资料不足时，系统会返回：
+
+```text
+当前资料库中没有找到足够可靠的依据。
+```
+
+运行问答评测：
+
+```powershell
+python scripts/evaluate_chat.py
+```
+
+当前结果：
+
+```text
+chat evaluation: 6/6 passed
+```
+
+阶段 3 仍然不做 Agent 工具调用，也不引入复杂 LangGraph workflow。当前目标是先把“基于资料回答、可引用、可拒答、可评测”的最小链路稳定跑通。
 
 ## Obsidian 知识库
 
@@ -191,6 +258,7 @@ rfc-rag-agent/
   app/
     main.py
     api/
+      chat.py
       documents.py
       health.py
       search.py
@@ -201,10 +269,12 @@ rfc-rag-agent/
       repositories.py
       session.py
     schemas/
+      chat.py
       document.py
       health.py
       search.py
     services/
+      generation/
       ingestion/
       retrieval/
       source_collection.py
@@ -268,3 +338,11 @@ rfc-rag-agent/
 我先抽象 `EmbeddingProvider`，让业务检索逻辑不依赖某一家模型服务；再新增 `chunk_embeddings` 表保存每个 chunk 的向量、模型信息、维度和内容指纹。索引构建由 `VectorIndexService` 负责，可以重复运行，未变化的 chunk 会被跳过，内容变化后会更新 embedding。
 
 检索时，`POST /search/vector` 会把用户问题转成 query embedding，再和数据库中的 chunk embedding 计算余弦相似度，返回来源、标题、片段和 score。为了验证效果，我复用了阶段 1 的关键词评测集，当前 deterministic embedding 下向量检索为 11/15，关键词 baseline 为 15/15。这个结果说明链路已经跑通，但真实语义效果还需要后续接入更好的 embedding 模型或混合检索来提升。
+
+## 阶段 3 面试表达
+
+阶段 3 我完成了引用式问答的最小稳定链路，而不是直接做一个普通聊天接口。
+
+我先抽象 `ChatModelProvider`，让业务逻辑不绑定某一家模型服务；再用 prompt builder 把检索结果组织成带 `[1]`、`[2]` 编号的上下文，并保存编号到 chunk 的映射。`CitationAnswerService` 负责串联检索、prompt 构造、模型调用、引用提取和拒答判断。最后通过 `POST /chat` 返回 answer、citations、sources、refused、retrieval_mode 和 model 信息。
+
+为了保证可排查性，我新增了 `qa_logs` 记录每次问答的问题、答案、召回 chunk、引用、模型和拒答状态；为了保证不是只靠演示，我新增了 chat 评测集和 `scripts/evaluate_chat.py`。当前 chat 评测 6/6 通过，全量测试 106 个通过。阶段 3 暂不做 Agent 工具调用和复杂 workflow，先保证 RAG 问答链路忠实、可引用、可拒答、可评测。

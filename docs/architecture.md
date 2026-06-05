@@ -503,3 +503,260 @@ vector search: 11/15 passed
 关键词 baseline 仍可用
 全量自动化测试通过
 ```
+
+## 阶段 3 总体框架
+
+阶段 3 的目标是打通第一条最小引用式问答链路：
+
+```text
+用户问题
+-> CitationAnswerService
+-> VectorSearchService 或 KeywordSearchService
+-> prompt_builder 组织上下文和来源编号
+-> ChatModelProvider 生成回答
+-> extract_citations 过滤引用
+-> ChatResponse 返回答案、来源和拒答状态
+-> qa_logs 保存问答记录
+```
+
+本阶段参考 Quivr 的 `LLMEndpoint`、RAG prompt、source index 和 response metadata 思路，但继续保持轻量 service 分层，不引入 LangGraph 或复杂 Agent workflow。
+
+```text
+Quivr LLMEndpoint          -> 本项目 ChatModelProvider
+Quivr combine_documents    -> 本项目 prompt_builder / ContextSource
+Quivr ParsedRAGResponse    -> 本项目 CitationAnswerResult / ChatResponse
+Quivr RAGResponseMetadata  -> 本项目 citations / sources / model_provider / model_name / refused
+```
+
+阶段 3 不做：
+
+- Agent 工具调用。
+- 多轮聊天历史。
+- 复杂 LangGraph workflow。
+- 真实模型质量优化。
+- rerank 或混合检索优化。
+
+这些内容放到阶段 4 以后逐步处理。
+
+### Generation 层
+
+阶段 3 新增 `app/services/generation/`：
+
+```text
+app/services/generation/
+  chat_model.py       ChatModelProvider、deterministic provider、OpenAI-compatible provider
+  prompt_builder.py   ContextSource、RagPrompt、build_rag_prompt()
+  answer_service.py   CitationAnswerService、引用提取、拒答和日志写入
+```
+
+为什么新增 generation 层：
+
+- 阶段 1/2 已经有 ingestion 和 retrieval。
+- 阶段 3 需要独立承接 prompt、模型调用和答案生成。
+- API 层不应该直接写检索、prompt 和模型调用细节。
+
+### ChatModelProvider
+
+`ChatModelProvider` 是聊天模型适配接口：
+
+```text
+messages -> ChatModelResult(answer, provider, model_name, raw_response)
+```
+
+当前实现：
+
+- `DeterministicChatModelProvider`：用于本地开发和自动化测试。
+- `OpenAICompatibleChatModelProvider`：预留国产大模型或兼容 OpenAI `/chat/completions` 的真实调用边界。
+
+配置项：
+
+```text
+CHAT_MODEL_PROVIDER
+CHAT_MODEL_NAME
+CHAT_MODEL_API_KEY
+CHAT_MODEL_BASE_URL
+CHAT_MODEL_TEMPERATURE
+CHAT_MODEL_TIMEOUT_SECONDS
+```
+
+### RAG prompt/context builder
+
+`prompt_builder.py` 把检索结果转成模型可读上下文：
+
+```text
+SearchResultLike
+-> ContextSource(source_id, chunk_id, document_title, content, score, ...)
+-> RagPrompt(messages, context_text, sources)
+```
+
+来源编号规则：
+
+- 每次回答内部从 `[1]` 开始编号。
+- `source_id` 是本次回答的局部编号，不等于数据库 `chunk_id`。
+- API 返回的 `sources` 保存 `source_id -> chunk_id` 的映射。
+
+prompt 约束：
+
+- 只基于给定资料回答。
+- 回答中引用来源编号。
+- 资料不足时拒答。
+- 区分事实、推断和工程风险。
+- 明确系统不替代规范审查、工程设计和专家判断。
+
+### CitationAnswerService
+
+`CitationAnswerService` 是阶段 3 的核心编排层：
+
+```text
+answer(question, top_k, retrieval_mode, min_score)
+```
+
+职责：
+
+- 校验问题和参数。
+- 根据 `retrieval_mode` 检索 chunks。
+- `auto` 模式先向量检索，失败后关键词回退。
+- 资料为空或低于 `min_score` 时拒答。
+- 调用 `build_rag_prompt()`。
+- 调用 `ChatModelProvider.generate()`。
+- 从答案中提取 `[1]`、`[2]` 这类 citations。
+- 只保留本次 sources 中存在的 citations。
+- 返回 `CitationAnswerResult`。
+- 默认保存 `qa_logs`。
+
+返回结构：
+
+```text
+question
+answer
+citations
+sources
+refused
+refusal_reason
+retrieval_mode
+model_provider
+model_name
+```
+
+### Chat API
+
+阶段 3 新增：
+
+```text
+POST /chat
+```
+
+请求结构 `ChatRequest`：
+
+```text
+question
+top_k
+retrieval_mode: auto | vector | keyword
+min_score
+```
+
+响应结构 `ChatResponse`：
+
+```text
+question
+answer
+citations
+sources
+refused
+refusal_reason
+retrieval_mode
+model_provider
+model_name
+```
+
+`ChatSourceItem` 包含：
+
+```text
+source_id
+document_id
+document_title
+source_type
+source_path
+file_name
+chunk_id
+chunk_index
+heading_path
+content
+score
+```
+
+API 层保持薄封装：
+
+- 用 Pydantic 校验请求。
+- 用 `Depends(...)` 注入数据库、chat provider、embedding provider。
+- 调用 `CitationAnswerService`。
+- 把内部结果映射成对外响应。
+
+### QA 日志
+
+阶段 3 新增 `qa_logs` 表，对应 `QuestionAnswerLog`：
+
+```text
+qa_logs
+  id
+  question
+  answer
+  retrieved_chunk_ids
+  citations
+  model_provider
+  model_name
+  retrieval_mode
+  refused
+  refusal_reason
+  created_at
+```
+
+设计原则：
+
+- 记录排查需要的信息。
+- 不保存 API key。
+- 不保存 `ChatModelResult.raw_response`。
+- `retrieved_chunk_ids` 和 `citations` 当前用 Text 保存 JSON 整数列表，后续迁移 PostgreSQL 时可升级为 JSON 字段。
+- `CitationAnswerService` 默认写日志，测试或批处理可以用 `log_answers=False` 关闭。
+
+### 评测策略
+
+阶段 3 新增：
+
+```text
+data/evaluation/chat_queries.csv
+scripts/evaluate_chat.py
+data/evaluation/chat_results.csv
+```
+
+评测指标：
+
+- 是否返回答案。
+- 是否按预期拒答。
+- 是否返回 sources。
+- citations 是否能映射到 sources。
+- 期望来源是否命中。
+- 答案是否包含明显不在资料中的禁止词。
+
+当前结果：
+
+```text
+chat evaluation: 6/6 passed
+keyword baseline: 15/15 passed
+vector evaluation: 11/15 passed
+full tests: 106 passed
+```
+
+### 阶段 3 完成标准
+
+```text
+ChatModelProvider 可替换
+RAG prompt 可构造
+AnswerService 可返回 answer/citations/sources/refused/model 信息
+POST /chat 可调用
+资料不足时拒答
+问答日志可追踪
+chat 评测脚本可运行
+旧关键词和向量评测仍可运行
+全量自动化测试通过
+```

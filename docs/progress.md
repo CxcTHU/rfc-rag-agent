@@ -2,24 +2,91 @@
 
 ## 最新状态：2026-06-05
 
-当前阶段：阶段 2，Embedding 与向量检索已完成。下一步准备进入阶段 3：引用式问答。
+当前阶段：阶段 3，引用式问答已完成。下一步准备进入阶段 4：数据采集与来源管理。
 
 当前关键证据：
 
-- `task_plan.md` 当前阶段为 `Stage 2 complete`。
+- `task_plan.md` 当前阶段为 `Phase 7 complete`。
+- `POST /chat` 已实现。
+- `ChatModelProvider`、RAG prompt/context builder、`CitationAnswerService` 已实现。
+- `qa_logs` 问答日志已落地。
+- `scripts/evaluate_chat.py` 已实现。
+- `data/evaluation/chat_results.csv` 已生成。
+- Chat 评测：6/6 通过。
 - `POST /search/vector` 已实现。
 - `scripts/build_vector_index.py` 已实现。
 - `scripts/evaluate_vector_search.py` 已实现。
 - `data/evaluation/vector_results.csv` 已生成。
 - 向量检索评测：11/15 通过。
 - 关键词 baseline：15/15 通过。
-- 全量测试：63 个测试通过。
+- 全量测试：106 个测试通过。
 
 下一步：
 
-- 新开或切换到阶段 3 分支 `codex/phase-3-cited-chat`。
-- 实现引用式问答链路：问题 -> 检索 chunks -> 组织上下文 -> 生成回答 -> 返回来源。
-- 阶段 3 不做 Agent 工具调用，先保证回答基于资料、能引用来源、资料不足时能拒答。
+- 阶段 3 分支 `codex/phase-3-cited-chat` 已完成开发与验证。
+- 下一阶段进入阶段 4：数据采集与来源管理。
+- 阶段 4 建议建立 source registry、来源去重、公开资料采集和重新索引流程。
+
+## 2026-06-05 阶段 3 完成记录：引用式问答
+
+当前分支：`codex/phase-3-cited-chat`
+
+当前阶段：阶段 3 已完成。下一步准备进入阶段 4：数据采集与来源管理。
+
+已完成：
+
+- 使用 `planning-with-files` 维护阶段 3 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 新增 `docs/stage3_learning_notes.md`，沉淀阶段 3 新词解释、设计原因、测试结果和面试表达。
+- 新增 `app/services/generation/chat_model.py`，定义 `ChatModelProvider`、`ChatMessage`、`ChatModelResult`，实现 deterministic provider 和 OpenAI-compatible provider。
+- 新增 `app/services/generation/prompt_builder.py`，把检索结果组织成带 `[1]`、`[2]` 编号的 RAG 上下文。
+- 新增 `app/services/generation/answer_service.py`，实现 `CitationAnswerService`，支持检索、prompt 构造、模型调用、引用提取、拒答和日志写入。
+- 新增 `app/schemas/chat.py` 和 `app/api/chat.py`，实现 `POST /chat`。
+- 新增 `qa_logs` 问答日志表、`QuestionAnswerLog` 模型和 `QuestionAnswerLogRepository`。
+- 新增 `scripts/evaluate_chat.py`、`data/evaluation/chat_queries.csv` 和 `data/evaluation/chat_results.csv`。
+- 新增测试：`tests/test_chat_model_provider.py`、`tests/test_prompt_builder.py`、`tests/test_answer_service.py`、`tests/test_chat_api.py`、`tests/test_chat_logging.py`、`tests/test_evaluate_chat.py`。
+
+阶段 3 设计结论：
+
+- 本阶段参考 Quivr 的 `LLMEndpoint`、RAG prompt、source index 和 response metadata 思路，但不引入 LangGraph。
+- `ChatModelProvider` 对齐模型调用抽象，避免业务服务绑定具体国产模型或 OpenAI-compatible API。
+- prompt builder 负责给 sources 编号，AnswerService 负责过滤 citations，不能完全相信模型自己输出的来源编号。
+- 拒答机制放在 service 层，不只靠 prompt。
+- `/chat` 是薄 API，RAG 业务逻辑集中在 `CitationAnswerService`。
+- `qa_logs` 是阶段 3 最小可观测性，支持后续排查检索、引用、拒答和模型配置问题。
+- Chat 评测默认使用 deterministic chat provider，保证没有真实模型 key 也能稳定回归。
+
+验证结果：
+
+- `python scripts\evaluate_chat.py`：6/6 通过。
+- `python scripts\evaluate_keyword_search.py`：15/15 通过。
+- `python scripts\evaluate_vector_search.py --skip-index-build`：11/15 通过。
+- `python -m pytest -q`：106 个测试通过。
+
+已处理问题：
+
+- `truncate_text()` 初版没有把 `... [truncated]` 后缀长度纳入计算，导致截断后仍超过 `max_chars`；已修复。
+- deterministic provider 初版回显完整 RAG prompt，导致上下文里的 `[2]` 被误识别为答案引用；已新增 `extract_question()`，只提取问题正文。
+- 首次真实 chat 评测为 4/6；质量控制问题期望词过窄，无依据英文问题被常见词误召回。已调整评测集，最终 6/6 通过。
+
+遗留问题：
+
+- 当前 deterministic chat provider 只用于稳定开发和评测，不代表真实国产大模型回答质量。
+- 当前向量检索仍为 11/15，真实语义检索效果需要后续接入真实 embedding、混合检索或 rerank。
+- 当前 `qa_logs` 使用 Text 存 JSON 字符串保存 id 列表，后续迁移 PostgreSQL 时可升级为 JSON 字段。
+- 当前没有多轮聊天历史，阶段 3 只做单轮引用式问答。
+- 当前没有 Agent 工具调用，符合阶段 3 目标；Agent 化留到后续阶段。
+
+面试表达：
+
+```text
+阶段 3 我完成了引用式问答的最小稳定链路。
+
+我先抽象 ChatModelProvider，把聊天模型供应商和业务逻辑解耦；再用 prompt_builder 把检索到的 chunks 组织成带来源编号的上下文；CitationAnswerService 负责检索、prompt 构造、模型调用、引用提取和拒答判断；最后通过 POST /chat 返回 answer、citations、sources、refused、retrieval_mode 和 model 信息。
+
+为了保证可追溯，我让 citations 只能引用本次 sources 中存在的编号，并新增 qa_logs 记录问题、答案、召回 chunk、引用、模型和拒答状态。为了避免只靠演示判断效果，我新增了 chat 评测集和 evaluate_chat.py，当前 chat 评测 6/6 通过，全量测试 106 个通过。
+
+这个阶段没有引入复杂 Agent workflow，而是先保证 RAG 问答链路稳定、可测试、可引用、可拒答。
+```
 
 ## 2026-06-04
 
