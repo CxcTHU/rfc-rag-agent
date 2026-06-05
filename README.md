@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 5：前端界面已完成，当前分支为 `codex/phase-5-frontend`。
+阶段 6：检索优化与评测已完成，当前分支为 `codex/phase-6-evaluation`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -24,7 +24,11 @@
 
 阶段 5 tag：`phase-5-complete`，指向上述提交。
 
-下一阶段准备进入：阶段 6，检索优化与评测。
+阶段 6 最终功能提交：由 `phase-6-complete` tag 指向的提交标识。
+
+阶段 6 tag：`phase-6-complete`。
+
+下一阶段准备进入：阶段 7，Agent 化。
 
 当前已经实现：
 
@@ -47,6 +51,13 @@
 - `POST /search/vector` 向量检索 API
 - `scripts/evaluate_vector_search.py` 向量检索评测脚本
 - `data/evaluation/vector_results.csv` 向量检索评测结果
+- `HybridSearchService` 混合检索服务，合并关键词和向量召回并去重、归一化、重排
+- `POST /search/hybrid` 混合检索 API
+- `scripts/evaluate_hybrid_search.py` 混合检索评测脚本
+- `data/evaluation/hybrid_results.csv` 混合检索评测结果
+- `docs/evaluation_plan.md` 阶段 6 评测计划
+- `scripts/analyze_retrieval_errors.py` 检索错误案例分析脚本
+- `data/evaluation/retrieval_error_cases.csv` 检索错误案例表
 - `ChatModelProvider` 聊天模型抽象，支持 deterministic provider 和 OpenAI-compatible provider
 - RAG prompt/context builder，把检索结果组织成带 `[1]`、`[2]` 编号的上下文
 - `CitationAnswerService` 最小引用式问答链路
@@ -61,9 +72,9 @@
 - `scripts/evaluate_sources.py` 来源登记库评测脚本
 - `data/evaluation/source_registry_metrics.csv` 来源治理指标
 - FastAPI 静态前端入口：`GET /`
-- 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量检索、引用式问答、引用来源侧栏、source sync 和 source reindex 入口
+- 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 126 个自动化测试
+- 141 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -75,7 +86,7 @@
 3. `docs/architecture.md`
 4. `docs/data_sources.md`
 
-阶段 4 的开发记忆：
+阶段 6 的开发记忆：
 
 - `task_plan.md`
 - `findings.md`
@@ -132,7 +143,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-126 passed
+141 passed
 ```
 
 当前测试覆盖：
@@ -152,6 +163,8 @@ python -m pytest
 - vector index service
 - vector search service 和 API
 - vector search evaluation script
+- hybrid search service、API 和 evaluation script
+- retrieval error case analysis script
 - ChatModelProvider 和 OpenAI-compatible 响应解析
 - RAG prompt/context builder
 - CitationAnswerService
@@ -165,9 +178,9 @@ python -m pytest
 - source registry 评测脚本
 - 前端首页、静态资源挂载和工作台入口
 
-## 向量索引与检索
+## 向量索引、混合检索与评测
 
-阶段 2 的最小链路是：
+阶段 2 的向量检索最小链路是：
 
 ```text
 chunks
@@ -190,15 +203,46 @@ python scripts/build_vector_index.py
 python scripts/evaluate_vector_search.py
 ```
 
+运行混合检索评测：
+
+```powershell
+python scripts/evaluate_hybrid_search.py
+```
+
+分析检索错误案例：
+
+```powershell
+python scripts/analyze_retrieval_errors.py
+```
+
 当前评测结果：
 
 ```text
 keyword baseline: 15/15 passed
 vector search: 11/15 passed
+hybrid search: 15/15 passed, rescued_vector=4, regressed_keyword=0
 chat evaluation: 6/6 passed
 ```
 
-说明：当前向量检索使用 deterministic embedding，主要用于稳定开发和自动化测试，不代表真实语义 embedding 的最终效果。后续接入真实 embedding 模型或混合检索后，应继续复用同一评测集对比。
+说明：当前向量检索使用 deterministic embedding，主要用于稳定开发和自动化测试，不代表真实语义 embedding 的最终效果。阶段 6 新增的 hybrid search 会同时召回关键词和向量结果，按 chunk 去重，对两路分数归一化并加权排序。它保留 keyword 和 vector baseline，便于持续对比。
+
+阶段 6 评测文件：
+
+```text
+docs/evaluation_plan.md
+data/evaluation/keyword_results.csv
+data/evaluation/vector_results.csv
+data/evaluation/hybrid_results.csv
+data/evaluation/chat_results.csv
+data/evaluation/retrieval_error_cases.csv
+```
+
+阶段 6 结论：
+
+- `Recall@K`：keyword 15/15，vector 11/15，hybrid 15/15。
+- `Citation Accuracy`：chat 6/6，citation_failures=0。
+- `Refusal Quality`：chat 评测中 1 条无依据问题正确拒答。
+- `Error Cases`：4 个 vector-only 失败均被 hybrid 标记为 `fixed_by_hybrid`。
 
 ## 引用式问答
 
@@ -230,7 +274,7 @@ Invoke-RestMethod `
 - `sources`：每个来源编号对应的文档、chunk、片段内容和 score。
 - `refused`：资料不足时为 `true`。
 - `refusal_reason`：拒答原因。
-- `retrieval_mode`：实际使用的检索模式，可能是 `vector`、`keyword` 或 `none`。
+- `retrieval_mode`：实际使用的检索模式，可能是 `vector`、`keyword`、`hybrid` 或 `none`。
 - `model_provider` / `model_name`：本次回答使用的聊天模型信息。
 
 资料不足时，系统会返回：
@@ -328,7 +372,7 @@ app/frontend/
 - 查看 sources 列表，并按关键词、状态、全文权限筛选。
 - 查看 documents 列表和每篇资料的 chunk 数量。
 - 查看指定 document 的 chunks。
-- 使用关键词检索或向量检索查看召回片段。
+- 使用关键词检索、向量检索或混合检索查看召回片段。
 - 调用 `/chat` 提问，展示回答、引用编号、模型信息和引用来源侧栏。
 - 触发 source sync。
 - 触发单条 source reindex，并在失败时展示可理解错误。
@@ -488,3 +532,11 @@ rfc-rag-agent/
 我采用 FastAPI 静态文件提供第一版前端，避免在当前 Python 项目里过早引入复杂前端构建链。页面直接接入已有 sources、documents、search、vector search 和 chat API，展示来源治理状态、资料列表、chunk 片段、检索结果、问答回答和引用来源侧栏。
 
 这样设计的重点是让非技术用户能看见 RAG 链路：source 是资料来源治理，documents/chunks 是已入库内容，chat 的 citations 可以追溯到具体 chunk。阶段 5 还提供 source sync 和 reindex 操作入口，并通过浏览器验证桌面和移动视口，最终全量测试 126 个通过。
+
+## 阶段 6 面试表达
+
+阶段 6 我没有继续盲目加功能，而是先把 RAG 的检索和问答质量变成可量化、可复现、可解释的评测闭环。
+
+我新增了 `docs/evaluation_plan.md`，把 Recall@K、Citation Accuracy、Faithfulness、Answer Coverage 和 Refusal Quality 映射到当前 keyword、vector、chat 评测脚本和 CSV 结果。然后复跑 baseline：关键词检索 15/15，向量检索 11/15，chat 6/6，并用 `retrieval_error_cases.csv` 记录 4 个向量检索失败案例。
+
+优化上我选择混合检索，而不是直接接更复杂的外部模型或 Agent。`HybridSearchService` 同时调用关键词和向量检索，按 chunk 去重，对两路分数归一化，再用权重和双路命中奖励重排。最终 hybrid search 达到 15/15，救回 4 个 vector-only 失败，且没有相对关键词 baseline 的退化。这样阶段 6 能清楚说明：优化不是凭感觉，而是有 baseline、有错误案例、有指标对比和回归测试。

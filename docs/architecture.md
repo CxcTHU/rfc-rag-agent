@@ -1126,3 +1126,196 @@ source sync/reindex 有操作入口和反馈
 浏览器桌面与移动视口验证通过
 全量自动化测试通过
 ```
+
+## 阶段 6 总体框架
+
+阶段 6 的目标是把“能检索、能回答”推进到“质量可度量、优化可解释、结果可复现”。
+
+```text
+documents/chunks/sources/chunk_embeddings
+-> keyword/vector/chat baseline
+-> evaluation plan
+-> retrieval error cases
+-> HybridSearchService
+-> POST /search/hybrid
+-> hybrid evaluation
+-> metrics comparison
+-> frontend minimal mode selector
+```
+
+阶段 6 不做：
+
+- Agent 工具调用。
+- 复杂 LangGraph workflow。
+- 登录系统。
+- 部署优化。
+- 大规模前端重构。
+
+这些内容放到阶段 7 以后逐步处理。
+
+### 评测计划
+
+阶段 6 新增：
+
+```text
+docs/evaluation_plan.md
+```
+
+核心指标：
+
+```text
+Recall@K
+Citation Accuracy
+Faithfulness
+Answer Coverage
+Refusal Quality
+```
+
+当前自动化口径：
+
+- `Recall@K` 由 keyword/vector/hybrid 评测脚本按期望标题、正文片段和 source_type 近似判断。
+- `Citation Accuracy` 由 chat 评测脚本检查 citations 是否能映射到本次 sources，并检查期望来源是否命中。
+- `Faithfulness` 当前用禁止词和拒答规则做轻量自动检查，后续接真实模型后可加入人工审阅或 LLM-as-judge。
+- `Answer Coverage` 当前由期望词和来源命中近似承接。
+- `Refusal Quality` 由 chat 评测集中的无依据问题验证。
+
+### 混合检索服务
+
+阶段 6 新增：
+
+```text
+app/services/retrieval/hybrid_search.py
+```
+
+`HybridSearchService` 复用已有两条召回链路：
+
+```text
+query
+-> KeywordSearchService.search(fetch_k)
+-> VectorSearchService.search(fetch_k)
+-> 按 chunk_id 去重
+-> keyword/vector 分数分别按最大分归一化
+-> keyword_weight + vector_weight + both_match_bonus
+-> source_type_rank 和稳定字段兜底排序
+-> top_k results
+```
+
+默认权重：
+
+```text
+keyword_weight = 0.7
+vector_weight = 0.3
+both_match_bonus = 0.15
+```
+
+这样设计的原因：
+
+- keyword baseline 当前 15/15，适合救回 deterministic vector 的弱召回。
+- vector 仍保留语义召回能力，后续接真实 embedding provider 后可以继续受益。
+- 不改写 `/search` 或 `/search/vector`，避免破坏 baseline。
+- 权重和 bonus 可解释，适合写入错误案例和面试表达。
+
+### API 与 Chat 集成
+
+阶段 6 新增：
+
+```text
+POST /search/hybrid
+```
+
+请求字段与现有检索入口保持一致：
+
+```text
+query
+top_k
+```
+
+响应结构与向量检索类似：
+
+```text
+query
+top_k
+provider
+model_name
+results
+```
+
+`POST /chat` 新增显式检索模式：
+
+```text
+retrieval_mode = "hybrid"
+```
+
+但 `auto` 模式仍保留阶段 3 的旧行为：先尝试 vector，有结果则使用 vector，只在无结果时 fallback 到 keyword。这样可以避免阶段 6 中途改变 chat baseline 的含义。
+
+### 评测脚本与结果
+
+阶段 6 新增和复用：
+
+```text
+scripts/evaluate_keyword_search.py
+scripts/evaluate_vector_search.py
+scripts/evaluate_hybrid_search.py
+scripts/evaluate_chat.py
+scripts/analyze_retrieval_errors.py
+
+data/evaluation/keyword_results.csv
+data/evaluation/vector_results.csv
+data/evaluation/hybrid_results.csv
+data/evaluation/chat_results.csv
+data/evaluation/retrieval_error_cases.csv
+```
+
+当前结果：
+
+```text
+keyword baseline: 15/15 passed
+vector search: 11/15 passed
+hybrid search: 15/15 passed
+chat evaluation: 6/6 passed
+rescued_vector: 4
+regressed_keyword: 0
+retrieval error cases: 4 fixed_by_hybrid
+full tests: 141 passed
+```
+
+### 前端最小展示
+
+阶段 6 只在现有工作台中增加 hybrid 选项：
+
+```text
+app/frontend/index.html
+app/frontend/static/app.js
+```
+
+搜索模式：
+
+```text
+keyword
+vector
+hybrid
+```
+
+聊天检索模式：
+
+```text
+auto
+hybrid
+vector
+keyword
+```
+
+前端仍只负责选择模式和调用 API；混合检索排序、去重和评分逻辑都在后端 service 中。
+
+### 阶段 6 完成标准
+
+```text
+docs/evaluation_plan.md 已建立
+keyword/vector/chat baseline 已复跑
+retrieval_error_cases.csv 已生成
+hybrid search service/API/chat mode 已实现
+hybrid_results.csv 可对比优化前后指标
+旧 search/vector/chat/sources/frontend 测试不被破坏
+前端能最小展示 hybrid 检索模式
+全量自动化测试通过
+```

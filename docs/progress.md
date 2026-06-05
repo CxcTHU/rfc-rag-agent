@@ -2,17 +2,19 @@
 
 ## 最新状态：2026-06-05
 
-当前阶段：阶段 5，前端界面已完成。下一步准备进入阶段 6：检索优化与评测。
+当前阶段：阶段 6，检索优化与评测已完成。下一步准备进入阶段 7：Agent 化。
 
 当前关键证据：
 
-- `task_plan.md` 当前阶段为 `Phase 6 complete`，阶段 4 已完成。
-- 当前分支：`codex/phase-5-frontend`。
+- `task_plan.md` 当前阶段为 `Phase 5 complete`，下一步进入 Phase 6 收尾。
+- 当前分支：`codex/phase-6-evaluation`。
 - 阶段 3 tag：`phase-3-complete -> 7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954`，未移动。
 - 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 - 阶段 4 tag：`phase-4-complete -> b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 - 阶段 5 最终功能提交：`8c885e6cc714cc985933438697a7eb2523b26722`。
 - 阶段 5 tag：`phase-5-complete -> 8c885e6cc714cc985933438697a7eb2523b26722`。
+- 阶段 6 最终功能提交：由 `phase-6-complete` tag 指向的提交标识。
+- 阶段 6 tag：`phase-6-complete`。
 - 阶段 4 分支和 tag 已推送到 GitHub。
 - `sources` 来源登记表已实现。
 - `SourceRepository` 和 `SourceRegistryService` 已实现。
@@ -36,17 +38,94 @@
 - `data/evaluation/vector_results.csv` 已生成。
 - 向量检索评测：11/15 通过。
 - 关键词 baseline：15/15 通过。
+- `docs/evaluation_plan.md` 已新增。
+- `scripts/analyze_retrieval_errors.py` 已新增。
+- `data/evaluation/retrieval_error_cases.csv` 已生成。
+- `HybridSearchService` 已实现。
+- `POST /search/hybrid` 已实现。
+- `scripts/evaluate_hybrid_search.py` 已实现。
+- `data/evaluation/hybrid_results.csv` 已生成。
+- 混合检索评测：15/15 通过，`rescued_vector=4`，`regressed_keyword=0`。
+- 错误案例状态：4 个 vector 失败均为 `fixed_by_hybrid`。
 - Chat 评测：6/6 通过。
-- 前端工作台已实现：来源管理、资料列表、chunk 查看、关键词/向量检索、聊天问答、引用来源侧栏、source sync 和 source reindex 入口。
+- 前端工作台已实现：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、聊天问答、引用来源侧栏、source sync 和 source reindex 入口。
 - 浏览器验证：桌面加载 sources=125、documents=136、chunks=997；移动视口 390x844 无横向溢出。
-- 全量测试：126 个测试通过。
+- 阶段 6 浏览器 smoke check：搜索模式包含 `keyword/vector/hybrid`，聊天检索模式包含 `auto/hybrid/vector/keyword`。
+- 全量测试：141 个测试通过。
 
 下一步：
 
-- 阶段 5 分支 `codex/phase-5-frontend` 已完成核心开发与验证。
-- 阶段 5 已创建 `phase-5-complete` tag，tag 指向阶段 5 最终功能提交。
-- 下一阶段进入阶段 6：检索优化与评测。
-- 阶段 6 建议做混合检索、rerank、评测计划、错误案例分析和指标对比。
+- 阶段 6 分支 `codex/phase-6-evaluation` 已完成核心开发与验证。
+- 阶段 6 收尾时确认 `phase-6-complete` tag 指向阶段 6 最终功能提交。
+- 下一阶段进入阶段 7：Agent 化。
+- 阶段 7 建议在稳定 RAG 基础上封装受控只读工具，例如知识库搜索、资料总结、来源对比和术语抽取。
+
+## 2026-06-05 阶段 6 完成记录：检索优化与评测
+
+当前分支：`codex/phase-6-evaluation`
+
+当前阶段：阶段 6 已完成。下一步准备进入阶段 7：Agent 化。
+
+阶段最终功能提交：由 `phase-6-complete` tag 指向的提交标识。
+
+阶段 tag：`phase-6-complete`。
+
+已完成：
+
+- 使用 Planning with Files 维护阶段 6 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 确认阶段 5 已完成并合并，且 `phase-5-complete` tag 指向 `8c885e6cc714cc985933438697a7eb2523b26722`，未移动已有阶段 tag。
+- 新增 `docs/evaluation_plan.md`，定义 Recall@K、Citation Accuracy、Faithfulness、Answer Coverage、Refusal Quality。
+- 复跑 keyword、vector、chat baseline。
+- 新增 `scripts/analyze_retrieval_errors.py` 和 `data/evaluation/retrieval_error_cases.csv`，记录失败问题、失败原因、期望依据、改进建议和优化后状态。
+- 新增 `HybridSearchService`，合并关键词和向量召回，按 chunk 去重，对分数归一化并重排。
+- 新增 `POST /search/hybrid`，保留 `POST /search` 和 `POST /search/vector` 既有行为。
+- 扩展 `POST /chat` 的显式 `retrieval_mode="hybrid"`，但不改变 `auto` 的既有行为。
+- 新增 `scripts/evaluate_hybrid_search.py` 和 `data/evaluation/hybrid_results.csv`，对比 keyword、vector、hybrid 三条链路。
+- 前端工作台新增 hybrid 检索模式选择，保持最小改动。
+- 开发完成后再统一补写 Obsidian Phase 汇报，符合本阶段用户要求。
+
+阶段 6 设计结论：
+
+- 先建立评测计划和 baseline，再做优化，避免凭感觉调参。
+- 保留 keyword 和 vector baseline，hybrid 作为独立入口，便于优化前后对比。
+- deterministic embedding 仍适合本地稳定测试；真实语义效果后续可接真实 embedding provider 继续评测。
+- 混合检索优先使用保守、可解释的加权重排，不引入复杂 Agent workflow。
+- 前端只暴露 hybrid 选项，不做界面重构。
+
+验证结果：
+
+- `python scripts/evaluate_keyword_search.py`：keyword 15/15 通过。
+- `python scripts/evaluate_vector_search.py`：vector 11/15 通过，4 个 `keyword_only_pass`。
+- `python scripts/evaluate_chat.py`：chat 6/6 通过，`refused=1`，`citation_failures=0`。
+- `python scripts/evaluate_hybrid_search.py`：hybrid 15/15 通过，`rescued_vector=4`，`regressed_keyword=0`。
+- `python scripts/analyze_retrieval_errors.py`：4 个 vector 失败均为 `fixed_by_hybrid`。
+- `python -m pytest tests\test_frontend_app.py tests\test_vector_search_api.py tests\test_chat_api.py tests\test_search_api.py -q`：14 个测试通过。
+- 浏览器 smoke check：`http://127.0.0.1:8001/` 页面可见 hybrid 搜索和 hybrid 聊天检索模式。
+- `python -m pytest -q`：141 个测试通过。
+
+遗留问题：
+
+- 当前 hybrid 权重是保守静态规则，尚未做真实用户日志驱动调参。
+- 当前 deterministic embedding 不代表真实语义模型效果；后续接真实 embedding provider 后应继续复用同一评测集。
+- Chat `auto` 模式暂未默认切换到 hybrid，以避免改变既有 baseline 含义；后续可在阶段 7 或真实模型评测后再决定。
+- 阶段 6 不做 Agent 工具调用，Agent 化留到阶段 7。
+
+下一阶段任务：
+
+- 阶段 7 进入 Agent 化。
+- 将稳定的 search、hybrid search、chat、sources/reindex 能力包装为受控工具。
+- 设计工具调用权限、最大步数、日志和失败回退。
+- 优先做只读工具，例如知识库搜索、资料总结、来源对比、术语抽取。
+
+面试表达：
+
+```text
+阶段 6 我重点解决 RAG 质量怎么证明的问题。
+
+我先写评测计划，把 Recall@K、Citation Accuracy、Faithfulness、Answer Coverage 和 Refusal Quality 映射到当前脚本和 CSV 结果。然后复跑 baseline：关键词检索 15/15，向量检索 11/15，chat 6/6，并把 4 个向量失败案例沉淀成错误案例表。
+
+优化时我没有直接上复杂 Agent 或外部模型，而是实现可解释的 hybrid search。它同时召回关键词和向量结果，按 chunk 去重，对两路分数归一化，再通过权重和双路命中奖励重排。最终 hybrid search 达到 15/15，救回 4 个 vector-only 失败，且没有 keyword baseline 退化。这个阶段体现的是工程评测闭环：有 baseline、有错误分析、有优化策略、有指标对比、有回归测试。
+```
 
 ## 2026-06-05 阶段 5 完成记录：前端界面
 

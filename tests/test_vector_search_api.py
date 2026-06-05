@@ -100,3 +100,18 @@ def test_vector_search_api_returns_empty_when_index_is_missing(tmp_path) -> None
 
     assert response.status_code == 200
     assert response.json()["results"] == []
+
+
+def test_hybrid_search_api_combines_keyword_and_vector_results(tmp_path) -> None:
+    with make_test_client(tmp_path, build_index=True) as client:
+        response = client.post("/search/hybrid", json={"query": "filling capacity", "top_k": 2})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["query"] == "filling capacity"
+    assert payload["top_k"] == 2
+    assert payload["provider"] == "deterministic"
+    assert payload["model_name"] == "hash-token-v1"
+    assert payload["results"]
+    assert payload["results"][0]["document_title"] == "Vector search source"
+    assert payload["results"][0]["chunk_index"] == 1

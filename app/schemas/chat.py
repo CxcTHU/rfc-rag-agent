@@ -3,8 +3,8 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
-RetrievalMode = Literal["auto", "vector", "keyword"]
-UsedRetrievalMode = Literal["vector", "keyword", "none"]
+RetrievalMode = Literal["auto", "vector", "keyword", "hybrid"]
+UsedRetrievalMode = Literal["vector", "keyword", "hybrid", "none"]
 
 
 class ChatRequest(BaseModel):
