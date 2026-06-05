@@ -788,18 +788,25 @@ overlap: 80 到 150 个中文字符
 第一阶段先做：
 
 ```text
-向量检索 top_k
+关键词检索 top_k
 ```
 
 第二阶段加入：
 
 ```text
-关键词检索
-向量 + 关键词混合检索
+embedding 向量检索 top_k
+向量检索与关键词检索结果对比
+必要时加入简单的向量 + 关键词混合检索
+保留来源可信度、时间过滤、分类过滤的扩展空间
+```
+
+后续阶段再逐步加入：
+
+```text
 rerank
+引用式问答
 来源可信度加权
-时间过滤
-分类过滤
+更细的时间过滤和分类过滤
 ```
 
 返回给大模型前，要整理上下文：
@@ -1110,18 +1117,33 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-项目目录和 GitHub 仓库已经创建完成。
+阶段 0 和阶段 1 已完成，阶段 1 已合并到 `main`。
 
-下一步最适合做：
+当前最权威的进度依据是：
 
 ```text
-在 G:\Codex\program\rfc-rag-agent 初始化 FastAPI 项目骨架
-实现 GET /health
-补充 requirements.txt 或 pyproject.toml
-补充最小测试
-更新 README.md 和 docs/progress.md
+docs/progress.md
 ```
 
-第一步不要急着爬虫，也不要急着接大模型。
+下一步最适合进入阶段 2：Embedding 与向量检索。
 
-先把可持续扩展的工程地基搭好。
+建议先创建或切换到阶段 2 分支：
+
+```text
+codex/phase-2-vector-search
+```
+
+阶段 2 的第一批最小任务：
+
+```text
+阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md 和 docs/data_sources.md
+确认阶段 1 的 documents/chunks 表、ingestion service 和 POST /search 已可用
+选择阶段 2 的 embedding 模型和向量索引方案
+设计 chunk embedding 的保存结构
+实现最小向量检索链路：问题 -> embedding -> 召回 chunks -> 返回来源
+补充向量检索测试，并与阶段 1 keyword baseline 对比
+```
+
+阶段 2 不要急着做引用式问答和 Agent 工具调用。
+
+先把“资料片段能被语义召回”这件事稳定跑通，再进入阶段 3。

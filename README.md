@@ -14,14 +14,26 @@
 
 ## 当前阶段
 
-阶段 0：FastAPI 工程底座已建立。
+阶段 1：本地资料导入与关键词检索已完成，并已合并到 `main`。
+
+下一阶段准备进入：阶段 2，Embedding 与向量检索。
 
 当前已经实现：
 
 - FastAPI 应用入口
 - `GET /health` 健康检查接口
 - 基础配置读取
-- 最小自动化测试
+- SQLAlchemy 数据库层，包含 `documents` 和 `chunks` 两张表
+- Markdown、TXT、PDF 的文本读取、清洗和 chunk 切分
+- 本地资料导入链路：读取文件 -> 清洗 -> 切分 -> 保存
+- `POST /documents/import`
+- `GET /documents`
+- `GET /documents/{document_id}/chunks`
+- `POST /search`
+- 阶段 1 关键词检索，包含中文/英文同义词扩展、标题/路径加分、泛词降权和来源均衡
+- 关键词检索评测集与自动评测脚本
+- 堆石混凝土种子资料、题录元数据语料库和来源目录
+- 38 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -82,6 +94,14 @@ python -m pytest
 - FastAPI 应用能被导入
 - `/health` 返回 HTTP 200
 - `/health` 返回结构化 JSON
+- SQLAlchemy 数据模型和 repository
+- Markdown/TXT/PDF parser
+- cleaner 和 splitter
+- ingestion service
+- documents API
+- search API
+- keyword search 评分与来源均衡
+- source collection 资料发现与过滤
 
 ## Obsidian 知识库
 
@@ -112,14 +132,30 @@ rfc-rag-agent/
   app/
     main.py
     api/
+      documents.py
       health.py
+      search.py
     core/
       config.py
+    db/
+      models.py
+      repositories.py
+      session.py
     schemas/
+      document.py
       health.py
+      search.py
+    services/
+      ingestion/
+      retrieval/
+      source_collection.py
+  data/
+    evaluation/
+    imports/
+    metadata/
   docs/
+  scripts/
   tests/
-    test_health.py
   obsidian-vault/
     首页.md
     阶段索引.md
@@ -157,3 +193,11 @@ rfc-rag-agent/
 本阶段先搭建 FastAPI 后端工程底座，而不是直接做爬虫或大模型调用。原因是 RAG 系统后续会包含资料导入、检索、问答、评测等多个模块，如果一开始没有清晰的应用入口、路由分层、配置读取和测试方式，后续功能会很容易堆在一起，难以维护。
 
 `/health` 是服务健康检查接口，用来证明 API 服务可以被正常启动和访问。真实部署时，健康检查还可以扩展为数据库连接、向量库状态、模型服务状态等检查。
+
+## 阶段 1 面试表达
+
+阶段 1 我先完成了 RAG 系统的数据入口和关键词检索 baseline，而不是直接接大模型。
+
+我把资料导入拆成 parser、cleaner、splitter、repository 和 ingestion service：parser 负责把 Markdown/TXT/PDF 读成文本，cleaner 负责去掉多余空白，splitter 负责切成可检索的 chunk，repository 负责数据库读写，ingestion service 负责串起完整导入流程。这样做的好处是每一步都能单独测试，后续接 embedding 或更换数据库时不需要重写整条链路。
+
+关键词检索用于在没有向量库之前建立第一版可解释检索能力。我建立了 `data/evaluation/keyword_queries.csv` 作为评测集，并用脚本自动检查命中结果。最终 15 个代表性查询全部通过，形成了阶段 2 向量检索的对照基线。
