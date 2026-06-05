@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
-from app.db.models import Base, Chunk, Document
+from app.db.models import Base, Chunk, ChunkEmbedding, Document
 from app.db.session import create_sqlite_engine
 
 
@@ -55,3 +55,57 @@ def test_document_and_chunks_can_be_persisted(tmp_path) -> None:
     assert saved_document.content_hash == "sample-hash"
     assert [chunk.chunk_index for chunk in saved_chunks] == [0, 1]
     assert saved_chunks[0].content.startswith("堆石混凝土")
+
+
+def test_chunk_embedding_can_be_persisted(tmp_path) -> None:
+    database_path = tmp_path / "test_embedding.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    with TestingSessionLocal() as db:
+        document = Document(
+            title="堆石混凝土向量资料",
+            source_type="local_file",
+            source_path="sample.md",
+            file_name="sample.md",
+            file_extension=".md",
+            content_hash="sample-embedding-hash",
+            raw_path="data/raw/sample.md",
+            status="imported",
+            chunks=[
+                Chunk(
+                    chunk_index=0,
+                    content="堆石混凝土温升控制。",
+                    char_count=10,
+                    heading_path="温控",
+                    start_char=0,
+                    end_char=10,
+                )
+            ],
+        )
+        db.add(document)
+        db.commit()
+        chunk_id = document.chunks[0].id
+
+        chunk_embedding = ChunkEmbedding(
+            chunk_id=chunk_id,
+            provider="deterministic",
+            model_name="hash-token-v1",
+            dimension=3,
+            embedding_json="[0.1,0.2,0.3]",
+            content_hash="chunk-content-hash",
+        )
+        db.add(chunk_embedding)
+        db.commit()
+        embedding_id = chunk_embedding.id
+
+    with TestingSessionLocal() as db:
+        saved_embedding = db.get(ChunkEmbedding, embedding_id)
+
+    assert saved_embedding is not None
+    assert saved_embedding.chunk_id == chunk_id
+    assert saved_embedding.provider == "deterministic"
+    assert saved_embedding.model_name == "hash-token-v1"
+    assert saved_embedding.dimension == 3
+    assert saved_embedding.content_hash == "chunk-content-hash"

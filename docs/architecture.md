@@ -300,3 +300,206 @@ SQLite 中能看到 documents 和 chunks
 搜索“堆石混凝土”“自密实混凝土”“施工质量”等关键词能返回相关片段
 返回结果包含 document title、chunk content、chunk_index 和 score
 ```
+
+## 阶段 2 总体框架
+
+阶段 2 的目标是打通第一条最小向量检索链路：
+
+```text
+documents/chunks
+-> EmbeddingProvider
+-> chunk_embeddings
+-> VectorIndexService
+-> 用户问题
+-> query embedding
+-> VectorSearchService
+-> 返回 top_k 相似 chunks 和来源
+```
+
+本阶段参考 Quivr 的 `embedder / vector store / retriever` 模块边界，但先保留轻量实现：
+
+```text
+Quivr embedder      -> 本项目 EmbeddingProvider
+Quivr vector store  -> 本项目先用 SQLite chunk_embeddings 表保存向量
+Quivr retriever     -> 本项目 VectorSearchService
+Quivr eval/tests    -> 本项目 keyword_queries.csv + evaluate_vector_search.py
+```
+
+阶段 2 不做：
+
+- 引用式回答生成。
+- 大模型聊天接口。
+- Agent 工具调用。
+- 复杂 workflow 编排。
+
+这些内容放到阶段 3 或更后续阶段。
+
+### 新词解释
+
+```text
+embedding
+  文本向量。把用户问题或堆石混凝土资料片段变成一组数字，便于计算相似度。
+
+EmbeddingProvider
+  embedding 模型提供者。检索服务只依赖这个接口，不直接绑定某一家模型 API。
+
+deterministic embedding
+  确定性 embedding。同样输入永远得到同样向量，用于无 API key 的开发和自动化测试。
+
+chunk_embeddings
+  chunk 向量表。保存每个 chunk 的 embedding、provider、model_name、dimension 和 content_hash。
+
+VectorIndexService
+  向量索引构建服务。扫描 chunks，生成或更新 embedding，并写入 chunk_embeddings。
+
+VectorSearchService
+  向量检索服务。把用户问题向量化，再和 chunk_embeddings 中的向量计算相似度。
+
+cosine similarity
+  余弦相似度。用两个向量方向的接近程度表示问题和资料片段的相关性。
+
+baseline
+  对照基线。阶段 1 的关键词检索就是阶段 2 向量检索的 baseline。
+```
+
+### 目录规划
+
+阶段 2 新增和扩展以下模块：
+
+```text
+app/
+  api/
+    search.py                 POST /search, POST /search/vector
+  db/
+    models.py                 ChunkEmbedding 模型
+    repositories.py           ChunkEmbeddingRepository
+  schemas/
+    search.py                 VectorSearchRequest, VectorSearchResponse
+  services/
+    retrieval/
+      embedding.py            EmbeddingProvider, DeterministicEmbeddingProvider
+      vector_index.py         VectorIndexService
+      vector_search.py        VectorSearchService
+scripts/
+  build_vector_index.py       构建 chunk_embeddings
+  evaluate_vector_search.py   评测向量检索
+data/
+  evaluation/
+    keyword_queries.csv
+    keyword_results.csv
+    vector_results.csv
+```
+
+### 数据库设计
+
+阶段 2 在阶段 1 的 `documents` 和 `chunks` 基础上新增 `chunk_embeddings`：
+
+```text
+chunk_embeddings
+  id
+  chunk_id
+  provider
+  model_name
+  dimension
+  embedding_json
+  content_hash
+  created_at
+  updated_at
+```
+
+为什么这样设计：
+
+- `documents/chunks` 仍保存可引用的主数据。
+- `chunk_embeddings` 只保存可重建的向量索引数据。
+- `chunk_id` 用来从向量结果回到原始 chunk 和 document。
+- `provider/model_name/dimension` 防止不同模型生成的向量混用。
+- `content_hash` 用来判断向量是否过期。
+- `embedding_json` 让 SQLite 阶段可以直接保存向量列表，后续迁移到 FAISS、Chroma 或 PGVector 时可以重建索引。
+
+### API 设计
+
+```text
+POST /search
+  阶段 1 关键词检索，继续作为 baseline。
+
+POST /search/vector
+  输入：query、top_k
+  处理：query -> embedding -> 和 chunk embedding 计算余弦相似度
+  输出：query、top_k、provider、model_name、results
+  results：document_id、document_title、source_type、source_path、file_name、chunk_id、chunk_index、content、heading_path、score
+```
+
+### 向量索引构建策略
+
+```text
+chunks
+-> 计算 content_hash
+-> 查询同 provider/model 的已有 embedding
+-> 未索引：生成 embedding 并插入
+-> 已过期：重新生成 embedding 并更新
+-> 未变化：跳过
+```
+
+索引构建由 `VectorIndexService` 负责，命令行入口是：
+
+```powershell
+python scripts/build_vector_index.py
+```
+
+### 向量检索策略
+
+```text
+query
+-> EmbeddingProvider.embed_query()
+-> 查询同 provider/model/dimension 的 chunk_embeddings
+-> 跳过 stale embedding
+-> cosine similarity
+-> score 降序
+-> 返回 top_k
+```
+
+当前使用 deterministic embedding，因此它主要证明工程链路可运行。真实语义效果需要后续接入真实 embedding 模型后继续评测。
+
+### 评测策略
+
+阶段 2 复用阶段 1 的评测集：
+
+```text
+data/evaluation/keyword_queries.csv
+```
+
+关键词检索评测输出：
+
+```text
+data/evaluation/keyword_results.csv
+```
+
+向量检索评测输出：
+
+```text
+data/evaluation/vector_results.csv
+```
+
+当前结果：
+
+```text
+keyword baseline: 15/15 passed
+vector search: 11/15 passed
+```
+
+这说明：
+
+- 阶段 2 的向量检索链路已经跑通。
+- deterministic embedding 不足以证明真实语义效果优于关键词检索。
+- 后续优化应复用这些 failure cases 做回归测试。
+
+阶段 2 完成标准：
+
+```text
+能为已有 chunks 构建 embedding
+能保存 chunk_embeddings
+能通过 POST /search/vector 返回来源、标题、片段和 score
+能复用关键词评测集输出向量检索评测结果
+关键词 baseline 仍可用
+全量自动化测试通过
+```

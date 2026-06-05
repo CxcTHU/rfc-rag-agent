@@ -14,9 +14,9 @@
 
 ## 当前阶段
 
-阶段 1：本地资料导入与关键词检索已完成，并已合并到 `main`。
+阶段 2：Embedding 与向量检索已完成，当前分支为 `codex/phase-2-vector-search`。
 
-下一阶段准备进入：阶段 2，Embedding 与向量检索。
+下一阶段准备进入：阶段 3，引用式问答。
 
 当前已经实现：
 
@@ -32,8 +32,15 @@
 - `POST /search`
 - 阶段 1 关键词检索，包含中文/英文同义词扩展、标题/路径加分、泛词降权和来源均衡
 - 关键词检索评测集与自动评测脚本
+- `EmbeddingProvider` 抽象和本地 deterministic embedding provider
+- `chunk_embeddings` 向量保存表
+- `VectorIndexService` 向量索引构建服务
+- `scripts/build_vector_index.py` 向量索引构建脚本
+- `POST /search/vector` 向量检索 API
+- `scripts/evaluate_vector_search.py` 向量检索评测脚本
+- `data/evaluation/vector_results.csv` 向量检索评测结果
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 38 个自动化测试
+- 63 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -44,6 +51,13 @@
 2. `docs/progress.md`
 3. `docs/architecture.md`
 4. `docs/data_sources.md`
+
+阶段 2 的开发记忆和学习笔记：
+
+- `task_plan.md`
+- `findings.md`
+- `progress.md`
+- `docs/stage2_learning_notes.md`
 
 ## 本地启动
 
@@ -89,6 +103,12 @@ python -m uvicorn app.main:app --reload --port 8001
 python -m pytest
 ```
 
+当前全量测试结果：
+
+```text
+63 passed
+```
+
 当前测试覆盖：
 
 - FastAPI 应用能被导入
@@ -101,7 +121,46 @@ python -m pytest
 - documents API
 - search API
 - keyword search 评分与来源均衡
+- embedding provider
+- chunk embedding 数据库保存
+- vector index service
+- vector search service 和 API
+- vector search evaluation script
 - source collection 资料发现与过滤
+
+## 向量索引与检索
+
+阶段 2 的最小链路是：
+
+```text
+chunks
+-> EmbeddingProvider
+-> chunk_embeddings
+-> 用户问题向量化
+-> 余弦相似度检索
+-> 返回来源、标题、chunk 和 score
+```
+
+构建或刷新向量索引：
+
+```powershell
+python scripts/build_vector_index.py
+```
+
+运行向量检索评测：
+
+```powershell
+python scripts/evaluate_vector_search.py
+```
+
+当前评测结果：
+
+```text
+keyword baseline: 15/15 passed
+vector search: 11/15 passed
+```
+
+说明：当前向量检索使用 deterministic embedding，主要用于稳定开发和自动化测试，不代表真实语义 embedding 的最终效果。后续接入真实 embedding 模型或混合检索后，应继续复用同一评测集对比。
 
 ## Obsidian 知识库
 
@@ -201,3 +260,11 @@ rfc-rag-agent/
 我把资料导入拆成 parser、cleaner、splitter、repository 和 ingestion service：parser 负责把 Markdown/TXT/PDF 读成文本，cleaner 负责去掉多余空白，splitter 负责切成可检索的 chunk，repository 负责数据库读写，ingestion service 负责串起完整导入流程。这样做的好处是每一步都能单独测试，后续接 embedding 或更换数据库时不需要重写整条链路。
 
 关键词检索用于在没有向量库之前建立第一版可解释检索能力。我建立了 `data/evaluation/keyword_queries.csv` 作为评测集，并用脚本自动检查命中结果。最终 15 个代表性查询全部通过，形成了阶段 2 向量检索的对照基线。
+
+## 阶段 2 面试表达
+
+阶段 2 我完成了从 chunk 到 embedding，再到向量检索 API 的最小可运行链路。
+
+我先抽象 `EmbeddingProvider`，让业务检索逻辑不依赖某一家模型服务；再新增 `chunk_embeddings` 表保存每个 chunk 的向量、模型信息、维度和内容指纹。索引构建由 `VectorIndexService` 负责，可以重复运行，未变化的 chunk 会被跳过，内容变化后会更新 embedding。
+
+检索时，`POST /search/vector` 会把用户问题转成 query embedding，再和数据库中的 chunk embedding 计算余弦相似度，返回来源、标题、片段和 score。为了验证效果，我复用了阶段 1 的关键词评测集，当前 deterministic embedding 下向量检索为 11/15，关键词 baseline 为 15/15。这个结果说明链路已经跑通，但真实语义效果还需要后续接入更好的 embedding 模型或混合检索来提升。

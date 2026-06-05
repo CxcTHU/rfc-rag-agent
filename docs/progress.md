@@ -1,8 +1,29 @@
 # 项目进度
 
+## 最新状态：2026-06-05
+
+当前阶段：阶段 2，Embedding 与向量检索已完成。下一步准备进入阶段 3：引用式问答。
+
+当前关键证据：
+
+- `task_plan.md` 当前阶段为 `Stage 2 complete`。
+- `POST /search/vector` 已实现。
+- `scripts/build_vector_index.py` 已实现。
+- `scripts/evaluate_vector_search.py` 已实现。
+- `data/evaluation/vector_results.csv` 已生成。
+- 向量检索评测：11/15 通过。
+- 关键词 baseline：15/15 通过。
+- 全量测试：63 个测试通过。
+
+下一步：
+
+- 新开或切换到阶段 3 分支 `codex/phase-3-cited-chat`。
+- 实现引用式问答链路：问题 -> 检索 chunks -> 组织上下文 -> 生成回答 -> 返回来源。
+- 阶段 3 不做 Agent 工具调用，先保证回答基于资料、能引用来源、资料不足时能拒答。
+
 ## 2026-06-04
 
-当前阶段：阶段 1，本地资料导入与关键词检索已完成，并已合并到 `main`。下一步准备进入阶段 2：Embedding 与向量检索。
+当时阶段：阶段 1，本地资料导入与关键词检索已完成，并已合并到 `main`。下一步准备进入阶段 2：Embedding 与向量检索。
 
 已完成：
 
@@ -523,3 +544,121 @@ Zotero 通道结果：
 
 - 新开阶段 2 分支 `codex/phase-2-vector-search`。
 - 设计 embedding 模型选择、向量索引方案、chunk embedding 保存结构和向量检索评测方式。
+
+## 2026-06-05 阶段 2 完成记录：Embedding 与向量检索
+
+当前分支：`codex/phase-2-vector-search`
+
+当前阶段：阶段 2 已完成。下一步准备进入阶段 3：引用式问答。
+
+已完成：
+
+- 使用 `planning-with-files` 生成并维护阶段 2 规划文件：
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+- 新增 `docs/stage2_learning_notes.md`，按步骤沉淀阶段 2 学习笔记和面试表达。
+- 新增 `app/services/retrieval/embedding.py`：
+  - 定义 `EmbeddingProvider` 抽象。
+  - 实现 `DeterministicEmbeddingProvider`，用于无 API key 的本地开发和稳定测试。
+  - 提供 `create_embedding_provider()`，为后续切换真实 embedding 模型预留入口。
+- 新增 `chunk_embeddings` 表：
+  - 记录 `chunk_id`、`provider`、`model_name`、`dimension`、`embedding_json`、`content_hash`。
+  - 使用 `chunk_id + provider + model_name` 唯一约束避免重复索引。
+  - 与 `chunks` 建立关联，删除 chunk 时可级联删除对应 embedding。
+- 扩展 `ChunkEmbeddingRepository`：
+  - 支持保存、更新、查询、列出和统计 chunk embeddings。
+  - 支持 `serialize_embedding()` 和 `deserialize_embedding()`。
+  - 支持批量索引时延迟提交，减少大量写入时的数据库提交次数。
+- 新增 `VectorIndexService`：
+  - 扫描 chunks。
+  - 判断已有 embedding 是否过期。
+  - 批量调用 embedding provider。
+  - 写入或更新 `chunk_embeddings`。
+  - 返回 total、indexed、updated、skipped 等构建统计。
+- 新增 `scripts/build_vector_index.py`：
+  - 支持从命令行构建向量索引。
+  - 默认使用 `.env` 中的 `EMBEDDING_PROVIDER`，未配置时使用 deterministic provider。
+- 新增 `VectorSearchService`：
+  - 把用户问题转成 query embedding。
+  - 读取同一 provider/model/dimension 的 chunk embedding。
+  - 计算余弦相似度并按 score 排序。
+  - 跳过内容 hash 不一致的 stale embedding。
+- 扩展 `app/api/search.py`：
+  - 保留阶段 1 的 `POST /search` 关键词检索。
+  - 新增 `POST /search/vector` 向量检索入口。
+- 扩展 `app/schemas/search.py`：
+  - 新增 `VectorSearchRequest`。
+  - 新增 `VectorSearchResponse`，返回 provider 和 model_name，便于排查当前使用的 embedding 实现。
+- 新增 `scripts/evaluate_vector_search.py`：
+  - 复用 `data/evaluation/keyword_queries.csv`。
+  - 输出 `data/evaluation/vector_results.csv`。
+  - 读取 `data/evaluation/keyword_results.csv`，对比关键词 baseline 和向量检索结果。
+- 新增和更新自动化测试：
+  - `tests/test_embedding_provider.py`
+  - `tests/test_db_models.py`
+  - `tests/test_repositories.py`
+  - `tests/test_vector_index_service.py`
+  - `tests/test_vector_search.py`
+  - `tests/test_vector_search_api.py`
+  - `tests/test_evaluate_vector_search.py`
+
+阶段 2 设计结论：
+
+- 本阶段没有直接接入 FAISS、Chroma 或云端 embedding 模型，而是先用 SQLite + deterministic embedding 跑通最小链路。
+- `documents` 和 `chunks` 仍是主数据源，`chunk_embeddings` 是可重建索引数据。
+- 向量检索与关键词检索保持并行：
+  - `POST /search` 是阶段 1 keyword baseline。
+  - `POST /search/vector` 是阶段 2 vector search。
+- 评测必须复用同一批问题，避免不同检索方式比较口径不一致。
+- 当前 deterministic embedding 只能证明链路和工程边界可运行，不能证明真实语义召回效果已经优于关键词检索。
+
+评测结果：
+
+- `scripts/evaluate_keyword_search.py`：关键词 baseline 15/15 通过。
+- `scripts/evaluate_vector_search.py`：向量检索 11/15 通过。
+- 向量检索失败样例：
+  - `filling_capacity_en`
+  - `mesoscopic_modeling`
+  - `peridynamics`
+  - `construction_management`
+
+验证结果：
+
+- `python -m pytest tests/test_embedding_provider.py -q`：7 个测试通过。
+- `python -m pytest tests/test_vector_index_service.py -q`：5 个测试通过。
+- `python -m pytest tests/test_vector_search.py tests/test_vector_search_api.py -q`：7 个测试通过。
+- `python -m pytest tests/test_evaluate_vector_search.py -q`：3 个测试通过。
+- `python scripts/evaluate_vector_search.py`：向量检索 11/15，关键词 baseline 15/15。
+- `python -m pytest -q`：63 个测试通过。
+
+已处理问题：
+
+- 写出 `def batched[T]` 后发现该语法只支持 Python 3.12；项目使用 Python 3.11，因此改为 `TypeVar` 写法。
+- 首次运行向量评测脚本超时；定位为首次索引构建时逐条 commit 成本高，已改为 batch commit。
+- 用户指出“新词解释”规则容易遗漏；已将新词解释写入 `AGENT.MD` 的自检要求、`task_plan.md` 验收项和 `docs/stage2_learning_notes.md`。
+
+遗留问题：
+
+- 当前 deterministic embedding 是稳定测试用实现，不是真实语义模型。
+- 向量检索 11/15 弱于关键词 baseline 15/15，说明下一步需要真实 embedding、混合检索或 query expansion。
+- 尚未实现引用式回答、上下文组织、拒答机制和聊天模型调用，这些属于阶段 3。
+- 尚未接入 FAISS/Chroma/PGVector；当前 SQLite 向量保存适合阶段 2 最小链路和迁移前验证。
+
+面试表达：
+
+```text
+阶段 2 我没有直接把文本丢进向量库，而是先把 embedding 模型调用、向量保存、索引构建、向量检索和评测拆成独立模块。
+
+EmbeddingProvider 负责把文本转成向量；chunk_embeddings 表保存每个 chunk 的向量、模型信息、维度和内容 hash；VectorIndexService 负责批量构建索引；VectorSearchService 负责把用户问题向量化并按余弦相似度召回 chunk。API 层只暴露 /search/vector，不直接写检索细节。
+
+为了防止只凭演示判断效果，我复用了阶段 1 的关键词评测集，对关键词 baseline 和向量检索使用同一批问题做对比。当前 deterministic embedding 下向量检索为 11/15，关键词 baseline 为 15/15，这说明工程链路已经打通，但真实语义效果还需要后续接入更好的 embedding 模型或混合检索。
+```
+
+下一步：
+
+- 进入阶段 3：引用式问答。
+- 先基于 `POST /search/vector` 的返回结果组织上下文。
+- 新增聊天模型 provider 抽象。
+- 实现 `POST /chat`，返回回答和来源。
+- 遇到资料不足时明确拒答，不让模型硬编。

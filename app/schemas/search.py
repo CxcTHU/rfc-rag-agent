@@ -23,3 +23,16 @@ class SearchResponse(BaseModel):
     query: str
     top_k: int
     results: list[SearchResultItem]
+
+
+class VectorSearchRequest(BaseModel):
+    query: str = Field(min_length=1)
+    top_k: int = Field(default=5, ge=1, le=50)
+
+
+class VectorSearchResponse(BaseModel):
+    query: str
+    top_k: int
+    provider: str
+    model_name: str
+    results: list[SearchResultItem]

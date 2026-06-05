@@ -1,10 +1,11 @@
+import json
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Chunk, Document
+from app.db.models import Chunk, ChunkEmbedding, Document
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,16 @@ class ChunkCreate:
     heading_path: str | None
     start_char: int | None
     end_char: int | None
+
+
+@dataclass(frozen=True)
+class ChunkEmbeddingCreate:
+    chunk_id: int
+    provider: str
+    model_name: str
+    dimension: int
+    embedding: Sequence[float]
+    content_hash: str
 
 
 class DocumentRepository:
@@ -87,3 +98,90 @@ class DocumentRepository:
     def count_chunks(self, document_id: int) -> int:
         statement = select(func.count(Chunk.id)).where(Chunk.document_id == document_id)
         return self.db.scalar(statement) or 0
+
+
+class ChunkEmbeddingRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def save_embedding(
+        self,
+        embedding_data: ChunkEmbeddingCreate,
+        commit: bool = True,
+    ) -> ChunkEmbedding:
+        existing_embedding = self.get_embedding(
+            chunk_id=embedding_data.chunk_id,
+            provider=embedding_data.provider,
+            model_name=embedding_data.model_name,
+        )
+        embedding_json = serialize_embedding(embedding_data.embedding)
+        if existing_embedding is not None:
+            existing_embedding.dimension = embedding_data.dimension
+            existing_embedding.embedding_json = embedding_json
+            existing_embedding.content_hash = embedding_data.content_hash
+            if commit:
+                self.db.commit()
+                self.db.refresh(existing_embedding)
+            return existing_embedding
+
+        chunk_embedding = ChunkEmbedding(
+            chunk_id=embedding_data.chunk_id,
+            provider=embedding_data.provider,
+            model_name=embedding_data.model_name,
+            dimension=embedding_data.dimension,
+            embedding_json=embedding_json,
+            content_hash=embedding_data.content_hash,
+        )
+        self.db.add(chunk_embedding)
+        if commit:
+            self.db.commit()
+            self.db.refresh(chunk_embedding)
+        return chunk_embedding
+
+    def get_embedding(
+        self,
+        chunk_id: int,
+        provider: str,
+        model_name: str,
+    ) -> ChunkEmbedding | None:
+        statement = select(ChunkEmbedding).where(
+            ChunkEmbedding.chunk_id == chunk_id,
+            ChunkEmbedding.provider == provider,
+            ChunkEmbedding.model_name == model_name,
+        )
+        return self.db.scalar(statement)
+
+    def list_embeddings(
+        self,
+        provider: str | None = None,
+        model_name: str | None = None,
+    ) -> list[ChunkEmbedding]:
+        statement = select(ChunkEmbedding).order_by(ChunkEmbedding.id)
+        if provider is not None:
+            statement = statement.where(ChunkEmbedding.provider == provider)
+        if model_name is not None:
+            statement = statement.where(ChunkEmbedding.model_name == model_name)
+        return list(self.db.scalars(statement).all())
+
+    def count_embeddings(
+        self,
+        provider: str | None = None,
+        model_name: str | None = None,
+    ) -> int:
+        statement = select(func.count(ChunkEmbedding.id))
+        if provider is not None:
+            statement = statement.where(ChunkEmbedding.provider == provider)
+        if model_name is not None:
+            statement = statement.where(ChunkEmbedding.model_name == model_name)
+        return self.db.scalar(statement) or 0
+
+
+def serialize_embedding(embedding: Sequence[float]) -> str:
+    return json.dumps([float(value) for value in embedding], separators=(",", ":"))
+
+
+def deserialize_embedding(embedding_json: str) -> list[float]:
+    values = json.loads(embedding_json)
+    if not isinstance(values, list):
+        raise ValueError("embedding_json must contain a JSON list")
+    return [float(value) for value in values]
