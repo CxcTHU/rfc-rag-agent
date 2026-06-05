@@ -28,12 +28,9 @@ data/fulltext/
 # Logs
 *.log
 
-# Obsidian local workspace state
+# Obsidian knowledge base is local-only; never commit it.
 obsidian-vault/
-obsidian-vault/.obsidian/
-obsidian-vault/.obsidian/workspace*.json
-obsidian-vault/.obsidian/cache/
-obsidian-vault/.trash/
+obsidian-vault/**
 
 # OS/editor
 .DS_Store
