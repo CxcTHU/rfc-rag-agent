@@ -6,7 +6,7 @@
 阶段 4 不做 Agent 工具调用、不做复杂 LangGraph workflow、不做前端界面。本阶段优先保证来源记录、去重、权限、状态、导入和重建索引这条最小稳定链路可运行、可测试、可讲清楚。
 
 ## Current Phase
-Phase 6 complete，阶段 4 文档、Obsidian、本地验证、最终提交和 `phase-4-complete` tag 收尾完成；阶段 4 已达到完成标准。
+Phase 6 complete，阶段 4 文档、Obsidian、本地验证、最终提交、`phase-4-complete` tag 和 GitHub 推送收尾完成；阶段 4 已达到完成标准。最终提交为 `b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
 ## Phases
 

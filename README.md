@@ -16,6 +16,10 @@
 
 阶段 4：数据采集与来源管理已完成，当前分支为 `codex/phase-4-source-management`。
 
+阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
+
+阶段 4 tag：`phase-4-complete`，已推送到 GitHub，并指向上述提交。
+
 下一阶段准备进入：阶段 5，前端界面。
 
 当前已经实现：

@@ -195,7 +195,9 @@
   - 更新 `AGENT.MD`，把后续默认起点从阶段 4 校准为阶段 5 前端界面。
   - 更新本地 Obsidian 知识库：首页、阶段索引、阶段 4 页面、分类页和阶段 4 知识点。
   - 运行阶段收尾验证：全量测试、source evaluation、keyword evaluation、vector evaluation、chat evaluation。
-  - 准备创建阶段最终提交与 `phase-4-complete` tag。
+  - 创建阶段最终提交 `b044459b9b8c2153e9225daa55af5d82cdcdb282`。
+  - 创建 `phase-4-complete` tag，并确认 tag 指向阶段最终提交。
+  - 将阶段 4 分支和 `phase-4-complete` tag 推送到 GitHub。
 - Files created/modified:
   - `README.md` modified
   - `docs/progress.md` modified
@@ -220,7 +222,7 @@
 | Question | Answer |
 |----------|--------|
 | Where am I? | Phase 6 complete，当前分支 `codex/phase-4-source-management` |
-| Where am I going? | 创建阶段最终提交和 `phase-4-complete` tag 后，阶段 4 即完成；下一大阶段是阶段 5 前端界面 |
+| Where am I going? | 阶段 4 已完成并推送到 GitHub；下一大阶段是阶段 5 前端界面 |
 | What's the goal? | 完成阶段 4 数据采集与来源管理：source registry、去重、权限、状态、导入、reindex、API/脚本、测试和文档收尾 |
 | What have I learned? | 来源治理需要和检索内容分层；`sources` 负责候选、权限、可信度、状态和去重，`documents/chunks` 负责可检索正文或题录卡片；阶段收尾必须同步 README、docs、AGENT 和 Obsidian |
 | What have I done? | 改线程名、确认分支/tag、用 Planning with Files 重写阶段 4 工作记忆；完成 `sources` 表、`SourceRepository`、`SourceRegistryService`、来源归一化/去重/权限/可信度/状态规则、`scripts/sync_sources.py`、sources API、source reindex、`scripts/evaluate_sources.py`、对应测试、阶段文档和 Obsidian 收尾；全量测试 123 passed |

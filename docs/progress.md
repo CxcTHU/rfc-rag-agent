@@ -6,9 +6,12 @@
 
 当前关键证据：
 
-- `task_plan.md` 当前阶段为 `Phase 5 complete`，下一步进入 Phase 6 收尾。
+- `task_plan.md` 当前阶段为 `Phase 6 complete`，阶段 4 已完成。
 - 当前分支：`codex/phase-4-source-management`。
 - 阶段 3 tag：`phase-3-complete -> 7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954`，未移动。
+- 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
+- 阶段 4 tag：`phase-4-complete -> b044459b9b8c2153e9225daa55af5d82cdcdb282`。
+- 阶段 4 分支和 tag 已推送到 GitHub。
 - `sources` 来源登记表已实现。
 - `SourceRepository` 和 `SourceRegistryService` 已实现。
 - `scripts/sync_sources.py` 已实现。
@@ -37,7 +40,7 @@
 下一步：
 
 - 阶段 4 分支 `codex/phase-4-source-management` 已完成核心开发与验证。
-- 阶段 4 收尾时创建 `phase-4-complete` tag，tag 指向阶段 4 最终功能提交。
+- 阶段 4 已创建 `phase-4-complete` tag，tag 指向阶段 4 最终功能提交。
 - 下一阶段进入阶段 5：前端界面。
 - 阶段 5 建议做资料管理界面、聊天界面、引用来源侧栏和 source registry 可视化入口。
 
@@ -47,7 +50,9 @@
 
 当前阶段：阶段 4 已完成。下一步准备进入阶段 5：前端界面。
 
-阶段 tag：`phase-4-complete`。阶段最终提交号以该 tag 指向提交和最终汇报为准。
+阶段最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`
+
+阶段 tag：`phase-4-complete`，已指向阶段最终提交并推送到 GitHub。
 
 已完成：
 

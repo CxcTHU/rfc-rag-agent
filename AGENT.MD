@@ -1141,7 +1141,17 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3 和阶段 4 已完成。阶段 4 当前在 `codex/phase-4-source-management` 分支完成开发和验证。
+阶段 0、阶段 1、阶段 2、阶段 3 和阶段 4 已完成。阶段 4 当前在 `codex/phase-4-source-management` 分支完成开发、验证、提交、tag 和 GitHub 推送。
+
+阶段 4 最终提交和 tag：
+
+```text
+commit: b044459b9b8c2153e9225daa55af5d82cdcdb282
+tag: phase-4-complete
+remote branch: origin/codex/phase-4-source-management
+```
+
+不要移动 `phase-4-complete`。如果阶段 4 后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
 当前最权威的进度依据是：
 
