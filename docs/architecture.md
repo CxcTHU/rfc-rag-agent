@@ -4,6 +4,7 @@
 
 ```text
 资料来源
+-> source registry 登记与治理
 -> 导入或爬取
 -> 文本抽取
 -> 清洗
@@ -24,6 +25,7 @@ API 层：FastAPI 路由
 Schema 层：Pydantic 请求和响应模型
 Service 层：导入、切分、检索、问答业务逻辑
 DB 层：文档、chunk、问答日志元数据
+Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
 Model Provider 层：聊天模型和 embedding 模型适配
 ```
 
@@ -758,5 +760,245 @@ POST /chat 可调用
 问答日志可追踪
 chat 评测脚本可运行
 旧关键词和向量评测仍可运行
+全量自动化测试通过
+```
+
+## 阶段 4 总体框架
+
+阶段 4 的目标是补齐资料来源治理层，让“有哪些资料来源、是否可信、能否保存全文、是否已经入库”这些问题有统一答案。
+
+```text
+公开资料候选 / PDF manifest / metadata CSV / metadata cards
+-> SourceRegistryService
+-> DOI / URL / 标题归一化
+-> SourceRepository
+-> sources 表
+-> sync_sources.py 或 sources API
+-> reindex_source()
+-> IngestionService
+-> documents/chunks
+-> 后续向量索引刷新
+```
+
+阶段 4 不做：
+
+- Agent 工具调用。
+- 复杂 LangGraph workflow。
+- 前端界面。
+- 大规模爬虫。
+- 检索召回质量优化。
+
+这些内容放到阶段 5 以后逐步处理。
+
+### Source Registry 层
+
+阶段 4 新增 `app/services/source_registry.py`：
+
+```text
+SourceCandidate
+-> candidate_to_source_create()
+-> normalize_doi / normalize_url / normalize_title
+-> derive_trust_level()
+-> derive_fulltext_permission()
+-> derive_status()
+-> SourceRepository
+-> sources
+```
+
+这个 service 位于“采集候选”和“数据库来源表”之间。它的作用不是下载更多论文，而是把已有来源变成可治理、可查询、可去重、可重新导入的结构化记录。
+
+### sources 表
+
+阶段 4 新增 `sources` 表：
+
+```text
+sources
+  id
+  source_id
+  title
+  normalized_title
+  authors
+  year
+  venue
+  category
+  discovered_via
+  doi
+  normalized_doi
+  url
+  normalized_url
+  pdf_url
+  abstract
+  keywords
+  language
+  citation_count
+  source_type
+  trust_level
+  access_rights
+  fulltext_permission
+  license_or_terms
+  local_path
+  status
+  notes
+  document_id
+  created_at
+  updated_at
+```
+
+`sources.document_id` 可为空。这样一条来源可以先被登记为 `candidate` 或 `collected`，等用户确认或前端触发后，再通过 reindex 导入到 `documents/chunks`。
+
+`sources` 和 `documents/chunks` 的关系：
+
+```text
+sources
+  管来源、权限、状态、可信度、重复合并和 reindex 入口
+
+documents/chunks
+  管已经入库、可检索、可引用的正文或题录卡片
+```
+
+### 去重策略
+
+阶段 4 使用三层去重：
+
+```text
+DOI -> URL -> 标题
+```
+
+设计原因：
+
+- DOI 是论文最稳定标识，优先级最高。
+- URL 可以识别网页、期刊页面、PDF 链接和题录页面。
+- 标题归一化用于没有 DOI/URL 的题录或历史资料卡。
+
+重复来源不会简单丢弃。当前策略是把更完整的字段合并到已有来源，并在 `notes` 中记录 `merged_duplicate_source_id=...`，方便后续审计。
+
+### 可信度与权限
+
+阶段 4 将可信度和全文保存权限分开：
+
+```text
+trust_level
+  来源可靠程度，例如 high / medium / low。
+
+fulltext_permission
+  本项目能否保存全文，例如 open_access / institutional_access / metadata_only / unknown。
+```
+
+这样设计是为了避免把两个问题混在一起：一篇期刊论文可能很可信，但项目只能保存题录；一份开放 PDF 可以保存全文，但仍需要记录来源和许可。
+
+### 来源状态
+
+阶段 4 使用固定字符串表达来源生命周期：
+
+```text
+candidate
+collected
+imported
+duplicate
+rejected
+```
+
+含义：
+
+- `candidate`：已发现但未收集原文。
+- `collected`：已有本地路径、题录卡片或可用来源信息。
+- `imported`：已经通过 reindex 进入 `documents/chunks`。
+- `duplicate`：被识别为重复来源。
+- `rejected`：因不相关、质量低或权限不合适而拒绝。
+
+### 来源同步脚本
+
+阶段 4 新增：
+
+```text
+scripts/sync_sources.py
+```
+
+默认读取：
+
+```text
+data/source_candidates.csv
+data/fulltext_manifest.csv
+data/metadata/rfc_papers_metadata.csv
+data/imports/metadata_corpus/*.md
+```
+
+真实同步结果：
+
+```text
+total=283
+created=125
+updated=132
+duplicates=26
+```
+
+脚本是幂等的：重复运行不会重复创建同一来源，而是更新已有来源或合并重复来源。
+
+### 来源管理 API
+
+阶段 4 新增：
+
+```text
+GET /sources
+GET /sources/{source_id}
+POST /sources/sync
+POST /sources/{source_id}/reindex
+```
+
+API 层保持薄封装：
+
+- 用 Pydantic schema 校验和组织响应。
+- 用 repository 查询来源。
+- 用 `SourceRegistryService` 执行 reindex。
+- 把找不到来源映射成 404，把无法导入映射成可理解的 400。
+
+### 重新索引
+
+`reindex_source()` 的最小流程：
+
+```text
+source_id
+-> 查询 sources
+-> 如果 local_path 存在，导入原文件
+-> 如果是 metadata-only，生成 metadata card 后导入
+-> IngestionService.import_document()
+-> 更新 sources.document_id
+-> 更新 sources.status=imported
+```
+
+阶段 4 先提供入口，不做后台任务队列。后续前端可以把 reindex 做成按钮，Agent 工具阶段也可以把它包装成受控工具。
+
+### 来源评测
+
+阶段 4 新增：
+
+```text
+scripts/evaluate_sources.py
+data/evaluation/source_registry_metrics.csv
+```
+
+当前指标：
+
+```text
+total_sources=125
+linked_documents=0
+merged_duplicates=14
+status=candidate:8;collected:117
+fulltext_permission=institutional_access:2;metadata_only:110;open_access:10;unknown:3
+trust_level=high:125
+```
+
+`linked_documents=0` 表示当前 source registry 已登记来源，但尚未对真实库逐条执行 reindex。这个状态是可接受的，因为阶段 4 的目标是提供登记、治理和入口；批量导入或前端触发可在后续阶段继续推进。
+
+### 阶段 4 完成标准
+
+```text
+sources 表可创建
+来源可以从现有 CSV / manifest / metadata corpus 同步
+来源可按 DOI / URL / 标题去重
+可信度、全文权限和状态字段可用
+sources API 可查询、同步和 reindex
+来源评测脚本可运行
+documents/search/vector/chat 测试不被破坏
 全量自动化测试通过
 ```

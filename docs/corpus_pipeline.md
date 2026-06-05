@@ -148,10 +148,55 @@ Zotero 状态：
 ## 后续优化
 
 - 增加代理配置检测。
-- 将 source candidates 导入 `sources` 表，而不只保存 CSV。
+- 已在阶段 4 将 source candidates、PDF manifest 和 metadata corpus 同步到 `sources` 表，不再只保存 CSV。
 - 增加批量 DOI -> Unpaywall 开放全文查找。
 - 增加 Zotero collection 筛选。
 - 增加 PDF 清洗规则，处理特殊符号、页眉页脚、参考文献噪声。
+
+## 2026-06-05 阶段 4 source registry 同步
+
+阶段 4 新增统一来源登记库：
+
+```text
+data/source_candidates.csv
+data/fulltext_manifest.csv
+data/metadata/rfc_papers_metadata.csv
+data/imports/metadata_corpus/*.md
+-> scripts/sync_sources.py
+-> sources
+```
+
+运行入口：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\sync_sources.py
+```
+
+真实同步结果：
+
+```text
+total=283
+created=125
+updated=132
+duplicates=26
+```
+
+来源评测入口：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_sources.py
+```
+
+当前指标：
+
+```text
+total_sources=125
+linked_documents=0
+merged_duplicates=14
+status=candidate:8;collected:117
+fulltext_permission=institutional_access:2;metadata_only:110;open_access:10;unknown:3
+trust_level=high:125
+```
 
 ## 2026-06-04 题录优先语料库管道
 

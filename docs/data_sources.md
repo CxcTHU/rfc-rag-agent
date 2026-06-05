@@ -19,7 +19,27 @@ URL:
 
 ## 当前状态
 
-已完成阶段 1 第一批试导入资料登记。
+已完成阶段 4 source registry 来源治理。
+
+阶段 4 已新增数据库表 `sources`，作为本项目的 source registry。它统一承接：
+
+- `docs/data_sources.md` 中的人读来源登记。
+- `data/fulltext_manifest.csv` 中的 PDF manifest。
+- `data/source_candidates.csv` 中的公开学术 API 候选。
+- `data/metadata/rfc_papers_metadata.csv` 中的题录元数据。
+- `data/imports/metadata_corpus/*.md` 中的题录卡片。
+
+当前同步结果：
+
+- 输入来源候选：283 条。
+- 写入 `sources` 表：125 条。
+- 更新已有来源：132 次。
+- 合并重复来源：26 次。
+- 状态分布：`candidate=8`、`collected=117`。
+- 全文保存权限分布：`institutional_access=2`、`metadata_only=110`、`open_access=10`、`unknown=3`。
+- 可信度分布：`high=125`。
+
+阶段 1 第一批试导入资料登记仍保留在下方，作为早期人工来源记录和历史审计依据。
 
 本批资料采用“资料卡”形式导入：保存题录、公开摘要的转述、检索关键词和来源链接，不保存受版权限制的论文全文。
 
@@ -76,3 +96,55 @@ URL:
 - 题录语料只保存公开元数据和摘要，不保存未授权全文。
 - Google Scholar 不作为直接网页爬取主链路；如需使用，优先通过可导出的题录文件进入本项目。
 - CNKI 机构账号获取的内容优先走题录导出或本地私有导入，不公开再分发全文。
+
+## Source Registry 关系说明
+
+阶段 4 之后，来源治理以 `sources` 表为准，文档关系如下：
+
+```text
+docs/data_sources.md
+  人读来源说明和合规边界
+
+data/fulltext_manifest.csv
+  PDF 全文清单，包含本地路径和访问权限
+
+data/source_candidates.csv
+  学术 API 发现的候选来源
+
+data/metadata/rfc_papers_metadata.csv
+  题录 CSV，适合批量导入和评测
+
+data/imports/metadata_corpus/*.md
+  题录 Markdown 卡片，可进入 documents/chunks
+
+sources
+  数据库来源登记库，统一保存来源元数据、去重键、权限、可信度、状态和 document 关联
+
+documents/chunks
+  已导入并可检索、可引用的内容库
+```
+
+同步入口：
+
+```powershell
+python scripts/sync_sources.py
+```
+
+来源评测入口：
+
+```powershell
+python scripts/evaluate_sources.py
+```
+
+重新索引入口：
+
+```text
+POST /sources/{source_id}/reindex
+```
+
+设计原则：
+
+- `sources` 管“这条资料来源是什么、是否可信、能否保存、是否已导入”。
+- `documents/chunks` 管“这条资料实际进入 RAG 检索后的正文和片段”。
+- `fulltext_permission` 与 `trust_level` 分开记录，避免把版权/授权问题和来源质量混在一起。
+- 对受限全文，保留题录、摘要、合法来源链接和本地授权路径，不公开分发全文。

@@ -232,7 +232,7 @@ workflow
 
 ### 当前对齐情况
 
-阶段 0 到阶段 3 当前已逐步对齐 Quivr 的工程思想：
+阶段 0 到阶段 4 当前已逐步对齐 Quivr 的工程思想：
 
 - 有清晰入口：`app/main.py`。
 - 有 API 分层：`app/api/health.py`、`app/api/documents.py`、`app/api/search.py`、`app/api/chat.py`。
@@ -241,10 +241,11 @@ workflow
 - 有导入、检索、生成和评测 service 分层。
 - 有 `EmbeddingProvider` 和 `ChatModelProvider` 两类 provider 抽象。
 - 有 response metadata：`citations`、`sources`、`refused`、`model_provider`、`model_name`。
+- 有 source registry：`sources` 表、`SourceRegistryService`、来源同步脚本、sources API 和 reindex 入口。
 - 有自动化测试和评测脚本。
 - 有文档和知识库沉淀：`README.md`、`docs/progress.md`、`obsidian-vault/`。
 
-阶段 3 已实现最小 RAG 问答核心链路。后续阶段按以下方式继续对齐：
+阶段 4 已实现来源治理层。后续阶段按以下方式继续对齐：
 
 ```text
 阶段 1
@@ -260,8 +261,8 @@ workflow
   已实现引用式问答、来源返回和拒答机制
 
 阶段 4
-  对齐 Quivr storage 扩展和 source 管理思想
-  建立公开资料采集、source registry、原文保存和去重机制
+  已对齐 Quivr storage 扩展和 source 管理思想
+  已建立 source registry、来源去重、可信度、全文权限、状态、同步脚本、sources API 和 reindex 入口
 
 阶段 6
   借鉴 Quivr 的测试组织，补充检索与问答评测集
@@ -1010,17 +1011,20 @@ POST /chat
 
 ```text
 建立 source registry
-小规模爬取公开网页
+同步现有公开资料候选、PDF manifest 和题录语料
 去重
-保存原文和元数据
+保存来源元数据、可信度、全文权限和状态
 支持重新索引
 ```
 
 完成标准：
 
 ```text
-至少收集 30 到 80 条高质量公开资料
-每条资料都有来源记录
+sources 表可管理至少 30 到 80 条高质量公开资料来源
+每条资料都有来源记录、可信度、全文权限和状态
+支持从现有 CSV / manifest / metadata corpus 同步
+支持按 DOI / URL / 标题去重
+支持来源重新索引到 documents/chunks
 ```
 
 ### 阶段 5：前端界面
@@ -1137,7 +1141,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2 和阶段 3 已完成。阶段 3 当前在 `codex/phase-3-cited-chat` 分支完成开发和验证。
+阶段 0、阶段 1、阶段 2、阶段 3 和阶段 4 已完成。阶段 4 当前在 `codex/phase-4-source-management` 分支完成开发和验证。
 
 当前最权威的进度依据是：
 
@@ -1145,25 +1149,25 @@ source = 回答依据，必须能追溯到标题和 URL
 docs/progress.md
 ```
 
-下一步最适合进入阶段 4：数据采集与来源管理。
+下一步最适合进入阶段 5：前端界面。
 
-建议从阶段 3 分支完成提交/合并后，新开阶段 4 分支：
+建议从阶段 4 分支完成提交/合并后，新开阶段 5 分支：
 
 ```text
-codex/phase-4-source-management
+codex/phase-5-frontend
 ```
 
-阶段 4 的第一批最小任务：
+阶段 5 的第一批最小任务：
 
 ```text
 阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md 和 docs/data_sources.md
-确认阶段 3 的 ChatModelProvider、prompt_builder、CitationAnswerService、POST /chat、qa_logs 和 chat 评测已可用
-设计 source registry 或 sources 表，统一管理公开资料来源
-梳理 data/fulltext_manifest.csv、docs/data_sources.md、metadata corpus 和本地 raw 文件之间的关系
-实现来源去重、可信度标签、全文保存权限字段和重新索引入口
-补充 source 管理 API、测试和 Obsidian 知识点
+确认阶段 4 的 sources 表、SourceRegistryService、scripts/sync_sources.py、sources API、reindex 和 evaluate_sources.py 已可用
+设计前端信息架构：资料库、来源管理、聊天、引用来源侧栏和检索片段查看
+优先实现非技术用户能理解的资料/来源查看界面
+把 GET /sources、POST /sources/{source_id}/reindex、POST /chat 串进前端工作流
+补充前端使用说明、必要测试和 Obsidian 知识点
 ```
 
-阶段 4 仍不要急着做 Agent 工具调用。
+阶段 5 仍不要急着做 Agent 工具调用。
 
-阶段 3 已经把“回答必须基于召回资料并能返回来源”稳定跑通。阶段 4 的重点是让资料来源、原文、题录和去重规则更可靠，为后续前端和 Agent 化打基础。
+阶段 4 已经把“资料来源、题录、PDF manifest、权限、可信度、状态和 reindex 入口”稳定管理起来。阶段 5 的重点是让非技术用户能通过界面查看来源、触发导入、提问并核验引用，为后续 Agent 化打基础。
