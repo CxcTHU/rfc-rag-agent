@@ -29,6 +29,7 @@ data/fulltext/
 *.log
 
 # Obsidian local workspace state
+obsidian-vault/
 obsidian-vault/.obsidian/
 obsidian-vault/.obsidian/workspace*.json
 obsidian-vault/.obsidian/cache/
