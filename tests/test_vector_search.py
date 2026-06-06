@@ -15,6 +15,18 @@ def make_session(tmp_path):
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+class ConstantEmbeddingProvider:
+    provider_name = "constant"
+    model_name = "constant-v1"
+    dimension = 2
+
+    def embed_texts(self, texts):
+        return [[1.0, 0.0] for _text in texts]
+
+    def embed_query(self, query):
+        return [1.0, 0.0]
+
+
 def seed_search_documents(db):
     repository = DocumentRepository(db)
     return repository.create_with_chunks(
@@ -75,6 +87,20 @@ def test_vector_search_returns_empty_when_index_is_missing(tmp_path) -> None:
         results = VectorSearchService(db, provider).search("thermal control", top_k=3)
 
     assert results == []
+
+
+def test_vector_search_reranks_vector_ties_by_topic_anchor(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        provider = ConstantEmbeddingProvider()
+        seed_search_documents(db)
+        VectorIndexService(db, provider).build_index()
+
+        results = VectorSearchService(db, provider).search("filling capacity", top_k=2)
+
+    assert results[0].chunk_index == 1
+    assert "Filling capacity" in results[0].content
 
 
 def test_vector_search_skips_stale_embeddings(tmp_path) -> None:

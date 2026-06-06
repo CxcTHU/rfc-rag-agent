@@ -3,6 +3,7 @@ from pathlib import Path
 from app.core.config import Settings
 from scripts.evaluate_model_configs import (
     build_model_config_summaries,
+    format_pass_rate,
     real_config_skipped_reason,
     summarize_passed_csv,
     write_results,
@@ -36,6 +37,11 @@ def test_summarize_passed_csv_counts_yes_values(tmp_path) -> None:
     write_passed_csv(path, ["yes", "no", "true", "0"])
 
     assert summarize_passed_csv(path) == (2, 4)
+
+
+def test_format_pass_rate_handles_completed_and_empty_suites() -> None:
+    assert format_pass_rate(3, 4) == "0.750"
+    assert format_pass_rate(0, 0) == ""
 
 
 def test_build_model_config_summaries_outputs_deterministic_baseline(tmp_path) -> None:
@@ -140,5 +146,5 @@ def test_write_results_outputs_explorable_csv(tmp_path) -> None:
     write_results(out, results)
 
     content = out.read_text(encoding="utf-8")
-    assert "config_name,suite,status" in content
-    assert "deterministic_baseline,keyword,completed" in content
+    assert "config_name,suite,status,passed,total,failed,pass_rate" in content
+    assert "deterministic_baseline,keyword,completed,2,3,1,0.667" in content

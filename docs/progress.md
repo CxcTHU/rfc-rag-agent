@@ -2,12 +2,12 @@
 
 ## 最新状态：2026-06-06
 
-当前阶段：阶段 9.1，真实 Jina 向量检索和真实 MIMO chat + Jina embedding 单独评测已完成。下一步建议进入阶段 10：真实 RAG 质量校准与拒答边界优化，重点处理 vector-only 误召回、unsupported 问题拒答和 hybrid 置信度保护。
+当前阶段：阶段 10，真实 RAG 质量校准与拒答边界优化已完成。下一步建议进入阶段 11：扩大真实用户问题评测集，并继续做跨语言 query expansion、人工审阅抽样或 LLM-as-judge 评测。
 
 当前关键证据：
 
-- `task_plan.md` 当前阶段为 `Phase 7 complete`，阶段 9.1 补充验证已完成收尾。
-- 当前分支：`codex/phase-9-real-model-evaluation`。
+- `task_plan.md` 当前阶段为 `Phase 6 complete`，阶段 10 已完成文档、Obsidian、最终验证、提交准备和 tag 收尾。
+- 当前分支：`codex/phase-10-rag-quality-calibration`。
 - 阶段 3 tag：`phase-3-complete -> 7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954`，未移动。
 - 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 - 阶段 4 tag：`phase-4-complete -> b044459b9b8c2153e9225daa55af5d82cdcdb282`。
@@ -23,6 +23,8 @@
 - 阶段 9 tag：`phase-9-complete`。
 - 阶段 9.1 补充提交：由 `phase-9.1-complete` tag 指向的提交标识。
 - 阶段 9.1 tag：`phase-9.1-complete`。
+- 阶段 10 最终功能提交：由 `phase-10-complete` tag 指向的提交标识。
+- 阶段 10 tag：`phase-10-complete`。
 - 阶段 4 分支和 tag 已推送到 GitHub。
 - `sources` 来源登记表已实现。
 - `SourceRepository` 和 `SourceRegistryService` 已实现。
@@ -44,7 +46,7 @@
 - `scripts/build_vector_index.py` 已实现。
 - `scripts/evaluate_vector_search.py` 已实现。
 - `data/evaluation/vector_results.csv` 已生成。
-- 向量检索评测：11/15 通过。
+- 向量检索评测：13/15 通过。
 - 关键词 baseline：15/15 通过。
 - `docs/evaluation_plan.md` 已新增。
 - `scripts/analyze_retrieval_errors.py` 已新增。
@@ -68,30 +70,104 @@
 - `CitationAnswerService` 已迁移为 Brain 兼容门面，`POST /chat` 与 Agent `answer_with_citations` 复用同一条 Brain workflow。
 - `scripts/evaluate_brain_workflow.py` 已新增。
 - `data/evaluation/brain_workflow_results.csv` 已生成。
-- Brain workflow 评测：18 次 config-query run；`keyword_baseline=6/6`，`default_hybrid=4/6`，`vector_only=2/6`。
+- Brain workflow 评测：18 次 config-query run；`keyword_baseline=6/6`，`default_hybrid=6/6`，`vector_only=6/6`。
 - `docs/model_provider_evaluation.md` 已新增。
 - `OpenAICompatibleEmbeddingProvider` 已实现，支持兼容 `/embeddings` 的真实 embedding API。
 - `.env.example` 已补齐真实 embedding provider 配置字段：model、API key、base URL、dimension、timeout。
 - `scripts/build_vector_index.py` 已支持 provider、model、API key、base URL、dimension、timeout 参数。
 - `scripts/evaluate_model_configs.py` 已新增。
 - `data/evaluation/model_config_results.csv` 已生成。
-- 模型配置评测：deterministic baseline completed；阶段 9.1 已另行完成真实 MIMO + Jina 单独评测。
+- 模型配置评测：deterministic baseline completed；阶段 10 已新增 `failed` 与 `pass_rate` 字段，并另行完成真实 MIMO + Jina 校准评测。
 - 前端工作台已实现：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、聊天问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口。
 - 浏览器验证：桌面加载 sources=125、documents=136、chunks=997；移动视口 390x844 无横向溢出。
 - 阶段 6 浏览器 smoke check：搜索模式包含 `keyword/vector/hybrid`，聊天检索模式包含 `auto/hybrid/vector/keyword`。
 - 阶段 7 浏览器 smoke check：Agent 面板提交“检索 filling capacity 相关资料”后状态为 `answered`，工具调用为 `hybrid_search_knowledge`，返回 5 条混合检索结果。
-- Jina 真实向量索引重建：997 个 chunk，995 个新写入，2 个已存在跳过。
-- Jina vector 评测：14/15 通过。
-- Jina hybrid 评测：15/15 通过。
-- 真实 MIMO chat + Jina embedding：chat 6/6、agent 5/5、brain workflow 15/18。
-- 全量测试：208 个测试通过。
+- Jina 真实向量索引重建：997 个 chunk，995 个新写入，2 个已存在跳过；阶段 10 复核时数据库已有 Jina 索引 997 条。
+- Jina vector 阶段 10 评测：15/15 通过。
+- Jina hybrid 阶段 10 评测：15/15 通过。
+- 真实 MIMO chat + Jina embedding 阶段 10 校准：chat 6/6、agent 5/5、brain workflow 18/18。
+- 新增阶段 10 失败案例表：`data/evaluation/real_rag_failure_cases.csv`，记录 4 条真实 RAG 失败案例。
+- 新增 Brain evidence confidence 低证据拒答保护，unsupported query 在生成前拒答。
+- 新增 vector topic anchor rerank，deterministic vector 从 11/15 提升到 13/15。
+- 全量测试：216 个测试通过。
 
 下一步：
 
-- 阶段 9 分支 `codex/phase-9-real-model-evaluation` 已完成核心开发、验证和普通文档收尾。
-- 阶段 9 收尾时确认 `phase-9-complete` tag 指向阶段 9 最终功能提交。
-- 阶段 9.1 之后，建议进入阶段 10：真实 RAG 质量校准与拒答边界优化。
-- 不要移动已有阶段 tag：`phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`。
+- 阶段 10 分支 `codex/phase-10-rag-quality-calibration` 已完成核心开发、验证、普通文档、Obsidian、最终测试和阶段 tag 收尾。
+- 阶段 10 收尾时确认 `phase-10-complete` tag 指向阶段 10 最终功能提交。
+- 阶段 10 之后，建议进入阶段 11：扩大真实用户问题评测集、跨语言 query expansion、人工审阅抽样或 LLM-as-judge。
+- 不要移动已有阶段 tag：`phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`、`phase-9.1-complete`。
+
+## 2026-06-06 阶段 10 完成记录：真实 RAG 质量校准与拒答边界优化
+
+当前分支：`codex/phase-10-rag-quality-calibration`
+
+当前阶段：阶段 10 已完成核心开发、回归验证和真实模型校准。该阶段不移动 `phase-9-complete` 或 `phase-9.1-complete`，新增 `phase-10-complete` 作为阶段 10 最终功能提交的标识。
+
+阶段 tag：`phase-10-complete`。
+
+已完成：
+
+- 使用 Planning with Files 维护阶段 10 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 确认阶段 9.1 已合并到 `main`，并确认 `phase-9-complete` 与 `phase-9.1-complete` 未移动。
+- 新增 `scripts/analyze_real_rag_failures.py`，把阶段 9.1 真实模型失败拆成可诊断案例。
+- 新增 `data/evaluation/real_rag_failure_cases.csv`，记录 unsupported under-refusal、vector topic drift 和 cross-language topic gap。
+- 在 `app/services/brain/workflow.py` 新增 `EvidenceConfidence` 与 query-token coverage 规则。
+- 在 `BrainService._generate_answer_step()` 中加入生成前低证据检查，证据不足时直接拒答，不调用真实模型硬生成。
+- 在 `app/services/retrieval/vector_search.py` 新增 topic anchor rerank，让 vector-only 候选排序更贴合问题主题。
+- 增强 `scripts/evaluate_model_configs.py`，新增 `failed` 和 `pass_rate` 字段。
+- 新增和更新对应测试，覆盖失败分析、低证据拒答、vector rerank 和 model config 指标。
+- 根据真实模型质量判断，单独复跑阶段 10 MIMO + Jina 校准评测，不覆盖 deterministic baseline。
+
+设计结论：
+
+- `EvidenceConfidence` 解决“检索有结果但证据不足”的问题，不等同于模型自信分。
+- 低证据拒答放在 Brain 生成前，可以同时保护 `/chat` 与 Agent 引用问答工具。
+- `topic anchor rerank` 不把 vector-only 静默改成 hybrid，只在向量候选内部调整排序，因此 baseline 仍可比较。
+- deterministic provider 继续作为自动回归基线；真实 MIMO + Jina 作为最终体验校准更好，但不适合作为唯一自动测试依据。
+
+验证结果：
+
+- `python scripts\analyze_real_rag_failures.py`：生成 4 条失败案例。
+- `python -m pytest tests\test_analyze_real_rag_failures.py -q`：3 个测试通过。
+- `python -m pytest tests\test_brain_workflow.py tests\test_brain_service.py tests\test_answer_service.py tests\test_chat_api.py tests\test_agent_service.py -q`：31 个测试通过。
+- `python -m pytest tests\test_vector_search.py tests\test_vector_search_api.py tests\test_evaluate_vector_search.py tests\test_hybrid_search.py tests\test_evaluate_hybrid_search.py tests\test_brain_service.py tests\test_evaluate_brain_workflow.py -q`：29 个测试通过。
+- `python -m pytest tests\test_evaluate_model_configs.py -q`：7 个测试通过。
+- `python scripts\evaluate_vector_search.py --provider deterministic --skip-index-build`：13/15 通过。
+- `python scripts\evaluate_hybrid_search.py --provider deterministic`：15/15 通过，`regressed_keyword=0`。
+- `python scripts\evaluate_chat.py --chat-provider deterministic --embedding-provider deterministic`：6/6 通过。
+- `python scripts\evaluate_agent.py --chat-provider deterministic --embedding-provider deterministic`：5/5 通过。
+- `python scripts\evaluate_brain_workflow.py --chat-provider deterministic --embedding-provider deterministic`：`default_hybrid=6/6`、`keyword_baseline=6/6`、`vector_only=6/6`。
+- `python scripts\evaluate_model_configs.py --include-real-config`：deterministic keyword 15/15、vector 13/15、hybrid 15/15、chat 6/6、agent 5/5、brain_workflow 18/18。
+- `python -m pytest tests\test_search_api.py tests\test_vector_search_api.py tests\test_chat_api.py tests\test_agent_api.py -q`：16 个测试通过。
+- `python -m pytest -q`：216 个测试通过。
+- `python scripts\evaluate_vector_search.py --provider openai-compatible --skip-index-build --out data\evaluation\stage10_jina_vector_results.csv`：Jina vector 15/15。
+- `python scripts\evaluate_hybrid_search.py --provider openai-compatible --vector-results data\evaluation\stage10_jina_vector_results.csv --out data\evaluation\stage10_jina_hybrid_results.csv`：Jina hybrid 15/15。
+- `python scripts\evaluate_chat.py --chat-provider openai-compatible --embedding-provider openai-compatible --out data\evaluation\stage10_mimo_jina_chat_results.csv`：MIMO + Jina chat 6/6。
+- `python scripts\evaluate_agent.py --chat-provider openai-compatible --embedding-provider openai-compatible --out data\evaluation\stage10_mimo_jina_agent_results.csv`：MIMO + Jina agent 5/5。
+- `python scripts\evaluate_brain_workflow.py --chat-provider openai-compatible --embedding-provider openai-compatible --out data\evaluation\stage10_mimo_jina_brain_workflow_results.csv`：MIMO + Jina Brain workflow 18/18。
+
+遗留问题：
+
+- deterministic vector 仍有 2 条未命中，适合后续用跨语言 query expansion 或更丰富领域词典继续优化。
+- 真实模型评测依赖本地 `.env`、网络、限流和余额，不能作为 CI 或本地自动回归的唯一依据。
+- 当前 evidence confidence 采用轻量 query-token coverage，后续可加入多来源一致性、LLM-as-judge 或人工审阅抽样。
+
+下一阶段任务：
+
+- 阶段 11 可扩大真实用户问题评测集，覆盖更多中文口语问法、工程场景和跨语言术语。
+- 可补充 query expansion 或 rerank 对比实验，尤其关注 deterministic vector 剩余失败。
+- 可建立人工审阅抽样表，验证 faithfulness 和 answer coverage 的主观质量。
+
+面试表达：
+
+```text
+阶段 10 我没有继续扩模型 provider，而是把真实模型暴露出的 RAG 失败转成可解释、可回归的质量保护。
+
+我先写失败案例分析脚本，把 MIMO + Jina Brain workflow 的失败拆成 unsupported 低证据拒答、vector-only 主题漂移和跨语言术语 gap。然后在 Brain 生成答案前加入 EvidenceConfidence，用 query-token coverage 判断召回片段是否足够支撑回答。这样即使真实向量模型对无意义问题召回了片段，系统也会在生成前拒答，而不是让模型硬编。
+
+针对 vector-only 误召回，我在向量候选内部加了 topic anchor rerank，复用已有领域词扩展做轻量主题锚点排序，但不把 vector-only 静默改成 hybrid，也不改变 API schema。最终 deterministic Brain workflow 从 12/18 提升到 18/18；真实 Jina vector 达到 15/15，MIMO + Jina Brain workflow 达到 18/18。这个阶段体现的是：真实模型用于质量校准，deterministic baseline 用于稳定回归。
+```
 
 ## 2026-06-06 阶段 9.1 补充记录：Jina 向量与 MIMO 真实评测
 

@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 9：真实模型接入与模型评测已完成；阶段 9.1 已补充完成真实 Jina 向量检索和真实 MIMO chat + Jina embedding 单独评测，当前分支为 `codex/phase-9-real-model-evaluation`。
+阶段 10：真实 RAG 质量校准与拒答边界优化已完成，当前分支为 `codex/phase-10-rag-quality-calibration`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -44,7 +44,11 @@
 
 阶段 9.1 tag：`phase-9.1-complete`。
 
-下一步建议：进入阶段 10，优先做真实 RAG 质量校准与拒答边界优化，重点处理 vector-only 误召回、unsupported 问题拒答和 hybrid 置信度保护。
+阶段 10 最终功能提交：由 `phase-10-complete` tag 指向的提交标识。
+
+阶段 10 tag：`phase-10-complete`。
+
+下一步建议：进入阶段 11，优先扩大真实用户问题评测集，并继续做跨语言 query expansion、人工审阅抽样或 LLM-as-judge 评测，但不要让自动回归依赖真实 API key。
 
 当前已经实现：
 
@@ -97,6 +101,15 @@
 - `data/evaluation/mimo_jina_chat_results.csv` 真实 MIMO chat + Jina embedding 问答评测结果
 - `data/evaluation/mimo_jina_agent_results.csv` 真实 MIMO chat + Jina embedding Agent 评测结果
 - `data/evaluation/mimo_jina_brain_workflow_results.csv` 真实 MIMO chat + Jina embedding Brain workflow 评测结果
+- `scripts/analyze_real_rag_failures.py` 阶段 10 真实 RAG 失败案例分析脚本
+- `data/evaluation/real_rag_failure_cases.csv` 阶段 10 失败案例分析表
+- Brain evidence confidence 低证据拒答保护，在真实模型生成前判断检索证据是否足够支撑回答
+- `VectorSearchService` topic anchor rerank，在 vector-only 候选内部用主题锚点降低误召回
+- `data/evaluation/stage10_jina_vector_results.csv` 阶段 10 Jina vector 校准评测结果
+- `data/evaluation/stage10_jina_hybrid_results.csv` 阶段 10 Jina hybrid 校准评测结果
+- `data/evaluation/stage10_mimo_jina_chat_results.csv` 阶段 10 MIMO + Jina chat 校准评测结果
+- `data/evaluation/stage10_mimo_jina_agent_results.csv` 阶段 10 MIMO + Jina Agent 校准评测结果
+- `data/evaluation/stage10_mimo_jina_brain_workflow_results.csv` 阶段 10 MIMO + Jina Brain workflow 校准评测结果
 - `ChatModelProvider` 聊天模型抽象，支持 deterministic provider 和 OpenAI-compatible provider
 - RAG prompt/context builder，把检索结果组织成带 `[1]`、`[2]` 编号的上下文
 - `CitationAnswerService` 最小引用式问答链路
@@ -113,7 +126,7 @@
 - FastAPI 静态前端入口：`GET /`
 - 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 205 个自动化测试
+- 216 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -125,7 +138,7 @@
 3. `docs/architecture.md`
 4. `docs/data_sources.md`
 
-阶段 9 的开发记忆：
+阶段 10 的开发记忆：
 
 - `task_plan.md`
 - `findings.md`
@@ -182,7 +195,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-208 passed
+216 passed
 ```
 
 当前测试覆盖：
@@ -222,6 +235,10 @@ python -m pytest
 - Agent API
 - Agent 评测脚本
 - 前端 Agent 面板和工具调用展示入口
+- 真实 RAG 失败案例分析脚本
+- Brain evidence confidence 低证据拒答
+- vector topic anchor rerank
+- model config failed/pass_rate 汇总指标
 
 ## 向量索引、混合检索与评测
 
@@ -264,14 +281,14 @@ python scripts/analyze_retrieval_errors.py
 
 ```text
 keyword baseline: 15/15 passed
-vector search: 11/15 passed
+vector search: 13/15 passed
 hybrid search: 15/15 passed, rescued_vector=4, regressed_keyword=0
 chat evaluation: 6/6 passed
 agent evaluation: 5/5 passed
-brain workflow evaluation: default_hybrid 4/6, keyword_baseline 6/6, vector_only 2/6
+brain workflow evaluation: default_hybrid 6/6, keyword_baseline 6/6, vector_only 6/6
 ```
 
-说明：当前向量检索使用 deterministic embedding，主要用于稳定开发和自动化测试，不代表真实语义 embedding 的最终效果。阶段 6 新增的 hybrid search 会同时召回关键词和向量结果，按 chunk 去重，对两路分数归一化并加权排序。它保留 keyword 和 vector baseline，便于持续对比。
+说明：当前 deterministic embedding 主要用于稳定开发和自动化测试。阶段 10 在 vector-only 候选内部新增 topic anchor rerank，让主题更贴合问题的片段优先进入 top_k；hybrid search 仍保留 keyword 和 vector baseline，便于持续对比。
 
 阶段 6 评测文件：
 
@@ -284,12 +301,30 @@ data/evaluation/chat_results.csv
 data/evaluation/retrieval_error_cases.csv
 ```
 
+阶段 10 新增评测文件：
+
+```text
+data/evaluation/real_rag_failure_cases.csv
+data/evaluation/stage10_jina_vector_results.csv
+data/evaluation/stage10_jina_hybrid_results.csv
+data/evaluation/stage10_mimo_jina_chat_results.csv
+data/evaluation/stage10_mimo_jina_agent_results.csv
+data/evaluation/stage10_mimo_jina_brain_workflow_results.csv
+```
+
 阶段 6 结论：
 
 - `Recall@K`：keyword 15/15，vector 11/15，hybrid 15/15。
 - `Citation Accuracy`：chat 6/6，citation_failures=0。
 - `Refusal Quality`：chat 评测中 1 条无依据问题正确拒答。
 - `Error Cases`：4 个 vector-only 失败均被 hybrid 标记为 `fixed_by_hybrid`。
+
+阶段 10 结论：
+
+- `Refusal Quality`：Brain 生成前新增 evidence confidence；unsupported query 即使被真实向量召回到片段，也会因低证据拒答。
+- `Vector Recall`：deterministic vector 从 11/15 提升到 13/15，Jina vector 阶段 10 校准为 15/15。
+- `Brain Workflow`：deterministic 与真实 MIMO + Jina 都达到 18/18。
+- `Model Config`：`model_config_results.csv` 新增 `failed` 和 `pass_rate`，方便直接比较配置质量。
 
 ## Agent 化
 
@@ -439,9 +474,54 @@ phase_9_1_real_mimo_jina:
   MIMO + Jina agent 5/5
   MIMO + Jina brain_workflow 15/18
   full tests 208 passed
+
+phase_10_rag_quality_calibration:
+  deterministic vector 13/15
+  deterministic hybrid 15/15
+  deterministic chat 6/6
+  deterministic agent 5/5
+  deterministic brain_workflow 18/18
+  Jina vector 15/15
+  Jina hybrid 15/15
+  MIMO + Jina chat 6/6
+  MIMO + Jina agent 5/5
+  MIMO + Jina brain_workflow 18/18
+  full tests 216 passed
 ```
 
-设计结论：真实模型接入已经具备工程边界和评测入口，但默认配置不切到真实模型。阶段 9.1 证明真实 Jina embedding 和真实 MIMO chat 能被现有 RAG 链路消费；剩余问题集中在纯向量召回质量和无依据问题拒答边界，适合作为阶段 10 的优化目标。
+设计结论：真实模型接入已经具备工程边界和评测入口，但默认配置仍不切到真实模型。阶段 10 的推荐做法是：deterministic provider 用于稳定回归，真实 MIMO + Jina 用于发布前质量校准；真实模型更贴近用户体验，但不适合作为自动测试唯一依据。
+
+## 真实 RAG 质量校准与拒答边界
+
+阶段 10 处理阶段 9.1 暴露的 3 类问题：vector-only 误召回、unsupported 问题未拒答、真实模型与 deterministic baseline 的指标不可直接读懂。
+
+新增质量保护：
+
+- `scripts/analyze_real_rag_failures.py`：把真实 RAG 失败拆成可诊断案例。
+- `EvidenceConfidence`：在 Brain 生成答案前检查问题有效词是否被召回证据覆盖。
+- 低证据拒答：有检索结果但证据不足时，直接返回“当前资料库中没有找到足够可靠的依据”，不调用真实模型硬生成。
+- `topic anchor rerank`：vector-only 候选内部用主题锚点轻量重排，降低语义相近但主题不对的误召回。
+- `failed` / `pass_rate`：模型配置汇总结果直接显示失败数和通过率。
+
+阶段 10 结果：
+
+```text
+deterministic:
+  vector 13/15
+  hybrid 15/15
+  chat 6/6
+  agent 5/5
+  brain_workflow 18/18
+
+real MIMO + Jina:
+  Jina vector 15/15
+  Jina hybrid 15/15
+  chat 6/6
+  agent 5/5
+  brain_workflow 18/18
+```
+
+面试表达：阶段 10 不是继续堆模型，而是把真实模型暴露出的失败转成可复现的工程保护。系统先判断检索证据是否足够，再决定是否生成；同时保留 deterministic 和真实模型两套评测口径，既能稳定回归，也能验证真实体验。
 
 ## 引用式问答
 

@@ -65,6 +65,7 @@ codex/phase-6-evaluation
 codex/phase-7-agent-tools
 codex/phase-8-brain-workflow
 codex/phase-9-real-model-evaluation
+codex/phase-10-rag-quality-calibration
 ```
 
 协作规则：
@@ -1175,7 +1176,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6、阶段 7、阶段 8 和阶段 9 已完成。阶段 9 当前在 `codex/phase-9-real-model-evaluation` 分支完成开发、验证、文档收尾和 tag 标识。
+阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6、阶段 7、阶段 8、阶段 9、阶段 9.1 和阶段 10 已完成。阶段 10 当前在 `codex/phase-10-rag-quality-calibration` 分支完成开发、验证、文档收尾和 tag 标识。
 
 阶段 4 最终提交和 tag：
 
@@ -1222,7 +1223,13 @@ tag: phase-9-complete
 tag: phase-9.1-complete
 ```
 
-不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete` 或 `phase-9.1-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+阶段 10 真实 RAG 质量校准与拒答边界优化由以下 tag 标识：
+
+```text
+tag: phase-10-complete
+```
+
+不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`、`phase-9.1-complete` 或 `phase-10-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
 阶段 6 已实现检索优化与评测闭环：
 
@@ -1333,6 +1340,39 @@ MIMO + Jina brain_workflow: 15/18
 full tests: 208 passed
 ```
 
+阶段 10 已完成真实 RAG 质量校准与拒答边界优化：
+
+```text
+scripts/analyze_real_rag_failures.py
+data/evaluation/real_rag_failure_cases.csv
+Brain EvidenceConfidence
+low-evidence refusal before model generation
+VectorSearchService topic anchor rerank
+scripts/evaluate_model_configs.py failed/pass_rate
+stage10_jina_* results
+stage10_mimo_jina_* results
+```
+
+阶段 10 评测结果：
+
+```text
+deterministic:
+  vector 13/15
+  hybrid 15/15
+  chat 6/6
+  agent 5/5
+  brain_workflow 18/18
+
+real MIMO + Jina:
+  Jina vector 15/15
+  Jina hybrid 15/15
+  chat 6/6
+  agent 5/5
+  brain_workflow 18/18
+
+full tests: 216 passed
+```
+
 阶段 9.1 关键经验：
 
 ```text
@@ -1342,19 +1382,28 @@ MIMO OpenAI-compatible 调用需要 api-key 请求头；项目同时保留 Autho
 真实模型评测要输出独立 CSV，不覆盖 deterministic baseline。
 ```
 
+阶段 10 关键经验：
+
+```text
+真实 ChatModel 和 EmbeddingModel 更适合做最终体验校准，但不适合作为自动回归的唯一依据。
+deterministic provider 继续负责稳定回归，真实 MIMO + Jina 负责发布前质量校准。
+低证据拒答应放在 Brain 生成前，不能只靠 prompt 要求模型不要胡编。
+vector-only 不能静默 fallback 到 hybrid；如果要优化，应使用可解释 rerank 或显式配置，保持 baseline 可比较。
+```
+
 当前最权威的进度依据是：
 
 ```text
 docs/progress.md
 ```
 
-下一步最适合新开阶段 10。优先方向：
+下一步最适合新开阶段 11。优先方向：
 
 ```text
-真实 RAG 质量校准与拒答边界优化
-vector-only 误召回分析
-unsupported 问题低置信度拒答
-hybrid 权重、query expansion 或 rerank 调优
+扩大真实用户问题评测集
+跨语言 query expansion
+人工审阅抽样或 LLM-as-judge
+真实模型成本、速度和稳定性记录
 ```
 
 阶段 7 已经把稳定 RAG 能力包装成受控工具，让 Agent 能调用 RAG 系统，但不能绕过来源、权限、引用和评测约束。后续如果加入 LLM 规划、写入工具或部署能力，必须继续保留只读优先、最大步数、显式权限、工具调用记录、引用溯源和评测回归。
@@ -1363,4 +1412,4 @@ hybrid 权重、query expansion 或 rerank 调优
 
 阶段 9 已经补齐真实模型 provider 边界。后续如果切换真实 chat 或 embedding 模型，必须保留 deterministic baseline，先按 provider/model/dimension 重建向量索引，再复跑 model config、vector、hybrid、chat、agent 和 brain workflow 评测，不能只凭单次回答效果判断质量。
 
-阶段 9.1 已证明真实 MIMO + Jina 可以运行，但失败项集中在 `vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。阶段 10 应优先优化证据置信度和拒答边界，而不是继续扩展模型 provider。
+阶段 9.1 已证明真实 MIMO + Jina 可以运行，但失败项集中在 `vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。阶段 10 已通过 EvidenceConfidence 和 topic anchor rerank 修复主要边界。后续阶段如果继续提升质量，应扩大评测集、补充跨语言 query expansion 和人工审阅，而不是继续盲目扩展模型 provider。

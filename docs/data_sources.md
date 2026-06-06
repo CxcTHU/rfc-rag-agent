@@ -363,3 +363,62 @@ evaluation results -> quality comparison
 - 真实 API key 只允许放在本地 `.env`，不得提交到 Git。
 - MIMO Token Plan key、Jina API key 和任何真实模型凭证不得写入源码、文档或评测 CSV。
 - 阶段 9 没有公开分发受限全文，也没有引入新的爬虫链路。
+
+## 阶段 10 真实 RAG 质量校准与数据来源边界
+
+阶段 10 进入真实 RAG 质量校准与拒答边界优化，没有新增外部文献资料来源，也没有改变阶段 4 建立的 source registry 合规边界。
+
+阶段 10 复用现有数据：
+
+```text
+sources
+documents/chunks
+chunk_embeddings
+data/evaluation/*.csv
+```
+
+阶段 10 新增或更新的评测产物：
+
+```text
+data/evaluation/real_rag_failure_cases.csv
+data/evaluation/vector_results.csv
+data/evaluation/hybrid_results.csv
+data/evaluation/brain_workflow_results.csv
+data/evaluation/model_config_results.csv
+data/evaluation/stage10_jina_vector_results.csv
+data/evaluation/stage10_jina_hybrid_results.csv
+data/evaluation/stage10_mimo_jina_chat_results.csv
+data/evaluation/stage10_mimo_jina_agent_results.csv
+data/evaluation/stage10_mimo_jina_brain_workflow_results.csv
+```
+
+这些文件不是新的资料来源。它们只记录：
+
+- 评测问题。
+- 期望命中条件。
+- 通过或失败状态。
+- 命中标题和来源类型。
+- 引用数量和拒答状态。
+- provider/model 名称。
+- 失败原因和改进建议。
+
+阶段 10 的核心关系是：
+
+```text
+已有 sources / documents / chunks
+-> deterministic or Jina chunk_embeddings
+-> keyword / vector / hybrid retrieval
+-> Brain evidence confidence
+-> chat / agent / brain workflow evaluation
+-> stage 10 quality conclusion
+```
+
+合规结论：
+
+- 阶段 10 不新增爬虫链路。
+- 阶段 10 不新增外部文献或受限全文。
+- Jina 和 MIMO 仍然是模型服务，不是资料来源。
+- `stage10_*_results.csv` 是质量校准结果，不是资料库。
+- `real_rag_failure_cases.csv` 是失败分析表，不包含受限全文，只保存可追溯标题、简短证据摘要和诊断。
+- 真实 API key 只允许放在本地 `.env`，不得写入源码、文档、CSV 或 Obsidian。
+- 自动回归继续优先使用 deterministic provider，避免把真实模型密钥、网络和余额变成测试前提。

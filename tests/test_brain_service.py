@@ -65,6 +65,18 @@ def make_brain_service(db, embedding_provider=None, log_answers=True) -> BrainSe
     )
 
 
+class ConstantEmbeddingProvider:
+    provider_name = "constant"
+    model_name = "constant-v1"
+    dimension = 2
+
+    def embed_texts(self, texts):
+        return [[1.0, 0.0] for _text in texts]
+
+    def embed_query(self, query):
+        return [1.0, 0.0]
+
+
 def test_brain_service_runs_default_workflow_with_keyword_retrieval(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -158,3 +170,23 @@ def test_brain_service_supports_vector_retrieval(tmp_path) -> None:
     assert result.retrieval_mode == "vector"
     assert result.model_provider == "deterministic"
     assert result.model_name == "rule-based-chat-v1"
+
+
+def test_brain_service_refuses_low_evidence_vector_results(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        embedding_provider = ConstantEmbeddingProvider()
+        seed_brain_documents(db)
+        VectorIndexService(db, embedding_provider).build_index()
+
+        result = make_brain_service(db, embedding_provider=embedding_provider).answer(
+            "zqxjvblorptasticprotocol",
+            config=RetrievalConfig(retrieval_mode="vector", top_k=2),
+        )
+
+    assert result.refused
+    assert result.sources == []
+    assert result.citations == []
+    assert "evidence" in (result.refusal_reason or "")
+    assert result.workflow_steps[-1].output_summary == "refused=True low_evidence"

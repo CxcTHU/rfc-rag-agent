@@ -12,6 +12,7 @@ from app.services.brain.workflow import (
     BrainWorkflowStepRecord,
     UsedRetrievalMode,
     build_retrieval_outcome,
+    evaluate_evidence_confidence,
     extract_citations,
 )
 from app.services.generation.chat_model import ChatModelProvider
@@ -235,6 +236,32 @@ class BrainService:
                 refusal_reason=(
                     retrieval_outcome.refusal_reason
                     or "No retrieved chunks were available."
+                ),
+                workflow_steps=workflow_steps,
+            )
+
+        evidence_confidence = evaluate_evidence_confidence(
+            retrieval_question,
+            retrieval_outcome.results,
+        )
+        if not evidence_confidence.sufficient:
+            workflow_steps.append(
+                BrainWorkflowStepRecord(
+                    name="generate_answer",
+                    input_summary=(
+                        f"sources={len(retrieval_outcome.results)} "
+                        f"evidence_confidence={evidence_confidence.score:.2f}"
+                    ),
+                    output_summary="refused=True low_evidence",
+                    succeeded=True,
+                )
+            )
+            return self._refuse(
+                question=original_question,
+                retrieval_mode=retrieval_outcome.used_retrieval_mode,
+                refusal_reason=(
+                    evidence_confidence.refusal_reason
+                    or "Retrieved chunks did not provide enough evidence."
                 ),
                 workflow_steps=workflow_steps,
             )
