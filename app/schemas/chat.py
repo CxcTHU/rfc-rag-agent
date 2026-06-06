@@ -12,6 +12,7 @@ class ChatRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=50)
     retrieval_mode: RetrievalMode = "auto"
     min_score: float = Field(default=0.0, ge=0)
+    history: list[str] = Field(default_factory=list, max_length=50)
 
     @field_validator("question")
     @classmethod
@@ -20,6 +21,12 @@ class ChatRequest(BaseModel):
         if not normalized:
             raise ValueError("question must not be empty")
         return normalized
+
+    @field_validator("history")
+    @classmethod
+    def history_items_must_not_be_blank(cls, value: list[str]) -> list[str]:
+        normalized_items = [item.strip() for item in value if item.strip()]
+        return normalized_items
 
 
 class ChatSourceItem(BaseModel):

@@ -6,6 +6,7 @@ class AgentQueryRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=50)
     max_tool_calls: int = Field(default=2, ge=1, le=5)
     source_id: str | None = None
+    history: list[str] = Field(default_factory=list, max_length=50)
 
     @field_validator("question")
     @classmethod
@@ -24,6 +25,12 @@ class AgentQueryRequest(BaseModel):
         if not normalized:
             raise ValueError("source_id must not be empty")
         return normalized
+
+    @field_validator("history")
+    @classmethod
+    def history_items_must_not_be_blank(cls, value: list[str]) -> list[str]:
+        normalized_items = [item.strip() for item in value if item.strip()]
+        return normalized_items
 
 
 class AgentToolCallItem(BaseModel):

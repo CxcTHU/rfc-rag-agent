@@ -478,3 +478,34 @@ docs/stage11_user_evaluation_plan.md
 - Jina、MIMO 或其他真实模型仍然是模型服务，不是资料来源。
 - 真实 API key 只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。
 - 自动回归继续使用 deterministic provider；真实模型只适合发布前质量校准或离线审阅。
+
+## 阶段 12 质量审阅与上下文最小补全产物
+
+阶段 12 新增或更新的评测与设计产物：
+
+```text
+data/evaluation/stage12_quality_review_results.csv
+docs/stage12_quality_review.md
+docs/stage13_decompose_plan.md
+```
+
+这些文件不是新的文献资料来源。它们只记录：
+
+- 审阅样本 ID 和用户问题 ID。
+- 语言类型和评测配置。
+- 期望回答要点。
+- Faithfulness、Answer Coverage、Citation Quality 的人工或离线审阅结论。
+- 风险等级、审阅备注和下一步建议。
+- 阶段 13 Decompose 的后续设计边界。
+
+阶段 12 的上下文补全也不新增资料来源。它只在检索前使用调用方传入的可选 `history`，把“它”“这个技术”等省略问法补成更完整的检索 query。补全后的 query 不会写入 `sources`、`documents`、`chunks` 或 `chunk_embeddings`。
+
+合规结论：
+
+- 阶段 12 不新增爬虫链路。
+- 阶段 12 不新增外部文献或受限全文。
+- `stage12_quality_review_results.csv` 是质量审阅产物，不是资料库。
+- `docs/stage13_decompose_plan.md` 是后续设计文档，不是资料来源。
+- 质量审阅只保存来源标题、答案摘要、审阅字段和必要备注，不保存完整论文正文。
+- HyDE 只保留为离线实验建议，不进入默认链路或自动回归。
+- 真实 API key 仍只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。

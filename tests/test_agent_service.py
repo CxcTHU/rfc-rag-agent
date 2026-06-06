@@ -102,6 +102,22 @@ def test_agent_service_routes_answer_questions_to_citation_tool(tmp_path) -> Non
     assert result.sources
 
 
+def test_agent_service_passes_history_to_citation_tool(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_agent_service_documents(db)
+        result = make_service(db).query(
+            "它有哪些研究？",
+            top_k=2,
+            history=["filling capacity in rock-filled concrete"],
+        )
+
+    assert result.tool_calls[0].tool_name == "answer_with_citations"
+    assert not result.refused
+    assert result.sources[0].title == "Rock-filled concrete filling guide"
+
+
 def test_agent_service_routes_search_queries_to_hybrid_search(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 

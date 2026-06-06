@@ -105,10 +105,12 @@ class RetrievalConfig(BaseModel):
         retrieval_mode: RetrievalMode = "auto",
         min_score: float = 0.0,
         model_provider: str = "deterministic",
+        max_history: int = 0,
     ) -> "RetrievalConfig":
         return cls(
             top_k=top_k,
             retrieval_mode=retrieval_mode,
             min_score=min_score,
             model_provider=model_provider,
+            max_history=max_history,
         )

@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from collections.abc import Sequence
 
 from sqlalchemy.orm import Session
 
@@ -130,6 +131,7 @@ class AgentToolbox:
         top_k: int = 5,
         retrieval_mode: str = "hybrid",
         min_score: float = 0.0,
+        history: Sequence[str] | None = None,
     ) -> AgentToolResult:
         tool_name = "answer_with_citations"
         try:
@@ -143,6 +145,7 @@ class AgentToolbox:
                 top_k=top_k,
                 retrieval_mode=retrieval_mode,  # type: ignore[arg-type]
                 min_score=min_score,
+                history=history,
             )
         except ValueError as exc:
             return failed_tool_result(tool_name, question, exc)

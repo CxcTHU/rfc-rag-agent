@@ -61,6 +61,7 @@ def query_agent(
             top_k=request.top_k,
             max_tool_calls=request.max_tool_calls,
             source_id=request.source_id,
+            history=request.history,
         )
     except ValueError as exc:
         raise HTTPException(

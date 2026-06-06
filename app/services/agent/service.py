@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass, field
+from collections.abc import Sequence
 from typing import Literal
 
 from sqlalchemy.orm import Session
@@ -56,6 +57,7 @@ class AgentService:
         top_k: int = 5,
         max_tool_calls: int = 2,
         source_id: str | None = None,
+        history: Sequence[str] | None = None,
     ) -> AgentQueryResult:
         normalized_question = question.strip()
         if not normalized_question:
@@ -107,6 +109,7 @@ class AgentService:
             normalized_question,
             top_k=top_k,
             retrieval_mode="hybrid",
+            history=history,
         )
         return result_from_tool(
             question=normalized_question,

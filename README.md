@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 11：真实用户问题评测集与跨语言质量提升已完成，当前分支为 `codex/phase-11-user-evaluation-query-expansion`。
+阶段 12：质量审阅与上下文最小补全已完成，当前分支为 `codex/phase-12-quality-review-context-calibration`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -52,7 +52,11 @@
 
 阶段 11 tag：`phase-11-complete`。
 
-下一步建议：进入阶段 12，优先把阶段 11 的人工审阅抽样真正用于发布前质量校准，评估是否需要更强 rerank、真实 embedding 对比或审阅报告自动汇总；仍不要让自动回归依赖真实 API key。
+阶段 12 最终功能提交：由 `phase-12-complete` tag 指向的提交标识。
+
+阶段 12 tag：`phase-12-complete`。
+
+下一步建议：进入阶段 13，优先做规则式 Decompose、子 query 检索、证据合并、按 chunk_id 去重和可解释 rerank；HyDE 只做离线实验，不进入默认链路或自动回归。
 
 当前已经实现：
 
@@ -119,6 +123,11 @@
 - `data/evaluation/user_question_results.csv` 阶段 11 用户问题评测结果
 - `docs/stage11_user_evaluation_plan.md` 阶段 11 人工审阅与 LLM-as-judge 离线设计
 - `data/evaluation/user_question_review_samples.csv` 阶段 11 人工审阅抽样表
+- `data/evaluation/stage12_quality_review_results.csv` 阶段 12 质量审阅结果表
+- `docs/stage12_quality_review.md` 阶段 12 质量审阅报告，说明 Faithfulness、Answer Coverage、Citation Quality 的人工判定标准和风险结论
+- `docs/stage13_decompose_plan.md` 阶段 13 Decompose 与可解释证据合并预研计划
+- Brain `rewrite_query` 最小上下文补全，支持基于可选 `history` 的“它/这个技术/这类问题”等代词或省略问法补全
+- `/chat` 和 `/agent/query` 可选 `history` 字段，旧请求保持兼容
 - 跨语言 query expansion 增强，补充 ITZ/界面、creep/徐变、freeze-thaw/抗冻、porosity/孔隙率、emission/碳排放、steel fiber/钢纤维、rock shear key/剪力键等术语
 - Brain evidence confidence 支持扩展后的中英文证据词，降低跨语言问题误拒答
 - `ChatModelProvider` 聊天模型抽象，支持 deterministic provider 和 OpenAI-compatible provider
@@ -137,7 +146,7 @@
 - FastAPI 静态前端入口：`GET /`
 - 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 230 个自动化测试
+- 244 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -149,7 +158,7 @@
 3. `docs/architecture.md`
 4. `docs/data_sources.md`
 
-阶段 11 的开发记忆：
+阶段 12 的开发记忆：
 
 - `task_plan.md`
 - `findings.md`
@@ -206,7 +215,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-230 passed
+244 passed
 ```
 
 当前测试覆盖：
@@ -584,6 +593,41 @@ full tests: 230 passed
 ```
 
 面试表达：阶段 11 我把 RAG 质量评测从“标准测试题”扩展到“真实用户怎么问”。新增问题集显式记录语言类型、期望来源、期望拒答和回答要点；自动脚本稳定检查拒答、来源命中和引用有效性；人工审阅表再检查 Faithfulness、Answer Coverage 和 Citation Quality。跨语言增强不是黑盒调参，而是把中文工程词和英文论文术语做可解释映射，并复用到 keyword、vector topic anchor 和 Brain 证据置信度中。
+
+## 质量审阅与上下文最小补全
+
+阶段 12 把阶段 11 的人工审阅设计真正落地，并在 Brain workflow 的 `rewrite_query` 位置实现最小上下文补全。
+
+新增链路：
+
+```text
+data/evaluation/user_question_review_samples.csv
+-> data/evaluation/stage12_quality_review_results.csv
+-> docs/stage12_quality_review.md
+-> Brain filter_history / rewrite_query
+-> 可选 history 补全代词或省略问法
+-> chat / agent / user question / Brain workflow 回归
+-> docs/stage13_decompose_plan.md
+```
+
+阶段 12 的上下文补全只处理明确依赖最近历史的问题，例如“它有哪些研究？”、“这个技术对长期变形有什么影响？”。系统会把最近历史问题拼入检索 query，但返回结果中的 `question` 仍保留用户原始问题。`/chat` 和 `/agent/query` 新增可选 `history` 字段，旧请求不传该字段仍保持兼容。
+
+当前结果：
+
+```text
+quality review tests: 8 passed
+context rewrite focused tests: 52 passed
+user question evaluation: 25/30
+chat evaluation: 6/6
+agent evaluation: 5/5
+brain workflow evaluation: 18/18
+API/core regression: 47 passed
+full tests: 244 passed
+```
+
+阶段 12 结论：默认 hybrid 链路来源命中可靠，deterministic provider 适合稳定回归但不能单独证明真实回答覆盖度；vector-only 仍有主题漂移。下一阶段优先做规则式 Decompose、子 query 检索、证据合并、按 `chunk_id` 去重和可解释 rerank；HyDE 只做离线实验建议。
+
+面试表达：阶段 12 我把自动评测和人工审阅分开。自动评测继续保证拒答、来源命中和引用链路稳定，人工审阅结果表则检查 Faithfulness、Answer Coverage 和 Citation Quality。同时我没有做复杂长期记忆，而是在 Brain 的 `rewrite_query` step 做最小上下文补全，让“它”“这个技术”等追问能带上最近历史问题进入检索，并通过回归测试证明默认链路不退化。
 
 ## 引用式问答
 
