@@ -277,3 +277,53 @@ sources
 - Agent 不自动执行 `POST /sources/{source_id}/reindex` 等写入型动作。
 - `agent_results.csv` 是评测产物，不是新的资料来源。
 - 受限全文仍只保存在本地授权环境中，不公开分发。
+
+## 阶段 8 Brain Workflow 与数据来源边界
+
+阶段 8 进入 Brain 中控层与 RAG Workflow 配置化，没有新增外部资料来源，也没有改变阶段 4 建立的 source registry 合规边界。
+
+Brain workflow 只读取或复用现有数据：
+
+```text
+sources
+documents/chunks
+chunk_embeddings
+qa_logs
+data/evaluation/*.csv
+```
+
+阶段 8 新增的评测输出：
+
+```text
+data/evaluation/brain_workflow_results.csv
+```
+
+它不是新的资料来源，而是对现有 chat 评测集和现有资料库的配置化评测产物。该 CSV 记录不同 Brain 配置下的：
+
+- config 名称
+- 实际检索模式
+- workflow steps
+- 来源命中
+- citation 有效性
+- 拒答匹配
+- 模型提供方和模型名称
+
+阶段 8 的核心关系是：
+
+```text
+sources
+-> documents/chunks
+-> chunk_embeddings
+-> keyword/vector/hybrid retrieval
+-> Brain workflow
+-> chat/agent answer
+-> brain workflow evaluation results
+```
+
+合规结论：
+
+- Brain 不联网爬取新资料。
+- Brain 不绕过 `sources` 的可信度、全文权限和状态记录。
+- Brain 不自动执行 `source reindex` 等写入型动作。
+- `brain_workflow_results.csv` 是评测产物，不是新的资料来源。
+- 受限全文仍只保存在本地授权环境中，不公开分发。

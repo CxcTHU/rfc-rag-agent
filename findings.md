@@ -1,104 +1,174 @@
 # Findings & Decisions
 
 ## Requirements
-- 用户要求本线程持续推进到阶段 7：Agent 化完整完成。
-- 用户要求线程名称为 `阶段7-Agent化`。
-- 用户要求先阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- 用户要求确认阶段 6 已完成，确认 `phase-6-complete` tag 指向阶段 6 最终功能提交，不移动已有阶段 tag。
-- 用户要求目标分支为 `codex/phase-7-agent-tools`。
+- 用户要求持续推进到阶段 8：Brain 中控层与 RAG Workflow 配置化完整完成。
+- 用户要求线程名称为 `阶段8-Brain中控层与Workflow配置化`。
+- 用户要求先阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/agent_design.md`、`task_plan.md`、`findings.md`、`progress.md`。
+- 用户要求确认阶段 7 已完成并合并到 `main`，确认 `phase-7-complete` tag 指向阶段 7 最终功能提交，不移动已有阶段 tag。
+- 用户要求目标分支为 `codex/phase-8-brain-workflow`。
 - 用户要求正式开发前用 Planning with Files 校准 `task_plan.md`、`findings.md`、`progress.md`。
-- 阶段 7 不做复杂 LangGraph workflow、不做登录系统、不做部署优化、不做联网爬虫扩展。
-- 阶段 7 核心目标是把阶段 6 已稳定的 RAG 能力包装成受控、可测试、可追踪的 Agent 工具调用链路。
-- 阶段 7 优先只读工具，写入型动作不能自动执行；source reindex 如接入必须有明确请求字段和测试约束。
-- 开发过程中先不要写入 Obsidian 小 Phase 汇报；等阶段 7 全部开发、测试、普通文档完成后，再统一补齐 Obsidian 10 项 Phase 汇报。
+- 阶段 8 不做复杂 LangGraph workflow、不做登录系统、不做部署优化、不做大规模前端重构、不自动接入写入型 Agent 工具。
+- 阶段 8 核心目标是新增 Brain 中控层、RAG Workflow 配置化、配置评测，并让 chat 与 agent 复用同一套 RAG workflow。
+- 阶段 8 必须参照 Quivr 的 Brain / RetrievalConfig / WorkflowConfig 思想，但不要照搬 Quivr 代码。
+- 开发过程中先不要写入 Obsidian 小 Phase 汇报；等阶段 8 全部开发、测试、普通文档完成后，再统一补齐 Obsidian 10 项 Phase 汇报。
 
 ## Current Project Findings
-- 当前已从 `codex/phase-6-evaluation` 切换到 `codex/phase-7-agent-tools`。
-- 阶段 6 tag `phase-6-complete` 指向 `fa11702150d79e036159f427f567051e92bfe8c2`，提交信息为 `feat: complete phase 6 evaluation`。
-- 切换前工作区干净，阶段 7 分支此前不存在。
-- 阶段 7 启动后全量测试通过：141 passed，说明阶段 7 起点没有破坏阶段 6 既有链路。
-- 阶段 6 已实现 `HybridSearchService`、`POST /search/hybrid`、`scripts/evaluate_hybrid_search.py`、`retrieval_error_cases.csv`。
-- 阶段 6 评测结果为 keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6、全量测试 141 passed。
-- `AGENT.MD` 已明确下一步最适合进入阶段 7：Agent 化。
+- 当前分支已从 `main` 创建为 `codex/phase-8-brain-workflow`。
+- `main` 最新提交为 `1ab9d5b merge phase 7 agent tools`，说明阶段 7 已合并。
+- `phase-7-complete` 指向 `3a1ad943abe24b2ce9a10e1ee5b2c09225760474`，提交信息为 `feat: complete phase 7 agent tools`。
+- 创建阶段 8 分支前工作区干净。
+- README 和 docs 当前仍显示“阶段 7 已完成，当前分支为 `codex/phase-7-agent-tools`”，阶段 8 收尾需要更新口径。
+- 旧 `task_plan.md`、`findings.md`、`progress.md` 均为阶段 7 工作记忆，符合本阶段启动前校准要求。
+
+## Quivr Findings
+- Quivr 的 `Brain` 是核心中控对象，统一管理 storage、processor、vector store、embedder、LLM、chat history 和 RAG 问答。
+- Quivr 的 `RetrievalConfig` 聚合 reranker、LLM config、max_history、max_files、k、prompt 和 workflow_config。
+- Quivr 的 `WorkflowConfig` 通过节点描述流程，默认 RAG 类似 `START -> filter_history -> rewrite -> retrieve -> generate_rag -> END`。
+- Quivr 支持 reranker，但它把 reranker 作为配置项，而不是写死在 API。
+- Quivr 的 `Brain.ask()` 接受 retrieval_config，因此同一个 Brain 可以用不同检索/生成配置运行。
+- 本项目应该借鉴“中控层 + 配置对象 + workflow 步骤”的架构思想，但不引入 LangGraph、不引入 Quivr 依赖、不照搬其代码。
 
 ## Architecture Findings
-- `app/main.py` 使用 `create_app()` 组装 FastAPI 应用，当前注册 frontend、health、documents、search、chat、sources 路由。
-- 当前分层是 API、Schema、Service、DB、Source Registry、Model Provider、Frontend。
-- 阶段 7 应新增 Agent 层，位置应在 API 层和既有 service 之间，负责编排工具，不直接处理数据库细节。
-- 当前 RAG 主链路是 sources -> documents/chunks -> chunk_embeddings -> keyword/vector/hybrid retrieval -> prompt -> chat model -> citations -> frontend。
-- Agent 层必须复用这个链路，不能直接拼 SQL 或绕过已有问答与引用逻辑。
+- 当前项目分层为 API、Schema、Service、Agent、DB、Source Registry、Model Provider、Frontend。
+- 阶段 8 应新增 Brain 层，位置在 API/Agent 与现有 retrieval/generation/source service 之间。
+- 当前 RAG 主链路是 sources -> documents/chunks -> chunk_embeddings -> keyword/vector/hybrid retrieval -> prompt_builder -> ChatModelProvider -> citations -> qa_logs -> frontend/agent。
+- `CitationAnswerService` 当前内部直接完成校验、检索、prompt 构造、模型调用、引用提取和日志写入。
+- 阶段 8 可以把上述内部步骤显式迁移到 Brain workflow；`CitationAnswerService` 作为兼容入口调用 Brain。
+- Agent 的 `answer_with_citations` 当前调用 `CitationAnswerService`；只要 `CitationAnswerService` 迁移到 Brain，Agent 可以自然复用同一 workflow。
 
 ## Existing Code Findings
 - `KeywordSearchService` 已提供关键词检索，包含同义词扩展、泛词降权和来源均衡。
 - `VectorSearchService` 已提供 deterministic embedding 下的向量检索。
-- `HybridSearchService` 已合并 keyword/vector 候选，按 chunk 去重、归一化和加权排序。
-- `CitationAnswerService` 已支持 `retrieval_mode` 为 `auto`、`vector`、`keyword`、`hybrid`，并返回 citations、sources、refused、model 信息。
-- `SourceRepository` 和 `SourceRegistryService` 已支持来源查询、同步和 reindex；阶段 7 只读工具可直接查询 repository，暂不自动调用 reindex。
-- `QuestionAnswerLogRepository` 已记录 chat 问答日志；Agent 工具调用日志可以先作为响应结构返回，是否入库可作为后续扩展。
+- `HybridSearchService` 已合并 keyword/vector 候选，按 chunk 去重、归一化和加权排序，是当前质量最好的检索入口。
+- `CitationAnswerService` 支持 `retrieval_mode` 为 `auto`、`vector`、`keyword`、`hybrid`，并返回 citations、sources、refused、model 信息。
+- `build_rag_prompt()` 已把检索结果组织成带 `[1]` 编号的上下文，阶段 8 不需要重写 prompt 体系。
+- `QuestionAnswerLogRepository` 已记录 chat 问答日志；Brain workflow 的 generate_answer step 应继续复用该日志链路。
+- `AgentToolbox.answer_with_citations()` 当前默认 `retrieval_mode="hybrid"`，调用 `CitationAnswerService` 并映射为 AgentToolResult。
 
 ## API Contract Findings
 - `POST /search`：关键词检索 baseline。
 - `POST /search/vector`：向量检索 baseline。
 - `POST /search/hybrid`：阶段 6 优化检索入口。
-- `POST /chat`：引用式问答入口。
-- `GET /sources`、`GET /sources/{source_id}`：来源查询入口。
-- 阶段 7 新增 `POST /agent/query` 时不能破坏以上入口的请求和响应结构。
+- `POST /chat`：引用式问答入口，响应结构包含 answer、citations、sources、refused、retrieval_mode、model 信息。
+- `POST /agent/query`：阶段 7 Agent 入口，搜索类走 hybrid，问答类走 answer_with_citations。
+- 阶段 8 新增 Brain 内部层时，必须保持以上入口的请求和响应结构不破坏。
 
 ## Evaluation Findings
 - `data/evaluation/keyword_queries.csv` 是 keyword/vector/hybrid 检索评测主数据集。
 - `data/evaluation/chat_queries.csv` 是引用式问答评测主数据集。
-- 阶段 7 应新增 Agent 评测脚本，复用现有问题，检查工具选择、来源命中、citation 有效性、拒答匹配和工具调用记录。
-- Agent 评测不能只验证 HTTP 200，还要证明没有降低阶段 6 的检索和引用质量。
+- `data/evaluation/agent_queries.csv` 是 Agent 工具编排评测主数据集。
+- 阶段 8 应新增配置化评测，比较 default_hybrid、keyword_baseline、vector_only 等配置，而不只比较单个 API。
+- 配置化评测应记录 workflow steps，证明 Brain 确实按配置执行了 filter_history、rewrite_query、retrieve、optional_rerank、generate_answer。
 
 ## Frontend Findings
 - 当前前端是 FastAPI 静态文件 + 原生 HTML/CSS/JS。
-- 工作台已有 sources、documents、chunks、keyword/vector/hybrid search、chat、citations、source sync 和 source reindex 入口。
-- 阶段 7 如更新前端，应只新增 Agent 最小面板：问题输入、回答、工具调用记录、引用来源；不重构布局，不引入构建链。
+- 工作台已有 sources、documents、chunks、keyword/vector/hybrid search、chat、agent、citations、source sync 和 source reindex 入口。
+- 阶段 8 不应变成前端重构；如果需要展示 Brain，只在文档中说明或保持最小前端变更。
 
 ## Data Source Findings
-- 阶段 7 不新增外部资料来源，不做联网爬虫扩展。
-- Agent 只读工具查询的是已有 `sources`、`documents/chunks`、`chunk_embeddings` 和评测数据。
-- `docs/data_sources.md` 阶段收尾时应说明 Agent 工具调用不改变来源合规边界。
+- 阶段 8 不新增外部资料来源，不做联网爬虫扩展。
+- Brain workflow 读取的是已有 `sources`、`documents/chunks`、`chunk_embeddings`、`qa_logs` 和评测 CSV。
+- 阶段 8 新增的 `brain_workflow_results.csv` 属于评测产物，不是新的资料来源。
 
 ## Technical Decisions
+
 | Decision | Rationale |
 |----------|-----------|
-| 新增 Agent 层而不是改造 chat service | 保持 `CitationAnswerService` 稳定，让 Agent 只做工具选择和结果编排 |
-| 第一版 Agent 使用规则式意图识别 | 不依赖真实 LLM 或复杂 workflow，便于本地测试和面试解释 |
-| Agent 默认优先 hybrid search | 阶段 6 已证明 hybrid 当前质量最好且不破坏 baseline |
-| 只读工具优先 | 降低风险，避免 Agent 自动修改来源或资料库 |
-| 工具返回结构化结果 | 便于前端展示、评测和排查 |
-| 新增 Agent 评测脚本 | 阶段 7 的完成必须能被量化证明，不只是 API 可调用 |
-| 先新增 `docs/agent_design.md` 和文档断言测试 | 先把工具边界、权限约束和评测方式固定下来，再进入代码实现 |
+| 中控层命名为 Brain | 用户明确要求，且与 Quivr 中控抽象一致 |
+| 新增 `app/services/brain/` | Brain 属于 service 层组合能力，不应放到 API、DB 或 Agent 专属目录 |
+| `CitationAnswerService` 保持对外兼容 | 避免破坏 `/chat`、Agent 工具和现有评测 |
+| Brain workflow 第一版用普通 Python 类 | 不引入 LangGraph，保持依赖少、行为稳定、测试简单 |
+| `filter_history` 和 `rewrite_query` 第一版 no-op | 保留 Quivr 式扩展点，但不提前引入复杂 LLM 改写 |
+| `optional_rerank` 第一版可用截断/空重排 | 保留 rerank 配置位置，后续真实 reranker 可接入 |
+| 配置化评测独立于现有 baseline | 可以证明不同 RetrievalConfig 的质量差异，而不是覆盖旧结果 |
 
 ## Planned File Changes
+
 | Area | Planned Files |
 |------|---------------|
-| Agent 设计 | `docs/agent_design.md`, `tests/test_agent_design.py` |
-| Agent 工具层 | `app/services/agent/__init__.py`, `app/services/agent/tools.py` |
-| Agent 编排 | `app/services/agent/service.py` |
-| Agent schema/API | `app/schemas/agent.py`, `app/api/agent.py`, `app/main.py` |
-| Agent 评测 | `scripts/evaluate_agent.py`, `data/evaluation/agent_queries.csv`, `data/evaluation/agent_results.csv` |
-| 测试 | `tests/test_agent_tools.py`, `tests/test_agent_service.py`, `tests/test_agent_api.py`, `tests/test_evaluate_agent.py` |
-| 前端 | `app/frontend/index.html`, `app/frontend/static/app.js`, `app/frontend/static/styles.css`, `tests/test_frontend_app.py` |
-| 文档 | `README.md`, `docs/progress.md`, `docs/architecture.md`, `docs/data_sources.md`, `AGENT.MD` |
-| Obsidian | 阶段 7 页面、Phase 汇报、首页、阶段索引、分类页和知识点 |
+| Brain 设计 | `docs/brain_workflow_design.md`, `tests/test_brain_workflow_design.py` |
+| Brain 配置 | `app/services/brain/config.py`, `tests/test_brain_config.py` |
+| Brain workflow/service | `app/services/brain/workflow.py`, `app/services/brain/service.py`, `tests/test_brain_workflow.py`, `tests/test_brain_service.py` |
+| Chat integration | `app/services/generation/answer_service.py`, existing chat tests |
+| Agent integration | `app/services/agent/tools.py`, existing agent tests |
+| Evaluation | `scripts/evaluate_brain_workflow.py`, `data/evaluation/brain_workflow_results.csv`, `tests/test_evaluate_brain_workflow.py` |
+| Documentation | `README.md`, `docs/progress.md`, `docs/architecture.md`, `docs/data_sources.md`, `AGENT.MD` |
+| Obsidian | 阶段 8 页面、Phase 汇报、首页、阶段索引、分类页和知识点 |
 
 ## Term Explanations
+
 | Term | Explanation |
 |------|-------------|
-| Agent | 能根据用户意图选择工具并组织结果的编排层 |
-| Tool | 被 Agent 调用的受控能力包装，例如检索、问答、来源查询 |
-| Orchestration | 编排，决定调用哪个工具、调用顺序和结果汇总方式 |
-| Tool call | 一次工具调用记录，包括工具名、输入摘要、输出摘要、成功或失败 |
-| Read-only | 只读，不修改数据库、不写入来源、不触发重新索引 |
-| Intent routing | 意图路由，根据用户问题判断应该搜索、问答还是查来源 |
-| Auditability | 可审计性，能回看 Agent 调用了什么工具、依据是什么、是否拒答 |
+| Brain | 本项目阶段 8 的中控层，统一组织资料库检索、配置、问答、日志和 Agent 复用链路 |
+| RetrievalConfig | 检索与问答配置，控制检索模式、召回数量、分数阈值、历史数量、重排数量和 prompt 方案 |
+| WorkflowConfig | 工作流配置，描述 RAG 每一步的顺序 |
+| Workflow step | RAG 流程中的单个步骤，例如过滤历史、改写问题、检索、重排、生成回答 |
+| no-op | 空操作。第一版保留步骤位置但不改变输入，用于稳定扩展点 |
+| rerank | 重排。先召回候选资料，再重新排序，提高最终上下文质量 |
+| baseline | 对照基线。用于比较新配置是否比旧检索或旧问答更好 |
 
 ## Issues Encountered
+
 | Issue | Resolution |
 |-------|------------|
 | 暂无 | 暂无 |
+
+## Phase 1 Findings
+- `docs/brain_workflow_design.md` 已固定阶段 8 的边界：Brain 是中控层，不是数据库层、爬虫层、外部资料采集层，也不自动执行 source reindex。
+- 设计文档明确本阶段只借鉴 Quivr 的 Brain / RetrievalConfig / WorkflowConfig 思路，不照搬 Quivr 代码，不引入复杂 LangGraph workflow。
+- 默认 workflow 顺序确定为 `filter_history -> rewrite_query -> retrieve -> optional_rerank -> generate_answer`。
+- `filter_history` 和 `rewrite_query` 第一版允许 no-op，但必须保留结构化 step 记录，便于后续多轮问答和真实 query rewrite 扩展。
+- Chat 和 Agent 的复用路线已经明确：`POST /chat` 继续通过 `CitationAnswerService`，`AgentToolbox.answer_with_citations` 继续通过同一个回答入口，内部编排迁移到 Brain。
+- 阶段 1 文档断言测试结果为 `2 passed`，说明设计文档已覆盖 Brain、配置、workflow steps、边界取舍和配置化评测要求。
+
+## Phase 2 Findings
+- 新增 `app/services/brain/config.py`，用 Pydantic 定义 `RetrievalConfig`、`WorkflowConfig` 和 `WorkflowStepConfig`。
+- `RetrievalConfig` 已覆盖 `retrieval_mode`、`top_k`、`min_score`、`max_history`、`rerank_top_n`、`prompt_profile`、`model_provider` 和 `workflow_config`。
+- `WorkflowConfig` 默认步骤为 `filter_history -> rewrite_query -> retrieve -> optional_rerank -> generate_answer`，并校验 step 不为空、不重复，且 `retrieve` 必须早于 `generate_answer`。
+- `rerank_top_n=0` 表示暂不重排，保留与现有 chat 默认行为一致；当 `rerank_top_n>0` 时必须小于或等于 `top_k`。
+- `RetrievalConfig.from_chat_request()` 已为后续 `CitationAnswerService.answer()` 迁移提供兼容入口。
+- 阶段 2 配置模型测试结果为 `13 passed`，覆盖默认值、非法数值、非法 step、必需 step 和从 chat 参数构造配置。
+
+## Phase 3 Findings
+- 新增 `app/services/brain/workflow.py`，集中保存 `BrainAnswerResult`、`BrainRetrievalOutcome`、`BrainWorkflowStepRecord`、默认拒答文本、引用提取和检索结果过滤函数。
+- 新增 `app/services/brain/service.py`，实现轻量 `BrainService`，按 `WorkflowConfig.enabled_step_names` 执行 RAG workflow。
+- `BrainService.retrieve()` 复用现有 `KeywordSearchService`、`VectorSearchService`、`HybridSearchService`，`auto` 模式保持先 vector、后 keyword fallback 的旧行为。
+- `optional_rerank` 第一版是可解释截断：`rerank_top_n=0` 时 disabled，`rerank_top_n>0` 时保留当前排序前 N 个结果，为后续真实 reranker 留出位置。
+- `generate_answer` 继续复用 `build_rag_prompt`、`ChatModelProvider`、citation 提取和 `QuestionAnswerLogRepository`，因此 Brain 不直接写 SQL。
+- Phase 3 测试结果为 `8 passed`，覆盖 workflow 函数、默认五步、auto fallback、可选 rerank、向量检索、拒答和日志记录。
+
+## Phase 4 Findings
+- `app/services/generation/answer_service.py` 已改造为兼容门面：保留 `CitationAnswerService`、`CitationAnswerResult`、`RetrievalOutcome`、`DEFAULT_REFUSAL_ANSWER`、`extract_citations` 等对外符号，内部调用 `BrainService.answer()` 和 `BrainService.retrieve()`。
+- `CitationAnswerService.answer()` 继续做旧有参数校验，确保空问题、非法 top_k、非法 min_score、非法 retrieval_mode 的错误信息不退化。
+- `CitationAnswerService` 返回结果仍不暴露 workflow steps，保持 `/chat` API 响应结构不变；后续配置化评测会直接调用 `BrainService` 获取 workflow steps。
+- `AgentToolbox.answer_with_citations()` 未新增工具，也未改变工具 schema；由于它继续调用 `CitationAnswerService`，因此自然复用 Brain workflow。
+- Phase 4 回归测试结果：answer/chat/log/agent tool 组合 `24 passed`，agent API/service 组合 `11 passed`。
+
+## Phase 5 Findings
+- 新增 `scripts/evaluate_brain_workflow.py`，复用 `data/evaluation/chat_queries.csv`，对每个问题依次运行 `default_hybrid`、`keyword_baseline`、`vector_only` 三种 Brain 配置。
+- 新增 `data/evaluation/brain_workflow_results.csv`，字段覆盖 config 名称、configured/actual retrieval mode、top_k、min_score、rerank_top_n、workflow steps、workflow_succeeded、来源命中、citation 有效性、拒答匹配等。
+- 新增 `tests/test_evaluate_brain_workflow.py`，测试三种配置构造、评测执行和 CSV 写出。
+- 实际评测结果为 18 次 config-query run：`keyword_baseline` 6/6 passed，`default_hybrid` 4/6 passed，`vector_only` 2/6 passed。
+- 该结果说明当前离线 deterministic embedding 和现有资料库条件下，keyword baseline 对 chat 评测集最稳；hybrid 和 vector_only 后续仍需要围绕 embedding 质量、rerank 或 query rewrite 继续优化。
+
+## Phase 6 Findings
+- 全量测试结果为 `189 passed`，包含阶段 8 新增 Brain/config/workflow/evaluation 测试和既有 API、source、frontend、agent、chat 回归测试。
+- 检索评测复跑结果：keyword 15/15 passed，vector 11/15 passed，hybrid 15/15 passed。
+- Chat 评测复跑结果：6/6 passed，refused=1，citation_failures=0。
+- Agent 评测复跑结果：5/5 passed，refused=1，tool_failures=0，citation_failures=0。
+- Source 评测复跑正常输出 source registry metrics：total_sources=125，status_counts=candidate:8;collected:117。
+- Brain workflow 评测复跑结果稳定：`keyword_baseline` 6/6，`default_hybrid` 4/6，`vector_only` 2/6。
+- 本阶段没有新增前端配置面板，也没有改动前端静态文件；`tests/test_frontend_app.py` 已包含在全量测试内通过。
+
+## Phase 7 Findings
+- `README.md` 已同步阶段 8 当前状态、Brain 中控层说明、配置化评测结果和全量测试数量。
+- `docs/progress.md` 已新增阶段 8 完成记录，包含完成内容、设计结论、验证结果、遗留问题、下一阶段任务和面试表达。
+- `docs/architecture.md` 已补充 Brain 层、配置模型、RAG workflow 数据流、chat/agent 复用关系和配置化评测。
+- `docs/data_sources.md` 已说明阶段 8 不新增外部资料来源，`brain_workflow_results.csv` 是评测产物。
+- `AGENT.MD` 已把后续起点校准到阶段 8，并明确本项目中控层正式命名为 Brain。
+- Obsidian 本地知识库已新增阶段 8 阶段页、阶段 8 Phase 汇报索引、Phase 0-7 小 Phase 汇报和 3 个知识点。
+- Obsidian 小 Phase 检查结果：8 篇 Phase 汇报均包含固定 10 项。
+- 阶段收尾最终 Git 操作应创建阶段最终功能提交并创建 `phase-8-complete` tag，tag 指向该提交。
 
 ## Resources
 - `AGENT.MD`
@@ -106,82 +176,32 @@
 - `docs/progress.md`
 - `docs/architecture.md`
 - `docs/data_sources.md`
+- `docs/agent_design.md`
 - `docs/evaluation_plan.md`
 - `task_plan.md`
 - `findings.md`
 - `progress.md`
+- `app/services/generation/answer_service.py`
+- `app/services/generation/prompt_builder.py`
+- `app/services/agent/tools.py`
+- `app/services/agent/service.py`
 - `app/services/retrieval/keyword_search.py`
 - `app/services/retrieval/vector_search.py`
 - `app/services/retrieval/hybrid_search.py`
-- `app/services/generation/answer_service.py`
-- `app/api/search.py`
-- `app/api/chat.py`
-- `app/api/sources.py`
-- `app/db/repositories.py`
-- `data/evaluation/`
-- `docs/agent_design.md`
-
-## Phase 1 Findings
-- `docs/agent_design.md` 已明确阶段 7 不引入复杂 LangGraph workflow，采用轻量规则式编排。
-- 最小工具集固定为 `search_knowledge`、`hybrid_search_knowledge`、`answer_with_citations`、`list_sources`、`get_source_detail`。
-- 权限边界固定为只读优先，`source reindex` 不自动执行；后续若要接入写入动作，必须有 `allow_write_actions=true` 类显式字段和测试。
-- `reasoning_summary` 被定义为可审计摘要，不暴露内部敏感推理。
-- `tests/test_agent_design.py` 已覆盖工具名、只读边界、`POST /agent/query`、`tool_calls`、`reasoning_summary` 和 Agent 评测文件路径。
-
-## Phase 2 Findings
-- 新增 `app/services/agent/`，作为阶段 7 Agent 工具层。
-- `AgentToolbox` 已实现 5 个工具：`search_knowledge`、`hybrid_search_knowledge`、`answer_with_citations`、`list_sources`、`get_source_detail`。
-- 工具层复用既有 service：`KeywordSearchService`、`HybridSearchService`、`CitationAnswerService`、`SourceRepository`。
-- 工具调用记录统一使用 `AgentToolCallRecord`，包含工具名、输入摘要、输出摘要、成功状态和错误信息。
-- 工具结果统一使用 `AgentToolResult`，包含 answer、search_results、sources、citations、refused 和 refusal_reason。
-- `get_source_detail` 找不到来源时返回可审计失败结果，而不是抛出未处理异常。
-- `tests/test_agent_tools.py` 覆盖关键词检索、混合检索、引用式问答、来源列表、来源详情、缺失来源和非法参数。
-
-## Phase 3 Findings
-- 新增 `app/services/agent/service.py`，作为 Agent 编排服务。
-- `AgentService.query()` 负责校验 question/top_k/max_tool_calls，并根据意图选择工具。
-- 第一版意图路由保持保守规则式：问答默认走 `answer_with_citations`，搜索走 `hybrid_search_knowledge`，来源列表走 `list_sources`，来源详情走 `get_source_detail`。
-- `AgentQueryResult` 已统一返回 question、answer、tool_calls、sources、search_results、citations、refused、refusal_reason、reasoning_summary。
-- 缺少 source_id 的来源详情查询会拒答并解释原因，不会误调用工具。
-- `tests/test_agent_service.py` 覆盖问答、搜索、来源列表、来源详情、缺少 source_id、非法参数和意图识别辅助函数。
-
-## Phase 4 Findings
-- 新增 `app/schemas/agent.py`，定义 Agent 请求和响应结构。
-- 新增 `app/api/agent.py`，实现 `POST /agent/query`。
-- `app/main.py` 已注册 Agent router。
-- Agent API 响应包含 question、answer、tool_calls、search_results、sources、citations、refused、refusal_reason、reasoning_summary。
-- `tests/test_agent_api.py` 覆盖问答、混合检索、来源详情、空问题校验和旧 API 回归。
-- 回归测试确认新增 Agent API 后，`POST /search`、`POST /chat`、`GET /sources` 仍可用。
-
-## Phase 5 Findings
-- 新增 `data/evaluation/agent_queries.csv`，覆盖 Agent 问答、Agent 搜索、来源列表、来源详情和缺失来源拒答。
-- 新增 `scripts/evaluate_agent.py`，直接调用 `AgentService`，输出 `data/evaluation/agent_results.csv`。
-- Agent 评测字段包含 expected_tool、actual_tools、tool_matched、refused、citations_valid、expected_source_hit、tool_call_count。
-- 新增 `tests/test_evaluate_agent.py`，覆盖 Agent 评测通过、缺失来源拒答和 CSV 读写。
-- 真实本地资料库运行 `scripts/evaluate_agent.py` 结果为 5/5 passed，refused=1，tool_failures=0，citation_failures=0。
-
-## Phase 6 Findings
-- 现有 FastAPI 静态工作台适合承载 Agent 最小展示，不需要新增前端构建链。
-- `app/frontend/index.html` 已新增 Agent 输入区和工具调用展示区，使用 `data-agent-*` 属性保持静态测试和浏览器检查可定位。
-- `app/frontend/static/app.js` 已新增 `/agent/query` 调用、Agent 回答渲染、引用渲染和 `tool_calls` 渲染。
-- `app/frontend/static/styles.css` 只补充 Agent 面板所需的网格、控制区和工具调用卡片样式，没有重构原有 sources/search/chat 布局。
-- `tests/test_frontend_app.py` 已覆盖 Agent 表单、工具调用区域、`/agent/query` 端点和 `renderAgentToolCalls`。
-- 浏览器 smoke check 使用本地 `http://127.0.0.1:8002/`，提交“检索 filling capacity 相关资料”后，页面状态为 `answered`，工具调用显示 `hybrid_search_knowledge` 且返回 5 条混合检索结果。
-- 视觉检查确认 Agent 区域可见，回答、引用标签和工具调用列表没有明显遮挡或布局错位。
-
-## Phase 7 Findings
-- 阶段 7 收尾复跑评测：keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6、agent 5/5，说明 Agent 没有破坏阶段 6 质量基线。
-- 全量测试结果为 163 passed。
-- `README.md` 已同步阶段 7 当前状态、Agent API、评测结果、前端能力、测试数和阶段 7 面试表达。
-- `docs/progress.md` 已新增 2026-06-06 阶段 7 完成记录，并把最新状态从阶段 6 更新到阶段 7。
-- `docs/architecture.md` 已新增阶段 7 Agent 总体框架、工具层、编排层、API 和评测策略。
-- `docs/data_sources.md` 已说明阶段 7 不新增外部资料来源，Agent 只读查询既有 sources、documents/chunks 和评测文件。
-- `AGENT.MD` 已把当前推荐起点从阶段 7 开发前校准到阶段 7 完成后，并记录 `phase-7-complete` tag 口径。
-- Obsidian 已新增 `obsidian-vault/阶段/阶段 7 - Agent 化.md`、`阶段 7 Phase 汇报索引`、Phase 0 到 Phase 7 汇报、`Agent 工具调用` 分类和 3 篇知识点。
-- Obsidian 检查确认 Phase 0 到 Phase 7 每篇汇报都包含用户要求的 10 个固定小节。
+- `scripts/evaluate_chat.py`
+- `scripts/evaluate_agent.py`
+- `G:\Codex\program\quivr\core\quivr_core\brain\brain.py`
+- `G:\Codex\program\quivr\core\quivr_core\rag\entities\config.py`
+- `G:\Codex\program\quivr\docs\docs\workflows\examples\basic_rag.md`
 
 ## Current Hypotheses
-- 第一版 Agent 不需要真实 LLM 规划；规则式工具选择已经能满足阶段 7 的可控性和可测性目标。
-- `answer_with_citations` 应作为问答类问题的主工具，因为它复用现有引用、拒答和日志链路。
-- `hybrid_search_knowledge` 应作为搜索类问题的主工具，因为阶段 6 已证明它能救回 vector-only 失败案例。
-- Agent API 的关键价值不是“更会聊天”，而是把工具调用过程、来源和引用透明返回。
+- Brain 层能减少 `CitationAnswerService` 和 Agent 工具之间的重复编排风险。
+- 阶段 8 不需要改变 API schema 就能完成核心目标，因为 Brain 是内部中控层。
+- 配置化评测能为阶段 9 真实模型接入提供更稳的比较框架。
+- 如果先接真实模型而不先做 Brain/config，模型参数和检索参数会继续散落在多个 service 中。
+
+## Phase 0 Findings
+- 阶段 8 启动校准已完成。
+- 起点全量测试为 163 passed，说明从 `main` 创建阶段 8 分支后，阶段 7 既有功能仍处于健康状态。
+- 阶段 8 的第一项开发应先新增 `docs/brain_workflow_design.md` 和文档断言测试，用文档固定 Brain、配置模型和 workflow 边界，再进入代码实现。
+- `AGENT.MD` 中原先写“本项目后续可以对应为 KnowledgeBase 或 Corpus，不一定直接命名为 Brain”，但用户已经明确要求中控层也叫 Brain；阶段 8 收尾时需要同步调整该口径。

@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 7：Agent 化已完成，当前分支为 `codex/phase-7-agent-tools`。
+阶段 8：Brain 中控层与 RAG Workflow 配置化已完成，当前分支为 `codex/phase-8-brain-workflow`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -32,7 +32,11 @@
 
 阶段 7 tag：`phase-7-complete`。
 
-下一步建议：在用户确认后进入真实模型接入、权限审计或部署工程化准备。
+阶段 8 最终功能提交：由 `phase-8-complete` tag 指向的提交标识。
+
+阶段 8 tag：`phase-8-complete`。
+
+下一步建议：在用户确认后进入阶段 9，优先考虑真实模型接入与模型评测，或进入 Agent 权限审计、部署工程化准备。
 
 当前已经实现：
 
@@ -68,6 +72,12 @@
 - `data/evaluation/agent_queries.csv` Agent 评测集
 - `scripts/evaluate_agent.py` Agent 评测脚本
 - `data/evaluation/agent_results.csv` Agent 评测结果
+- `docs/brain_workflow_design.md` 阶段 8 Brain 中控层与 workflow 设计文档
+- `app/services/brain/` Brain 中控层、配置模型、workflow step 记录和回答编排服务
+- `RetrievalConfig`、`WorkflowConfig` 和默认 RAG workflow：`filter_history -> rewrite_query -> retrieve -> optional_rerank -> generate_answer`
+- `CitationAnswerService` 作为兼容门面复用 Brain workflow，`POST /chat` 和 Agent `answer_with_citations` 共享同一条回答路径
+- `scripts/evaluate_brain_workflow.py` Brain 配置化评测脚本
+- `data/evaluation/brain_workflow_results.csv` Brain 配置化评测结果
 - `ChatModelProvider` 聊天模型抽象，支持 deterministic provider 和 OpenAI-compatible provider
 - RAG prompt/context builder，把检索结果组织成带 `[1]`、`[2]` 编号的上下文
 - `CitationAnswerService` 最小引用式问答链路
@@ -84,7 +94,7 @@
 - FastAPI 静态前端入口：`GET /`
 - 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 163 个自动化测试
+- 189 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -96,7 +106,7 @@
 3. `docs/architecture.md`
 4. `docs/data_sources.md`
 
-阶段 7 的开发记忆：
+阶段 8 的开发记忆：
 
 - `task_plan.md`
 - `findings.md`
@@ -153,7 +163,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-163 passed
+189 passed
 ```
 
 当前测试覆盖：
@@ -239,6 +249,7 @@ vector search: 11/15 passed
 hybrid search: 15/15 passed, rescued_vector=4, regressed_keyword=0
 chat evaluation: 6/6 passed
 agent evaluation: 5/5 passed
+brain workflow evaluation: default_hybrid 4/6, keyword_baseline 6/6, vector_only 2/6
 ```
 
 说明：当前向量检索使用 deterministic embedding，主要用于稳定开发和自动化测试，不代表真实语义 embedding 的最终效果。阶段 6 新增的 hybrid search 会同时召回关键词和向量结果，按 chunk 去重，对两路分数归一化并加权排序。它保留 keyword 和 vector baseline，便于持续对比。
@@ -317,6 +328,44 @@ citation_failures=0
 ```
 
 阶段 7 只做只读工具优先，不自动执行 source reindex 等写入型动作；后续如接入写入工具，必须有显式请求字段、权限约束和测试。
+
+## Brain 中控层与 Workflow 配置化
+
+阶段 8 将中控层正式命名为 Brain。Brain 不是新的数据库层，也不是爬虫层，而是位于 `/chat`、Agent 和现有检索/生成服务之间的轻量编排层。
+
+默认 RAG workflow 是：
+
+```text
+filter_history
+-> rewrite_query
+-> retrieve
+-> optional_rerank
+-> generate_answer
+```
+
+当前实现要点：
+
+- `RetrievalConfig` 统一控制 `retrieval_mode`、`top_k`、`min_score`、`max_history`、`rerank_top_n`、`prompt_profile` 和 `model_provider`。
+- `WorkflowConfig` 描述 workflow step 顺序，默认保持五步 RAG 链路。
+- `BrainService` 复用现有 keyword、vector、hybrid、prompt、chat model、citation 和 qa_logs 能力，不直接写 SQL。
+- `CitationAnswerService` 保留原有对外入口，内部改为调用 Brain，因此 `POST /chat` 和 Agent `answer_with_citations` 共享同一条回答路径。
+- 本阶段不引入复杂 LangGraph workflow，不联网爬取新资料，不自动执行 source reindex，也不做前端大重构。
+
+运行 Brain 配置化评测：
+
+```powershell
+python scripts/evaluate_brain_workflow.py
+```
+
+当前配置化评测结果：
+
+```text
+default_hybrid: 4/6 passed
+keyword_baseline: 6/6 passed
+vector_only: 2/6 passed
+```
+
+说明：该结果反映当前 deterministic embedding 和现有 chat 评测集下的配置差异。它证明 Brain workflow 可复现、可对比，也说明后续真实 embedding、rerank 或 query rewrite 仍有优化空间。
 
 ## 引用式问答
 

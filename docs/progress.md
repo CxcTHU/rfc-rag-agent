@@ -2,12 +2,12 @@
 
 ## 最新状态：2026-06-06
 
-当前阶段：阶段 7，Agent 化已完成。下一步建议在用户确认后进入真实模型接入、权限审计或部署工程化准备。
+当前阶段：阶段 8，Brain 中控层与 RAG Workflow 配置化已完成。下一步建议在用户确认后进入阶段 9，优先考虑真实模型接入与模型评测，或进入 Agent 权限审计、部署工程化准备。
 
 当前关键证据：
 
-- `task_plan.md` 当前阶段为 `Phase 6 complete`，下一步进入 Phase 7 收尾。
-- 当前分支：`codex/phase-7-agent-tools`。
+- `task_plan.md` 当前阶段为 `Phase 7 complete`，阶段 8 已进入收尾。
+- 当前分支：`codex/phase-8-brain-workflow`。
 - 阶段 3 tag：`phase-3-complete -> 7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954`，未移动。
 - 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 - 阶段 4 tag：`phase-4-complete -> b044459b9b8c2153e9225daa55af5d82cdcdb282`。
@@ -17,6 +17,8 @@
 - 阶段 6 tag：`phase-6-complete`。
 - 阶段 7 最终功能提交：由 `phase-7-complete` tag 指向的提交标识。
 - 阶段 7 tag：`phase-7-complete`。
+- 阶段 8 最终功能提交：由 `phase-8-complete` tag 指向的提交标识。
+- 阶段 8 tag：`phase-8-complete`。
 - 阶段 4 分支和 tag 已推送到 GitHub。
 - `sources` 来源登记表已实现。
 - `SourceRepository` 和 `SourceRegistryService` 已实现。
@@ -57,18 +59,99 @@
 - `scripts/evaluate_agent.py` 已实现。
 - `data/evaluation/agent_queries.csv` 和 `data/evaluation/agent_results.csv` 已生成。
 - Agent 评测：5/5 通过，`refused=1`，`tool_failures=0`，`citation_failures=0`。
+- `docs/brain_workflow_design.md` 已新增。
+- `app/services/brain/` 已实现 Brain 中控层、配置模型、workflow step 记录和回答编排服务。
+- `CitationAnswerService` 已迁移为 Brain 兼容门面，`POST /chat` 与 Agent `answer_with_citations` 复用同一条 Brain workflow。
+- `scripts/evaluate_brain_workflow.py` 已新增。
+- `data/evaluation/brain_workflow_results.csv` 已生成。
+- Brain workflow 评测：18 次 config-query run；`keyword_baseline=6/6`，`default_hybrid=4/6`，`vector_only=2/6`。
 - 前端工作台已实现：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、聊天问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口。
 - 浏览器验证：桌面加载 sources=125、documents=136、chunks=997；移动视口 390x844 无横向溢出。
 - 阶段 6 浏览器 smoke check：搜索模式包含 `keyword/vector/hybrid`，聊天检索模式包含 `auto/hybrid/vector/keyword`。
 - 阶段 7 浏览器 smoke check：Agent 面板提交“检索 filling capacity 相关资料”后状态为 `answered`，工具调用为 `hybrid_search_knowledge`，返回 5 条混合检索结果。
-- 全量测试：163 个测试通过。
+- 全量测试：189 个测试通过。
 
 下一步：
 
-- 阶段 7 分支 `codex/phase-7-agent-tools` 已完成核心开发与验证。
-- 阶段 7 收尾时确认 `phase-7-complete` tag 指向阶段 7 最终功能提交。
-- 阶段 7 之后，建议先由用户确认下一阶段方向：真实模型接入、Agent 权限审计、部署工程化或更细粒度用户评测。
-- 不要移动已有阶段 tag：`phase-4-complete`、`phase-5-complete`、`phase-6-complete`。
+- 阶段 8 分支 `codex/phase-8-brain-workflow` 已完成核心开发、验证和普通文档收尾。
+- 阶段 8 收尾时确认 `phase-8-complete` tag 指向阶段 8 最终功能提交。
+- 阶段 8 之后，建议先由用户确认阶段 9 方向：真实模型接入与模型评测、Agent 权限审计、部署工程化或更大规模用户问题评测。
+- 不要移动已有阶段 tag：`phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`。
+
+## 2026-06-06 阶段 8 完成记录：Brain 中控层与 RAG Workflow 配置化
+
+当前分支：`codex/phase-8-brain-workflow`
+
+当前阶段：阶段 8 已完成。下一步建议由用户确认阶段 9 方向：真实模型接入与模型评测、Agent 权限审计、部署工程化或更大规模用户问题评测。
+
+阶段最终功能提交：由 `phase-8-complete` tag 指向的提交标识。
+
+阶段 tag：`phase-8-complete`。
+
+已完成：
+
+- 使用 Planning with Files 维护阶段 8 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 确认阶段 7 已完成并合并到 `main`，且 `phase-7-complete` tag 指向阶段 7 最终功能提交，未移动已有阶段 tag。
+- 新增 `docs/brain_workflow_design.md`，明确 Brain 中控层目标、与 Quivr 的对应关系、workflow 步骤、配置化评测和阶段边界。
+- 新增 `app/services/brain/config.py`，实现 `RetrievalConfig`、`WorkflowConfig` 和 `WorkflowStepConfig`。
+- 新增 `app/services/brain/workflow.py`，定义 `BrainAnswerResult`、`BrainRetrievalOutcome`、`BrainWorkflowStepRecord`、引用提取和检索结果过滤函数。
+- 新增 `app/services/brain/service.py`，实现轻量 `BrainService`，按 `filter_history -> rewrite_query -> retrieve -> optional_rerank -> generate_answer` 执行 workflow。
+- `filter_history` 和 `rewrite_query` 第一版为 no-op，但保留结构化 step 记录。
+- `retrieve` 复用现有 keyword/vector/hybrid service，`auto` 模式保持 vector 优先、keyword fallback。
+- `optional_rerank` 第一版采用可解释截断；`rerank_top_n=0` 表示暂不重排。
+- `generate_answer` 复用 `build_rag_prompt`、`ChatModelProvider`、citation 提取和 `qa_logs`。
+- 改造 `CitationAnswerService` 为兼容门面，`POST /chat` 和 Agent `answer_with_citations` 共享 Brain workflow。
+- 新增 `scripts/evaluate_brain_workflow.py` 和 `data/evaluation/brain_workflow_results.csv`，比较 `default_hybrid`、`keyword_baseline`、`vector_only` 三种配置。
+- 阶段 8 不引入复杂 LangGraph workflow，不联网爬取新资料，不自动执行 source reindex，不新增前端配置面板。
+
+阶段 8 设计结论：
+
+- Brain 是内部中控层，不替代 keyword/vector/hybrid/source/chat/agent 等既有 service，而是统一编排它们。
+- `RetrievalConfig` 解决“本次问答怎么检索、召回多少、是否重排、用什么 prompt/model provider”的问题。
+- `WorkflowConfig` 解决“RAG 链路按哪些步骤执行”的问题。
+- Chat 和 Agent 共用 Brain 后，后续真实模型接入、query rewrite 或 rerank 不需要分别改两套回答逻辑。
+- 配置化评测证明本项目可以用同一批问题横向比较不同检索配置，而不是只看单次演示。
+
+验证结果：
+
+- `python -m pytest tests\test_brain_workflow_design.py -q`：2 个测试通过。
+- `python -m pytest tests\test_brain_config.py -q`：13 个测试通过。
+- `python -m pytest tests\test_brain_workflow.py tests\test_brain_service.py -q`：8 个测试通过。
+- `python -m pytest tests\test_answer_service.py tests\test_chat_logging.py tests\test_chat_api.py tests\test_agent_tools.py -q`：24 个测试通过。
+- `python -m pytest tests\test_agent_api.py tests\test_agent_service.py -q`：11 个测试通过。
+- `python -m pytest tests\test_evaluate_brain_workflow.py -q`：3 个测试通过。
+- `python scripts\evaluate_brain_workflow.py`：18 次 config-query run；`keyword_baseline=6/6`，`default_hybrid=4/6`，`vector_only=2/6`。
+- `python scripts\evaluate_keyword_search.py`：keyword 15/15 通过。
+- `python scripts\evaluate_vector_search.py`：vector 11/15 通过。
+- `python scripts\evaluate_hybrid_search.py`：hybrid 15/15 通过，`rescued_vector=4`，`regressed_keyword=0`。
+- `python scripts\evaluate_chat.py`：chat 6/6 通过，`refused=1`，`citation_failures=0`。
+- `python scripts\evaluate_agent.py`：agent 5/5 通过，`refused=1`，`tool_failures=0`，`citation_failures=0`。
+- `python scripts\evaluate_sources.py`：`total_sources=125`，`merged_duplicates=14`。
+- `python -m pytest -q`：189 个测试通过。
+
+遗留问题：
+
+- 当前 `filter_history` 和 `rewrite_query` 是结构化 no-op，后续阶段可接入真实多轮历史压缩和 query rewrite。
+- 当前 `optional_rerank` 是可解释截断，不是真实 reranker；后续可以接入 cross-encoder 或 LLM rerank。
+- 当前 deterministic embedding 仍不代表真实语义模型效果；阶段 9 如果接真实 embedding，需要复用现有评测集重新对比。
+- `CitationAnswerService` 对外不暴露 workflow steps；如前端需要展示 Brain 过程，应另行设计响应字段或内部调试接口。
+
+下一阶段任务：
+
+- 优先建议阶段 9：真实模型接入与模型评测。
+- 可选方向：Agent 权限审计与写入工具安全设计。
+- 可选方向：部署工程化、日志观测和运行说明完善。
+- 可选方向：扩大用户问题评测集，覆盖更多工程案例和中文问题。
+
+面试表达：
+
+```text
+阶段 8 我把原先分散在 CitationAnswerService 和 Agent 工具里的 RAG 问答编排抽成了 Brain 中控层，而不是直接上复杂 LangGraph。
+
+BrainService 接收 RetrievalConfig 和 WorkflowConfig，按 filter_history、rewrite_query、retrieve、optional_rerank、generate_answer 五步执行。前两步第一版是 no-op，但保留结构化 step 记录；retrieve 复用 keyword/vector/hybrid；generate_answer 继续复用 prompt builder、模型 provider、citation 提取和 qa_logs。
+
+这样做的价值是：/chat 和 Agent answer_with_citations 共享同一条回答路径，后续接真实模型、query rewrite 或 rerank 时只需要改 Brain workflow，不用维护两套逻辑。验证上，我新增了 Brain 配置化评测脚本，同一批 chat 问题可以比较 default_hybrid、keyword_baseline 和 vector_only，最终全量测试 189 个通过，说明这是一个可配置、可复用、可评测的 RAG 中控层，而不是只靠演示跑通的问答接口。
+```
 
 ## 2026-06-06 阶段 7 完成记录：Agent 化
 
