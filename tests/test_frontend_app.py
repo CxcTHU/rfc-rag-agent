@@ -17,6 +17,7 @@ def test_frontend_index_is_served() -> None:
     assert 'data-chat-form' in response.text
     assert 'data-citations-list' in response.text
     assert 'data-search-form' in response.text
+    assert '<option value="hybrid">hybrid</option>' in response.text
     assert 'data-chunks-list' in response.text
     assert 'data-sync-sources' in response.text
 
@@ -32,6 +33,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "/documents" in response.text
     assert "/chat" in response.text
     assert "/search/vector" in response.text
+    assert "/search/hybrid" in response.text
     assert "renderSources" in response.text
     assert "renderCitations" in response.text
     assert "reindexSource" in response.text

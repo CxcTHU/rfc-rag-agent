@@ -1159,7 +1159,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3、阶段 4 和阶段 5 已完成。阶段 5 当前在 `codex/phase-5-frontend` 分支完成开发、验证、提交和 tag。
+阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5 和阶段 6 已完成。阶段 6 当前在 `codex/phase-6-evaluation` 分支完成开发、验证、文档收尾和 tag 标识。
 
 阶段 4 最终提交和 tag：
 
@@ -1169,29 +1169,6 @@ tag: phase-4-complete
 remote branch: origin/codex/phase-4-source-management
 ```
 
-不要移动 `phase-4-complete`。如果阶段 4 后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
-
-阶段 5 已实现前端工作台：
-
-```text
-GET /
-app/frontend/index.html
-app/frontend/static/app.js
-app/frontend/static/styles.css
-```
-
-阶段 5 前端能力：
-
-```text
-查看 sources 和 documents
-查看 document chunks
-执行 keyword/vector search
-调用 POST /chat 并展示引用来源侧栏
-触发 source sync
-触发单条 source reindex
-浏览器桌面和移动视口验证
-```
-
 阶段 5 最终功能提交和 tag：
 
 ```text
@@ -1199,7 +1176,38 @@ commit: 8c885e6cc714cc985933438697a7eb2523b26722
 tag: phase-5-complete
 ```
 
-不要移动 `phase-5-complete`。如果阶段 5 后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+阶段 6 由以下 tag 标识：
+
+```text
+tag: phase-6-complete
+```
+
+不要移动 `phase-4-complete`、`phase-5-complete` 或 `phase-6-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+
+阶段 6 已实现检索优化与评测闭环：
+
+```text
+docs/evaluation_plan.md
+scripts/analyze_retrieval_errors.py
+scripts/evaluate_hybrid_search.py
+app/services/retrieval/hybrid_search.py
+POST /search/hybrid
+POST /chat retrieval_mode="hybrid"
+data/evaluation/hybrid_results.csv
+data/evaluation/retrieval_error_cases.csv
+```
+
+阶段 6 评测结果：
+
+```text
+keyword baseline: 15/15 passed
+vector search: 11/15 passed
+hybrid search: 15/15 passed
+chat evaluation: 6/6 passed
+rescued_vector: 4
+regressed_keyword: 0
+full tests: 141 passed
+```
 
 当前最权威的进度依据是：
 
@@ -1207,26 +1215,23 @@ tag: phase-5-complete
 docs/progress.md
 ```
 
-下一步最适合进入阶段 6：检索优化与评测。
+下一步最适合进入阶段 7：Agent 化。
 
-建议从阶段 5 分支完成提交/合并后，新开阶段 6 分支：
-
-```text
-codex/phase-6-evaluation
-```
-
-阶段 6 的第一批最小任务：
+建议从阶段 6 分支完成提交/合并后，新开阶段 7 分支：
 
 ```text
-阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md 和 docs/data_sources.md
-确认阶段 5 的前端工作台、sources/documents/search/chat/reindex 入口和浏览器验证记录已可用
-设计检索优化与评测计划：混合检索、rerank、真实 embedding 或 query expansion 的优先级
-补充 docs/evaluation_plan.md
-扩展评测指标：Recall@K、Citation Accuracy、Faithfulness、Answer Coverage、Refusal Quality
-建立错误案例分析表，记录关键词/向量/chat 的失败样例和改进前后对比
-优先保证评测可重复，再逐步优化召回质量
+codex/phase-7-agent-tools
 ```
 
-阶段 6 仍不要急着做 Agent 工具调用。
+阶段 7 的第一批最小任务：
 
-阶段 5 已经让非技术用户能通过界面查看来源、资料、chunk、检索结果和引用式问答。阶段 6 的重点是让系统质量能被量化证明：哪些问题召回对了、哪些引用可靠、哪些回答忠实、哪些拒答合理，并把优化前后的指标写进 README 和进度文档。
+```text
+阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md 和 docs/evaluation_plan.md
+确认阶段 6 的 keyword/vector/hybrid/chat 评测结果和错误案例表可用
+设计受控 Agent 工具边界：只读优先、最大工具调用步数、日志记录、失败回退
+优先封装 search_knowledge_base、summarize_document、compare_sources、extract_engineering_terms
+不要一开始就引入复杂 LangGraph workflow；先保证单工具、少步数、可观测
+继续复用阶段 6 评测集，验证 Agent 工具调用不会降低检索和引用质量
+```
+
+阶段 6 已经让系统质量能被量化证明：哪些问题召回对了、哪些引用可靠、哪些回答忠实、哪些拒答合理。阶段 7 的重点是把这些稳定能力包装成受控工具，让 Agent 能调用 RAG 系统，但不能绕过来源、权限、引用和评测约束。

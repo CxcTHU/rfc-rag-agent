@@ -36,3 +36,16 @@ class VectorSearchResponse(BaseModel):
     provider: str
     model_name: str
     results: list[SearchResultItem]
+
+
+class HybridSearchRequest(BaseModel):
+    query: str = Field(min_length=1)
+    top_k: int = Field(default=5, ge=1, le=50)
+
+
+class HybridSearchResponse(BaseModel):
+    query: str
+    top_k: int
+    provider: str
+    model_name: str
+    results: list[SearchResultItem]

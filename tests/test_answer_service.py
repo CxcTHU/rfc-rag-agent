@@ -157,6 +157,27 @@ def test_answer_service_falls_back_to_keyword_when_vector_index_is_missing(tmp_p
     assert result.sources[0].document_title == "Thermal control guide"
 
 
+def test_answer_service_supports_hybrid_retrieval_mode(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        embedding_provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_answer_documents(db)
+        VectorIndexService(db, embedding_provider).build_index()
+
+        result = CitationAnswerService(
+            db=db,
+            chat_model_provider=DeterministicChatModelProvider(),
+            embedding_provider=embedding_provider,
+        ).answer("filling capacity", retrieval_mode="hybrid", top_k=2)
+
+    assert not result.refused
+    assert result.retrieval_mode == "hybrid"
+    assert result.citations == [1]
+    assert result.sources[0].document_title == "Thermal control guide"
+    assert result.sources[0].chunk_index == 1
+
+
 def test_answer_service_filters_invalid_citations(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -191,7 +212,7 @@ def test_answer_service_rejects_invalid_parameters(tmp_path) -> None:
         with pytest.raises(ValueError, match="min_score"):
             service.answer("question", min_score=-1.0)
         with pytest.raises(ValueError, match="Unsupported retrieval mode"):
-            service.answer("question", retrieval_mode="hybrid")  # type: ignore[arg-type]
+            service.answer("question", retrieval_mode="unsupported")  # type: ignore[arg-type]
 
 
 def test_extract_citations_returns_unique_allowed_source_ids() -> None:

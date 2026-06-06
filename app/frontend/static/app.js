@@ -6,6 +6,7 @@ const apiEndpoints = {
   documentChunks: (documentId) => `/documents/${encodeURIComponent(documentId)}/chunks`,
   keywordSearch: "/search",
   vectorSearch: "/search/vector",
+  hybridSearch: "/search/hybrid",
   chat: "/chat",
 };
 
@@ -242,7 +243,12 @@ async function submitSearch() {
     return;
   }
   setApiStatus("检索中");
-  const endpoint = mode === "vector" ? apiEndpoints.vectorSearch : apiEndpoints.keywordSearch;
+  const searchEndpoints = {
+    keyword: apiEndpoints.keywordSearch,
+    vector: apiEndpoints.vectorSearch,
+    hybrid: apiEndpoints.hybridSearch,
+  };
+  const endpoint = searchEndpoints[mode] || apiEndpoints.keywordSearch;
   const payload = await fetchJson(endpoint, {
     method: "POST",
     body: JSON.stringify({ query, top_k: topK }),

@@ -13,12 +13,13 @@ from app.services.generation.prompt_builder import (
     build_rag_prompt,
 )
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
+from app.services.retrieval.hybrid_search import HybridSearchService
 from app.services.retrieval.keyword_search import KeywordSearchService
 from app.services.retrieval.vector_search import VectorSearchService
 
 
-RetrievalMode = Literal["auto", "vector", "keyword"]
-UsedRetrievalMode = Literal["vector", "keyword", "none"]
+RetrievalMode = Literal["auto", "vector", "keyword", "hybrid"]
+UsedRetrievalMode = Literal["vector", "keyword", "hybrid", "none"]
 CITATION_RE = re.compile(r"\[(\d+)\]")
 DEFAULT_REFUSAL_ANSWER = "当前资料库中没有找到足够可靠的依据。"
 
@@ -70,7 +71,7 @@ class CitationAnswerService:
             raise ValueError("top_k must be greater than 0")
         if min_score < 0:
             raise ValueError("min_score must be greater than or equal to 0")
-        if retrieval_mode not in {"auto", "vector", "keyword"}:
+        if retrieval_mode not in {"auto", "vector", "keyword", "hybrid"}:
             raise ValueError(f"Unsupported retrieval mode: {retrieval_mode}")
 
         retrieval_outcome = self.retrieve(
@@ -127,6 +128,8 @@ class CitationAnswerService:
             return self._retrieve_with_vector(question, top_k, min_score)
         if retrieval_mode == "keyword":
             return self._retrieve_with_keyword(question, top_k, min_score)
+        if retrieval_mode == "hybrid":
+            return self._retrieve_with_hybrid(question, top_k, min_score)
 
         vector_outcome = self._retrieve_with_vector(question, top_k, min_score)
         if vector_outcome.results:
@@ -172,6 +175,22 @@ class CitationAnswerService:
         return build_retrieval_outcome(
             raw_results=raw_results,
             used_retrieval_mode="keyword",
+            min_score=min_score,
+        )
+
+    def _retrieve_with_hybrid(
+        self,
+        question: str,
+        top_k: int,
+        min_score: float,
+    ) -> RetrievalOutcome:
+        raw_results = HybridSearchService(self.db, self.embedding_provider).search(
+            query=question,
+            top_k=top_k,
+        )
+        return build_retrieval_outcome(
+            raw_results=raw_results,
+            used_retrieval_mode="hybrid",
             min_score=min_score,
         )
 

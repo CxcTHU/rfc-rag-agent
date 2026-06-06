@@ -136,6 +136,22 @@ def test_chat_api_falls_back_to_keyword_in_auto_mode(tmp_path) -> None:
     assert payload["sources"][0]["document_title"] == "Chat API thermal source"
 
 
+def test_chat_api_supports_hybrid_retrieval_mode(tmp_path) -> None:
+    with make_test_client(tmp_path, seed_documents=True, build_index=True) as client:
+        response = client.post(
+            "/chat",
+            json={"question": "filling capacity", "retrieval_mode": "hybrid", "top_k": 2},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refused"] is False
+    assert payload["retrieval_mode"] == "hybrid"
+    assert payload["citations"] == [1]
+    assert payload["sources"][0]["document_title"] == "Chat API thermal source"
+    assert payload["sources"][0]["chunk_index"] == 1
+
+
 def test_chat_api_refuses_when_context_is_missing(tmp_path) -> None:
     with make_test_client(tmp_path, seed_documents=False) as client:
         response = client.post(
@@ -164,7 +180,7 @@ def test_chat_api_rejects_invalid_retrieval_mode_with_422(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/chat",
-            json={"question": "thermal control", "retrieval_mode": "hybrid"},
+            json={"question": "thermal control", "retrieval_mode": "unsupported"},
         )
 
     assert response.status_code == 422

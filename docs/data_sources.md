@@ -173,3 +173,45 @@ GET /
 - 在聊天引用侧栏中核验回答依据的具体 chunk。
 
 阶段 5 的界面不改变数据来源合规边界：受限全文仍不公开分发，前端只展示本地系统已登记或已导入的来源和片段。
+
+## 阶段 6 评测与数据来源边界
+
+阶段 6 进入检索优化与评测，没有新增外部资料来源，也没有改变阶段 4 建立的 source registry 合规边界。
+
+阶段 6 使用的评测数据来自现有本地项目文件：
+
+```text
+data/evaluation/keyword_queries.csv
+data/evaluation/chat_queries.csv
+data/evaluation/keyword_results.csv
+data/evaluation/vector_results.csv
+data/evaluation/chat_results.csv
+```
+
+阶段 6 新增的评测输出是对现有资料库和现有评测集的分析结果：
+
+```text
+data/evaluation/hybrid_results.csv
+data/evaluation/retrieval_error_cases.csv
+```
+
+它们不包含新的受限全文，只记录查询、期望命中、命中结果、通过状态、失败原因、改进建议和 hybrid 优化后的状态。
+
+阶段 6 的核心关系是：
+
+```text
+sources
+-> documents/chunks
+-> chunk_embeddings
+-> keyword/vector/hybrid retrieval
+-> evaluation results
+-> error cases
+```
+
+合规结论：
+
+- `sources` 仍然负责来源可信度、全文权限和状态。
+- `documents/chunks` 仍然只保存已导入的本地资料或题录卡片。
+- `chunk_embeddings` 是由 chunks 派生出的可重建索引数据。
+- `hybrid_results.csv` 和 `retrieval_error_cases.csv` 是评测产物，不是新的资料来源。
+- 阶段 6 没有公开分发受限全文，也没有引入新的爬虫链路。
