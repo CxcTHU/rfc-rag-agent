@@ -1,133 +1,104 @@
 # Findings & Decisions
 
 ## Requirements
-- 用户要求本线程设置并执行阶段 6 goal，持续推进到“检索优化与评测”完整完成。
-- 用户要求线程名称为 `阶段6-检索优化与评测`。
+- 用户要求本线程持续推进到阶段 7：Agent 化完整完成。
+- 用户要求线程名称为 `阶段7-Agent化`。
 - 用户要求先阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- 用户要求确认阶段 5 已完成并合并，确认 `phase-5-complete` tag 指向阶段 5 最终功能提交，不移动已有阶段 tag。
-- 用户要求目标分支为 `codex/phase-6-evaluation`。
+- 用户要求确认阶段 6 已完成，确认 `phase-6-complete` tag 指向阶段 6 最终功能提交，不移动已有阶段 tag。
+- 用户要求目标分支为 `codex/phase-7-agent-tools`。
 - 用户要求正式开发前用 Planning with Files 校准 `task_plan.md`、`findings.md`、`progress.md`。
-- 阶段 6 不做 Agent 工具调用、不做复杂 LangGraph workflow、不做登录系统、不做部署优化。
-- 阶段 6 核心目标是检索质量、问答质量和评测可复现：评测计划、baseline、错误案例、优化方案、指标对比和文档收尾。
-- 用户后续明确：开发过程中先不要写入 Obsidian 小 Phase 汇报；等阶段 6 全部开发工作完成后，再统一按 `obsidian-vault/模板/Phase 汇报模板.md` 补齐每个小 Phase 笔记。
-- 用户后续再次明确：对话中也不需要输出完整 Phase 汇报，完整 10 项汇报只放在最终 Obsidian 知识库中。
+- 阶段 7 不做复杂 LangGraph workflow、不做登录系统、不做部署优化、不做联网爬虫扩展。
+- 阶段 7 核心目标是把阶段 6 已稳定的 RAG 能力包装成受控、可测试、可追踪的 Agent 工具调用链路。
+- 阶段 7 优先只读工具，写入型动作不能自动执行；source reindex 如接入必须有明确请求字段和测试约束。
+- 开发过程中先不要写入 Obsidian 小 Phase 汇报；等阶段 7 全部开发、测试、普通文档完成后，再统一补齐 Obsidian 10 项 Phase 汇报。
 
 ## Current Project Findings
-- 当前主线分支 `main` 已合并阶段 5，HEAD 为 `ae539f5 Revert "docs: add phase 1 phase reports"`。
-- 阶段 5 合并提交为 `9456a59 merge phase 5 frontend`。
-- `phase-5-complete` tag 指向 `8c885e6cc714cc985933438697a7eb2523b26722`，提交信息为 `feat: complete phase 5 frontend workspace`。
-- `phase-5-complete` 是 `main` 的祖先，说明阶段 5 已合并。
-- 当前已创建并切换到 `codex/phase-6-evaluation`。
-- 切换前工作区有一个 Obsidian 阶段汇报索引本地改动；按规则保留，不回退。
-- 旧 `task_plan.md`、`findings.md`、`progress.md` 仍记录阶段 5 工作记忆，Phase 0 已重写为阶段 6 工作记忆。
-- 当前项目已有 126 个自动化测试历史通过记录。
+- 当前已从 `codex/phase-6-evaluation` 切换到 `codex/phase-7-agent-tools`。
+- 阶段 6 tag `phase-6-complete` 指向 `fa11702150d79e036159f427f567051e92bfe8c2`，提交信息为 `feat: complete phase 6 evaluation`。
+- 切换前工作区干净，阶段 7 分支此前不存在。
+- 阶段 7 启动后全量测试通过：141 passed，说明阶段 7 起点没有破坏阶段 6 既有链路。
+- 阶段 6 已实现 `HybridSearchService`、`POST /search/hybrid`、`scripts/evaluate_hybrid_search.py`、`retrieval_error_cases.csv`。
+- 阶段 6 评测结果为 keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6、全量测试 141 passed。
+- `AGENT.MD` 已明确下一步最适合进入阶段 7：Agent 化。
 
 ## Architecture Findings
-- `app/main.py` 使用 `create_app()` 组装 FastAPI 应用，注册 frontend、health、documents、search、chat、sources 路由。
-- 当前 RAG 主链路是：source registry -> documents/chunks -> embedding -> retrieval -> prompt -> chat model -> citations -> frontend。
-- 阶段 6 主要落在 retrieval/evaluation 层，少量影响 chat retrieve 路径和前端检索入口。
-- 后端分层清楚：API、schema、service、db、model provider、frontend。阶段 6 应继续把核心逻辑放在 service 和 scripts，不把评测规则塞到 API 或前端。
+- `app/main.py` 使用 `create_app()` 组装 FastAPI 应用，当前注册 frontend、health、documents、search、chat、sources 路由。
+- 当前分层是 API、Schema、Service、DB、Source Registry、Model Provider、Frontend。
+- 阶段 7 应新增 Agent 层，位置应在 API 层和既有 service 之间，负责编排工具，不直接处理数据库细节。
+- 当前 RAG 主链路是 sources -> documents/chunks -> chunk_embeddings -> keyword/vector/hybrid retrieval -> prompt -> chat model -> citations -> frontend。
+- Agent 层必须复用这个链路，不能直接拼 SQL 或绕过已有问答与引用逻辑。
 
-## Existing Evaluation Findings
-- `scripts/evaluate_keyword_search.py` 读取 `data/evaluation/keyword_queries.csv`，输出 `keyword_results.csv`，当前历史结果为 15/15。
-- `scripts/evaluate_vector_search.py` 使用同一批 keyword queries，对比 `keyword_results.csv`，输出 `vector_results.csv`，当前 deterministic embedding 历史结果为 11/15。
-- `scripts/evaluate_chat.py` 读取 `chat_queries.csv`，输出 `chat_results.csv`，当前历史结果为 6/6。
-- 现有评测以 pass/fail 为主，已经具备 baseline，但缺少统一评测计划、错误案例表、Recall@K/Citation Accuracy/Faithfulness 等指标说明和优化前后对比表。
-- deterministic embedding 适合稳定测试，但不能代表真实语义模型效果。
-- Phase 1 新增 `docs/evaluation_plan.md`，把 Recall@K、Citation Accuracy、Faithfulness、Answer Coverage、Refusal Quality 映射到现有 CSV 字段和后续错误案例表。
-- Phase 1 新增 `tests/test_evaluation_plan.py`，用文档断言保证评测计划覆盖核心指标和关键评测文件。
-- Phase 2 复跑 baseline：keyword 15/15，vector 11/15，chat 6/6。
-- Phase 2 新增 `scripts/analyze_retrieval_errors.py` 和 `data/evaluation/retrieval_error_cases.csv`。
-- 当前错误案例共 4 个，全部为 vector 的 `keyword_only_pass`：`filling_capacity_en`、`mesoscopic_modeling`、`peridynamics`、`construction_management`。
-- Phase 4 新增 `scripts/evaluate_hybrid_search.py` 和 `data/evaluation/hybrid_results.csv`。
-- Phase 4 评测结果：hybrid 15/15，rescued_vector=4，regressed_keyword=0。
-- Phase 4 刷新错误案例表后，4 个 vector 失败的 `after_status` 均为 `fixed_by_hybrid`。
-- Phase 4 复跑 chat：6/6，refused=1，citation_failures=0。
-
-## Retrieval Findings
-- `KeywordSearchService` 已有领域同义词扩展、标题/heading/content 加权、泛词降权、metadata source 限制和来源均衡。
-- `VectorSearchService` 当前只做 query embedding 与 chunk embedding 的余弦相似度排序。
-- `CitationAnswerService` 的 `auto` 模式当前先尝试 vector，有结果就直接使用；只有 vector 无结果时才 fallback 到 keyword。
-- 因为 vector 当前 11/15 弱于 keyword 15/15，chat 的 `auto` 模式可能在部分问题上过早接受较弱向量结果。
-- 阶段 6 的保守优化方向是 hybrid search 或 rerank：合并 keyword 与 vector，再按归一化分数、来源类型、期望可靠性和去重规则排序。
-- Phase 3 已实现 `HybridSearchService`：多取 keyword/vector 候选，按 `chunk_id` 去重，对两路分数按各自最大分归一化，以 keyword_weight=0.7、vector_weight=0.3、both_match_bonus=0.15 组合排序。
-- Phase 3 新增 `POST /search/hybrid`，不改变既有 `POST /search` 和 `POST /search/vector`。
-- Phase 3 新增 chat `retrieval_mode="hybrid"`，但不改变 `auto` 的旧行为，避免阶段 6 中途扰动既有 chat baseline。
+## Existing Code Findings
+- `KeywordSearchService` 已提供关键词检索，包含同义词扩展、泛词降权和来源均衡。
+- `VectorSearchService` 已提供 deterministic embedding 下的向量检索。
+- `HybridSearchService` 已合并 keyword/vector 候选，按 chunk 去重、归一化和加权排序。
+- `CitationAnswerService` 已支持 `retrieval_mode` 为 `auto`、`vector`、`keyword`、`hybrid`，并返回 citations、sources、refused、model 信息。
+- `SourceRepository` 和 `SourceRegistryService` 已支持来源查询、同步和 reindex；阶段 7 只读工具可直接查询 repository，暂不自动调用 reindex。
+- `QuestionAnswerLogRepository` 已记录 chat 问答日志；Agent 工具调用日志可以先作为响应结构返回，是否入库可作为后续扩展。
 
 ## API Contract Findings
-- `POST /search` 当前请求字段为 `query`、`top_k`，返回 `SearchResponse`。
-- `POST /search/vector` 当前请求字段为 `query`、`top_k`，返回 provider、model_name 和 results。
-- `POST /chat` 支持 `retrieval_mode` 为 `auto`、`vector`、`keyword`、`hybrid`。
-- `POST /search/hybrid` 返回字段与 vector response 类似：query、top_k、provider、model_name、results。
+- `POST /search`：关键词检索 baseline。
+- `POST /search/vector`：向量检索 baseline。
+- `POST /search/hybrid`：阶段 6 优化检索入口。
+- `POST /chat`：引用式问答入口。
+- `GET /sources`、`GET /sources/{source_id}`：来源查询入口。
+- 阶段 7 新增 `POST /agent/query` 时不能破坏以上入口的请求和响应结构。
+
+## Evaluation Findings
+- `data/evaluation/keyword_queries.csv` 是 keyword/vector/hybrid 检索评测主数据集。
+- `data/evaluation/chat_queries.csv` 是引用式问答评测主数据集。
+- 阶段 7 应新增 Agent 评测脚本，复用现有问题，检查工具选择、来源命中、citation 有效性、拒答匹配和工具调用记录。
+- Agent 评测不能只验证 HTTP 200，还要证明没有降低阶段 6 的检索和引用质量。
 
 ## Frontend Findings
-- Phase 5 只做最小前端接入：`app/frontend/index.html` 的搜索模式新增 `hybrid`，聊天检索模式新增 `hybrid`。
-- `app/frontend/static/app.js` 新增 `apiEndpoints.hybridSearch = "/search/hybrid"`，`submitSearch()` 按 `keyword`、`vector`、`hybrid` 选择对应后端入口。
-- 前端改动没有调整页面布局和状态模型，仍沿用原有搜索结果渲染函数，因此不会把阶段 6 扩大成前端重构。
-- 浏览器 smoke check 确认本地工作台标题为 `RFC RAG 工作台`，搜索模式包含 `keyword`、`vector`、`hybrid`，聊天检索模式包含 `auto`、`hybrid`、`vector`、`keyword`。
-- 当前分支服务在 8001 端口验证 `/search/hybrid` 可返回 5 条结果，`filling capacity rock-filled concrete` 的第一条命中为本地全文资料，说明前端入口对应的新后端路由可用。
+- 当前前端是 FastAPI 静态文件 + 原生 HTML/CSS/JS。
+- 工作台已有 sources、documents、chunks、keyword/vector/hybrid search、chat、citations、source sync 和 source reindex 入口。
+- 阶段 7 如更新前端，应只新增 Agent 最小面板：问题输入、回答、工具调用记录、引用来源；不重构布局，不引入构建链。
 
-## Phase 6 Closeout Findings
-- 普通项目文档已同步：`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD`。
-- `AGENT.MD` 的默认下一步已从阶段 6 校准为阶段 7：Agent 化。
-- `docs/data_sources.md` 已说明阶段 6 没有新增外部资料来源，`hybrid_results.csv` 和 `retrieval_error_cases.csv` 是评测产物，不是新的来源。
-- 最终评测结果稳定：keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6、error cases 4 个均为 `fixed_by_hybrid`、全量测试 141 passed。
-- Obsidian 本地知识库已在开发、测试和普通文档完成后统一回填，包含首页、阶段索引、阶段 6 阶段页、阶段汇报索引、Phase 0-6 汇报、评测体系分类和阶段 6 知识点。
-- `obsidian-vault/` 被 `.gitignore` 排除，符合 AGENT 中“本地知识库不得提交到 Git”的规则。
-
-## Data Findings
-- `data/app.sqlite` 当前历史记录包含 sources=125、documents=136、chunks=997、chunk_embeddings=997。
-- `data/evaluation/keyword_queries.csv` 是关键词和向量 baseline 共用评测集。
-- `data/evaluation/chat_queries.csv` 是引用式问答评测集。
-- `docs/data_sources.md` 的来源治理关系不需要在 Phase 0 改动；阶段 6 如果不新增数据来源，只需阶段收尾时说明数据边界未变。
+## Data Source Findings
+- 阶段 7 不新增外部资料来源，不做联网爬虫扩展。
+- Agent 只读工具查询的是已有 `sources`、`documents/chunks`、`chunk_embeddings` 和评测数据。
+- `docs/data_sources.md` 阶段收尾时应说明 Agent 工具调用不改变来源合规边界。
 
 ## Technical Decisions
 | Decision | Rationale |
 |----------|-----------|
-| 阶段 6 先写 `docs/evaluation_plan.md` | 先定义质量标准，再优化，避免凭感觉调参 |
-| baseline 复跑后再做优化 | 用当前项目状态确认起点，避免只依赖历史记录 |
-| 优先 hybrid search 或轻量 rerank | 复用现有关键词和向量链路，低风险、可解释、容易测试 |
-| 不依赖外部模型 key 完成阶段 6 | 本地 deterministic provider 必须仍能完整回归 |
-| 保持 `/search` 与 `/search/vector` 兼容 | 阶段 6 不能破坏阶段 1/2/5 已有入口 |
-| 新增 `/search/hybrid` 而不是改写 `/search/vector` | 让优化方案有独立入口，保留 baseline 可对比 |
-| chat 支持显式 hybrid，但暂不改变 auto | 先评测检索优化，避免自动模式改变导致 chat baseline 含义漂移 |
-| 前端只暴露 hybrid 模式，不重构工作台 | 阶段 6 的重点是评测和检索质量；前端只需要让新模式可选、可验证 |
-| Obsidian 小 Phase 汇报阶段末统一回填 | 用户明确要求开发过程中不写入、不在对话输出完整 Phase 汇报，全部开发和普通文档完成后再写入知识库 |
-| 阶段 7 默认从 Agent 化开始 | 阶段 6 已完成评测闭环，下一步可以把稳定 search/chat/source 能力包装为受控工具 |
+| 新增 Agent 层而不是改造 chat service | 保持 `CitationAnswerService` 稳定，让 Agent 只做工具选择和结果编排 |
+| 第一版 Agent 使用规则式意图识别 | 不依赖真实 LLM 或复杂 workflow，便于本地测试和面试解释 |
+| Agent 默认优先 hybrid search | 阶段 6 已证明 hybrid 当前质量最好且不破坏 baseline |
+| 只读工具优先 | 降低风险，避免 Agent 自动修改来源或资料库 |
+| 工具返回结构化结果 | 便于前端展示、评测和排查 |
+| 新增 Agent 评测脚本 | 阶段 7 的完成必须能被量化证明，不只是 API 可调用 |
+| 先新增 `docs/agent_design.md` 和文档断言测试 | 先把工具边界、权限约束和评测方式固定下来，再进入代码实现 |
 
 ## Planned File Changes
 | Area | Planned Files |
 |------|---------------|
-| 评测计划 | `docs/evaluation_plan.md` |
-| 检索优化 | `app/services/retrieval/*.py` |
-| API/schema | `app/api/search.py`, `app/schemas/search.py` |
-| 问答检索模式 | `app/services/generation/answer_service.py`, `app/schemas/chat.py`, `app/api/chat.py` if needed |
-| 评测脚本 | `scripts/evaluate_*.py`, possible new scripts |
-| 评测数据 | `data/evaluation/*.csv` |
-| 测试 | `tests/test_*search*.py`, `tests/test_evaluate_*.py`, `tests/test_chat_api.py` if needed |
-| 前端最小更新 | `app/frontend/*` only if new search mode needs UI exposure |
+| Agent 设计 | `docs/agent_design.md`, `tests/test_agent_design.py` |
+| Agent 工具层 | `app/services/agent/__init__.py`, `app/services/agent/tools.py` |
+| Agent 编排 | `app/services/agent/service.py` |
+| Agent schema/API | `app/schemas/agent.py`, `app/api/agent.py`, `app/main.py` |
+| Agent 评测 | `scripts/evaluate_agent.py`, `data/evaluation/agent_queries.csv`, `data/evaluation/agent_results.csv` |
+| 测试 | `tests/test_agent_tools.py`, `tests/test_agent_service.py`, `tests/test_agent_api.py`, `tests/test_evaluate_agent.py` |
+| 前端 | `app/frontend/index.html`, `app/frontend/static/app.js`, `app/frontend/static/styles.css`, `tests/test_frontend_app.py` |
 | 文档 | `README.md`, `docs/progress.md`, `docs/architecture.md`, `docs/data_sources.md`, `AGENT.MD` |
-| Obsidian | 阶段 6 页面、Phase 汇报、首页、阶段索引、分类页和知识点 |
+| Obsidian | 阶段 7 页面、Phase 汇报、首页、阶段索引、分类页和知识点 |
 
 ## Term Explanations
 | Term | Explanation |
 |------|-------------|
-| baseline | 优化前的稳定对照成绩，本项目包括 keyword、vector 和 chat 三条评测线 |
-| Recall@K | 前 K 条结果能否召回正确资料，阶段 6 可用期望标题/正文/source_type 命中近似计算 |
-| Citation Accuracy | 回答引用编号是否有效、是否能对应返回来源、是否命中期望来源 |
-| Faithfulness | 回答是否忠实于检索上下文，不把资料中没有的内容说成事实 |
-| Answer Coverage | 回答是否覆盖用户问题需要的关键点 |
-| Refusal Quality | 该拒答时拒答，不该拒答时不误拒 |
-| hybrid search | 混合检索，把关键词和向量召回结果合并、去重、归一化和排序 |
-| rerank | 重排，对初步召回结果再次排序 |
+| Agent | 能根据用户意图选择工具并组织结果的编排层 |
+| Tool | 被 Agent 调用的受控能力包装，例如检索、问答、来源查询 |
+| Orchestration | 编排，决定调用哪个工具、调用顺序和结果汇总方式 |
+| Tool call | 一次工具调用记录，包括工具名、输入摘要、输出摘要、成功或失败 |
+| Read-only | 只读，不修改数据库、不写入来源、不触发重新索引 |
+| Intent routing | 意图路由，根据用户问题判断应该搜索、问答还是查来源 |
+| Auditability | 可审计性，能回看 Agent 调用了什么工具、依据是什么、是否拒答 |
 
 ## Issues Encountered
 | Issue | Resolution |
 |-------|------------|
-| 旧 planning 文件仍是阶段 5 内容 | Phase 0 重写为阶段 6 工作记忆 |
-| 切换分支前存在一个 Obsidian 索引本地改动 | 保留该改动，避免覆盖用户工作 |
-| 评测指标容易写成抽象口号 | Phase 1 将每个指标绑定到当前脚本字段或后续 CSV 字段 |
-| 提前写入了 Phase 0-2 Obsidian 汇报 | 根据用户最新口径撤回提前写入内容，改为阶段完成后统一补写 |
+| 暂无 | 暂无 |
 
 ## Resources
 - `AGENT.MD`
@@ -135,22 +106,82 @@
 - `docs/progress.md`
 - `docs/architecture.md`
 - `docs/data_sources.md`
+- `docs/evaluation_plan.md`
 - `task_plan.md`
 - `findings.md`
 - `progress.md`
-- `scripts/evaluate_keyword_search.py`
-- `scripts/evaluate_vector_search.py`
-- `scripts/evaluate_chat.py`
 - `app/services/retrieval/keyword_search.py`
 - `app/services/retrieval/vector_search.py`
+- `app/services/retrieval/hybrid_search.py`
 - `app/services/generation/answer_service.py`
 - `app/api/search.py`
-- `app/schemas/search.py`
+- `app/api/chat.py`
+- `app/api/sources.py`
+- `app/db/repositories.py`
 - `data/evaluation/`
+- `docs/agent_design.md`
+
+## Phase 1 Findings
+- `docs/agent_design.md` 已明确阶段 7 不引入复杂 LangGraph workflow，采用轻量规则式编排。
+- 最小工具集固定为 `search_knowledge`、`hybrid_search_knowledge`、`answer_with_citations`、`list_sources`、`get_source_detail`。
+- 权限边界固定为只读优先，`source reindex` 不自动执行；后续若要接入写入动作，必须有 `allow_write_actions=true` 类显式字段和测试。
+- `reasoning_summary` 被定义为可审计摘要，不暴露内部敏感推理。
+- `tests/test_agent_design.py` 已覆盖工具名、只读边界、`POST /agent/query`、`tool_calls`、`reasoning_summary` 和 Agent 评测文件路径。
+
+## Phase 2 Findings
+- 新增 `app/services/agent/`，作为阶段 7 Agent 工具层。
+- `AgentToolbox` 已实现 5 个工具：`search_knowledge`、`hybrid_search_knowledge`、`answer_with_citations`、`list_sources`、`get_source_detail`。
+- 工具层复用既有 service：`KeywordSearchService`、`HybridSearchService`、`CitationAnswerService`、`SourceRepository`。
+- 工具调用记录统一使用 `AgentToolCallRecord`，包含工具名、输入摘要、输出摘要、成功状态和错误信息。
+- 工具结果统一使用 `AgentToolResult`，包含 answer、search_results、sources、citations、refused 和 refusal_reason。
+- `get_source_detail` 找不到来源时返回可审计失败结果，而不是抛出未处理异常。
+- `tests/test_agent_tools.py` 覆盖关键词检索、混合检索、引用式问答、来源列表、来源详情、缺失来源和非法参数。
+
+## Phase 3 Findings
+- 新增 `app/services/agent/service.py`，作为 Agent 编排服务。
+- `AgentService.query()` 负责校验 question/top_k/max_tool_calls，并根据意图选择工具。
+- 第一版意图路由保持保守规则式：问答默认走 `answer_with_citations`，搜索走 `hybrid_search_knowledge`，来源列表走 `list_sources`，来源详情走 `get_source_detail`。
+- `AgentQueryResult` 已统一返回 question、answer、tool_calls、sources、search_results、citations、refused、refusal_reason、reasoning_summary。
+- 缺少 source_id 的来源详情查询会拒答并解释原因，不会误调用工具。
+- `tests/test_agent_service.py` 覆盖问答、搜索、来源列表、来源详情、缺少 source_id、非法参数和意图识别辅助函数。
+
+## Phase 4 Findings
+- 新增 `app/schemas/agent.py`，定义 Agent 请求和响应结构。
+- 新增 `app/api/agent.py`，实现 `POST /agent/query`。
+- `app/main.py` 已注册 Agent router。
+- Agent API 响应包含 question、answer、tool_calls、search_results、sources、citations、refused、refusal_reason、reasoning_summary。
+- `tests/test_agent_api.py` 覆盖问答、混合检索、来源详情、空问题校验和旧 API 回归。
+- 回归测试确认新增 Agent API 后，`POST /search`、`POST /chat`、`GET /sources` 仍可用。
+
+## Phase 5 Findings
+- 新增 `data/evaluation/agent_queries.csv`，覆盖 Agent 问答、Agent 搜索、来源列表、来源详情和缺失来源拒答。
+- 新增 `scripts/evaluate_agent.py`，直接调用 `AgentService`，输出 `data/evaluation/agent_results.csv`。
+- Agent 评测字段包含 expected_tool、actual_tools、tool_matched、refused、citations_valid、expected_source_hit、tool_call_count。
+- 新增 `tests/test_evaluate_agent.py`，覆盖 Agent 评测通过、缺失来源拒答和 CSV 读写。
+- 真实本地资料库运行 `scripts/evaluate_agent.py` 结果为 5/5 passed，refused=1，tool_failures=0，citation_failures=0。
+
+## Phase 6 Findings
+- 现有 FastAPI 静态工作台适合承载 Agent 最小展示，不需要新增前端构建链。
+- `app/frontend/index.html` 已新增 Agent 输入区和工具调用展示区，使用 `data-agent-*` 属性保持静态测试和浏览器检查可定位。
+- `app/frontend/static/app.js` 已新增 `/agent/query` 调用、Agent 回答渲染、引用渲染和 `tool_calls` 渲染。
+- `app/frontend/static/styles.css` 只补充 Agent 面板所需的网格、控制区和工具调用卡片样式，没有重构原有 sources/search/chat 布局。
+- `tests/test_frontend_app.py` 已覆盖 Agent 表单、工具调用区域、`/agent/query` 端点和 `renderAgentToolCalls`。
+- 浏览器 smoke check 使用本地 `http://127.0.0.1:8002/`，提交“检索 filling capacity 相关资料”后，页面状态为 `answered`，工具调用显示 `hybrid_search_knowledge` 且返回 5 条混合检索结果。
+- 视觉检查确认 Agent 区域可见，回答、引用标签和工具调用列表没有明显遮挡或布局错位。
+
+## Phase 7 Findings
+- 阶段 7 收尾复跑评测：keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6、agent 5/5，说明 Agent 没有破坏阶段 6 质量基线。
+- 全量测试结果为 163 passed。
+- `README.md` 已同步阶段 7 当前状态、Agent API、评测结果、前端能力、测试数和阶段 7 面试表达。
+- `docs/progress.md` 已新增 2026-06-06 阶段 7 完成记录，并把最新状态从阶段 6 更新到阶段 7。
+- `docs/architecture.md` 已新增阶段 7 Agent 总体框架、工具层、编排层、API 和评测策略。
+- `docs/data_sources.md` 已说明阶段 7 不新增外部资料来源，Agent 只读查询既有 sources、documents/chunks 和评测文件。
+- `AGENT.MD` 已把当前推荐起点从阶段 7 开发前校准到阶段 7 完成后，并记录 `phase-7-complete` tag 口径。
+- Obsidian 已新增 `obsidian-vault/阶段/阶段 7 - Agent 化.md`、`阶段 7 Phase 汇报索引`、Phase 0 到 Phase 7 汇报、`Agent 工具调用` 分类和 3 篇知识点。
+- Obsidian 检查确认 Phase 0 到 Phase 7 每篇汇报都包含用户要求的 10 个固定小节。
 
 ## Current Hypotheses
-- Hybrid search should improve or at least stabilize deterministic vector weakness by letting keyword matches rescue weak vector results.
-- Chat `auto` mode may eventually benefit from hybrid retrieval, but Phase 3 should first implement and evaluate retrieval-level hybrid before changing chat behavior.
-- Error case analysis should become the main teaching artifact for explaining “为什么要优化检索”。
-- Phase 2 结果强化了 hybrid search 优先级：4 个失败不是 keyword 也失败，而是 vector 单独失败，所以合并 keyword evidence 是最低风险修复方向。
-- Phase 4 已验证该假设：hybrid 救回全部 4 个 vector-only 失败，且没有相对 keyword baseline 的退化。
+- 第一版 Agent 不需要真实 LLM 规划；规则式工具选择已经能满足阶段 7 的可控性和可测性目标。
+- `answer_with_citations` 应作为问答类问题的主工具，因为它复用现有引用、拒答和日志链路。
+- `hybrid_search_knowledge` 应作为搜索类问题的主工具，因为阶段 6 已证明它能救回 vector-only 失败案例。
+- Agent API 的关键价值不是“更会聊天”，而是把工具调用过程、来源和引用透明返回。

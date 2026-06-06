@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from app.api.agent import router as agent_router
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 from app.api.frontend import FRONTEND_DIR
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(search_router)
     app.include_router(chat_router)
     app.include_router(sources_router)
+    app.include_router(agent_router)
     app.mount(
         "/static",
         StaticFiles(directory=FRONTEND_DIR / "static"),

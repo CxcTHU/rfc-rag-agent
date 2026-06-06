@@ -250,16 +250,17 @@ workflow
 
 ### 当前对齐情况
 
-阶段 0 到阶段 4 当前已逐步对齐 Quivr 的工程思想：
+阶段 0 到阶段 7 当前已逐步对齐 Quivr 的工程思想：
 
 - 有清晰入口：`app/main.py`。
-- 有 API 分层：`app/api/health.py`、`app/api/documents.py`、`app/api/search.py`、`app/api/chat.py`。
-- 有 schema 分层：`app/schemas/health.py`、`app/schemas/document.py`、`app/schemas/search.py`、`app/schemas/chat.py`。
+- 有 API 分层：`app/api/health.py`、`app/api/documents.py`、`app/api/search.py`、`app/api/chat.py`、`app/api/sources.py`、`app/api/agent.py`。
+- 有 schema 分层：`app/schemas/health.py`、`app/schemas/document.py`、`app/schemas/search.py`、`app/schemas/chat.py`、`app/schemas/source.py`、`app/schemas/agent.py`。
 - 有集中配置：`app/core/config.py`。
 - 有导入、检索、生成和评测 service 分层。
 - 有 `EmbeddingProvider` 和 `ChatModelProvider` 两类 provider 抽象。
 - 有 response metadata：`citations`、`sources`、`refused`、`model_provider`、`model_name`。
 - 有 source registry：`sources` 表、`SourceRegistryService`、来源同步脚本、sources API 和 reindex 入口。
+- 有受控 Agent 工具层：`AgentToolbox`、`AgentService`、`POST /agent/query`、`tool_calls` 和 `reasoning_summary`。
 - 有自动化测试和评测脚本。
 - 有文档和知识库沉淀：`README.md`、`docs/progress.md`、`obsidian-vault/`。
 
@@ -286,7 +287,8 @@ workflow
   借鉴 Quivr 的测试组织，补充检索与问答评测集
 
 阶段 7
-  借鉴 Quivr workflow/tools 思路，再做 Agent 工具调用
+  已借鉴 Quivr workflow/tools 思路，但采用更轻量的只读工具封装和规则式编排
+  已实现 search_knowledge、hybrid_search_knowledge、answer_with_citations、list_sources、get_source_detail
 ```
 
 ### 使用 Quivr 作为参考时的规则
@@ -1084,14 +1086,14 @@ README 中能展示评测结果和改进前后对比
 
 在 RAG 稳定后再做 Agent。
 
-可加入工具：
+已加入第一批只读工具：
 
 ```text
-search_knowledge_base
-summarize_document
-compare_sources
-generate_review_questions
-extract_engineering_terms
+search_knowledge
+hybrid_search_knowledge
+answer_with_citations
+list_sources
+get_source_detail
 ```
 
 限制：
@@ -1100,6 +1102,8 @@ extract_engineering_terms
 - 只读工具优先。
 - 高风险动作人工确认。
 - 工具调用日志脱敏。
+- 不自动执行 source reindex 等写入型动作。
+- 继续复用阶段 6/7 评测集做回归。
 
 ## 简历化目标
 
@@ -1159,7 +1163,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5 和阶段 6 已完成。阶段 6 当前在 `codex/phase-6-evaluation` 分支完成开发、验证、文档收尾和 tag 标识。
+阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6 和阶段 7 已完成。阶段 7 当前在 `codex/phase-7-agent-tools` 分支完成开发、验证、文档收尾和 tag 标识。
 
 阶段 4 最终提交和 tag：
 
@@ -1182,7 +1186,13 @@ tag: phase-5-complete
 tag: phase-6-complete
 ```
 
-不要移动 `phase-4-complete`、`phase-5-complete` 或 `phase-6-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+阶段 7 由以下 tag 标识：
+
+```text
+tag: phase-7-complete
+```
+
+不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete` 或 `phase-7-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
 阶段 6 已实现检索优化与评测闭环：
 
@@ -1209,29 +1219,42 @@ regressed_keyword: 0
 full tests: 141 passed
 ```
 
+阶段 7 已实现受控 Agent 工具调用链路：
+
+```text
+docs/agent_design.md
+app/services/agent/tools.py
+app/services/agent/service.py
+app/api/agent.py
+POST /agent/query
+scripts/evaluate_agent.py
+data/evaluation/agent_queries.csv
+data/evaluation/agent_results.csv
+frontend Agent panel
+```
+
+阶段 7 评测结果：
+
+```text
+agent evaluation: 5/5 passed
+tool_failures: 0
+citation_failures: 0
+full tests: 163 passed
+```
+
 当前最权威的进度依据是：
 
 ```text
 docs/progress.md
 ```
 
-下一步最适合进入阶段 7：Agent 化。
-
-建议从阶段 6 分支完成提交/合并后，新开阶段 7 分支：
+下一步最适合由用户确认方向后再开新阶段。候选方向：
 
 ```text
-codex/phase-7-agent-tools
+真实模型接入与模型评测
+Agent 权限审计与写入工具安全设计
+部署工程化与日志观测
+更大规模用户问题评测集
 ```
 
-阶段 7 的第一批最小任务：
-
-```text
-阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md 和 docs/evaluation_plan.md
-确认阶段 6 的 keyword/vector/hybrid/chat 评测结果和错误案例表可用
-设计受控 Agent 工具边界：只读优先、最大工具调用步数、日志记录、失败回退
-优先封装 search_knowledge_base、summarize_document、compare_sources、extract_engineering_terms
-不要一开始就引入复杂 LangGraph workflow；先保证单工具、少步数、可观测
-继续复用阶段 6 评测集，验证 Agent 工具调用不会降低检索和引用质量
-```
-
-阶段 6 已经让系统质量能被量化证明：哪些问题召回对了、哪些引用可靠、哪些回答忠实、哪些拒答合理。阶段 7 的重点是把这些稳定能力包装成受控工具，让 Agent 能调用 RAG 系统，但不能绕过来源、权限、引用和评测约束。
+阶段 7 已经把稳定 RAG 能力包装成受控工具，让 Agent 能调用 RAG 系统，但不能绕过来源、权限、引用和评测约束。后续如果加入 LLM 规划、写入工具或部署能力，必须继续保留只读优先、最大步数、显式权限、工具调用记录、引用溯源和评测回归。

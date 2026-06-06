@@ -15,6 +15,8 @@ def test_frontend_index_is_served() -> None:
     assert 'data-documents-body' in response.text
     assert 'data-source-filter' in response.text
     assert 'data-chat-form' in response.text
+    assert 'data-agent-form' in response.text
+    assert 'data-agent-tools-list' in response.text
     assert 'data-citations-list' in response.text
     assert 'data-search-form' in response.text
     assert '<option value="hybrid">hybrid</option>' in response.text
@@ -32,10 +34,12 @@ def test_frontend_static_assets_are_served() -> None:
     assert "/sources" in response.text
     assert "/documents" in response.text
     assert "/chat" in response.text
+    assert "/agent/query" in response.text
     assert "/search/vector" in response.text
     assert "/search/hybrid" in response.text
     assert "renderSources" in response.text
     assert "renderCitations" in response.text
+    assert "renderAgentToolCalls" in response.text
     assert "reindexSource" in response.text
 
 

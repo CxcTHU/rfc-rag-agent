@@ -224,6 +224,54 @@
             </div>
           </aside>
         </div>
+
+        <div class="agent-grid">
+          <section class="data-panel" aria-labelledby="agent-title">
+            <div class="panel-heading">
+              <h2 id="agent-title">Agent</h2>
+              <span data-agent-status>idle</span>
+            </div>
+            <form class="chat-form" data-agent-form>
+              <label class="question-field">
+                <span>任务</span>
+                <textarea
+                  data-agent-question
+                  rows="4"
+                  placeholder="检索 filling capacity 相关资料"
+                  required
+                ></textarea>
+              </label>
+              <div class="agent-controls">
+                <label>
+                  <span>召回数</span>
+                  <input type="number" min="1" max="50" value="5" data-agent-top-k />
+                </label>
+                <label>
+                  <span>工具步数</span>
+                  <input type="number" min="1" max="5" value="2" data-agent-max-tool-calls />
+                </label>
+                <label>
+                  <span>source_id</span>
+                  <input type="text" data-agent-source-id placeholder="可选" />
+                </label>
+                <button class="command-button" type="submit" data-agent-submit>运行</button>
+              </div>
+            </form>
+            <article class="answer-box" data-agent-answer-box>
+              <div class="empty-state">暂无 Agent 结果</div>
+            </article>
+          </section>
+
+          <aside class="data-panel" aria-labelledby="agent-tools-title">
+            <div class="panel-heading">
+              <h2 id="agent-tools-title">工具调用</h2>
+              <span data-agent-tools-count>0</span>
+            </div>
+            <div class="tool-call-list" data-agent-tools-list>
+              <div class="empty-state">暂无工具调用</div>
+            </div>
+          </aside>
+        </div>
       </section>
     </main>
     <script src="/static/app.js" type="module"></script>

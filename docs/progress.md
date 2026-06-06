@@ -1,13 +1,13 @@
 # 项目进度
 
-## 最新状态：2026-06-05
+## 最新状态：2026-06-06
 
-当前阶段：阶段 6，检索优化与评测已完成。下一步准备进入阶段 7：Agent 化。
+当前阶段：阶段 7，Agent 化已完成。下一步建议在用户确认后进入真实模型接入、权限审计或部署工程化准备。
 
 当前关键证据：
 
-- `task_plan.md` 当前阶段为 `Phase 5 complete`，下一步进入 Phase 6 收尾。
-- 当前分支：`codex/phase-6-evaluation`。
+- `task_plan.md` 当前阶段为 `Phase 6 complete`，下一步进入 Phase 7 收尾。
+- 当前分支：`codex/phase-7-agent-tools`。
 - 阶段 3 tag：`phase-3-complete -> 7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954`，未移动。
 - 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 - 阶段 4 tag：`phase-4-complete -> b044459b9b8c2153e9225daa55af5d82cdcdb282`。
@@ -15,6 +15,8 @@
 - 阶段 5 tag：`phase-5-complete -> 8c885e6cc714cc985933438697a7eb2523b26722`。
 - 阶段 6 最终功能提交：由 `phase-6-complete` tag 指向的提交标识。
 - 阶段 6 tag：`phase-6-complete`。
+- 阶段 7 最终功能提交：由 `phase-7-complete` tag 指向的提交标识。
+- 阶段 7 tag：`phase-7-complete`。
 - 阶段 4 分支和 tag 已推送到 GitHub。
 - `sources` 来源登记表已实现。
 - `SourceRepository` 和 `SourceRegistryService` 已实现。
@@ -48,17 +50,96 @@
 - 混合检索评测：15/15 通过，`rescued_vector=4`，`regressed_keyword=0`。
 - 错误案例状态：4 个 vector 失败均为 `fixed_by_hybrid`。
 - Chat 评测：6/6 通过。
-- 前端工作台已实现：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、聊天问答、引用来源侧栏、source sync 和 source reindex 入口。
+- `docs/agent_design.md` 已新增。
+- Agent 工具层已实现：`search_knowledge`、`hybrid_search_knowledge`、`answer_with_citations`、`list_sources`、`get_source_detail`。
+- Agent 编排服务已实现，支持规则式意图路由、最大工具调用步数限制、拒答和 `reasoning_summary`。
+- `POST /agent/query` 已实现。
+- `scripts/evaluate_agent.py` 已实现。
+- `data/evaluation/agent_queries.csv` 和 `data/evaluation/agent_results.csv` 已生成。
+- Agent 评测：5/5 通过，`refused=1`，`tool_failures=0`，`citation_failures=0`。
+- 前端工作台已实现：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、聊天问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口。
 - 浏览器验证：桌面加载 sources=125、documents=136、chunks=997；移动视口 390x844 无横向溢出。
 - 阶段 6 浏览器 smoke check：搜索模式包含 `keyword/vector/hybrid`，聊天检索模式包含 `auto/hybrid/vector/keyword`。
-- 全量测试：141 个测试通过。
+- 阶段 7 浏览器 smoke check：Agent 面板提交“检索 filling capacity 相关资料”后状态为 `answered`，工具调用为 `hybrid_search_knowledge`，返回 5 条混合检索结果。
+- 全量测试：163 个测试通过。
 
 下一步：
 
-- 阶段 6 分支 `codex/phase-6-evaluation` 已完成核心开发与验证。
-- 阶段 6 收尾时确认 `phase-6-complete` tag 指向阶段 6 最终功能提交。
-- 下一阶段进入阶段 7：Agent 化。
-- 阶段 7 建议在稳定 RAG 基础上封装受控只读工具，例如知识库搜索、资料总结、来源对比和术语抽取。
+- 阶段 7 分支 `codex/phase-7-agent-tools` 已完成核心开发与验证。
+- 阶段 7 收尾时确认 `phase-7-complete` tag 指向阶段 7 最终功能提交。
+- 阶段 7 之后，建议先由用户确认下一阶段方向：真实模型接入、Agent 权限审计、部署工程化或更细粒度用户评测。
+- 不要移动已有阶段 tag：`phase-4-complete`、`phase-5-complete`、`phase-6-complete`。
+
+## 2026-06-06 阶段 7 完成记录：Agent 化
+
+当前分支：`codex/phase-7-agent-tools`
+
+当前阶段：阶段 7 已完成。下一步建议由用户确认真实模型接入、权限审计、部署工程化或更细粒度用户评测方向。
+
+阶段最终功能提交：由 `phase-7-complete` tag 指向的提交标识。
+
+阶段 tag：`phase-7-complete`。
+
+已完成：
+
+- 使用 Planning with Files 维护阶段 7 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 确认阶段 6 已完成，且 `phase-6-complete` tag 指向 `fa11702150d79e036159f427f567051e92bfe8c2`，未移动已有阶段 tag。
+- 新增 `docs/agent_design.md`，说明 Agent 工具边界、调用流程、权限约束、失败处理和评测方式。
+- 新增 `app/services/agent/tools.py`，实现只读工具：`search_knowledge`、`hybrid_search_knowledge`、`answer_with_citations`、`list_sources`、`get_source_detail`。
+- 新增 `app/services/agent/service.py`，实现规则式意图路由、最大工具调用步数限制、拒答和可审计摘要。
+- 新增 `app/schemas/agent.py` 和 `app/api/agent.py`，实现 `POST /agent/query`。
+- 在 `app/main.py` 注册 Agent API，保持 search、vector、hybrid、chat 和 sources 既有 API 不变。
+- 新增 `data/evaluation/agent_queries.csv`、`scripts/evaluate_agent.py` 和 `data/evaluation/agent_results.csv`。
+- 前端工作台新增 Agent 面板，展示回答、引用标签和工具调用记录。
+- 开发完成后再统一补写 Obsidian Phase 汇报，符合本阶段用户要求。
+
+阶段 7 设计结论：
+
+- 第一版 Agent 采用只读工具优先，不自动执行 source reindex 等写入型动作。
+- Agent 工具必须复用现有 service 和 repository，不绕过 sources、documents/chunks、hybrid search、chat citation 和日志链路。
+- 第一版编排采用保守规则式意图路由，避免在 RAG 链路稳定前引入复杂 LangGraph workflow。
+- `tool_calls` 和 `reasoning_summary` 是审计字段，帮助用户看见 Agent 调用了什么工具、为什么调用、是否成功。
+- Agent 评测必须检查工具选择、来源命中、引用有效性和拒答，而不只是 HTTP 200。
+
+验证结果：
+
+- `python -m pytest tests\test_agent_design.py -q`：2 个测试通过。
+- `python -m pytest tests\test_agent_tools.py -q`：6 个测试通过。
+- `python -m pytest tests\test_agent_service.py -q`：6 个测试通过。
+- `python -m pytest tests\test_agent_api.py tests\test_search_api.py tests\test_chat_api.py tests\test_sources_api.py -q`：16 个测试通过。
+- `python -m pytest tests\test_evaluate_agent.py -q`：3 个测试通过。
+- `python scripts\evaluate_agent.py`：5/5 通过，`refused=1`，`tool_failures=0`，`citation_failures=0`。
+- `python scripts\evaluate_keyword_search.py`：keyword 15/15 通过。
+- `python scripts\evaluate_vector_search.py`：vector 11/15 通过。
+- `python scripts\evaluate_hybrid_search.py`：hybrid 15/15 通过，`rescued_vector=4`，`regressed_keyword=0`。
+- `python scripts\evaluate_chat.py`：chat 6/6 通过，`refused=1`，`citation_failures=0`。
+- `python scripts\evaluate_sources.py`：`total_sources=125`，`merged_duplicates=14`。
+- `python -m pytest tests\test_frontend_app.py -q`：3 个测试通过。
+- 浏览器 smoke check：`http://127.0.0.1:8002/` 页面可提交 Agent 问题并展示 `hybrid_search_knowledge` 工具调用记录。
+- `python -m pytest -q`：163 个测试通过。
+
+遗留问题：
+
+- 当前 Agent 意图路由是规则式，适合阶段 7 的可控可测目标；后续若引入真实 LLM 规划，需要保留权限、步数和评测约束。
+- 当前 Agent 工具只读优先；写入型工具如 reindex 需要显式字段、人工确认或更严格测试后再接入。
+- 当前 Agent 评测集规模较小，后续可扩展更多任务类型和用户日志回放。
+- 当前仍使用 deterministic provider 作为本地稳定测试实现，真实模型效果需要后续专项评测。
+
+下一阶段任务：
+
+- 用户确认后，可进入真实模型接入与模型评测。
+- 或进入 Agent 权限审计与写入工具安全设计。
+- 或进入部署工程化、日志观测和使用说明完善。
+
+面试表达：
+
+```text
+阶段 7 我把阶段 6 已经稳定的 RAG 能力包装成受控 Agent 工具调用链路，而不是直接上复杂 workflow。
+
+我先用 docs/agent_design.md 固定工具边界和权限约束，然后新增 AgentToolbox，把关键词检索、混合检索、引用式问答和来源查询封装为只读工具。AgentService 做保守规则式意图路由：搜索类走 hybrid_search_knowledge，问答类走 answer_with_citations，来源类走 sources 工具。POST /agent/query 返回 answer、tool_calls、sources、citations、refused 和 reasoning_summary，前端也能展示工具调用记录。
+
+这样设计的核心是可控和可审计：Agent 不能绕过 source registry、documents/chunks、hybrid search、引用和拒答机制。验证上我新增 Agent 评测脚本，结果 5/5 通过，同时复跑 keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6 和全量 163 个测试。这个阶段证明项目不是一个随意调用工具的 demo，而是一个可回归、只读优先、来源可追踪的 RAG Agent。
+```
 
 ## 2026-06-05 阶段 6 完成记录：检索优化与评测
 
