@@ -75,5 +75,20 @@ def test_evaluate_evidence_confidence_rejects_unsupported_token() -> None:
     assert "not share enough" in (confidence.refusal_reason or "")
 
 
+def test_evaluate_evidence_confidence_accepts_cross_language_expanded_terms() -> None:
+    confidence = evaluate_evidence_confidence(
+        "孔隙率会怎么影响堆石混凝土抗压表现？",
+        [
+            FakeSearchResult(
+                document_title="Void effect study on compressive behavior",
+                content="Porosity and void defects influence compressive behavior.",
+            )
+        ],
+    )
+
+    assert confidence.sufficient
+    assert "porosity" in confidence.matched_terms
+
+
 def test_extract_citations_returns_unique_allowed_source_ids() -> None:
     assert extract_citations("Use [2], [1], [2], and [99].", [1, 2]) == [2, 1]

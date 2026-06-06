@@ -2,168 +2,172 @@
 
 ## Requirements
 
-- 用户要求持续推进到阶段 10：真实 RAG 质量校准与拒答边界优化完整完成。
-- 线程标题已修改为 `阶段10-真实RAG质量校准与拒答边界优化`。
-- 目标分支为 `codex/phase-10-rag-quality-calibration`。
-- 阶段 10 必须从阶段 9.1 已完成并合并到 `main` 的状态出发。
-- 必须确认 `phase-9-complete` 与 `phase-9.1-complete` 指向各自最终提交，不移动已有 tag。
-- 阶段 10 不做登录系统、不做部署优化、不做大规模前端重构、不做写入型 Agent 工具、不扩展新模型 provider、不引入复杂 LangGraph workflow。
-- 阶段 10 重点是真实 RAG 质量校准、检索证据置信度、拒答边界和可复现评测。
+- 用户要求正式进入阶段 11：真实用户问题评测集与跨语言质量提升。
+- 线程标题已修改为 `阶段11-真实用户问题评测集与跨语言质量提升`。
+- 目标分支为 `codex/phase-11-user-evaluation-query-expansion`。
+- 阶段 11 必须从阶段 10 已完成并合并到 `main` 的状态出发。
+- 必须确认 `phase-10-complete` 指向阶段 10 最终功能提交，不移动已有阶段 tag。
+- 阶段 11 不做登录系统、不做部署优化、不做大规模前端重构、不做写入型 Agent 工具。
+- 阶段 11 重点是真实用户问题评测、跨语言 query expansion、质量审阅和可复现指标。
 - 开发阶段不写 Obsidian 小 Phase 汇报，收尾时统一补齐。
 
 ## Current Project Findings
 
-- 当前 goal 已激活，目标为阶段 10 完整完成。
-- 当前工作区已切换到 `codex/phase-10-rag-quality-calibration`。
-- `main` 最新合并提交为 `2528deb merge phase 9.1 real model evaluation`。
-- `phase-9-complete` 指向 `9bdc8b015a6b8c03cee949c0b03376ce81bd55ea`。
-- `phase-9.1-complete` 指向 `12d0443953a0a4c004975d98600d86ca16d9ba22`。
-- 阶段 10 起点全量测试为 `208 passed`，完成当前开发后全量测试为 `216 passed`。
+- 当前工作区已切换到 `codex/phase-11-user-evaluation-query-expansion`。
+- `main` 最新合并提交为 `c0bf8d6f9250db9bca00a686aa277f1adc5eb55c`，提交信息为 `merge phase 10 rag quality calibration`。
+- `phase-10-complete` 指向 `1454919eb8d9615f5ae32e069c8dcfe56829ba90`。
+- 阶段 10 最终全量测试记录为 `216 passed`，阶段 11 启动后的起点全量测试也为 `216 passed`。
+- 普通文档仍有阶段 10 分支口径，Phase 6 需要统一校准为阶段 11 完成状态。
 
 ## Architecture Findings
 
-- 阶段 8 已把 `/chat` 与 Agent `answer_with_citations` 收敛到 `BrainService`，因此阶段 10 的质量保护优先放在 Brain 层。
-- `BrainService.retrieve()` 支持 `auto`、`vector`、`keyword`、`hybrid`；阶段 10 在生成前加入证据判断，不改变基础 search API schema。
-- `build_retrieval_outcome()` 仍按 `min_score` 过滤结果；阶段 10 新增的 evidence confidence 处理“有结果但证据不足”的场景。
-- `chunk_embeddings` 按 provider/model/dimension/content_hash 区分索引，Jina 1024 维索引与 deterministic 64 维索引可以并存。
-- `OpenAICompatibleChatModelProvider` 与 `OpenAICompatibleEmbeddingProvider` 已能支持 MIMO 与 Jina，本阶段不需要扩展 provider。
+- 阶段 8 已把 `/chat` 与 Agent `answer_with_citations` 收敛到 `BrainService`，用户问题评测应优先复用 Brain workflow。
+- `BrainService.retrieve()` 支持 `auto`、`vector`、`keyword`、`hybrid`；阶段 11 通过 `default_hybrid`、`keyword_baseline`、`vector_only` 三种配置比较。
+- `BrainService._generate_answer_step()` 在生成前调用 evidence confidence；低证据时拒答并清空 sources/citations。
+- `VectorSearchService` 使用 topic anchor rerank，且 topic anchor 复用 `keyword_search.expand_query_terms()`。
+- `chunk_embeddings` 同时保存 deterministic 64 维索引和 Jina 1024 维索引；阶段 11 自动回归仍默认 deterministic。
+- API schema 当前不需要变化；阶段 11 通过新增评测文件、脚本和词表增强推进质量。
 
 ## Existing Code Findings
 
-- `app/services/retrieval/vector_search.py` 原本只按 cosine score 排序，容易在 vector-only 场景召回语义相近但主题偏移的片段。
-- `app/services/retrieval/keyword_search.py` 已有领域词扩展与泛词降权，可复用于 topic anchor rerank。
-- `app/services/retrieval/hybrid_search.py` 保留 `keyword_score` 与 `vector_score`，适合做 baseline 对比。
-- `app/services/brain/workflow.py` 新增 `EvidenceConfidence`、`evaluate_evidence_confidence()`、`extract_evidence_terms()` 等证据判断工具。
-- `app/services/brain/service.py` 在 `_generate_answer_step()` 中调用证据判断，低证据时返回默认拒答并跳过真实模型调用。
+- `app/services/retrieval/keyword_search.py` 的 `SYNONYM_RULES` 是当前最适合扩展跨语言术语的入口。
+- `app/services/retrieval/vector_search.py` 的 `topic_anchor_score()` 调用 `expand_query_terms()`，因此扩展 `SYNONYM_RULES` 会同时影响 keyword 召回和 vector 候选内部重排。
+- `app/services/retrieval/hybrid_search.py` 保留 keyword/vector 分数，可用于对比用户问题集下不同召回通道的表现。
+- `scripts/evaluate_chat.py` 已实现引用有效性、拒答匹配、来源命中和禁止词检查。
+- `scripts/evaluate_brain_workflow.py` 已比较 `default_hybrid`、`keyword_baseline`、`vector_only`，适合给用户问题评测脚本复用设计。
+- 前端已支持 keyword/vector/hybrid 搜索、chat 检索模式和 Agent 面板；阶段 11 不需要前端重构。
 
 ## API Contract Findings
 
-- `POST /search`、`POST /search/vector`、`POST /search/hybrid` 仍只负责返回检索结果，不承担问答拒答。
-- `POST /chat` 响应已有 `refused`、`refusal_reason`、`sources`、`citations` 字段，可以表达低证据拒答。
-- `POST /agent/query` 通过 Agent toolbox 复用 Brain 引用问答，因此 Brain 低证据保护会覆盖 Agent 问答工具。
-- 阶段 10 未新增 API 响应必填字段，避免破坏现有前端和测试。
+- `POST /search`、`POST /search/vector`、`POST /search/hybrid` 仍只负责返回检索结果。
+- `POST /chat` 响应已有 `refused`、`refusal_reason`、`sources`、`citations`、`retrieval_mode`、`model_provider`、`model_name`。
+- `POST /agent/query` 响应已有工具调用、来源、引用、拒答和 `reasoning_summary`。
+- 阶段 11 不新增 API 必填字段，避免破坏现有前端和测试。
 
 ## Evaluation Findings
 
-- 阶段 9 deterministic baseline：keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6、agent 5/5、Brain workflow 12/18。
-- 阶段 9.1 真实 Jina + MIMO：Jina vector 14/15、Jina hybrid 15/15、MIMO + Jina chat 6/6、agent 5/5、Brain workflow 15/18。
-- 阶段 9.1 的真实 Brain workflow 失败项包括：
-  - `vector_only/filling_capacity`：未拒答，但召回主题偏向 elastic modulus / mesoscale。
-  - `default_hybrid/unsupported`：乱字符串 unsupported query 仍生成回答。
-  - `vector_only/unsupported`：同一 unsupported query 仍生成回答。
-- 阶段 10 deterministic 结果：
-  - vector 13/15
-  - hybrid 15/15
-  - chat 6/6
-  - agent 5/5
-  - Brain workflow 18/18
-  - full tests 216 passed
-- 阶段 10 真实模型校准结果：
-  - Jina vector 15/15
-  - Jina hybrid 15/15
-  - MIMO + Jina chat 6/6
-  - MIMO + Jina agent 5/5
-  - MIMO + Jina Brain workflow 18/18
+- 阶段 10 deterministic 结果：keyword 15/15、vector 13/15、hybrid 15/15、chat 6/6、agent 5/5、Brain workflow 18/18。
+- 阶段 10 真实模型校准结果：Jina vector 15/15、Jina hybrid 15/15、MIMO + Jina chat 6/6、MIMO + Jina agent 5/5、MIMO + Jina Brain workflow 18/18。
+- 现有 `chat_queries.csv` 只有 6 条问题，适合阶段 3-10 回归，但不足以代表真实用户问法。
+- 现有 `keyword_queries.csv` 有 15 条检索问题，但没有显式 `language_type` 和 `expected_answer_points` 字段。
+- 阶段 11 新增独立 `user_questions.csv`，避免覆盖原有 baseline。
+- 用户问题评测经过 Phase 3 增强后达到 `25/30 passed`；其中 `default_hybrid=10/10`、`keyword_baseline=10/10`、`vector_only=5/10`。
+- 剩余失败集中在 deterministic `vector_only` 的来源命中不匹配，属于向量 baseline 的主题漂移风险，不应通过隐藏 fallback 掩盖。
 
 ## Data Source Findings
 
-- 阶段 10 不新增外部文献资料来源，不改变 source registry 合规边界。
-- Jina 与 MIMO 是模型服务，不是文献资料来源。
+- 阶段 11 不新增外部文献来源，不改变 source registry 合规边界。
+- `data/evaluation/user_questions.csv`、`data/evaluation/user_question_results.csv` 和 `data/evaluation/user_question_review_samples.csv` 都是评测产物，不是新的资料来源。
+- Jina 和 MIMO 仍是模型服务，不是文献资料来源。
 - 真实 API key 只允许存在本地 `.env`，不能写入文档、CSV、测试或 Obsidian。
-- 阶段 10 新增的 CSV 只保存问题、结果、来源标题、片段摘要、分数和诊断，不保存密钥或受限全文。
+- 评测 CSV 只保存问题、期望条件、来源标题、片段摘要、分数、诊断和审阅字段，不保存受限全文。
 
 ## Technical Decisions
 
 | Decision | Reason |
 |---|---|
-| 质量保护优先放在 Brain 层 | `/chat` 与 Agent 引用问答共享 Brain workflow |
-| 不改变基础 search API schema | 阶段 10 是 RAG 问答质量校准，不是检索 API 重构 |
-| 不把 vector-only 静默 fallback 到 hybrid | vector-only 是评测 baseline，必须保留语义 |
-| unsupported 使用可解释 evidence confidence 拒答 | 真实向量可能对乱字符串也返回正分结果，不能只看是否有结果 |
-| topic anchor 只参与排序，不覆盖 cosine score | 保留向量结果可解释性和 baseline 可比性 |
-| deterministic 用于稳定回归，真实模型用于质量校准 | 真实模型更贴近用户体验，但受网络、限流、费用和密钥影响 |
+| 新增 `user_questions.csv` 而不是直接扩写 `chat_queries.csv` | 保留阶段 10 chat baseline 可比性 |
+| 用户问题评测优先复用 Brain workflow | `/chat` 和 Agent 问答已共享 Brain，一处评测覆盖主链路 |
+| 继续默认 deterministic provider | 自动回归不依赖真实 API key、网络和余额 |
+| 真实 MIMO + Jina 只作为可选校准 | 真实模型贴近体验，但不适合作为必跑测试 |
+| 跨语言增强复用 `SYNONYM_RULES` | 现有 keyword 与 vector topic anchor 已共同依赖该词表 |
+| 人工审阅先做抽样表和字段设计 | Faithfulness 与 Answer Coverage 需要人工或裁判模型，不宜只靠规则 |
 
 ## Phase Findings
 
 ### Phase 0
 
-- 线程标题、分支、阶段 tag、阶段 9.1 合并状态均已确认。
-- 起点全量测试 `208 passed`，说明进入阶段 10 时主链路稳定。
+- 线程标题已修改为阶段 11。
+- 已阅读 Planning with Files 技能说明。
+- 已阅读阶段启动所需普通文档、阶段 10 旧规划文件和关键代码入口。
+- `main` 与 `phase-10-complete` 已确认。
+- 已创建并切换阶段 11 分支。
+- 三份 Planning with Files 文件已校准为阶段 11。
+- 起点全量测试为 `216 passed`。
 
 ### Phase 1
 
-- 新增 `scripts/analyze_real_rag_failures.py`。
-- 新增 `data/evaluation/real_rag_failure_cases.csv`，记录 4 条失败案例。
-- 新增 `tests/test_analyze_real_rag_failures.py`，测试结果 `3 passed`。
-- unsupported 根因是低证据 under-refusal；filling_capacity 根因是 vector topic drift；mesoscopic_modeling 根因是跨语言术语 gap。
+- Phase 1 目标是新增独立真实用户问题评测集。
+- 问题集显式记录 `language_type` 和 `expected_answer_points`，服务真实问法与人工审阅。
+- 已新增 `data/evaluation/user_questions.csv`，包含 10 条问题。
+- 覆盖 `zh_colloquial`、`en`、`mixed`、`engineering_cn`、`unsupported` 五类语言/场景标签。
+- 新增 `tests/test_user_questions.py`，校验字段、语言覆盖、supported/unsupported 约束。
+- Phase 1 测试结果：`3 passed`。
 
 ### Phase 2
 
-- 新增 Brain evidence confidence 机制。
-- 第一版规则采用 query-token coverage，阈值为 `0.2`。
-- 低证据拒答会清空 sources/citations，并在 workflow step 中记录拒答原因。
-- 相关测试结果：Brain workflow/service/answer/chat/agent 组合测试 `31 passed`，Brain workflow evaluator 测试 `3 passed`。
-- Phase 2 后 deterministic Brain workflow 从 12/18 提升到 14/18。
+- Phase 2 目标是把 `user_questions.csv` 接入可复现评测脚本。
+- 评测脚本复用 Brain workflow，因为阶段 8 后 `/chat` 与 Agent 引用问答已共用 Brain。
+- 自动评测判断来源命中、拒答、引用有效性；`expected_answer_points` 先作为人工审阅字段。
+- 已新增 `scripts/evaluate_user_questions.py`。
+- 新增 `tests/test_evaluate_user_questions.py`，与 `tests/test_user_questions.py` 组合测试结果为 `6 passed`。
+- 修正边界：当 `expected_source_hit=no` 且没有期望标题/正文词时，不把空期望误判为 actual source hit。
+- 初次用户问题 baseline 为 `15/30 passed`，`refusal_matched=22/30`，`source_hit_matched=15/30`。
 
 ### Phase 3
 
-- 新增 vector topic anchor rerank。
-- `TOPIC_ANCHOR_BOOST` 试过 `0.25`，发现影响 Brain thermal_control，最终使用 `0.20`。
-- deterministic vector 提升到 13/15。
-- deterministic hybrid 保持 15/15，`regressed_keyword=0`。
-- deterministic Brain workflow 达到 18/18。
+- Phase 3 目标是针对用户问题失败项扩展跨语言 query expansion。
+- 失败主要集中在 freeze-thaw、creep、cost/emission、porosity、rock shear key 和 compactness 等术语没有被中文/英文互相增强。
+- 已扩展 `SYNONYM_RULES`，覆盖灌满/密实度、现场判断、界面/ITZ、徐变/creep、冻融/freeze-thaw、孔隙率/porosity、碳排放/成本/工期、钢纤维、剪力键等。
+- 已更新 Brain evidence confidence，让它可用扩展后的中英文证据词判断跨语言证据是否足够。
+- 新增 Brain workflow 测试，确认中文“孔隙率/抗压表现”可被英文 porosity/void/compressive behavior 证据支持。
+- 新增 keyword search 测试，覆盖徐变、孔隙率、剪力键三类阶段 11 术语。
+- 用户问题评测从 `15/30` 提升到 `25/30`，其中 `default_hybrid=10/10`、`keyword_baseline=10/10`、`vector_only=5/10`。
+- 标准回归保持稳定：vector 13/15、hybrid 15/15、chat 6/6、Brain workflow 18/18。
 
 ### Phase 4
 
-- `scripts/evaluate_model_configs.py` 新增 `failed` 与 `pass_rate` 字段。
-- `tests/test_evaluate_model_configs.py` 新增 pass_rate 与 schema 断言。
-- model config 结果能直接对比 deterministic 各 suite 的通过率。
-- 本地 `.env` 有真实模型配置时，`--include-real-config` 会查找 `data/evaluation/real/` 预计算结果；目录缺失时标记 `missing_results`，不是模型失败。
+- Phase 4 目标是补齐人工审阅抽样与 LLM-as-judge 离线设计。
+- 自动脚本能检查拒答、引用和来源命中，但 `expected_answer_points` 的覆盖质量仍需要人工或裁判模型判断。
+- 已新增 `docs/stage11_user_evaluation_plan.md`，说明自动评测、人工审阅、LLM-as-judge 的分工。
+- 已新增 `data/evaluation/user_question_review_samples.csv`，记录 `faithfulness`、`answer_coverage`、`citation_quality`、`reviewer_notes` 等审阅字段。
+- 抽样表覆盖默认混合通过样例、vector-only 失败样例、unsupported 拒答样例、中英混合样例和工程中文样例。
+- 新增 `tests/test_stage11_user_evaluation_plan.py`，确认文档路径、核心指标、真实 key 边界、CSV schema、语言覆盖和敏感信息约束。
+- Phase 4 测试结果：`10 passed`。
 
 ### Phase 5
 
-- deterministic chat：6/6。
-- deterministic agent：5/5。
-- deterministic Brain workflow：default_hybrid 6/6、keyword_baseline 6/6、vector_only 6/6。
-- deterministic model config：keyword 15/15、vector 13/15、hybrid 15/15、chat 6/6、agent 5/5、Brain workflow 18/18。
-- API 回归测试：search/vector/chat/agent 相关 `16 passed`。
-- 全量测试：`216 passed`。
-- 真实模型校准：
-  - `stage10_jina_vector_results.csv`：15/15。
-  - `stage10_jina_hybrid_results.csv`：15/15。
-  - `stage10_mimo_jina_chat_results.csv`：6/6。
-  - `stage10_mimo_jina_agent_results.csv`：5/5。
-  - `stage10_mimo_jina_brain_workflow_results.csv`：18/18。
-- 结论：真实 ChatModel 与 EmbeddingModel 对最终质量判断更有价值，但阶段回归不能默认依赖真实服务。阶段 10 的正确姿势是 deterministic 保证可复现，MIMO + Jina 作为真实体验校准。
+- Phase 5 目标是确认阶段 11 新增评测集、脚本、query expansion 和审阅设计没有破坏既有 RAG 链路。
+- deterministic 评测结果保持稳定：keyword 15/15、vector 13/15、hybrid 15/15、chat 6/6、agent 5/5、Brain workflow 18/18。
+- 用户问题评测保持 `25/30 passed`，`refusal_matched=30/30`，`source_hit_matched=25/30`。
+- `default_hybrid` 与 `keyword_baseline` 在用户问题集上均为 10/10，说明阶段 11 的跨语言词表增强对默认链路有效。
+- `vector_only` 在用户问题集上为 5/10，剩余失败均是 deterministic vector-only source hit mismatch；这是保留给下一阶段的真实向量或更强 rerank 校准问题。
+- API 回归测试通过：search/vector/chat/agent 相关测试 `16 passed`。
+- 全量测试通过：`230 passed`。
+- `scripts/evaluate_model_configs.py --include-real-config` 正常输出 deterministic baseline；real_config 因缺少本地真实评测结果文件标记为 `missing_results`，符合不依赖真实 API key 的边界。
 
 ### Phase 6
 
-- README、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md` 和 `AGENT.MD` 已同步阶段 10 完成状态。
-- Obsidian 本地知识库已新增阶段 10 阶段页、阶段 10 Phase 汇报索引、Phase 0-6 七篇 10 项汇报和关键知识点。
-- Obsidian 仍由 `.gitignore` 排除，不进入 Git 提交。
-- 最终 deterministic 关键评测结果：vector 13/15，hybrid 15/15，chat 6/6，agent 5/5，Brain workflow 18/18。
-- 最终全量测试结果：216 passed。
-- 阶段最终提交准备完成，`phase-10-complete` 将指向阶段 10 最终功能提交。
+- Phase 6 目标是把阶段 11 的成果同步到普通文档、Obsidian、本地过程文件和 Git 标记。
+- 已更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md` 和 `AGENT.MD`，把当前状态校准为阶段 11 完成。
+- 已新增 Obsidian 阶段页、阶段 11 Phase 汇报索引、Phase 0-6 小 Phase 汇报、阶段索引、阶段汇报索引、首页和 3 个知识点。
+- Obsidian 每篇 Phase 汇报均有 10 个固定小节；Git 状态确认 `obsidian-vault/` 仍被忽略。
+- 最终全量测试通过：`230 passed`。
+- 阶段最终提交和 `phase-11-complete` tag 将作为本阶段完成标识；tag 必须指向阶段 11 最终功能提交。
 
 ## Term Explanations
 
 | Term | Explanation |
 |---|---|
-| Evidence Confidence | 判断检索证据是否足够支撑回答的规则，不等同于模型自信 |
-| 低证据拒答 | 有召回结果但结果与问题缺少足够关联时拒绝回答 |
-| query-token 覆盖率 | 问题有效词在证据文本中出现的比例 |
-| topic anchor | 用问题中的核心主题词约束向量候选排序的轻量信号 |
-| vector topic drift | 向量召回到语义相关但主题不满足用户问题的片段 |
-| 真实模型校准 | 用真实 ChatModel/EmbeddingModel 评估体验与边界，而不是替代可复现测试 |
+| 真实用户问题评测集 | 更贴近真实提问方式的问题集合，用来测试系统能否处理口语、英文、中英混合和工程场景 |
+| language_type | 问题语言形态标签，例如中文口语、英文、中英混合、工程中文、unsupported |
+| expected_answer_points | 希望回答覆盖的技术要点，主要用于人工审阅和 LLM-as-judge |
+| Query Expansion | 把用户问题中的词扩展成中英文同义词，例如“徐变”扩成 `creep` |
+| 跨语言术语 gap | 用户和资料使用不同语言表达同一技术概念导致召回困难 |
+| topic anchor | 阶段 10 中用于约束 vector 候选排序的主题词信号 |
+| Faithfulness | 回答是否忠实于检索来源，没有编造资料外事实 |
+| Answer Coverage | 回答是否覆盖问题需要的核心技术点 |
+| Citation Quality | 引用编号是否能支持回答中的关键说法 |
+| LLM-as-judge | 让模型按 rubric 进行质量裁判；本阶段只用于离线抽检，不进入自动回归 |
 
 ## Issues Encountered
 
 | Issue | Evidence | Current handling |
 |---|---|---|
-| unsupported query 有检索结果导致不拒答 | 阶段 9.1 Brain workflow 失败 | Brain 生成前 evidence confidence 拦截 |
-| vector_only/filling_capacity 召回主题偏移 | 阶段 9.1 失败案例 | topic anchor rerank 改善候选排序 |
-| `mesoscopic_modeling` 跨语言术语 gap | Phase 1 失败案例 | 阶段 10 已由真实 Jina 15/15 修复；deterministic 留作后续 query expansion 方向 |
-| 真实模型评测不适合作为自动回归唯一依据 | 依赖 API key、网络、费用和供应商稳定性 | deterministic 与真实模型结果分开记录 |
+| README/docs 当前分支口径仍停在阶段 10 分支 | README 与 `docs/progress.md` 最新状态段落 | Phase 6 统一校准 |
+| 现有 chat 评测集规模较小 | `chat_queries.csv` 只有 6 条 | 阶段 11 新增独立用户问题集 |
+| Faithfulness/Answer Coverage 仍主要靠规则近似 | 阶段 6 evaluation plan | 阶段 11 新增人工审阅抽样和 LLM-as-judge 离线设计 |
+| deterministic vector-only 仍有主题漂移 | 用户问题评测 vector_only 5/10 | 保留为 honest baseline，并在下一阶段考虑更强 rerank 或真实 embedding 校准 |
 
 ## Resources
 
@@ -176,13 +180,18 @@
 - `docs/agent_design.md`
 - `docs/brain_workflow_design.md`
 - `docs/model_provider_evaluation.md`
-- `data/evaluation/real_rag_failure_cases.csv`
-- `data/evaluation/vector_results.csv`
-- `data/evaluation/hybrid_results.csv`
-- `data/evaluation/brain_workflow_results.csv`
-- `data/evaluation/model_config_results.csv`
-- `data/evaluation/stage10_jina_vector_results.csv`
-- `data/evaluation/stage10_jina_hybrid_results.csv`
-- `data/evaluation/stage10_mimo_jina_chat_results.csv`
-- `data/evaluation/stage10_mimo_jina_agent_results.csv`
-- `data/evaluation/stage10_mimo_jina_brain_workflow_results.csv`
+- `docs/stage11_user_evaluation_plan.md`
+- `app/services/retrieval/keyword_search.py`
+- `app/services/retrieval/vector_search.py`
+- `app/services/retrieval/hybrid_search.py`
+- `app/services/brain/workflow.py`
+- `scripts/evaluate_chat.py`
+- `scripts/evaluate_agent.py`
+- `scripts/evaluate_brain_workflow.py`
+- `scripts/evaluate_user_questions.py`
+- `data/evaluation/keyword_queries.csv`
+- `data/evaluation/chat_queries.csv`
+- `data/evaluation/agent_queries.csv`
+- `data/evaluation/user_questions.csv`
+- `data/evaluation/user_question_results.csv`
+- `data/evaluation/user_question_review_samples.csv`

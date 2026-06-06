@@ -488,7 +488,7 @@ data/evaluation/keyword_results.csv
 data/evaluation/vector_results.csv
 ```
 
-当前结果：
+阶段 8 完成时结果：
 
 ```text
 keyword baseline: 15/15 passed
@@ -1652,7 +1652,7 @@ keyword_baseline: 6/6 passed
 vector_only: 2/6 passed
 ```
 
-这个结果说明阶段 8 已经能对不同 Brain 配置做可复现比较，也说明后续真实 embedding、rerank 或 query rewrite 仍有提升空间。
+这个结果说明阶段 8 已经能对不同 Brain 配置做可复现比较；阶段 10 和阶段 11 已在此基础上进一步提升 Brain workflow 和真实用户问题评测质量。
 
 ### 阶段 8 完成标准
 
@@ -1969,6 +1969,121 @@ MIMO + Jina brain_workflow:
 ```
 
 架构结论：阶段 10 后，真实模型更适合做最终体验校准，deterministic provider 更适合做稳定回归。RAG 质量保护应优先放在 Brain 生成前，而不是只靠 prompt 要求模型“不要胡编”。
+
+## 阶段 11 真实用户问题评测集与跨语言质量提升
+
+阶段 11 不改变外部 API schema，而是在评测层、检索词表和 Brain 证据判断层补强真实用户问法覆盖。
+
+核心数据流：
+
+```text
+data/evaluation/user_questions.csv
+-> scripts/evaluate_user_questions.py
+-> BrainService.answer()
+-> keyword / vector / hybrid retrieval
+-> query expansion / topic anchor
+-> Brain evidence confidence
+-> answer / refusal / sources / citations
+-> data/evaluation/user_question_results.csv
+-> data/evaluation/user_question_review_samples.csv
+```
+
+### 用户问题评测集
+
+阶段 11 新增：
+
+```text
+data/evaluation/user_questions.csv
+scripts/evaluate_user_questions.py
+data/evaluation/user_question_results.csv
+tests/test_user_questions.py
+tests/test_evaluate_user_questions.py
+```
+
+`user_questions.csv` 与阶段 10 的 `chat_queries.csv` 分开维护，原因是两者用途不同：
+
+- `chat_queries.csv` 保留旧问答 baseline，适合长期稳定回归。
+- `user_questions.csv` 覆盖更接近真实提问的语言形态，例如中文口语、英文问题、中英混合术语、工程中文和 unsupported。
+
+新增字段中，`language_type` 用来标记问题语言形态，`expected_answer_points` 用来给人工审阅或 LLM-as-judge 判断回答覆盖度。
+
+### 跨语言 Query Expansion
+
+阶段 11 继续复用 `app/services/retrieval/keyword_search.py` 中的 `SYNONYM_RULES`：
+
+```text
+中文工程词
+-> 英文论文术语
+-> keyword search term expansion
+-> vector topic anchor
+-> evidence confidence expanded terms
+```
+
+这样做的好处是同一套可解释词表能服务三处能力：
+
+- `KeywordSearchService`：提高中文、英文、中英混合问法的关键词召回。
+- `VectorSearchService`：topic anchor 在向量候选内部做轻量主题重排。
+- `BrainService`：evidence confidence 使用扩展后的中英文证据词，避免中文问题与英文证据之间的误拒答。
+
+阶段 11 增强的术语包括：
+
+```text
+ITZ / 界面 / interfacial transition zone
+creep / 徐变 / 长期变形
+freeze-thaw / 冻融 / 抗冻
+porosity / void / 孔隙率 / 孔洞
+emission / cost / schedule / 碳排放 / 成本 / 工期
+steel fiber / 钢纤维
+rock shear keys / 剪力键
+compactness / compaction detection / 灌满 / 密实度
+```
+
+### 离线审阅设计
+
+阶段 11 新增：
+
+```text
+docs/stage11_user_evaluation_plan.md
+data/evaluation/user_question_review_samples.csv
+tests/test_stage11_user_evaluation_plan.py
+```
+
+自动评测适合稳定检查：
+
+```text
+Refusal Quality
+Source Hit
+Citation Quality
+Forbidden Terms
+```
+
+人工审阅或 LLM-as-judge 离线校准适合检查：
+
+```text
+Faithfulness
+Answer Coverage
+Citation Quality
+```
+
+LLM-as-judge 在本项目中只作为离线质量裁判设计，不进入 CI，不作为自动回归前提，也不要求真实 API key。
+
+### 阶段 11 评测结果
+
+```text
+keyword: 15/15
+vector: 13/15
+hybrid: 15/15
+chat: 6/6
+agent: 5/5
+brain_workflow: 18/18
+user_question_evaluation: 25/30
+  default_hybrid: 10/10
+  keyword_baseline: 10/10
+  vector_only: 5/10
+full tests: 230 passed
+```
+
+架构结论：阶段 11 把质量提升放在“评测输入更真实”和“术语增强更可解释”上，而不是改变 API 或引入黑盒 workflow。剩余的 vector-only 用户问题失败项保留为下一阶段真实 embedding、rerank 或人工审阅校准依据。
 
 ### 阶段 9 完成标准
 

@@ -1,6 +1,58 @@
 # 项目进度
 
-## 最新状态：2026-06-06
+## 最新状态：2026-06-06（阶段 11 完成）
+
+当前阶段：阶段 11，真实用户问题评测集与跨语言质量提升已完成。下一步建议进入阶段 12：把人工审阅抽样用于发布前质量校准，评估更强 rerank、真实 embedding 对比或审阅报告自动汇总；自动回归仍不要依赖真实 API key。
+
+当前关键证据：
+
+- 当前分支：`codex/phase-11-user-evaluation-query-expansion`。
+- 阶段 10 已合并到 `main`，`main` 最新阶段 10 合并提交为 `c0bf8d6 merge phase 10 rag quality calibration`。
+- `phase-10-complete -> 1454919`，未移动已有阶段 tag。
+- 阶段 11 新增 `data/evaluation/user_questions.csv`，包含 10 条真实用户风格问题，覆盖中文口语、英文、中英混合、工程中文和 unsupported。
+- 阶段 11 新增 `scripts/evaluate_user_questions.py` 与 `data/evaluation/user_question_results.csv`，可比较 `default_hybrid`、`keyword_baseline`、`vector_only`。
+- 阶段 11 扩展跨语言 query expansion，覆盖 ITZ/界面、creep/徐变、freeze-thaw/抗冻、porosity/孔隙率、emission/碳排放、steel fiber/钢纤维、rock shear key/剪力键等术语。
+- Brain evidence confidence 已支持扩展后的中英文证据词，降低中文问题被英文证据误判为低证据的风险。
+- 阶段 11 新增 `docs/stage11_user_evaluation_plan.md` 和 `data/evaluation/user_question_review_samples.csv`，用于人工审阅或 LLM-as-judge 离线校准。
+- 用户问题评测：`25/30 passed`，`refusal_matched=30/30`，`source_hit_matched=25/30`。
+- 用户问题分配置结果：`default_hybrid=10/10`、`keyword_baseline=10/10`、`vector_only=5/10`。
+- deterministic 回归：keyword 15/15、vector 13/15、hybrid 15/15、chat 6/6、agent 5/5、Brain workflow 18/18。
+- API 回归测试：16 个测试通过。
+- 全量测试：230 个测试通过。
+- 阶段 11 tag：`phase-11-complete`，阶段最终提交完成后指向该提交。
+
+阶段 11 完成内容：
+
+- 使用 Planning with Files 维护阶段 11 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 扩充真实用户问题评测集，并为每条问题记录 query_id、question、language_type、expected_source_hit、expected_refused、expected_answer_points 和 notes。
+- 新增用户问题评测脚本，输出通过率、失败原因、拒答匹配、来源命中、引用有效性和配置名。
+- 复用并扩展 `SYNONYM_RULES`，让中文工程词和英文论文术语互相增强。
+- 增强 Brain 证据置信度，让跨语言证据词参与低证据判断。
+- 建立人工审阅抽样表和 LLM-as-judge 离线设计，但不让 CI 或自动回归依赖真实模型裁判。
+- 保持 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query` API schema 不变。
+
+遗留问题：
+
+- deterministic `vector_only` 在真实用户问题集上仍有 5 条来源命中不匹配，主要是主题漂移或领域术语召回不足。
+- Faithfulness 与 Answer Coverage 仍需要人工审阅或离线 LLM-as-judge 校准，自动脚本只做稳定近似。
+- 真实 MIMO + Jina 可作为发布前校准，但依赖本地 `.env`、网络、限流和余额，不应成为自动测试前提。
+
+下一阶段任务：
+
+- 阶段 12 可把 `user_question_review_samples.csv` 真正用于人工审阅，形成发布前质量审阅报告。
+- 可比较真实 Jina embedding 与 deterministic vector 在用户问题集上的差异。
+- 可设计更强但仍可解释的 rerank 或 query rewrite，优先修复 vector-only 用户问题失败项。
+- 可把 LLM-as-judge 作为离线分析工具，但不要接入必跑回归。
+
+面试表达：
+
+```text
+阶段 11 我把 RAG 评测从标准测试题扩展到真实用户问法。新增用户问题集显式记录语言类型、期望来源、期望拒答和回答覆盖点，自动脚本比较 default_hybrid、keyword_baseline 和 vector_only 三种配置，稳定检查拒答、来源命中和引用有效性。
+
+优化上我没有做黑盒调参，而是复用已有 SYNONYM_RULES 做可解释的跨语言 query expansion，例如把“徐变”映射到 creep，把“孔隙率”映射到 porosity/void，把“剪力键”映射到 rock shear keys。由于 vector topic anchor 也复用这套词表，增强会同时影响关键词检索和向量候选排序。最后我补了人工审阅和 LLM-as-judge 的离线设计，把 Faithfulness、Answer Coverage 和 Citation Quality 从自动近似扩展到可抽样审阅。
+```
+
+## 历史状态：2026-06-06（阶段 10 完成）
 
 当前阶段：阶段 10，真实 RAG 质量校准与拒答边界优化已完成。下一步建议进入阶段 11：扩大真实用户问题评测集，并继续做跨语言 query expansion、人工审阅抽样或 LLM-as-judge 评测。
 

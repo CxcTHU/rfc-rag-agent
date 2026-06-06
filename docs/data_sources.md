@@ -422,3 +422,59 @@ data/evaluation/stage10_mimo_jina_brain_workflow_results.csv
 - `real_rag_failure_cases.csv` 是失败分析表，不包含受限全文，只保存可追溯标题、简短证据摘要和诊断。
 - 真实 API key 只允许放在本地 `.env`，不得写入源码、文档、CSV 或 Obsidian。
 - 自动回归继续优先使用 deterministic provider，避免把真实模型密钥、网络和余额变成测试前提。
+
+## 阶段 11 真实用户问题评测与数据来源边界
+
+阶段 11 进入真实用户问题评测集与跨语言质量提升，没有新增外部文献资料来源，也没有改变阶段 4 建立的 source registry 合规边界。
+
+阶段 11 复用现有数据：
+
+```text
+sources
+documents/chunks
+chunk_embeddings
+data/evaluation/keyword_queries.csv
+data/evaluation/chat_queries.csv
+data/evaluation/agent_queries.csv
+```
+
+阶段 11 新增或更新的评测产物：
+
+```text
+data/evaluation/user_questions.csv
+data/evaluation/user_question_results.csv
+data/evaluation/user_question_review_samples.csv
+docs/stage11_user_evaluation_plan.md
+```
+
+这些文件不是新的资料来源。它们只记录：
+
+- 用户问题。
+- 语言类型。
+- 期望来源命中。
+- 期望拒答状态。
+- 期望回答要点。
+- 自动评测通过或失败状态。
+- 来源标题、答案摘要、审阅字段和 judge prompt。
+
+阶段 11 的核心关系是：
+
+```text
+已有 sources / documents / chunks
+-> keyword / vector / hybrid retrieval
+-> user question evaluation
+-> cross-language query expansion
+-> manual review samples
+-> stage 11 quality conclusion
+```
+
+合规结论：
+
+- 阶段 11 不新增爬虫链路。
+- 阶段 11 不新增外部文献或受限全文。
+- `user_questions.csv` 是评测输入，不是资料库。
+- `user_question_results.csv` 和 `user_question_review_samples.csv` 是质量评测产物，不保存受限全文。
+- 审阅抽样表只保存来源标题、答案摘要、审阅字段和必要备注，不保存完整论文正文。
+- Jina、MIMO 或其他真实模型仍然是模型服务，不是资料来源。
+- 真实 API key 只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。
+- 自动回归继续使用 deterministic provider；真实模型只适合发布前质量校准或离线审阅。
