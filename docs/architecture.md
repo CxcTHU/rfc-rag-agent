@@ -12,6 +12,7 @@
 -> embedding 向量化
 -> 向量索引
 -> 用户提问
+-> Brain 中控层
 -> 检索召回
 -> 组织上下文
 -> 大模型回答
@@ -27,6 +28,7 @@ API 层：FastAPI 路由
 Schema 层：Pydantic 请求和响应模型
 Service 层：导入、切分、检索、问答业务逻辑
 Agent 层：受控工具封装、意图路由、工具调用记录和拒答约束
+Brain 层：RAG workflow 中控、RetrievalConfig、WorkflowConfig、step 记录和 chat/agent 复用
 DB 层：文档、chunk、问答日志元数据
 Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
 Model Provider 层：聊天模型和 embedding 模型适配
@@ -1516,6 +1518,154 @@ refused=1
 tool_failures=0
 citation_failures=0
 full tests=163 passed
+```
+
+## 阶段 8 总体框架
+
+阶段 8 的目标是把阶段 3-7 已经跑通的 RAG 问答、检索和 Agent 回答能力收拢到一个轻量 Brain 中控层。
+
+核心数据流：
+
+```text
+POST /chat 或 AgentToolbox.answer_with_citations
+-> CitationAnswerService 兼容门面
+-> RetrievalConfig / WorkflowConfig
+-> BrainService.answer()
+-> filter_history
+-> rewrite_query
+-> retrieve
+-> optional_rerank
+-> generate_answer
+-> answer / citations / sources / qa_logs
+```
+
+阶段 8 不改变外部 API 响应结构：
+
+```text
+POST /chat
+  仍然返回 question、answer、citations、sources、refused、retrieval_mode、model_provider、model_name
+
+POST /agent/query
+  仍然返回 answer、tool_calls、search_results、sources、citations、refused、reasoning_summary
+```
+
+### Brain 模块
+
+阶段 8 新增：
+
+```text
+app/services/brain/__init__.py
+app/services/brain/config.py
+app/services/brain/workflow.py
+app/services/brain/service.py
+```
+
+`BrainService` 的职责：
+
+- 接收用户问题和 `RetrievalConfig`。
+- 按 `WorkflowConfig` 执行 RAG workflow。
+- 复用 `KeywordSearchService`、`VectorSearchService`、`HybridSearchService`。
+- 复用 `build_rag_prompt`、`ChatModelProvider`、citation 提取和 `QuestionAnswerLogRepository`。
+- 返回 `BrainAnswerResult`，其中包含 answer、citations、sources、refused、retrieval_mode、model 信息和 workflow step 记录。
+
+Brain 不负责：
+
+- 不直接写 SQL。
+- 不联网爬取新资料。
+- 不自动执行 source reindex。
+- 不替代 source registry、documents/chunks 或 retrieval service。
+- 不引入复杂 LangGraph workflow。
+
+### 配置模型
+
+`RetrievalConfig` 控制一次问答的检索和生成参数：
+
+```text
+retrieval_mode: auto / keyword / vector / hybrid
+top_k
+min_score
+max_history
+rerank_top_n
+prompt_profile
+model_provider
+workflow_config
+```
+
+`WorkflowConfig` 默认步骤：
+
+```text
+filter_history -> rewrite_query -> retrieve -> optional_rerank -> generate_answer
+```
+
+第一版实现中：
+
+- `filter_history` 是历史过滤占位，用于后续多轮问答。
+- `rewrite_query` 是问题改写占位，用于后续 query expansion。
+- `retrieve` 复用现有检索服务。
+- `optional_rerank` 使用可解释截断，为后续真实 reranker 预留位置。
+- `generate_answer` 复用现有引用式问答链路。
+
+### 与 Quivr 的取舍
+
+本阶段借鉴 Quivr 的三个思想：
+
+- Brain 作为中控对象。
+- RetrievalConfig 作为检索与生成参数包。
+- WorkflowConfig 作为 RAG 步骤描述。
+
+但本项目不照搬 Quivr 代码，也不引入 LangGraph。阶段 8 的选择是先用普通 Python service 固定边界，让 `/chat` 和 Agent 共用一条可测试、可评测的工作流。
+
+### 配置化评测
+
+阶段 8 新增：
+
+```text
+scripts/evaluate_brain_workflow.py
+data/evaluation/brain_workflow_results.csv
+tests/test_evaluate_brain_workflow.py
+```
+
+评测比较三种配置：
+
+```text
+default_hybrid
+keyword_baseline
+vector_only
+```
+
+CSV 记录：
+
+- config 名称
+- configured / actual retrieval mode
+- top_k、min_score、rerank_top_n
+- workflow steps
+- workflow_succeeded
+- citations_valid
+- expected_source_hit
+- refusal_matched
+
+当前结果：
+
+```text
+default_hybrid: 4/6 passed
+keyword_baseline: 6/6 passed
+vector_only: 2/6 passed
+```
+
+这个结果说明阶段 8 已经能对不同 Brain 配置做可复现比较，也说明后续真实 embedding、rerank 或 query rewrite 仍有提升空间。
+
+### 阶段 8 完成标准
+
+```text
+docs/brain_workflow_design.md 已建立
+app/services/brain/ 已建立
+RetrievalConfig / WorkflowConfig 已实现
+BrainService 五步 workflow 已实现
+CitationAnswerService 已复用 Brain
+Agent answer_with_citations 已复用同一路径
+Brain 配置化评测脚本和结果 CSV 已生成
+search/vector/hybrid/chat/agent/sources/frontend 回归通过
+全量自动化测试通过：189 passed
 ```
 
 ### 阶段 7 完成标准

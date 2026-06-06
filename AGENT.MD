@@ -63,6 +63,7 @@ codex/phase-4-source-management
 codex/phase-5-frontend
 codex/phase-6-evaluation
 codex/phase-7-agent-tools
+codex/phase-8-brain-workflow
 ```
 
 协作规则：
@@ -207,7 +208,7 @@ response metadata
 
 ```text
 Brain
-  Quivr 中的知识库对象。本项目后续可以对应为 KnowledgeBase 或 Corpus，不一定直接命名为 Brain。
+  Quivr 中的知识库/中控对象。本项目阶段 8 已正式命名为 Brain，用来统一编排 RAG workflow，但不照搬 Quivr 代码。
 
 storage
   原始资料存储。本项目会对应 data/raw、documents 表、source registry。
@@ -250,7 +251,7 @@ workflow
 
 ### 当前对齐情况
 
-阶段 0 到阶段 7 当前已逐步对齐 Quivr 的工程思想：
+阶段 0 到阶段 8 当前已逐步对齐 Quivr 的工程思想：
 
 - 有清晰入口：`app/main.py`。
 - 有 API 分层：`app/api/health.py`、`app/api/documents.py`、`app/api/search.py`、`app/api/chat.py`、`app/api/sources.py`、`app/api/agent.py`。
@@ -261,6 +262,7 @@ workflow
 - 有 response metadata：`citations`、`sources`、`refused`、`model_provider`、`model_name`。
 - 有 source registry：`sources` 表、`SourceRegistryService`、来源同步脚本、sources API 和 reindex 入口。
 - 有受控 Agent 工具层：`AgentToolbox`、`AgentService`、`POST /agent/query`、`tool_calls` 和 `reasoning_summary`。
+- 有 Brain 中控层：`app/services/brain/`、`RetrievalConfig`、`WorkflowConfig`、`BrainService` 和可记录的 workflow steps。
 - 有自动化测试和评测脚本。
 - 有文档和知识库沉淀：`README.md`、`docs/progress.md`、`obsidian-vault/`。
 
@@ -289,6 +291,10 @@ workflow
 阶段 7
   已借鉴 Quivr workflow/tools 思路，但采用更轻量的只读工具封装和规则式编排
   已实现 search_knowledge、hybrid_search_knowledge、answer_with_citations、list_sources、get_source_detail
+
+阶段 8
+  已借鉴 Quivr Brain / RetrievalConfig / WorkflowConfig 思路，但采用普通 Python service
+  已实现 BrainService、RetrievalConfig、WorkflowConfig、filter_history、rewrite_query、retrieve、optional_rerank、generate_answer
 ```
 
 ### 使用 Quivr 作为参考时的规则
@@ -1163,7 +1169,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6 和阶段 7 已完成。阶段 7 当前在 `codex/phase-7-agent-tools` 分支完成开发、验证、文档收尾和 tag 标识。
+阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6、阶段 7 和阶段 8 已完成。阶段 8 当前在 `codex/phase-8-brain-workflow` 分支完成开发、验证、文档收尾和 tag 标识。
 
 阶段 4 最终提交和 tag：
 
@@ -1192,7 +1198,13 @@ tag: phase-6-complete
 tag: phase-7-complete
 ```
 
-不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete` 或 `phase-7-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+阶段 8 由以下 tag 标识：
+
+```text
+tag: phase-8-complete
+```
+
+不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete` 或 `phase-8-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
 阶段 6 已实现检索优化与评测闭环：
 
@@ -1242,6 +1254,31 @@ citation_failures: 0
 full tests: 163 passed
 ```
 
+阶段 8 已实现 Brain 中控层与 RAG Workflow 配置化：
+
+```text
+docs/brain_workflow_design.md
+app/services/brain/config.py
+app/services/brain/workflow.py
+app/services/brain/service.py
+CitationAnswerService -> BrainService
+Agent answer_with_citations -> CitationAnswerService -> BrainService
+scripts/evaluate_brain_workflow.py
+data/evaluation/brain_workflow_results.csv
+```
+
+阶段 8 评测结果：
+
+```text
+brain workflow: default_hybrid 4/6, keyword_baseline 6/6, vector_only 2/6
+keyword evaluation: 15/15 passed
+vector evaluation: 11/15 passed
+hybrid evaluation: 15/15 passed
+chat evaluation: 6/6 passed
+agent evaluation: 5/5 passed
+full tests: 189 passed
+```
+
 当前最权威的进度依据是：
 
 ```text
@@ -1258,3 +1295,5 @@ Agent 权限审计与写入工具安全设计
 ```
 
 阶段 7 已经把稳定 RAG 能力包装成受控工具，让 Agent 能调用 RAG 系统，但不能绕过来源、权限、引用和评测约束。后续如果加入 LLM 规划、写入工具或部署能力，必须继续保留只读优先、最大步数、显式权限、工具调用记录、引用溯源和评测回归。
+
+阶段 8 已经把 `/chat` 和 Agent `answer_with_citations` 收拢到 Brain workflow。后续如果加入真实模型、query rewrite、rerank 或更复杂 workflow，应优先扩展 `RetrievalConfig`、`WorkflowConfig` 和 `BrainService`，而不是重新在 chat 或 Agent 工具里复制编排逻辑。

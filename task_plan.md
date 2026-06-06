@@ -1,155 +1,169 @@
-# Task Plan: 阶段 7 - Agent 化
+# Task Plan: 阶段 8 - Brain 中控层与 RAG Workflow 配置化
 
 ## Goal
-在阶段 6 检索优化与评测已完成的基础上，进入阶段 7：Agent 化。本阶段目标不是引入复杂工作流框架，而是把已经稳定的 search、hybrid search、chat、sources 能力包装成受控、只读优先、可测试、可追踪的 Agent 工具调用链路。
+在阶段 7 Agent 化已完成并合并到 `main` 的基础上，进入阶段 8：Brain 中控层与 RAG Workflow 配置化。
 
-阶段 7 不做复杂 LangGraph workflow、不做登录系统、不做部署优化、不做联网爬虫扩展。重点是工具边界、工具选择、执行编排、引用和拒答约束、调用记录、评测回归和最小展示。
+本阶段参照 Quivr 的 Brain / RetrievalConfig / WorkflowConfig 架构思想，但不照搬 Quivr 代码，不引入复杂 LangGraph workflow。目标是把现有 search、vector、hybrid、chat、agent、sources 能力收拢到一个轻量 Brain 中控层，用配置描述 RAG 问答流程，让 `/chat` 和 Agent 的 `answer_with_citations` 工具复用同一套 workflow。
+
+阶段 8 不做登录系统、不做部署优化、不做大规模前端重构、不自动接入写入型 Agent 工具。重点是配置化、复用、可测试、可评测、可解释。
 
 ## Current Phase
-Phase 7 complete。阶段 7 Agent 化已完成代码、评测、前端最小展示、普通文档、Obsidian 本地知识库、最终提交与 `phase-7-complete` tag 收尾口径。
+Phase 7 complete。阶段 8 普通文档、Obsidian 本地知识库、最终验证准备、提交与 `phase-8-complete` tag 收尾已完成。
 
 ## Phases
 
-### Phase 0: 阶段 7 启动与规划文件校准
-- [x] 将线程标题修改为 `阶段7-Agent化`。
-- [x] 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-- [x] 阅读旧 `task_plan.md`、`findings.md`、`progress.md`，确认其记录阶段 6 工作记忆。
-- [x] 确认阶段 6 已完成，`phase-6-complete` 指向阶段 6 最终功能提交。
-- [x] 从阶段 6 稳定提交创建并切换到 `codex/phase-7-agent-tools`。
-- [x] 使用 Planning with Files 校准 `task_plan.md`、`findings.md`、`progress.md` 为阶段 7 工作记忆。
-- [x] 运行阶段启动最小基线检查。
-- **验证方式:** `git show phase-6-complete`、`git branch --show-current`、规划文件内容检查、必要的轻量测试。
+### Phase 0: 阶段 8 启动与规划校准
+- [x] 将线程标题修改为 `阶段8-Brain中控层与Workflow配置化`。
+- [x] 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/agent_design.md`。
+- [x] 阅读旧 `task_plan.md`、`findings.md`、`progress.md`，确认其记录阶段 7 工作记忆。
+- [x] 确认阶段 7 已完成并合并到 `main`。
+- [x] 确认 `phase-7-complete` 指向阶段 7 最终功能提交，且不移动已有 tag。
+- [x] 从阶段 7 合并后的 `main` 创建并切换到 `codex/phase-8-brain-workflow`。
+- [x] 参照 Quivr 的 Brain、RetrievalConfig、WorkflowConfig，校准阶段 8 规划文件。
+- [x] 运行阶段 8 起点基线测试。
+- **验证方式:** `git log --oneline --decorate -n 12`、`git show phase-7-complete`、`git branch --show-current`、规划文件内容检查、全量或轻量基线测试。
 - **Status:** complete
 
-### Phase 1: Agent 化设计文档与工具边界
-- [x] 新增 `docs/agent_design.md`，说明阶段 7 的 Agent 目标、工具边界、只读优先原则、失败处理、权限约束、日志字段和评测方式。
-- [x] 明确最小工具集：`search_knowledge`、`hybrid_search_knowledge`、`answer_with_citations`、`list_sources`、`get_source_detail`。
-- [x] 明确阶段 7 暂不自动执行写入型动作；`source reindex` 暂不作为自动工具。
-- [x] 增加文档断言测试，保证设计文档覆盖核心工具、只读约束和评测要求。
-- **验证方式:** `tests/test_agent_design.py`。
+### Phase 1: Brain Workflow 设计文档
+- [x] 新增 `docs/brain_workflow_design.md`。
+- [x] 说明 Brain 中控层目标、模块边界、与现有 RAG/Agent 的关系。
+- [x] 说明 `RetrievalConfig`、`WorkflowConfig`、workflow steps、配置化评测。
+- [x] 明确与 Quivr 的对应关系和取舍：借鉴 Brain/配置/workflow 思路，不照搬 LangGraph 和外部依赖。
+- [x] 增加文档断言测试，确保设计文档覆盖 Brain、RetrievalConfig、WorkflowConfig、filter_history、rewrite_query、retrieve、optional_rerank、generate_answer、chat/agent 复用。
+- **验证方式:** `tests/test_brain_workflow_design.py`。
 - **Status:** complete
 
-### Phase 2: Agent 工具抽象与只读工具实现
-- [x] 新增 `app/services/agent/` 模块。
-- [x] 实现工具输入、输出、工具调用记录的数据结构。
-- [x] 实现只读工具：关键词搜索、混合检索、引用式问答、来源列表、来源详情。
-- [x] 工具必须复用现有 service/repository，不直接绕过 `KeywordSearchService`、`HybridSearchService`、`CitationAnswerService`、`SourceRepository`。
-- [x] 补充工具层单元测试。
-- **验证方式:** `tests/test_agent_tools.py`。
+### Phase 2: Brain 配置模型
+- [x] 新增 `app/services/brain/` 模块。
+- [x] 实现配置模型：`RetrievalConfig`、`WorkflowConfig`、`WorkflowStepConfig` 或等价结构。
+- [x] 配置至少覆盖 `retrieval_mode`、`top_k`、`min_score`、`max_history`、`rerank_top_n`、`prompt_profile`、`model_provider`。
+- [x] 提供默认 workflow：`filter_history -> rewrite_query -> retrieve -> optional_rerank -> generate_answer`。
+- [x] 增加配置校验测试，覆盖默认值、非法参数、非法步骤、从 chat 参数构造配置。
+- **验证方式:** `tests/test_brain_config.py`。
 - **Status:** complete
 
-### Phase 3: Agent 编排服务
-- [x] 新增 Agent 编排服务，负责根据用户意图选择工具。
-- [x] 实现保守的规则式意图识别：问答类走 `answer_with_citations`，搜索类走 `hybrid_search_knowledge`，来源列表/详情类走 sources 工具。
-- [x] 增加最大工具调用步数限制，默认只执行 1 到 2 步。
-- [x] 返回结构化结果：answer、tool_calls、sources、citations、refused、reasoning_summary。
-- [x] 补充编排服务测试，覆盖问答、搜索、来源查询和拒答。
-- **验证方式:** `tests/test_agent_service.py`。
+### Phase 3: 轻量 RAG Workflow 与 BrainService
+- [x] 实现 `BrainService` 或等价中控服务。
+- [x] 实现 workflow steps：`filter_history`、`rewrite_query`、`retrieve`、`optional_rerank`、`generate_answer`。
+- [x] `filter_history` 和 `rewrite_query` 第一版允许 no-op，但必须返回结构化 step 记录。
+- [x] `retrieve` 复用现有 keyword/vector/hybrid service。
+- [x] `generate_answer` 复用 `build_rag_prompt`、`ChatModelProvider`、citation 提取和 qa_logs 记录。
+- [x] 返回兼容 `CitationAnswerResult` 的结果，并额外保留 workflow step 记录供内部评测使用。
+- [x] 增加 Brain/workflow 单元测试。
+- **验证方式:** `tests/test_brain_service.py`、`tests/test_brain_workflow.py`。
 - **Status:** complete
 
-### Phase 4: Agent API 与现有 API 回归
-- [x] 新增 `app/schemas/agent.py` 和 `app/api/agent.py`。
-- [x] 实现 `POST /agent/query`。
-- [x] 在 `app/main.py` 注册 Agent API。
-- [x] 确认 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`/sources` 既有 API 不被破坏。
-- [x] 补充 API 测试。
-- **验证方式:** `tests/test_agent_api.py` 以及相关旧 API 测试。
+### Phase 4: Chat 与 Agent 复用 Brain Workflow
+- [x] 改造 `CitationAnswerService`，让 `answer()` 通过 Brain/workflow 执行，而不是在自身内部直接串联所有步骤。
+- [x] 保持 `CitationAnswerResult`、`POST /chat` 响应结构和既有行为不破坏。
+- [x] 改造 Agent 的 `answer_with_citations` 工具，让它通过改造后的 `CitationAnswerService` 复用 Brain/workflow。
+- [x] 保持 Agent 工具调用记录、引用、拒答和 `reasoning_summary` 不退化。
+- [x] 补充 chat/agent 回归测试。
+- **验证方式:** `tests/test_answer_service.py`、`tests/test_chat_api.py`、`tests/test_agent_tools.py`、`tests/test_agent_api.py`。
 - **Status:** complete
 
-### Phase 5: Agent 评测脚本与回归结果
-- [x] 新增 `data/evaluation/agent_queries.csv` 或复用 chat/keyword queries 生成 Agent 评测输入。
-- [x] 新增 `scripts/evaluate_agent.py`，输出 `data/evaluation/agent_results.csv`。
-- [x] 验证 Agent 不降低阶段 6 的检索、引用和拒答质量。
-- [x] 记录工具调用数量、使用工具、引用有效性、拒答匹配和期望来源命中。
+### Phase 5: 配置化评测
+- [x] 新增配置化评测输入或配置定义，至少比较 `default_hybrid`、`keyword_baseline`、`vector_only`。
+- [x] 新增 `scripts/evaluate_brain_workflow.py` 或扩展现有评测脚本。
+- [x] 输出 `data/evaluation/brain_workflow_results.csv`。
+- [x] 评测字段记录 config 名称、workflow steps、实际检索模式、来源命中、citation 有效性、拒答匹配。
 - [x] 补充评测脚本测试。
-- **验证方式:** `tests/test_evaluate_agent.py`、运行 `scripts/evaluate_agent.py`。
+- **验证方式:** `tests/test_evaluate_brain_workflow.py`、运行 `scripts/evaluate_brain_workflow.py`。
 - **Status:** complete
 
-### Phase 6: 前端最小展示与体验核验
-- [x] 判断是否需要在现有工作台展示 Agent 问答入口。
-- [x] 如需要，只做最小前端更新：Agent 问题输入、回答、工具调用记录和引用来源展示。
-- [x] 不重构前端布局，不引入前端构建链。
-- [x] 补充前端静态入口测试，必要时做浏览器 smoke check。
-- **验证方式:** `tests/test_frontend_app.py` 和浏览器检查。
+### Phase 6: 回归验证与前端/API 边界检查
+- [x] 确认阶段 8 不破坏 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`/sources`。
+- [x] 复跑 keyword、vector、hybrid、chat、agent、source 评测。
+- [x] 运行前端静态测试；本阶段不做大规模前端重构。
+- [x] 如需要，只在 README/docs 中说明 Brain workflow，不强行新增前端配置面板。
+- **验证方式:** 相关 API 测试、评测脚本、`tests/test_frontend_app.py`。
 - **Status:** complete
 
 ### Phase 7: 阶段收尾文档、Obsidian、提交与 tag
-- [x] 复跑 Agent 评测、阶段 6 评测和全量测试。
-- [x] 更新 `README.md`，说明阶段 7 Agent 能力、API、启动方式、测试方式和下一阶段。
-- [x] 更新 `docs/progress.md`，记录阶段 7 完成内容、验证方式、遗留问题和面试表达。
-- [x] 更新 `docs/architecture.md`，补充 Agent 工具层、编排服务、API 和评测链路。
-- [x] 更新 `docs/data_sources.md`，说明阶段 7 是否改变数据来源边界；如未改变，要明确 Agent 只读工具不新增外部来源。
-- [x] 判断并更新 `AGENT.MD`，将后续默认起点校准到阶段 7 完成后的下一步。
-- [x] 开发、测试和普通文档完成后，再统一更新 Obsidian 本地知识库：阶段 7 页、阶段索引、首页、分类页、知识点、Phase 0 到最终 Phase 汇报。
+- [x] 更新 `README.md`，说明阶段 8 Brain/workflow 能力、评测方式、启动和测试方式。
+- [x] 更新 `docs/progress.md`，记录阶段 8 完成内容、验证方式、遗留问题、下一阶段任务和面试表达。
+- [x] 更新 `docs/architecture.md`，补充 Brain 层、配置模型、workflow 数据流和 chat/agent 复用关系。
+- [x] 更新 `docs/data_sources.md`，说明阶段 8 不新增外部资料来源，新增评测 CSV 只是评测产物。
+- [x] 判断并更新 `AGENT.MD`，将后续默认起点校准到阶段 8 完成后的下一步。
+- [x] 统一更新 Obsidian 本地知识库：阶段 8 页、阶段汇报索引、Phase 0 到最终 Phase 汇报、分类页和知识点。
+- [x] 复跑全量测试和阶段评测。
 - [x] 创建阶段最终功能提交。
-- [x] 创建 `phase-7-complete` tag，确保 tag 指向阶段 7 最终功能提交。
+- [x] 创建 `phase-8-complete` tag，确保 tag 指向阶段 8 最终功能提交。
 - **验证方式:** 全量测试、评测脚本、Obsidian 10 项模板检查、Git tag 检查。
 - **Status:** complete
 
-## Final Verification Summary
+## Final Verification Targets
 
-| Check | Result |
-|-------|--------|
-| Agent evaluation | 5/5 passed, refused=1, tool_failures=0, citation_failures=0 |
-| Keyword baseline | 15/15 passed |
-| Vector baseline | 11/15 passed |
-| Hybrid search | 15/15 passed, rescued_vector=4, regressed_keyword=0 |
-| Chat evaluation | 6/6 passed |
-| Source metrics | total_sources=125, merged_duplicates=14 |
-| Frontend static tests | 3 passed |
-| Browser smoke check | Agent panel answered with `hybrid_search_knowledge`, returned 5 hybrid results |
-| Full tests | 163 passed |
-| Obsidian Phase reports | Phase 0 through Phase 7 each contain 10 required sections |
+| Check | Expected |
+|-------|----------|
+| Design doc | `docs/brain_workflow_design.md` exists and covers Brain/config/workflow/Quivr tradeoffs |
+| Brain module | `app/services/brain/` exists with config and service/workflow |
+| Config coverage | retrieval_mode/top_k/min_score/max_history/rerank_top_n/prompt_profile/model_provider |
+| Workflow steps | filter_history/rewrite_query/retrieve/optional_rerank/generate_answer |
+| Chat reuse | `/chat` still works and goes through Brain/workflow via `CitationAnswerService` |
+| Agent reuse | `answer_with_citations` still works and uses the shared answer path |
+| Evaluation | config comparison output exists for default_hybrid/keyword_baseline/vector_only |
+| Regression | keyword/vector/hybrid/chat/agent/source/frontend tests and evaluations remain green |
+| Full tests | `python -m pytest -q` passes |
+| Tag | `phase-8-complete` points to final phase 8 functionality commit |
 
 ## Key Questions
-1. 阶段 7 是否引入 LangGraph？
-   - 初步答案：不引入。当前目标是受控工具调用链路，先用轻量规则式编排保证可测试和可解释。
-2. Agent 工具是否允许写入？
-   - 初步答案：阶段 7 只读优先。source reindex 属于写入型动作，除非有明确请求字段和测试约束，否则不自动执行。
-3. Agent 默认调用哪个检索？
-   - 初步答案：优先 hybrid search，因为阶段 6 已证明 hybrid 在当前评测集上优于 deterministic vector 且不退化 keyword baseline。
-4. Agent 评测如何证明不退化？
-   - 初步答案：复用阶段 6 的检索与 chat 评测思想，记录工具调用、来源命中、citation 有效性和拒答匹配。
+
+1. 阶段 8 是否引入 LangGraph？
+   - 初步答案：不引入。先用轻量 Python service 表达 workflow，保留后续扩展点。
+2. 中控层为什么叫 Brain？
+   - 初步答案：用户已确认使用 Brain，更简洁，也与 Quivr 的核心抽象对齐。
+3. Brain 是否替代现有 service？
+   - 初步答案：不替代。Brain 作为中控层组合既有 retrieval、generation、logging、agent 能力，降低重复编排。
+4. `filter_history` 和 `rewrite_query` 第一版是否必须真的智能化？
+   - 初步答案：不必须。第一版 no-op，但要有清晰 step 输出和测试，证明扩展点存在。
+5. 阶段 8 是否接真实模型？
+   - 初步答案：不作为主目标。阶段 8 先把配置和 workflow 稳住，为阶段 9 真实模型接入铺路。
 
 ## Decisions Made
+
 | Decision | Rationale |
 |----------|-----------|
-| 从 `phase-6-complete` 创建 `codex/phase-7-agent-tools` | 阶段 6 已完成并 tag 标识，阶段 7 应从稳定 RAG 质量基线出发 |
-| 不移动 `phase-6-complete` | 阶段 tag 必须指向对应阶段最终功能提交 |
-| 阶段 7 采用只读工具优先 | 降低风险，避免 Agent 自动执行 reindex 等写入动作 |
-| 不引入复杂 workflow 框架 | 当前项目更需要可解释、可测试的最小 Agent 工具链 |
-| Agent 工具复用既有 service | 保证不绕过 sources、documents/chunks、hybrid search、chat citation 和日志约束 |
-| 每个 Phase 后更新三份规划文件 | Planning with Files 是本阶段工作记忆和恢复依据 |
+| 目标分支为 `codex/phase-8-brain-workflow` | 与阶段命名和用户要求一致 |
+| 从 `main` 创建阶段 8 分支 | 阶段 7 已合并到 main，符合阶段切换规则 |
+| 不移动 `phase-7-complete` | 阶段 tag 必须稳定指向阶段最终功能提交 |
+| 中控层命名为 Brain | 用户明确要求，且与 Quivr 架构概念一致 |
+| 第一版 workflow 不引入 LangGraph | 保持依赖和行为简单可测，先沉淀边界 |
+| 配置模型放在 `app/services/brain/` | Brain 是 service 层中控，不应该放在 API 或 DB 层 |
+| Chat/Agent 共享 `CitationAnswerService` 入口 | 保持外部 API 不变，同时把内部编排迁移到 Brain/workflow |
 
 ## Planned File Changes
+
 | Area | Planned Files |
 |------|---------------|
-| Agent 设计 | `docs/agent_design.md`, `tests/test_agent_design.py` |
-| Agent service | `app/services/agent/*.py` |
-| Agent API/schema | `app/api/agent.py`, `app/schemas/agent.py`, `app/main.py` |
-| Agent 评测 | `scripts/evaluate_agent.py`, `data/evaluation/agent_queries.csv`, `data/evaluation/agent_results.csv` |
-| 测试 | `tests/test_agent_tools.py`, `tests/test_agent_service.py`, `tests/test_agent_api.py`, `tests/test_evaluate_agent.py` |
-| 前端最小展示 | `app/frontend/index.html`, `app/frontend/static/app.js`, `app/frontend/static/styles.css`, `tests/test_frontend_app.py` |
-| 阶段文档 | `README.md`, `docs/progress.md`, `docs/architecture.md`, `docs/data_sources.md`, `AGENT.MD` |
-| Obsidian | `obsidian-vault/首页.md`, `obsidian-vault/阶段索引.md`, `obsidian-vault/阶段/阶段 7 - Agent 化.md`, `obsidian-vault/阶段汇报/阶段 7 - Agent 化/*.md`, `obsidian-vault/知识点/*.md`, `obsidian-vault/分类/*.md` |
+| Brain 设计 | `docs/brain_workflow_design.md`, `tests/test_brain_workflow_design.py` |
+| Brain service | `app/services/brain/__init__.py`, `app/services/brain/config.py`, `app/services/brain/workflow.py`, `app/services/brain/service.py` |
+| Generation integration | `app/services/generation/answer_service.py` |
+| Agent integration | `app/services/agent/tools.py` |
+| Evaluation | `scripts/evaluate_brain_workflow.py`, `data/evaluation/brain_workflow_results.csv`, optional config/query CSV |
+| Tests | `tests/test_brain_config.py`, `tests/test_brain_service.py`, `tests/test_brain_workflow.py`, `tests/test_evaluate_brain_workflow.py`, existing chat/agent regression tests |
+| Stage docs | `README.md`, `docs/progress.md`, `docs/architecture.md`, `docs/data_sources.md`, `AGENT.MD` |
+| Obsidian | `obsidian-vault/阶段/阶段 8 - Brain 中控层与 Workflow 配置化.md`, phase reports, categories, knowledge notes |
 
 ## Term Explanations
+
 | Term | Explanation |
 |------|-------------|
-| Agent | 能根据用户意图选择工具并组织结果的编排层。本项目阶段 7 先做轻量、受控、只读优先的 Agent |
-| Tool | Agent 可调用的能力包装，例如混合检索、引用式问答、来源查询 |
-| Orchestration | 编排。决定调用哪个工具、调用几步、如何汇总结果 |
-| Tool call log | 工具调用记录。保存工具名、输入摘要、输出摘要、成功状态和错误信息，便于排查 |
-| Read-only tool | 只读工具。只查询资料和来源，不修改数据库或文件 |
-| reasoning_summary | 可审计摘要。给用户说明本次为什么调用这些工具，但不暴露内部推理细节 |
+| Brain | 本项目阶段 8 的中控层，统一组织资料库检索、配置、问答、日志和 Agent 复用链路 |
+| RetrievalConfig | 检索与问答配置，控制检索模式、召回数量、分数阈值、历史数量、重排数量和 prompt 方案 |
+| WorkflowConfig | 工作流配置，描述 RAG 每一步的顺序 |
+| workflow step | RAG 流程中的单个步骤，例如过滤历史、改写问题、检索、重排、生成回答 |
+| no-op | 空操作。第一版保留步骤位置但不改变输入，用于稳定扩展点 |
+| rerank | 重排。先召回候选资料，再重新排序，提高最终上下文质量 |
 
 ## Errors Encountered
+
 | Error | Attempt | Resolution |
 |-------|---------|------------|
 | 无 | 0 | 暂无 |
 
 ## Notes
-- 本文件由 Planning with Files 维护，是阶段 7 的工作记忆。
-- 每个 Phase 完成后，必须先更新 `task_plan.md`、`findings.md`、`progress.md`；对话中只保留简短进度说明，不输出完整 10 项 Phase 汇报。
-- 阶段 7 开发过程中暂不写入 Obsidian 小 Phase 汇报；所有开发、测试和普通文档收尾完成后，再按 `obsidian-vault/模板/Phase 汇报模板.md` 统一补齐每个 Phase 的 Obsidian 笔记。
-- 阶段 7 的重点是让 Agent 调用 RAG 系统，但不能绕过来源、权限、引用、拒答和评测约束。
+- 本文件由 Planning with Files 维护，是阶段 8 的工作记忆。
+- 每个 Phase 完成后，必须先更新 `task_plan.md`、`findings.md`、`progress.md`。
+- 阶段 8 开发过程中暂不写入 Obsidian 小 Phase 汇报；全部开发、测试和普通文档收尾完成后，再统一补齐每个 Phase 的 Obsidian 笔记。
+- 阶段 8 的重点是让 RAG 编排从 service 内部隐式流程变成 Brain/workflow 的显式可配置流程。
