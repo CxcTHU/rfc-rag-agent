@@ -34,7 +34,14 @@ def get_agent_chat_model_provider() -> ChatModelProvider:
 
 def get_agent_embedding_provider() -> EmbeddingProvider:
     settings = get_settings()
-    return create_embedding_provider(settings.embedding_provider)
+    return create_embedding_provider(
+        provider_name=settings.embedding_provider,
+        model_name=settings.embedding_model_name,
+        api_key=settings.embedding_api_key,
+        base_url=settings.embedding_base_url,
+        dimension=settings.embedding_dimension or None,
+        timeout_seconds=settings.embedding_timeout_seconds,
+    )
 
 
 @router.post("/query", response_model=AgentQueryResponse)

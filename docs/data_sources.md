@@ -327,3 +327,33 @@ sources
 - Brain 不自动执行 `source reindex` 等写入型动作。
 - `brain_workflow_results.csv` 是评测产物，不是新的资料来源。
 - 受限全文仍只保存在本地授权环境中，不公开分发。
+
+## 阶段 9 真实模型接入与数据来源边界
+
+阶段 9 进入真实模型接入与模型评测，没有新增外部文献资料来源，也没有改变阶段 4 建立的 source registry 合规边界。
+
+阶段 9 新增的是模型服务配置和评测产物：
+
+```text
+docs/model_provider_evaluation.md
+scripts/evaluate_model_configs.py
+data/evaluation/model_config_results.csv
+```
+
+真实模型 API 不是资料来源。它只用于：
+
+```text
+chunks -> embedding vectors
+prompt/context -> chat answer
+evaluation results -> quality comparison
+```
+
+阶段 9 不保存真实模型服务返回的受限文献全文；`model_config_results.csv` 只保存配置名、评测项、通过数、总数、provider/model 名称和 skipped reason。
+
+合规结论：
+
+- `sources` 仍然负责资料来源、可信度、权限和状态。
+- `documents/chunks` 仍然只保存已导入的本地资料或题录卡片。
+- `chunk_embeddings` 是由 chunks 派生出的可重建索引数据。
+- 真实 API key 只允许放在本地 `.env`，不得提交到 Git。
+- 阶段 9 没有公开分发受限全文，也没有引入新的爬虫链路。

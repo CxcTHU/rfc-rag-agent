@@ -2,12 +2,12 @@
 
 ## 最新状态：2026-06-06
 
-当前阶段：阶段 8，Brain 中控层与 RAG Workflow 配置化已完成。下一步建议在用户确认后进入阶段 9，优先考虑真实模型接入与模型评测，或进入 Agent 权限审计、部署工程化准备。
+当前阶段：阶段 9，真实模型接入与模型评测已完成。下一步建议在用户确认后进入阶段 10，优先考虑 Agent 权限审计与写入工具安全设计，或进入部署工程化、日志观测和更大规模用户问题评测。
 
 当前关键证据：
 
-- `task_plan.md` 当前阶段为 `Phase 7 complete`，阶段 8 已进入收尾。
-- 当前分支：`codex/phase-8-brain-workflow`。
+- `task_plan.md` 当前阶段为 `Phase 6 complete`，阶段 9 已完成收尾。
+- 当前分支：`codex/phase-9-real-model-evaluation`。
 - 阶段 3 tag：`phase-3-complete -> 7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954`，未移动。
 - 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 - 阶段 4 tag：`phase-4-complete -> b044459b9b8c2153e9225daa55af5d82cdcdb282`。
@@ -19,6 +19,8 @@
 - 阶段 7 tag：`phase-7-complete`。
 - 阶段 8 最终功能提交：由 `phase-8-complete` tag 指向的提交标识。
 - 阶段 8 tag：`phase-8-complete`。
+- 阶段 9 最终功能提交：由 `phase-9-complete` tag 指向的提交标识。
+- 阶段 9 tag：`phase-9-complete`。
 - 阶段 4 分支和 tag 已推送到 GitHub。
 - `sources` 来源登记表已实现。
 - `SourceRepository` 和 `SourceRegistryService` 已实现。
@@ -65,18 +67,96 @@
 - `scripts/evaluate_brain_workflow.py` 已新增。
 - `data/evaluation/brain_workflow_results.csv` 已生成。
 - Brain workflow 评测：18 次 config-query run；`keyword_baseline=6/6`，`default_hybrid=4/6`，`vector_only=2/6`。
+- `docs/model_provider_evaluation.md` 已新增。
+- `OpenAICompatibleEmbeddingProvider` 已实现，支持兼容 `/embeddings` 的真实 embedding API。
+- `.env.example` 已补齐真实 embedding provider 配置字段：model、API key、base URL、dimension、timeout。
+- `scripts/build_vector_index.py` 已支持 provider、model、API key、base URL、dimension、timeout 参数。
+- `scripts/evaluate_model_configs.py` 已新增。
+- `data/evaluation/model_config_results.csv` 已生成。
+- 模型配置评测：deterministic baseline completed；real_config 因本地未配置真实模型密钥和参数而 skipped。
 - 前端工作台已实现：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、聊天问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口。
 - 浏览器验证：桌面加载 sources=125、documents=136、chunks=997；移动视口 390x844 无横向溢出。
 - 阶段 6 浏览器 smoke check：搜索模式包含 `keyword/vector/hybrid`，聊天检索模式包含 `auto/hybrid/vector/keyword`。
 - 阶段 7 浏览器 smoke check：Agent 面板提交“检索 filling capacity 相关资料”后状态为 `answered`，工具调用为 `hybrid_search_knowledge`，返回 5 条混合检索结果。
-- 全量测试：189 个测试通过。
+- 全量测试：205 个测试通过。
 
 下一步：
 
-- 阶段 8 分支 `codex/phase-8-brain-workflow` 已完成核心开发、验证和普通文档收尾。
-- 阶段 8 收尾时确认 `phase-8-complete` tag 指向阶段 8 最终功能提交。
-- 阶段 8 之后，建议先由用户确认阶段 9 方向：真实模型接入与模型评测、Agent 权限审计、部署工程化或更大规模用户问题评测。
-- 不要移动已有阶段 tag：`phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`。
+- 阶段 9 分支 `codex/phase-9-real-model-evaluation` 已完成核心开发、验证和普通文档收尾。
+- 阶段 9 收尾时确认 `phase-9-complete` tag 指向阶段 9 最终功能提交。
+- 阶段 9 之后，建议先由用户确认阶段 10 方向：Agent 权限审计与写入工具安全设计、部署工程化或更大规模用户问题评测。
+- 不要移动已有阶段 tag：`phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`。
+
+## 2026-06-06 阶段 9 完成记录：真实模型接入与模型评测
+
+当前分支：`codex/phase-9-real-model-evaluation`
+
+当前阶段：阶段 9 已完成。下一步建议由用户确认阶段 10 方向：Agent 权限审计与写入工具安全设计、部署工程化或更大规模用户问题评测。
+
+阶段最终功能提交：由 `phase-9-complete` tag 指向的提交标识。
+
+阶段 tag：`phase-9-complete`。
+
+已完成：
+
+- 使用 Planning with Files 维护阶段 9 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 确认阶段 8 已完成并合并到 `main`，且 `phase-8-complete` tag 指向阶段 8 最终功能提交，未移动已有阶段 tag。
+- 新增 `docs/model_provider_evaluation.md`，明确真实模型 provider 边界、配置字段、向量索引重建、评测对比和阶段边界。
+- 新增 `OpenAICompatibleEmbeddingProvider`，支持兼容 OpenAI `/embeddings` 的真实 embedding API。
+- 扩展 `create_embedding_provider()`，兼容旧调用，同时支持 provider/model/api_key/base_url/dimension/timeout 参数。
+- 更新 `.env.example` 和 `app/core/config.py`，补齐真实 embedding 配置字段。
+- 更新 search/chat/agent API 的 embedding provider dependency，让 API 能消费真实 embedding 配置但不改变响应结构。
+- 增强 `scripts/build_vector_index.py`，支持 provider、model、API key、base URL、dimension 和 timeout 参数。
+- 新增 `scripts/evaluate_model_configs.py` 和 `data/evaluation/model_config_results.csv`，汇总 deterministic baseline 与可选真实模型配置。
+- 新增测试：`tests/test_model_provider_evaluation_design.py`、`tests/test_build_vector_index.py`、`tests/test_evaluate_model_configs.py`，并扩展 `tests/test_embedding_provider.py`。
+
+阶段 9 设计结论：
+
+- `ChatModelProvider` 和 `EmbeddingProvider` 是模型隔离层，业务 service 不直接依赖具体模型 API。
+- deterministic provider 继续作为默认实现，保证本地测试和无密钥环境稳定。
+- 真实 embedding provider 采用 OpenAI-compatible `/embeddings` 边界，便于接入国产兼容模型服务。
+- 切换真实 embedding 后必须按 provider/model/dimension 重建向量索引，否则 vector/hybrid search 查不到对应索引。
+- 本地未配置真实 API key 时，模型配置评测记录 `real_config=skipped`，不让阶段验证失败。
+
+验证结果：
+
+- `python -m pytest tests\test_model_provider_evaluation_design.py -q`：2 个测试通过。
+- `python -m pytest tests\test_embedding_provider.py -q`：12 个测试通过。
+- `python -m pytest tests\test_embedding_provider.py tests\test_vector_index_service.py tests\test_build_vector_index.py -q`：20 个测试通过。
+- `python scripts\build_vector_index.py --limit 1 --batch-size 1`：默认 deterministic 索引路径正常输出。
+- `python -m pytest tests\test_evaluate_model_configs.py -q`：6 个测试通过。
+- `python scripts\evaluate_model_configs.py --include-real-config`：12 行输出；deterministic baseline completed，real_config skipped。
+- `python scripts\evaluate_keyword_search.py`：keyword 15/15 通过。
+- `python scripts\evaluate_vector_search.py`：vector 11/15 通过。
+- `python scripts\evaluate_hybrid_search.py`：hybrid 15/15 通过，`rescued_vector=4`，`regressed_keyword=0`。
+- `python scripts\evaluate_chat.py`：chat 6/6 通过，`refused=1`，`citation_failures=0`。
+- `python scripts\evaluate_agent.py`：agent 5/5 通过，`refused=1`，`tool_failures=0`，`citation_failures=0`。
+- `python scripts\evaluate_brain_workflow.py`：18 次 config-query run；`keyword_baseline=6/6`，`default_hybrid=4/6`，`vector_only=2/6`。
+- `python scripts\evaluate_sources.py`：`total_sources=125`，`merged_duplicates=14`。
+- `python -m pytest tests\test_search_api.py tests\test_vector_search_api.py tests\test_chat_api.py tests\test_agent_api.py -q`：16 个测试通过。
+- `python -m pytest -q`：205 个测试通过。
+
+遗留问题：
+
+- 当前真实模型配置未在本机运行，因为 `.env` 没有真实 API key、base URL、model 和 embedding dimension。
+- 真实 embedding 的质量、成本、速度和稳定性需要用户本地配置后复跑同一批评测来量化。
+- 当前没有自动后台索引任务；切换真实 embedding 后仍需手动运行 `scripts/build_vector_index.py`。
+
+下一阶段任务：
+
+- 可进入 Agent 权限审计与写入工具安全设计。
+- 可进入部署工程化、日志观测和运行说明完善。
+- 可扩大用户问题评测集，覆盖更多工程案例和中文问法。
+
+面试表达：
+
+```text
+阶段 9 我补齐了真实模型接入和评测闭环，但没有把系统默认切到真实模型。
+
+我先复核了 ChatModelProvider 和 EmbeddingProvider 的边界：业务层只依赖 provider 协议，不直接依赖具体模型 SDK。Chat 侧已有 OpenAI-compatible provider，所以本阶段重点补齐 OpenAICompatibleEmbeddingProvider，支持兼容 /embeddings 的真实向量接口，同时保留 deterministic provider 作为默认测试实现。
+
+工程上我让 .env、API 依赖和 build_vector_index.py 都能传入 provider、model、API key、base URL、dimension 和 timeout。chunk_embeddings 已经按 provider/model/dimension/content_hash 保存，所以真实模型索引和本地索引可以并存，不会误用。评测上我新增 evaluate_model_configs.py，把 keyword、vector、hybrid、chat、agent 和 brain workflow 的结果汇总成模型配置对比表；没有真实 API key 时 real_config 会被标记为 skipped，而不是让测试失败。最终全量测试 205 个通过，说明真实模型边界已经接入，但本地稳定性仍由 deterministic baseline 保证。
+```
 
 ## 2026-06-06 阶段 8 完成记录：Brain 中控层与 RAG Workflow 配置化
 

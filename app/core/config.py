@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     embedding_model_name: str = ""
     embedding_api_key: str = ""
     embedding_base_url: str = ""
+    embedding_dimension: int = 0
+    embedding_timeout_seconds: float = 30.0
 
     model_config = SettingsConfigDict(
         env_file=".env",
