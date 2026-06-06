@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
-from app.services.brain.workflow import build_retrieval_outcome, extract_citations
+from app.services.brain.workflow import (
+    build_retrieval_outcome,
+    evaluate_evidence_confidence,
+    extract_citations,
+)
 
 
 @dataclass(frozen=True)
@@ -42,6 +46,33 @@ def test_build_retrieval_outcome_refuses_when_no_results_meet_threshold() -> Non
     assert outcome.results == []
     assert outcome.used_retrieval_mode == "keyword"
     assert "minimum score" in (outcome.refusal_reason or "")
+
+
+def test_evaluate_evidence_confidence_accepts_shared_query_terms() -> None:
+    confidence = evaluate_evidence_confidence(
+        "What affects filling capacity in rock-filled concrete?",
+        [
+            FakeSearchResult(
+                document_title="Filling capacity guide",
+                content="Self compacting concrete flowability improves filling capacity.",
+            )
+        ],
+    )
+
+    assert confidence.sufficient
+    assert "filling" in confidence.matched_terms
+    assert confidence.score > 0
+
+
+def test_evaluate_evidence_confidence_rejects_unsupported_token() -> None:
+    confidence = evaluate_evidence_confidence(
+        "zqxjvblorptasticprotocol",
+        [FakeSearchResult(content="Thermal control reduces hydration heat.")],
+    )
+
+    assert not confidence.sufficient
+    assert confidence.score == 0
+    assert "not share enough" in (confidence.refusal_reason or "")
 
 
 def test_extract_citations_returns_unique_allowed_source_ids() -> None:

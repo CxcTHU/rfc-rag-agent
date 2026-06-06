@@ -1813,6 +1813,163 @@ full tests: 208 passed
 
 架构结论：真实 MIMO + Jina 组合证明 provider 边界有效，业务层无需知道具体供应商差异。剩余 3 个 brain workflow 失败项集中在 `vector_only` 和 `unsupported` 边界，说明下一阶段不应继续扩 provider，而应优化检索置信度、拒答判断和 hybrid/rerank 策略。
 
+## 阶段 10 真实 RAG 质量校准与拒答边界优化
+
+阶段 10 的目标不是新增模型 provider，而是在真实模型已经能运行的基础上，校准 RAG 的质量边界。
+
+本阶段处理的失败链路是：
+
+```text
+真实 Jina / MIMO 评测结果
+-> 失败案例分析
+-> Brain 生成前证据置信度检查
+-> vector-only 候选主题锚点重排
+-> deterministic 与真实模型结果对比
+```
+
+### 失败案例分析
+
+阶段 10 新增：
+
+```text
+scripts/analyze_real_rag_failures.py
+data/evaluation/real_rag_failure_cases.csv
+tests/test_analyze_real_rag_failures.py
+```
+
+失败案例表记录：
+
+- 失败问题。
+- 失败配置。
+- 失败原因。
+- 召回片段标题。
+- 期望依据。
+- 改进建议。
+
+它把阶段 9.1 的失败拆成三类：
+
+```text
+unsupported_low_evidence
+vector_topic_drift
+cross_language_topic_gap
+```
+
+### Evidence Confidence
+
+阶段 10 在 Brain workflow 中新增 `EvidenceConfidence`。
+
+它解决的问题是：检索有结果，不代表证据足够回答。
+
+数据流：
+
+```text
+BrainService.retrieve()
+-> BrainRetrievalOutcome(results)
+-> evaluate_evidence_confidence(question, results)
+-> confidence.sufficient?
+   -> yes: build prompt and call ChatModelProvider
+   -> no: return DEFAULT_REFUSAL_ANSWER without model generation
+```
+
+当前规则使用轻量 query-token coverage：
+
+```text
+question
+-> normalize and extract evidence terms
+-> compare with result title / heading / content
+-> matched_terms / query_terms
+-> coverage >= 0.20 means sufficient
+```
+
+设计取舍：
+
+- 不依赖真实模型自评，保证 deterministic 测试可复现。
+- 不改变基础 search API schema。
+- 不把低证据片段交给真实模型硬生成。
+- 先覆盖乱字符串式 unsupported query，避免过度拒答正常工程问题。
+
+### 低证据拒答
+
+低证据拒答发生在 Brain 的 `generate_answer` 步骤之前。
+
+当证据不足时，系统返回：
+
+```text
+answer = DEFAULT_REFUSAL_ANSWER
+sources = []
+citations = []
+refused = true
+refusal_reason = evidence confidence insufficient
+```
+
+因为 `/chat` 和 Agent `answer_with_citations` 都复用 Brain，因此这条保护同时覆盖：
+
+```text
+POST /chat
+POST /agent/query -> answer_with_citations
+```
+
+### Topic Anchor Rerank
+
+阶段 10 在 `VectorSearchService` 中新增 topic anchor rerank。
+
+原向量检索：
+
+```text
+query embedding
+-> cosine similarity
+-> top_k
+```
+
+阶段 10 后：
+
+```text
+query embedding
+-> cosine similarity candidates
+-> topic anchor score from query terms and document text
+-> combined internal rank score
+-> top_k
+```
+
+实现要点：
+
+- 复用 `keyword_search.expand_query_terms()` 的领域词扩展。
+- `TOPIC_ANCHOR_BOOST = 0.20`。
+- 返回给 API 和 CSV 的 `score` 仍是 cosine score。
+- topic anchor 只参与内部排序，不改变 `POST /search/vector` 响应结构。
+- 不把 vector-only 静默 fallback 到 hybrid，保留 baseline 可解释性。
+
+### 阶段 10 评测结果
+
+deterministic 结果：
+
+```text
+vector: 13/15
+hybrid: 15/15
+chat: 6/6
+agent: 5/5
+brain_workflow:
+  default_hybrid 6/6
+  keyword_baseline 6/6
+  vector_only 6/6
+full tests: 216 passed
+```
+
+真实 MIMO + Jina 校准结果：
+
+```text
+Jina vector: 15/15
+Jina hybrid: 15/15
+MIMO + Jina chat: 6/6
+MIMO + Jina agent: 5/5
+MIMO + Jina brain_workflow:
+  default_hybrid 6/6
+  keyword_baseline 6/6
+  vector_only 6/6
+```
+
+架构结论：阶段 10 后，真实模型更适合做最终体验校准，deterministic provider 更适合做稳定回归。RAG 质量保护应优先放在 Brain 生成前，而不是只靠 prompt 要求模型“不要胡编”。
+
 ### 阶段 9 完成标准
 
 ```text

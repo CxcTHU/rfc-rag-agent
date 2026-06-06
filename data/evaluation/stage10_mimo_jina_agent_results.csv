@@ -1,5 +1,12 @@
 query_id,question,passed,expected_tool,actual_tools,tool_matched,expected_refused,refused,refusal_matched,source_count,citations,citations_valid,expected_source_hit,tool_call_count,answer,reasoning_summary,error,notes
-agent_answer_filling,What affects filling capacity in rock-filled concrete?,yes,answer_with_citations,answer_with_citations,yes,no,no,yes,5,1,yes,yes,1,Deterministic answer based on source [1]: What affects filling capacity in rock-filled concrete?,识别为引用式问答意图，调用 answer_with_citations 复用现有问答、引用和拒答链路。,,Agent answer should use cited RAG answer tool.
+agent_answer_filling,What affects filling capacity in rock-filled concrete?,yes,answer_with_citations,answer_with_citations,yes,no,no,yes,4,1|2,yes,yes,1,"根据提供的文献，影响堆石混凝土中填充能力的因素主要包括**自密实混凝土的流变特性**和**岩石骨架的孔隙结构**。具体如下：
+
+1.  **自密实混凝土的屈服应力**：自密实混凝土的**屈服应力**是影响其在岩石孔隙中流动和填充的关键流变学参数[1][2]。
+2.  **岩石颗粒的尺寸与形状**：岩石骨架中颗粒的**尺寸**和**形状**会影响孔隙结构，从而影响自密实混凝土的填充能力[1][2]。
+
+**说明**：
+- 上述因素主要基于对自密实混凝土在模拟多孔介质（近似岩石骨架）中流动的研究得出[1][2]。
+- 当前知识库的资料主要聚焦于这两个核心因素，其他可能的相关因素（如自密实混凝土的塑性粘度、岩石骨架的堆积方式等）未在现有上下文中提供详细证据。",识别为引用式问答意图，调用 answer_with_citations 复用现有问答、引用和拒答链路。,,Agent answer should use cited RAG answer tool.
 agent_search_filling,检索 filling capacity 相关资料,yes,hybrid_search_knowledge,hybrid_search_knowledge,yes,no,no,yes,5,,yes,yes,1,找到 5 条混合检索结果。,识别为资料检索意图，调用 hybrid_search_knowledge 复用阶段 6 的混合检索。,,Agent search should use hybrid search tool.
 agent_list_sources,请列出资料来源列表,yes,list_sources,list_sources,yes,no,no,yes,5,,yes,yes,1,找到 5 条来源记录。,识别为来源列表查询，调用 list_sources 获取来源登记记录。,,
 agent_source_detail,查看来源详情,yes,get_source_detail,get_source_detail,yes,no,no,yes,1,,yes,yes,1,来源 openalex_0c0b0b985d9c: Study on rock-fill concrete dam,识别为来源详情查询，调用 get_source_detail 查询 openalex_0c0b0b985d9c。,,

@@ -20,6 +20,8 @@ RESULT_FIELDS = [
     "status",
     "passed",
     "total",
+    "failed",
+    "pass_rate",
     "chat_provider",
     "chat_model_name",
     "embedding_provider",
@@ -63,6 +65,8 @@ class ModelConfigSummary:
             "status": self.status,
             "passed": str(self.passed),
             "total": str(self.total),
+            "failed": str(max(self.total - self.passed, 0)),
+            "pass_rate": format_pass_rate(self.passed, self.total),
             "chat_provider": self.chat_provider,
             "chat_model_name": self.chat_model_name,
             "embedding_provider": self.embedding_provider,
@@ -113,7 +117,7 @@ def build_model_config_summaries(
         config_name="deterministic_baseline",
         result_dir=evaluation_dir,
         chat_provider="deterministic",
-        chat_model_name=settings.chat_model_name or "rule-based-chat-v1",
+        chat_model_name="rule-based-chat-v1",
         embedding_provider="deterministic",
         embedding_model_name="hash-token-v1",
         embedding_dimension=64,
@@ -246,6 +250,12 @@ def summarize_passed_csv(path: Path) -> tuple[int, int]:
 
     passed = sum(1 for row in rows if parse_bool(row.get("passed", "")))
     return passed, len(rows)
+
+
+def format_pass_rate(passed: int, total: int) -> str:
+    if total <= 0:
+        return ""
+    return f"{passed / total:.3f}"
 
 
 def real_config_skipped_reason(settings: Settings) -> str:

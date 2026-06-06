@@ -1,217 +1,188 @@
 # Findings & Decisions
 
 ## Requirements
-- 用户要求持续推进到阶段 9：真实模型接入与模型评测完整完成。
-- 用户要求线程名称为 `阶段9-真实模型接入与模型评测`。
-- 用户要求先阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/brain_workflow_design.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- 用户要求确认阶段 8 已完成并合并到 `main`，确认 `phase-8-complete` tag 指向阶段 8 最终功能提交，不移动已有阶段 tag。
-- 用户要求目标分支为 `codex/phase-9-real-model-evaluation`。
-- 用户要求正式开发前用 Planning with Files 校准 `task_plan.md`、`findings.md`、`progress.md`。
-- 阶段 9 不做登录系统、不做部署优化、不做大规模前端重构、不做写入型 Agent 工具。
-- 阶段 9 重点是真实模型配置、模型边界、向量索引重建、评测可复现和质量对比。
-- 阶段 9 必须保留 deterministic provider 作为本地稳定测试默认实现，所有测试不能依赖真实 API key。
-- 阶段 9 收尾必须同步普通文档和 Obsidian 本地知识库，并创建 `phase-9-complete` tag。
+
+- 用户要求持续推进到阶段 10：真实 RAG 质量校准与拒答边界优化完整完成。
+- 线程标题已修改为 `阶段10-真实RAG质量校准与拒答边界优化`。
+- 目标分支为 `codex/phase-10-rag-quality-calibration`。
+- 阶段 10 必须从阶段 9.1 已完成并合并到 `main` 的状态出发。
+- 必须确认 `phase-9-complete` 与 `phase-9.1-complete` 指向各自最终提交，不移动已有 tag。
+- 阶段 10 不做登录系统、不做部署优化、不做大规模前端重构、不做写入型 Agent 工具、不扩展新模型 provider、不引入复杂 LangGraph workflow。
+- 阶段 10 重点是真实 RAG 质量校准、检索证据置信度、拒答边界和可复现评测。
+- 开发阶段不写 Obsidian 小 Phase 汇报，收尾时统一补齐。
 
 ## Current Project Findings
-- 当前线程 goal 已激活，目标为阶段 9 完整完成。
-- 当前线程标题已修改为 `阶段9-真实模型接入与模型评测`。
-- 起点分支为 `main`，工作区干净。
-- `main` 最新提交为 `5aeed3b merge phase 8 brain workflow`，说明阶段 8 已合并。
-- `phase-8-complete` 指向 `5330ba3f5e1a474892810d562b15b9a7a0bcb808`，提交信息为 `feat: complete phase 8 brain workflow`。
-- 已从 `main` 创建并切换到 `codex/phase-9-real-model-evaluation`。
-- 旧 `task_plan.md`、`findings.md`、`progress.md` 均为阶段 8 工作记忆，符合本阶段启动前校准要求。
-- README/docs 当前仍显示阶段 8 已完成，阶段 9 收尾需要更新口径。
+
+- 当前 goal 已激活，目标为阶段 10 完整完成。
+- 当前工作区已切换到 `codex/phase-10-rag-quality-calibration`。
+- `main` 最新合并提交为 `2528deb merge phase 9.1 real model evaluation`。
+- `phase-9-complete` 指向 `9bdc8b015a6b8c03cee949c0b03376ce81bd55ea`。
+- `phase-9.1-complete` 指向 `12d0443953a0a4c004975d98600d86ca16d9ba22`。
+- 阶段 10 起点全量测试为 `208 passed`，完成当前开发后全量测试为 `216 passed`。
 
 ## Architecture Findings
-- 当前项目分层为 API、Schema、Service、Agent、Brain、DB、Source Registry、Model Provider、Frontend。
-- 阶段 8 已把 `/chat` 和 Agent `answer_with_citations` 收拢到 Brain workflow。
-- `BrainService` 依赖 `ChatModelProvider` 和 `EmbeddingProvider`，因此阶段 9 可以增强 provider 而不改 API schema。
-- `RetrievalConfig` 已有 `model_provider` 字段，但当前主要记录 chat provider，不直接创建 provider。
-- `VectorSearchService` 和 `HybridSearchService` 都通过 `EmbeddingProvider` 查询 `chunk_embeddings`。
-- `VectorIndexService` 已按 provider、model_name、dimension、content_hash 保存或跳过 chunk embedding。
-- 因此阶段 9 的最小高价值改动是补齐真实 embedding provider 和配置入口，再扩展评测脚本对比 deterministic 与真实配置。
+
+- 阶段 8 已把 `/chat` 与 Agent `answer_with_citations` 收敛到 `BrainService`，因此阶段 10 的质量保护优先放在 Brain 层。
+- `BrainService.retrieve()` 支持 `auto`、`vector`、`keyword`、`hybrid`；阶段 10 在生成前加入证据判断，不改变基础 search API schema。
+- `build_retrieval_outcome()` 仍按 `min_score` 过滤结果；阶段 10 新增的 evidence confidence 处理“有结果但证据不足”的场景。
+- `chunk_embeddings` 按 provider/model/dimension/content_hash 区分索引，Jina 1024 维索引与 deterministic 64 维索引可以并存。
+- `OpenAICompatibleChatModelProvider` 与 `OpenAICompatibleEmbeddingProvider` 已能支持 MIMO 与 Jina，本阶段不需要扩展 provider。
 
 ## Existing Code Findings
-- `app/services/generation/chat_model.py` 已实现 `DeterministicChatModelProvider` 和 `OpenAICompatibleChatModelProvider`。
-- `OpenAICompatibleChatModelProvider` 使用标准库 `urllib.request`，不依赖第三方 SDK，边界轻量。
-- `app/services/retrieval/embedding.py` 目前只有 `DeterministicEmbeddingProvider`，`create_embedding_provider()` 只接受 provider_name。
-- `.env.example` 已有 embedding provider/name/api_key/base_url 字段，但代码尚未消费 model/api_key/base_url。
-- `app/core/config.py` 已有 `embedding_provider`、`embedding_model_name`、`embedding_api_key`、`embedding_base_url` 字段，但缺少 embedding timeout 和 dimension。
-- `scripts/build_vector_index.py` 当前支持 `--provider`、`--limit`、`--batch-size`，还不支持 model/api_key/base_url/dimension/timeout。
-- `scripts/evaluate_vector_search.py`、`scripts/evaluate_hybrid_search.py`、`scripts/evaluate_chat.py`、`scripts/evaluate_agent.py`、`scripts/evaluate_brain_workflow.py` 已支持 provider 参数或通过 settings 创建 provider，但还不能完整传入真实 embedding 配置。
+
+- `app/services/retrieval/vector_search.py` 原本只按 cosine score 排序，容易在 vector-only 场景召回语义相近但主题偏移的片段。
+- `app/services/retrieval/keyword_search.py` 已有领域词扩展与泛词降权，可复用于 topic anchor rerank。
+- `app/services/retrieval/hybrid_search.py` 保留 `keyword_score` 与 `vector_score`，适合做 baseline 对比。
+- `app/services/brain/workflow.py` 新增 `EvidenceConfidence`、`evaluate_evidence_confidence()`、`extract_evidence_terms()` 等证据判断工具。
+- `app/services/brain/service.py` 在 `_generate_answer_step()` 中调用证据判断，低证据时返回默认拒答并跳过真实模型调用。
 
 ## API Contract Findings
-- `POST /search` 不依赖 embedding provider，是关键词 baseline。
-- `POST /search/vector` 依赖当前 settings 创建的 embedding provider，并返回 provider/model_name。
-- `POST /search/hybrid` 依赖 embedding provider，同时保留 keyword fallback/融合。
-- `POST /chat` 通过 `CitationAnswerService` 进入 Brain workflow。
-- `POST /agent/query` 通过 `AgentService` 和 `AgentToolbox` 调用 hybrid/search/chat/source 工具。
-- 阶段 9 不应改变这些 API 的请求和响应结构，只增强 provider 创建和错误提示。
+
+- `POST /search`、`POST /search/vector`、`POST /search/hybrid` 仍只负责返回检索结果，不承担问答拒答。
+- `POST /chat` 响应已有 `refused`、`refusal_reason`、`sources`、`citations` 字段，可以表达低证据拒答。
+- `POST /agent/query` 通过 Agent toolbox 复用 Brain 引用问答，因此 Brain 低证据保护会覆盖 Agent 问答工具。
+- 阶段 10 未新增 API 响应必填字段，避免破坏现有前端和测试。
 
 ## Evaluation Findings
-- 当前检索评测主数据集是 `data/evaluation/keyword_queries.csv`。
-- 当前问答评测主数据集是 `data/evaluation/chat_queries.csv`。
-- 当前 Agent 评测主数据集是 `data/evaluation/agent_queries.csv`。
-- 阶段 8 已新增 `data/evaluation/brain_workflow_results.csv`，可比较 `default_hybrid`、`keyword_baseline`、`vector_only`。
-- 阶段 9 应新增模型配置对比结果，至少记录 deterministic baseline；真实配置缺少 API key 时应记录 skipped，而不是让测试失败。
-- 真实模型评测要复用现有评测脚本，避免另起一套不可比较指标。
+
+- 阶段 9 deterministic baseline：keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6、agent 5/5、Brain workflow 12/18。
+- 阶段 9.1 真实 Jina + MIMO：Jina vector 14/15、Jina hybrid 15/15、MIMO + Jina chat 6/6、agent 5/5、Brain workflow 15/18。
+- 阶段 9.1 的真实 Brain workflow 失败项包括：
+  - `vector_only/filling_capacity`：未拒答，但召回主题偏向 elastic modulus / mesoscale。
+  - `default_hybrid/unsupported`：乱字符串 unsupported query 仍生成回答。
+  - `vector_only/unsupported`：同一 unsupported query 仍生成回答。
+- 阶段 10 deterministic 结果：
+  - vector 13/15
+  - hybrid 15/15
+  - chat 6/6
+  - agent 5/5
+  - Brain workflow 18/18
+  - full tests 216 passed
+- 阶段 10 真实模型校准结果：
+  - Jina vector 15/15
+  - Jina hybrid 15/15
+  - MIMO + Jina chat 6/6
+  - MIMO + Jina agent 5/5
+  - MIMO + Jina Brain workflow 18/18
 
 ## Data Source Findings
-- 阶段 9 不新增外部资料来源，不改变 source registry 合规边界。
-- 真实模型 API 是模型服务调用，不是文献资料来源。
-- 新增的 `model_config_results.csv` 属于评测产物，不包含受限全文。
+
+- 阶段 10 不新增外部文献资料来源，不改变 source registry 合规边界。
+- Jina 与 MIMO 是模型服务，不是文献资料来源。
+- 真实 API key 只允许存在本地 `.env`，不能写入文档、CSV、测试或 Obsidian。
+- 阶段 10 新增的 CSV 只保存问题、结果、来源标题、片段摘要、分数和诊断，不保存密钥或受限全文。
 
 ## Technical Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| 新增 OpenAI-compatible embedding provider | 当前 chat 已有真实模型边界，embedding 是阶段 9 的主要缺口 |
-| 继续使用标准库 HTTP | 与现有 chat provider 一致，避免引入 SDK 依赖和版本不稳定 |
-| deterministic 默认不变 | 保证离线开发、自动测试、无 API key 环境都能稳定运行 |
-| `create_embedding_provider()` 增加可选参数 | 兼容旧调用，同时支持真实模型配置 |
-| 缺少真实模型 key 时评测跳过真实配置 | 阶段 9 要可复现，不让私密环境决定测试成败 |
-| 新增模型配置评测汇总脚本 | 把 keyword/vector/hybrid/chat/agent/brain 指标聚合到一个阶段 9 结果文件 |
+| Decision | Reason |
+|---|---|
+| 质量保护优先放在 Brain 层 | `/chat` 与 Agent 引用问答共享 Brain workflow |
+| 不改变基础 search API schema | 阶段 10 是 RAG 问答质量校准，不是检索 API 重构 |
+| 不把 vector-only 静默 fallback 到 hybrid | vector-only 是评测 baseline，必须保留语义 |
+| unsupported 使用可解释 evidence confidence 拒答 | 真实向量可能对乱字符串也返回正分结果，不能只看是否有结果 |
+| topic anchor 只参与排序，不覆盖 cosine score | 保留向量结果可解释性和 baseline 可比性 |
+| deterministic 用于稳定回归，真实模型用于质量校准 | 真实模型更贴近用户体验，但受网络、限流、费用和密钥影响 |
 
-## Planned File Changes
+## Phase Findings
 
-| Area | Planned Files |
-|------|---------------|
-| 设计文档 | `docs/model_provider_evaluation.md`, `tests/test_model_provider_evaluation_design.py` |
-| Embedding provider | `app/services/retrieval/embedding.py`, `tests/test_embedding_provider.py` |
-| 配置入口 | `app/core/config.py`, `.env.example`, `app/api/search.py`, `app/api/chat.py`, `app/api/agent.py` |
-| Vector index | `scripts/build_vector_index.py`, related tests |
-| Evaluation | `scripts/evaluate_model_configs.py`, `data/evaluation/model_config_results.csv`, `tests/test_evaluate_model_configs.py` |
-| Documentation | `README.md`, `docs/progress.md`, `docs/architecture.md`, `docs/data_sources.md`, `AGENT.MD` |
-| Obsidian | 阶段 9 页面、Phase 汇报、首页、阶段索引、分类页和知识点 |
+### Phase 0
+
+- 线程标题、分支、阶段 tag、阶段 9.1 合并状态均已确认。
+- 起点全量测试 `208 passed`，说明进入阶段 10 时主链路稳定。
+
+### Phase 1
+
+- 新增 `scripts/analyze_real_rag_failures.py`。
+- 新增 `data/evaluation/real_rag_failure_cases.csv`，记录 4 条失败案例。
+- 新增 `tests/test_analyze_real_rag_failures.py`，测试结果 `3 passed`。
+- unsupported 根因是低证据 under-refusal；filling_capacity 根因是 vector topic drift；mesoscopic_modeling 根因是跨语言术语 gap。
+
+### Phase 2
+
+- 新增 Brain evidence confidence 机制。
+- 第一版规则采用 query-token coverage，阈值为 `0.2`。
+- 低证据拒答会清空 sources/citations，并在 workflow step 中记录拒答原因。
+- 相关测试结果：Brain workflow/service/answer/chat/agent 组合测试 `31 passed`，Brain workflow evaluator 测试 `3 passed`。
+- Phase 2 后 deterministic Brain workflow 从 12/18 提升到 14/18。
+
+### Phase 3
+
+- 新增 vector topic anchor rerank。
+- `TOPIC_ANCHOR_BOOST` 试过 `0.25`，发现影响 Brain thermal_control，最终使用 `0.20`。
+- deterministic vector 提升到 13/15。
+- deterministic hybrid 保持 15/15，`regressed_keyword=0`。
+- deterministic Brain workflow 达到 18/18。
+
+### Phase 4
+
+- `scripts/evaluate_model_configs.py` 新增 `failed` 与 `pass_rate` 字段。
+- `tests/test_evaluate_model_configs.py` 新增 pass_rate 与 schema 断言。
+- model config 结果能直接对比 deterministic 各 suite 的通过率。
+- 本地 `.env` 有真实模型配置时，`--include-real-config` 会查找 `data/evaluation/real/` 预计算结果；目录缺失时标记 `missing_results`，不是模型失败。
+
+### Phase 5
+
+- deterministic chat：6/6。
+- deterministic agent：5/5。
+- deterministic Brain workflow：default_hybrid 6/6、keyword_baseline 6/6、vector_only 6/6。
+- deterministic model config：keyword 15/15、vector 13/15、hybrid 15/15、chat 6/6、agent 5/5、Brain workflow 18/18。
+- API 回归测试：search/vector/chat/agent 相关 `16 passed`。
+- 全量测试：`216 passed`。
+- 真实模型校准：
+  - `stage10_jina_vector_results.csv`：15/15。
+  - `stage10_jina_hybrid_results.csv`：15/15。
+  - `stage10_mimo_jina_chat_results.csv`：6/6。
+  - `stage10_mimo_jina_agent_results.csv`：5/5。
+  - `stage10_mimo_jina_brain_workflow_results.csv`：18/18。
+- 结论：真实 ChatModel 与 EmbeddingModel 对最终质量判断更有价值，但阶段回归不能默认依赖真实服务。阶段 10 的正确姿势是 deterministic 保证可复现，MIMO + Jina 作为真实体验校准。
+
+### Phase 6
+
+- README、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md` 和 `AGENT.MD` 已同步阶段 10 完成状态。
+- Obsidian 本地知识库已新增阶段 10 阶段页、阶段 10 Phase 汇报索引、Phase 0-6 七篇 10 项汇报和关键知识点。
+- Obsidian 仍由 `.gitignore` 排除，不进入 Git 提交。
+- 最终 deterministic 关键评测结果：vector 13/15，hybrid 15/15，chat 6/6，agent 5/5，Brain workflow 18/18。
+- 最终全量测试结果：216 passed。
+- 阶段最终提交准备完成，`phase-10-complete` 将指向阶段 10 最终功能提交。
 
 ## Term Explanations
 
 | Term | Explanation |
-|------|-------------|
-| provider | 模型适配器。本项目用 provider 把业务代码和具体模型 API 隔开 |
-| OpenAI-compatible embedding | 兼容 OpenAI `/embeddings` 格式的向量接口，输入文本，返回数字向量 |
-| API key | 调用真实模型服务的密钥，只能放本地 `.env`，不能提交 |
-| dimension | 向量维度，例如 1024 或 1536；索引和检索必须使用同一维度 |
-| content_hash | chunk 正文的哈希，用来判断索引是否已经是最新 |
-| model config evaluation | 模型配置评测，用同一批问题比较不同 provider/model 配置 |
+|---|---|
+| Evidence Confidence | 判断检索证据是否足够支撑回答的规则，不等同于模型自信 |
+| 低证据拒答 | 有召回结果但结果与问题缺少足够关联时拒绝回答 |
+| query-token 覆盖率 | 问题有效词在证据文本中出现的比例 |
+| topic anchor | 用问题中的核心主题词约束向量候选排序的轻量信号 |
+| vector topic drift | 向量召回到语义相关但主题不满足用户问题的片段 |
+| 真实模型校准 | 用真实 ChatModel/EmbeddingModel 评估体验与边界，而不是替代可复现测试 |
 
 ## Issues Encountered
 
-| Issue | Resolution |
-|-------|------------|
-| 暂无 | 暂无 |
-
-## Phase 0 Findings
-- 阶段 9 启动校准已完成。
-- 线程标题已改为 `阶段9-真实模型接入与模型评测`。
-- 阶段 8 已合并到 `main`，`phase-8-complete` tag 指向 `5330ba3`。
-- 阶段 9 分支 `codex/phase-9-real-model-evaluation` 已创建。
-- Planning with Files 三份文件已从阶段 8 工作记忆切换为阶段 9 工作记忆。
-- 起点全量测试为 `189 passed`，说明阶段 9 从稳定的阶段 8 合并状态出发。
-
-## Phase 1 Findings
-- 新增 `docs/model_provider_evaluation.md`，固定阶段 9 的真实模型接入、provider 边界、向量索引重建、评测对比和阶段不做事项。
-- 新增 `tests/test_model_provider_evaluation_design.py`，断言设计文档覆盖 `ChatModelProvider`、`EmbeddingProvider`、`OpenAICompatibleEmbeddingProvider`、配置字段、`build_vector_index`、模型评测 CSV 和 skipped config。
-- Phase 1 测试结果为 `2 passed`。
-- 设计结论：真实模型只接在 provider 层；业务 service 继续依赖协议；测试继续使用 deterministic 或 mock HTTP；缺少真实 API key 的评测应记录 skipped。
-
-## Phase 2 Findings
-- 新增 `OpenAICompatibleEmbeddingProvider`，支持 `model_name`、`api_key`、`base_url`、`dimension`、`timeout_seconds`。
-- `OpenAICompatibleEmbeddingProvider` 调用兼容 `/embeddings` 的 HTTP endpoint，按 `data[].index` 排序并解析 embedding 向量。
-- `create_embedding_provider()` 现在兼容旧的 provider_name 调用，同时支持真实 provider 的 model/key/base_url/dimension/timeout 参数。
-- deterministic provider 仍是默认实现，旧测试和旧调用路径不需要配置真实 key。
-- 新增/扩展 `tests/test_embedding_provider.py`，使用 monkeypatch mock `urlopen`，不访问真实网络。
-- Phase 2 测试结果为 `12 passed`。
-
-## Phase 3 Findings
-- `app/core/config.py` 新增 `embedding_dimension` 和 `embedding_timeout_seconds`。
-- `.env.example` 新增 `EMBEDDING_DIMENSION` 和 `EMBEDDING_TIMEOUT_SECONDS`，真实 key 仍只允许本地填写。
-- `app/api/search.py`、`app/api/chat.py`、`app/api/agent.py` 的 embedding dependency 已改为传入 provider/model/api_key/base_url/dimension/timeout。
-- `scripts/build_vector_index.py` 新增 `--model-name`、`--api-key`、`--base-url`、`--dimension`、`--timeout-seconds`，并在输出中标明 `content_hash=tracked`。
-- 新增 `tests/test_build_vector_index.py`，覆盖 CLI 参数优先、settings fallback 和 deterministic 默认。
-- Phase 3 测试结果：`tests/test_embedding_provider.py tests/test_vector_index_service.py tests/test_build_vector_index.py` 共 `20 passed`。
-- 脚本 smoke run：`scripts/build_vector_index.py --limit 1 --batch-size 1` 输出 deterministic provider/model/dimension/content_hash 摘要。
-
-## Phase 4 Findings
-- 新增 `scripts/evaluate_model_configs.py`，汇总 keyword、vector、hybrid、chat、agent、brain workflow 六类评测结果。
-- 新增 `tests/test_evaluate_model_configs.py`，覆盖 passed 统计、deterministic baseline、真实配置缺失 skipped、完整真实配置读取 real results dir 和 CSV 写出。
-- 新增 `data/evaluation/model_config_results.csv`。
-- 当前输出 12 行：deterministic baseline 6 行 completed，real_config 6 行 skipped。
-- deterministic baseline 当前汇总：keyword 15/15，vector 11/15，hybrid 15/15，chat 6/6，agent 5/5，brain_workflow 12/18。
-- real_config skipped 原因：本地 `.env` 未配置真实 chat/embedding provider、model、API key、base URL 和 embedding dimension。
-- Phase 4 测试结果为 `6 passed`。
-
-## Phase 5 Findings
-- 复跑 keyword 评测：15/15 passed。
-- 复跑 vector 评测：11/15 passed，仍有 4 个 keyword_only_pass，符合 deterministic embedding 既有基线。
-- 复跑 hybrid 评测：15/15 passed，rescued_vector=4，regressed_keyword=0。
-- 复跑 chat 评测：6/6 passed，refused=1，citation_failures=0。
-- 复跑 agent 评测：5/5 passed，refused=1，tool_failures=0，citation_failures=0。
-- 复跑 brain workflow 评测：18 runs，default_hybrid 4/6，keyword_baseline 6/6，vector_only 2/6，总计 12/18 passed。
-- 复跑 source metrics：total_sources=125，merged_duplicates=14。
-- 复跑 model config 评测：12 rows；deterministic baseline completed，real_config 因缺少真实模型配置 skipped。
-- API 回归测试：`tests/test_search_api.py tests/test_vector_search_api.py tests/test_chat_api.py tests/test_agent_api.py` 共 16 passed。
-- 全量测试：205 passed。
-- 当前质量结论：阶段 9 没有改变 deterministic baseline；真实模型通道已实现和可评测，但本地未配置真实 API key，因此真实配置暂未运行，风险和成本需用户本地配置后再量化。
-- 推荐默认配置：本地开发和自动化测试继续 deterministic；需要真实效果评估时，显式配置 OpenAI-compatible chat/embedding 并重建对应 provider/model/dimension 的向量索引。
-
-## Phase 6 Findings
-- README 已同步阶段 9 当前状态、真实模型配置入口、向量索引重建命令、模型配置评测结果和默认推荐。
-- `docs/progress.md` 已记录阶段 9 完成内容、验证结果、遗留问题、下一阶段方向和面试表达。
-- `docs/architecture.md` 已补充真实模型 provider 边界、OpenAI-compatible embedding、索引重建和模型配置评测数据流。
-- `docs/data_sources.md` 已说明阶段 9 不新增外部资料来源；真实模型 API 属于模型服务调用，`model_config_results.csv` 属于评测产物。
-- `AGENT.MD` 已校准到阶段 0 到阶段 9 完成后的项目状态，并保留下一阶段候选方向。
-- Obsidian 本地知识库已补齐阶段 9 阶段页、阶段汇报索引、Phase 0 到 Phase 6 的小 Phase 汇报、首页/阶段索引/阶段汇报索引和 3 篇知识点。
-- Obsidian Phase 汇报已逐篇检查，每篇均包含用户要求的 10 个栏目。
-- 阶段 9 最终验证结论：deterministic provider 仍是默认配置，真实 chat/embedding 通道已接入到 provider 和评测边界；本地缺少真实模型密钥时，真实配置以 skipped 记录，不影响测试和评测可复现。
-- Phase 6 最终验证结果：`scripts/evaluate_model_configs.py --include-real-config` 输出 12 行，deterministic completed、real_config skipped；全量测试 `205 passed`。
-
-## Phase 7 Findings
-- Phase 7 是阶段 9 的补充验证，不移动 `phase-9-complete` tag。
-- 本地 `.env` 已配置 MIMO chat provider 和 Jina embedding provider；`.env` 已被 Git 忽略，不应提交。
-- 当前 Jina embedding 配置为 OpenAI-compatible endpoint：provider=`openai-compatible`，model=`jina-embeddings-v3`，base URL=`https://api.jina.ai/v1`，dimension=`1024`。
-- 本小 Phase 的关键判断不是新增 provider 代码，而是验证真实 embedding 索引能否被现有 vector/hybrid/chat/agent/brain workflow 消费。
-- 初次 Jina smoke index 返回 403；最小化请求验证发现补充 `Accept: application/json` 和明确 `User-Agent` 后可正常返回 1024 维向量，因此 `OpenAICompatibleEmbeddingProvider` 增加了这两个请求头。
-- 各评测脚本原先只传 provider 名称，没有把 `.env` 中的 model/base URL/API key/dimension/timeout 一起传入，导致真实 embedding 评测无法创建 provider；现在统一通过 settings 构建完整 embedding provider。
-- Jina 全量索引重建覆盖 997 个 chunk，其中 995 个新写入，2 个在 smoke run 中已存在并被跳过；说明 provider/model/dimension/content_hash 维度下的索引复用逻辑正常。
-- Jina vector 评测为 14/15，通过数高于阶段 9 deterministic vector baseline 的 11/15；唯一失败仍是 `mesoscopic_modeling`。
-- Jina hybrid 评测为 15/15，`rescued_vector=1`、`regressed_keyword=0`，说明真实向量增强没有破坏关键词 baseline。
-- chat、agent 和 brain workflow 评测已复跑：chat 6/6，agent 5/5，brain workflow 中 default_hybrid 5/6、keyword_baseline 6/6、vector_only 4/6。当前脚本默认 chat provider 仍保持 deterministic，不把真实 MIMO key 作为自动测试依赖。
-- 评测脚本已避免在 deterministic chat 评测结果中误写 `.env` 的真实 chat model 名称；现在 deterministic 结果明确标记为 `rule-based-chat-v1`，真实模型名只在显式选择真实 chat provider 时使用。
-- 自动化测试需要隔离本地 `.env`：`tests/test_agent_api.py` 现在同时覆盖 agent 和 chat 路由依赖，避免本地真实模型配置让回归测试误连外部服务。
-- MIMO 官方文档显示：普通按量 API Key 是 `sk-xxxxx`，OpenAI 兼容 Base URL 是 `https://api.xiaomimimo.com/v1`；Token Plan 订阅 API Key 是 `tp-xxxxx`，中国集群 OpenAI 兼容 Base URL 是 `https://token-plan-cn.xiaomimimo.com/v1`，两类 key 不能混用。
-- MIMO OpenAI-compatible curl 示例使用 `api-key` 请求头；项目的 `OpenAICompatibleChatModelProvider` 已同时发送 `Authorization: Bearer` 和 `api-key`，从而兼容常规 OpenAI-compatible 服务和 MIMO。
-- 使用普通 `sk-...` key 配 Token Plan 地址会返回 401；切到普通 API 地址后该 key 被识别但返回 402 余额不足。用户随后提供的 Token Plan `tp-...` key 在 `token-plan-cn` 地址 smoke test 通过，返回 `MIMO_OK`。
-- 真实 MIMO chat + Jina embedding 单独评测已写入独立结果文件：`mimo_jina_chat_results.csv` 为 6/6，`mimo_jina_agent_results.csv` 为 5/5，`mimo_jina_brain_workflow_results.csv` 为 15/18。
-- 真实组合的 brain workflow 失败项为：`vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。这说明真实 MIMO 能稳定按证据回答常规问题，但在纯向量模式和 unsupported 拒答边界上仍需要下一阶段优化。
+| Issue | Evidence | Current handling |
+|---|---|---|
+| unsupported query 有检索结果导致不拒答 | 阶段 9.1 Brain workflow 失败 | Brain 生成前 evidence confidence 拦截 |
+| vector_only/filling_capacity 召回主题偏移 | 阶段 9.1 失败案例 | topic anchor rerank 改善候选排序 |
+| `mesoscopic_modeling` 跨语言术语 gap | Phase 1 失败案例 | 阶段 10 已由真实 Jina 15/15 修复；deterministic 留作后续 query expansion 方向 |
+| 真实模型评测不适合作为自动回归唯一依据 | 依赖 API key、网络、费用和供应商稳定性 | deterministic 与真实模型结果分开记录 |
 
 ## Resources
+
 - `AGENT.MD`
 - `README.md`
 - `docs/progress.md`
 - `docs/architecture.md`
 - `docs/data_sources.md`
+- `docs/evaluation_plan.md`
+- `docs/agent_design.md`
 - `docs/brain_workflow_design.md`
-- `task_plan.md`
-- `findings.md`
-- `progress.md`
-- `.env.example`
-- `app/core/config.py`
-- `app/services/generation/chat_model.py`
-- `app/services/retrieval/embedding.py`
-- `app/services/retrieval/vector_index.py`
-- `app/services/retrieval/vector_search.py`
-- `app/services/retrieval/hybrid_search.py`
-- `app/services/brain/service.py`
-- `scripts/build_vector_index.py`
-- `scripts/evaluate_vector_search.py`
-- `scripts/evaluate_hybrid_search.py`
-- `scripts/evaluate_chat.py`
-- `scripts/evaluate_agent.py`
-- `scripts/evaluate_brain_workflow.py`
-
-## Current Hypotheses
-- 如果先补齐 OpenAI-compatible embedding provider，再扩展索引脚本和评测脚本，阶段 9 可以最小改动实现真实模型接入闭环。
-- 真实 chat provider 已存在，阶段 9 主要需要文档和评测层把它纳入模型配置对比。
-- 真实 embedding 一旦改变 provider/model/dimension，必须重建向量索引，否则 vector/hybrid 搜索会查不到对应 provider/model 的 embedding。
-- 阶段 9 应把“缺少真实 API key”的情况设计成可解释跳过，而不是报错中断。
+- `docs/model_provider_evaluation.md`
+- `data/evaluation/real_rag_failure_cases.csv`
+- `data/evaluation/vector_results.csv`
+- `data/evaluation/hybrid_results.csv`
+- `data/evaluation/brain_workflow_results.csv`
+- `data/evaluation/model_config_results.csv`
+- `data/evaluation/stage10_jina_vector_results.csv`
+- `data/evaluation/stage10_jina_hybrid_results.csv`
+- `data/evaluation/stage10_mimo_jina_chat_results.csv`
+- `data/evaluation/stage10_mimo_jina_agent_results.csv`
+- `data/evaluation/stage10_mimo_jina_brain_workflow_results.csv`

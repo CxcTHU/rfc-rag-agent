@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 from app.db.models import Chunk, ChunkEmbedding, Document
 from app.db.repositories import deserialize_embedding
 from app.services.retrieval.embedding import EmbeddingProvider
+from app.services.retrieval.keyword_search import capped_count, expand_query_terms, normalize_text
 from app.services.retrieval.vector_index import calculate_text_hash
+
+
+TOPIC_ANCHOR_BOOST = 0.2
 
 
 @dataclass(frozen=True)
@@ -72,10 +76,7 @@ class VectorSearchService:
                 )
             )
 
-        return sorted(
-            results,
-            key=lambda item: (-item.score, item.document_id, item.chunk_index),
-        )[:top_k]
+        return rank_vector_results(normalized_query, results)[:top_k]
 
     def _list_indexed_chunks(self) -> list[tuple[ChunkEmbedding, Chunk, Document]]:
         statement = (
@@ -108,3 +109,57 @@ def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 
 def is_zero_vector(vector: Sequence[float]) -> bool:
     return all(value == 0 for value in vector)
+
+
+def rank_vector_results(query: str, results: list[VectorSearchResult]) -> list[VectorSearchResult]:
+    anchor_scores = {
+        result.chunk_id: topic_anchor_score(query, result)
+        for result in results
+    }
+    max_anchor_score = max(anchor_scores.values(), default=0.0)
+
+    return sorted(
+        results,
+        key=lambda item: (
+            -combined_rank_score(item.score, anchor_scores[item.chunk_id], max_anchor_score),
+            -normalized_anchor_score(anchor_scores[item.chunk_id], max_anchor_score),
+            item.document_id,
+            item.chunk_index,
+        ),
+    )
+
+
+def topic_anchor_score(query: str, result: VectorSearchResult) -> float:
+    terms = expand_query_terms(query)
+    if not terms:
+        return 0.0
+    normalized_query = normalize_text(query)
+    normalized_title = normalize_text(result.document_title)
+    normalized_heading = normalize_text(result.heading_path)
+    normalized_content = normalize_text(result.content)
+
+    score = 0.0
+    for term in terms:
+        normalized_term = normalize_text(term.text)
+        if not normalized_term:
+            continue
+        specificity_weight = 1.0 if term.specific else 0.25
+        score += capped_count(normalized_title, normalized_term) * term.weight * specificity_weight * 3.0
+        score += capped_count(normalized_heading, normalized_term) * term.weight * specificity_weight * 1.5
+        score += capped_count(normalized_content, normalized_term) * term.weight * specificity_weight
+
+    if normalized_query:
+        score += capped_count(normalized_title, normalized_query) * 4.0
+        score += capped_count(normalized_heading, normalized_query) * 2.5
+        score += capped_count(normalized_content, normalized_query) * 2.0
+    return score
+
+
+def combined_rank_score(vector_score: float, anchor_score: float, max_anchor_score: float) -> float:
+    return vector_score + normalized_anchor_score(anchor_score, max_anchor_score) * TOPIC_ANCHOR_BOOST
+
+
+def normalized_anchor_score(anchor_score: float, max_anchor_score: float) -> float:
+    if anchor_score <= 0 or max_anchor_score <= 0:
+        return 0.0
+    return min(1.0, anchor_score / max_anchor_score)
