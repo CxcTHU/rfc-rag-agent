@@ -153,3 +153,99 @@ def test_keyword_search_boosts_specific_terms_over_generic_domain_terms(tmp_path
 
     assert results[0].document_title.startswith("Full-Scale micromechanical")
     assert results[0].source_type == "open_access_pdf"
+
+
+def test_keyword_search_expands_stage_11_creep_terms(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        DocumentRepository(db).create_with_chunks(
+            DocumentCreate(
+                title="Experimental study on the creep behaviour of rock-filled concrete",
+                source_type="metadata_record",
+                source_path="creep.md",
+                file_name="creep.md",
+                file_extension=".md",
+                content_hash="creep-hash",
+                raw_path="data/raw/creep.md",
+            ),
+            [
+                ChunkCreate(
+                    chunk_index=0,
+                    content="The creep behaviour describes long-term deformation of rock-filled concrete.",
+                    char_count=78,
+                    heading_path="Abstract",
+                    start_char=0,
+                    end_char=78,
+                ),
+            ],
+        )
+
+        results = KeywordSearchService(db).search("徐变 堆石混凝土", top_k=5)
+
+    assert results
+    assert "creep behaviour" in results[0].document_title
+
+
+def test_keyword_search_expands_stage_11_porosity_terms(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        DocumentRepository(db).create_with_chunks(
+            DocumentCreate(
+                title="Void effect study on the compressive behavior of RFC",
+                source_type="metadata_record",
+                source_path="void.md",
+                file_name="void.md",
+                file_extension=".md",
+                content_hash="void-hash",
+                raw_path="data/raw/void.md",
+            ),
+            [
+                ChunkCreate(
+                    chunk_index=0,
+                    content="Porosity and void defects influence compressive behavior.",
+                    char_count=60,
+                    heading_path="Abstract",
+                    start_char=0,
+                    end_char=60,
+                ),
+            ],
+        )
+
+        results = KeywordSearchService(db).search("孔隙率 抗压表现", top_k=5)
+
+    assert results
+    assert results[0].document_title.startswith("Void effect")
+
+
+def test_keyword_search_expands_stage_11_shear_key_terms(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        DocumentRepository(db).create_with_chunks(
+            DocumentCreate(
+                title="Effect of rock shear keys on cold joint shear performance",
+                source_type="metadata_record",
+                source_path="shear-key.md",
+                file_name="shear-key.md",
+                file_extension=".md",
+                content_hash="shear-key-hash",
+                raw_path="data/raw/shear-key.md",
+            ),
+            [
+                ChunkCreate(
+                    chunk_index=0,
+                    content="Rock shear keys improve the shear performance of cold joints.",
+                    char_count=63,
+                    heading_path="Abstract",
+                    start_char=0,
+                    end_char=63,
+                ),
+            ],
+        )
+
+        results = KeywordSearchService(db).search("岩石剪力键 冷缝", top_k=5)
+
+    assert results
+    assert "rock shear keys" in results[0].document_title

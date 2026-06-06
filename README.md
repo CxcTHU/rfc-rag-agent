@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 10：真实 RAG 质量校准与拒答边界优化已完成，当前分支为 `codex/phase-10-rag-quality-calibration`。
+阶段 11：真实用户问题评测集与跨语言质量提升已完成，当前分支为 `codex/phase-11-user-evaluation-query-expansion`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -48,7 +48,11 @@
 
 阶段 10 tag：`phase-10-complete`。
 
-下一步建议：进入阶段 11，优先扩大真实用户问题评测集，并继续做跨语言 query expansion、人工审阅抽样或 LLM-as-judge 评测，但不要让自动回归依赖真实 API key。
+阶段 11 最终功能提交：由 `phase-11-complete` tag 指向的提交标识。
+
+阶段 11 tag：`phase-11-complete`。
+
+下一步建议：进入阶段 12，优先把阶段 11 的人工审阅抽样真正用于发布前质量校准，评估是否需要更强 rerank、真实 embedding 对比或审阅报告自动汇总；仍不要让自动回归依赖真实 API key。
 
 当前已经实现：
 
@@ -110,6 +114,13 @@
 - `data/evaluation/stage10_mimo_jina_chat_results.csv` 阶段 10 MIMO + Jina chat 校准评测结果
 - `data/evaluation/stage10_mimo_jina_agent_results.csv` 阶段 10 MIMO + Jina Agent 校准评测结果
 - `data/evaluation/stage10_mimo_jina_brain_workflow_results.csv` 阶段 10 MIMO + Jina Brain workflow 校准评测结果
+- `data/evaluation/user_questions.csv` 阶段 11 真实用户问题评测集，覆盖中文口语、英文、中英混合、工程中文和 unsupported 问题
+- `scripts/evaluate_user_questions.py` 阶段 11 用户问题评测脚本
+- `data/evaluation/user_question_results.csv` 阶段 11 用户问题评测结果
+- `docs/stage11_user_evaluation_plan.md` 阶段 11 人工审阅与 LLM-as-judge 离线设计
+- `data/evaluation/user_question_review_samples.csv` 阶段 11 人工审阅抽样表
+- 跨语言 query expansion 增强，补充 ITZ/界面、creep/徐变、freeze-thaw/抗冻、porosity/孔隙率、emission/碳排放、steel fiber/钢纤维、rock shear key/剪力键等术语
+- Brain evidence confidence 支持扩展后的中英文证据词，降低跨语言问题误拒答
 - `ChatModelProvider` 聊天模型抽象，支持 deterministic provider 和 OpenAI-compatible provider
 - RAG prompt/context builder，把检索结果组织成带 `[1]`、`[2]` 编号的上下文
 - `CitationAnswerService` 最小引用式问答链路
@@ -126,7 +137,7 @@
 - FastAPI 静态前端入口：`GET /`
 - 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 216 个自动化测试
+- 230 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -138,7 +149,7 @@
 3. `docs/architecture.md`
 4. `docs/data_sources.md`
 
-阶段 10 的开发记忆：
+阶段 11 的开发记忆：
 
 - `task_plan.md`
 - `findings.md`
@@ -195,7 +206,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-216 passed
+230 passed
 ```
 
 当前测试覆盖：
@@ -239,6 +250,8 @@ python -m pytest
 - Brain evidence confidence 低证据拒答
 - vector topic anchor rerank
 - model config failed/pass_rate 汇总指标
+- 阶段 11 用户问题评测集、评测脚本和审阅抽样表
+- 阶段 11 跨语言 query expansion 与 Brain evidence confidence 回归
 
 ## 向量索引、混合检索与评测
 
@@ -282,10 +295,11 @@ python scripts/analyze_retrieval_errors.py
 ```text
 keyword baseline: 15/15 passed
 vector search: 13/15 passed
-hybrid search: 15/15 passed, rescued_vector=4, regressed_keyword=0
+hybrid search: 15/15 passed, rescued_vector=2, regressed_keyword=0
 chat evaluation: 6/6 passed
 agent evaluation: 5/5 passed
 brain workflow evaluation: default_hybrid 6/6, keyword_baseline 6/6, vector_only 6/6
+user question evaluation: 25/30 passed, default_hybrid 10/10, keyword_baseline 10/10, vector_only 5/10
 ```
 
 说明：当前 deterministic embedding 主要用于稳定开发和自动化测试。阶段 10 在 vector-only 候选内部新增 topic anchor rerank，让主题更贴合问题的片段优先进入 top_k；hybrid search 仍保留 keyword 和 vector baseline，便于持续对比。
@@ -312,6 +326,15 @@ data/evaluation/stage10_mimo_jina_agent_results.csv
 data/evaluation/stage10_mimo_jina_brain_workflow_results.csv
 ```
 
+阶段 11 新增评测文件：
+
+```text
+docs/stage11_user_evaluation_plan.md
+data/evaluation/user_questions.csv
+data/evaluation/user_question_results.csv
+data/evaluation/user_question_review_samples.csv
+```
+
 阶段 6 结论：
 
 - `Recall@K`：keyword 15/15，vector 11/15，hybrid 15/15。
@@ -325,6 +348,13 @@ data/evaluation/stage10_mimo_jina_brain_workflow_results.csv
 - `Vector Recall`：deterministic vector 从 11/15 提升到 13/15，Jina vector 阶段 10 校准为 15/15。
 - `Brain Workflow`：deterministic 与真实 MIMO + Jina 都达到 18/18。
 - `Model Config`：`model_config_results.csv` 新增 `failed` 和 `pass_rate`，方便直接比较配置质量。
+
+阶段 11 结论：
+
+- `User Question Evaluation`：新增 10 条真实用户风格问题，每条按 3 种配置评测，共 30 次 config-query run。
+- `Cross-language Quality`：default_hybrid 与 keyword_baseline 在用户问题集上均为 10/10，说明中英术语增强对默认链路有效。
+- `Refusal Quality`：用户问题评测 `refusal_matched=30/30`，unsupported 随机问题保持拒答。
+- `Residual Risk`：deterministic vector_only 在用户问题集上为 5/10，剩余失败集中在来源命中不匹配，适合作为下一阶段 rerank 或真实 embedding 校准依据。
 
 ## Agent 化
 
@@ -414,12 +444,12 @@ python scripts/evaluate_brain_workflow.py
 当前配置化评测结果：
 
 ```text
-default_hybrid: 4/6 passed
+default_hybrid: 6/6 passed
 keyword_baseline: 6/6 passed
-vector_only: 2/6 passed
+vector_only: 6/6 passed
 ```
 
-说明：该结果反映当前 deterministic embedding 和现有 chat 评测集下的配置差异。它证明 Brain workflow 可复现、可对比，也说明后续真实 embedding、rerank 或 query rewrite 仍有优化空间。
+说明：阶段 10 之后 Brain workflow 在 deterministic 配置下已经稳定到 18/18；阶段 11 在此基础上新增真实用户问题评测，用更接近实际提问的方式继续暴露质量边界。
 
 ## 真实模型接入与模型评测
 
@@ -522,6 +552,38 @@ real MIMO + Jina:
 ```
 
 面试表达：阶段 10 不是继续堆模型，而是把真实模型暴露出的失败转成可复现的工程保护。系统先判断检索证据是否足够，再决定是否生成；同时保留 deterministic 和真实模型两套评测口径，既能稳定回归，也能验证真实体验。
+
+## 真实用户问题评测集与跨语言质量提升
+
+阶段 11 处理阶段 10 后的下一类质量问题：旧评测集能证明主链路稳定，但还不足以覆盖真实用户会怎么问，尤其是中文口语、英文问题、中英混合术语和工程场景问法。
+
+新增链路：
+
+```text
+data/evaluation/user_questions.csv
+-> scripts/evaluate_user_questions.py
+-> data/evaluation/user_question_results.csv
+-> 跨语言 query expansion / Brain evidence confidence
+-> docs/stage11_user_evaluation_plan.md
+-> data/evaluation/user_question_review_samples.csv
+```
+
+阶段 11 的 query expansion 继续复用 `SYNONYM_RULES`，因此同一套术语增强会同时服务关键词检索和向量检索的 topic anchor。Brain evidence confidence 也会使用扩展后的中英文证据词，避免中文问题被英文证据片段误判为低证据。
+
+当前结果：
+
+```text
+keyword evaluation: 15/15
+vector evaluation: 13/15
+hybrid evaluation: 15/15
+chat evaluation: 6/6
+agent evaluation: 5/5
+brain workflow evaluation: 18/18
+user question evaluation: 25/30
+full tests: 230 passed
+```
+
+面试表达：阶段 11 我把 RAG 质量评测从“标准测试题”扩展到“真实用户怎么问”。新增问题集显式记录语言类型、期望来源、期望拒答和回答要点；自动脚本稳定检查拒答、来源命中和引用有效性；人工审阅表再检查 Faithfulness、Answer Coverage 和 Citation Quality。跨语言增强不是黑盒调参，而是把中文工程词和英文论文术语做可解释映射，并复用到 keyword、vector topic anchor 和 Brain 证据置信度中。
 
 ## 引用式问答
 

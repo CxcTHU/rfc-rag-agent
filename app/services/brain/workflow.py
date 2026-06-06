@@ -5,6 +5,7 @@ from typing import Literal
 
 from app.services.brain.config import WorkflowStepName
 from app.services.generation.prompt_builder import ContextSource, SearchResultLike
+from app.services.retrieval.keyword_search import expand_query_terms, normalize_text
 
 
 UsedRetrievalMode = Literal["vector", "keyword", "hybrid", "none"]
@@ -107,7 +108,12 @@ def evaluate_evidence_confidence(
     min_query_token_coverage: float = DEFAULT_MIN_QUERY_TOKEN_COVERAGE,
 ) -> EvidenceConfidence:
     query_terms = extract_evidence_terms(query)
-    if not query_terms:
+    expanded_terms = extract_expanded_evidence_terms(query)
+    candidate_terms = query_terms
+    if expanded_terms:
+        candidate_terms = expanded_terms
+
+    if not candidate_terms:
         return EvidenceConfidence(
             sufficient=False,
             score=0.0,
@@ -120,14 +126,17 @@ def evaluate_evidence_confidence(
             sufficient=False,
             score=0.0,
             matched_terms=(),
-            missing_terms=tuple(query_terms),
+            missing_terms=tuple(candidate_terms),
             refusal_reason="No retrieved chunks were available for evidence confidence.",
         )
 
     evidence_text = evidence_text_from_results(results)
-    matched_terms = tuple(term for term in query_terms if term in evidence_text)
-    missing_terms = tuple(term for term in query_terms if term not in matched_terms)
-    score = len(matched_terms) / len(query_terms)
+    raw_confidence = score_evidence_terms(query_terms, evidence_text)
+    expanded_confidence = score_evidence_terms(expanded_terms, evidence_text)
+    matched_terms, missing_terms, score = max(
+        [raw_confidence, expanded_confidence],
+        key=lambda item: item[2],
+    )
     if matched_terms and score >= min_query_token_coverage:
         return EvidenceConfidence(
             sufficient=True,
@@ -148,6 +157,18 @@ def evaluate_evidence_confidence(
     )
 
 
+def score_evidence_terms(
+    query_terms: Sequence[str],
+    evidence_text: str,
+) -> tuple[tuple[str, ...], tuple[str, ...], float]:
+    if not query_terms:
+        return (), (), 0.0
+    matched_terms = tuple(term for term in query_terms if term in evidence_text)
+    missing_terms = tuple(term for term in query_terms if term not in matched_terms)
+    score = len(matched_terms) / len(query_terms)
+    return matched_terms, missing_terms, score
+
+
 def extract_evidence_terms(query: str) -> tuple[str, ...]:
     raw_terms = [
         match.group(0).casefold()
@@ -166,6 +187,30 @@ def extract_evidence_terms(query: str) -> tuple[str, ...]:
         if term not in unique_terms:
             unique_terms.append(term)
     return tuple(unique_terms)
+
+
+def extract_expanded_evidence_terms(query: str) -> tuple[str, ...]:
+    expanded_terms = [
+        normalize_text(term.text)
+        for term in expand_query_terms(query)
+        if term.specific and is_evidence_phrase(term.text)
+    ]
+
+    unique_terms: list[str] = []
+    for term in expanded_terms:
+        if term and term not in unique_terms:
+            unique_terms.append(term)
+    return tuple(unique_terms)
+
+
+def is_evidence_phrase(term: str) -> bool:
+    normalized = normalize_text(term)
+    if not normalized:
+        return False
+    if any(marker in normalized for marker in ["?", "？", "，", ",", "。"]):
+        return False
+    tokens = [token for token in EVIDENCE_TOKEN_RE.findall(normalized) if token not in QUERY_STOPWORDS]
+    return bool(tokens)
 
 
 def is_evidence_term(term: str) -> bool:
