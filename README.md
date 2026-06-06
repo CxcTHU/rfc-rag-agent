@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 9：真实模型接入与模型评测已完成，当前分支为 `codex/phase-9-real-model-evaluation`。
+阶段 9：真实模型接入与模型评测已完成；阶段 9.1 已补充完成真实 Jina 向量检索和真实 MIMO chat + Jina embedding 单独评测，当前分支为 `codex/phase-9-real-model-evaluation`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -40,7 +40,11 @@
 
 阶段 9 tag：`phase-9-complete`。
 
-下一步建议：在用户确认后进入阶段 10，优先考虑 Agent 权限审计与写入工具安全设计，或进入部署工程化、日志观测和更大规模用户问题评测。
+阶段 9.1 补充提交：由 `phase-9.1-complete` tag 指向的提交标识。
+
+阶段 9.1 tag：`phase-9.1-complete`。
+
+下一步建议：进入阶段 10，优先做真实 RAG 质量校准与拒答边界优化，重点处理 vector-only 误召回、unsupported 问题拒答和 hybrid 置信度保护。
 
 当前已经实现：
 
@@ -88,6 +92,11 @@
 - `scripts/build_vector_index.py` provider/model/dimension/API 参数
 - `scripts/evaluate_model_configs.py` 模型配置评测汇总脚本
 - `data/evaluation/model_config_results.csv` 模型配置评测结果
+- Jina `jina-embeddings-v3` 真实向量索引和评测结果
+- MIMO Token Plan `mimo-v2.5-pro` 真实 chat provider 接入验证
+- `data/evaluation/mimo_jina_chat_results.csv` 真实 MIMO chat + Jina embedding 问答评测结果
+- `data/evaluation/mimo_jina_agent_results.csv` 真实 MIMO chat + Jina embedding Agent 评测结果
+- `data/evaluation/mimo_jina_brain_workflow_results.csv` 真实 MIMO chat + Jina embedding Brain workflow 评测结果
 - `ChatModelProvider` 聊天模型抽象，支持 deterministic provider 和 OpenAI-compatible provider
 - RAG prompt/context builder，把检索结果组织成带 `[1]`、`[2]` 编号的上下文
 - `CitationAnswerService` 最小引用式问答链路
@@ -173,7 +182,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-205 passed
+208 passed
 ```
 
 当前测试覆盖：
@@ -422,9 +431,17 @@ deterministic_baseline:
 
 real_config:
   skipped，本地未配置真实 chat/embedding API key、base URL、model 和 embedding dimension
+
+phase_9_1_real_mimo_jina:
+  Jina vector 14/15
+  Jina hybrid 15/15
+  MIMO + Jina chat 6/6
+  MIMO + Jina agent 5/5
+  MIMO + Jina brain_workflow 15/18
+  full tests 208 passed
 ```
 
-设计结论：真实模型接入已经具备工程边界和评测入口，但默认配置不切到真实模型。这样既能保护测试稳定性，也能让后续真实模型评估可复现、可对比、可回滚。
+设计结论：真实模型接入已经具备工程边界和评测入口，但默认配置不切到真实模型。阶段 9.1 证明真实 Jina embedding 和真实 MIMO chat 能被现有 RAG 链路消费；剩余问题集中在纯向量召回质量和无依据问题拒答边界，适合作为阶段 10 的优化目标。
 
 ## 引用式问答
 

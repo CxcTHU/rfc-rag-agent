@@ -117,8 +117,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = get_settings()
-    provider_name = args.provider or settings.embedding_provider or "deterministic"
-    provider = create_embedding_provider(provider_name)
+    provider = create_embedding_provider_from_settings(args.provider, settings)
     expected_queries = read_expected_queries(Path(args.queries), top_k_override=args.top_k)
     keyword_passed_by_id = read_keyword_passed(Path(args.keyword_results))
 
@@ -131,6 +130,20 @@ def main() -> None:
 
     write_results(Path(args.out), results)
     print_summary(results, args.out, index_result)
+
+
+def create_embedding_provider_from_settings(
+    provider_name: str | None,
+    settings,
+) -> EmbeddingProvider:
+    return create_embedding_provider(
+        provider_name=provider_name or settings.embedding_provider or "deterministic",
+        model_name=settings.embedding_model_name,
+        api_key=settings.embedding_api_key,
+        base_url=settings.embedding_base_url,
+        dimension=settings.embedding_dimension or None,
+        timeout_seconds=settings.embedding_timeout_seconds,
+    )
 
 
 def read_expected_queries(path: Path, top_k_override: int = 0) -> list[ExpectedQuery]:

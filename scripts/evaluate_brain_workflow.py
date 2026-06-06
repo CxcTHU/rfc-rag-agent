@@ -15,15 +15,17 @@ from app.services.brain.config import RetrievalConfig  # noqa: E402
 from app.services.brain.service import BrainService  # noqa: E402
 from app.services.brain.workflow import BrainAnswerResult  # noqa: E402
 from app.services.generation.chat_model import ChatModelProvider, create_chat_model_provider  # noqa: E402
-from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider  # noqa: E402
+from app.services.retrieval.embedding import EmbeddingProvider  # noqa: E402
 from scripts.evaluate_chat import (  # noqa: E402
     ExpectedChatQuery,
+    chat_model_name_for_provider,
     citations_map_to_sources,
     contains_any,
     format_bool,
     read_expected_queries,
     source_matches_expectation,
 )
+from scripts.evaluate_vector_search import create_embedding_provider_from_settings  # noqa: E402
 
 
 RESULT_FIELDS = [
@@ -149,14 +151,15 @@ def main() -> None:
     expected_queries = read_expected_queries(Path(args.queries), top_k_override=args.top_k)
     chat_provider = create_chat_model_provider(
         provider_name=args.chat_provider,
-        model_name=settings.chat_model_name,
+        model_name=chat_model_name_for_provider(args.chat_provider, settings),
         api_key=settings.chat_model_api_key,
         base_url=settings.chat_model_base_url,
         temperature=settings.chat_model_temperature,
         timeout_seconds=settings.chat_model_timeout_seconds,
     )
-    embedding_provider = create_embedding_provider(
-        args.embedding_provider or settings.embedding_provider or "deterministic"
+    embedding_provider = create_embedding_provider_from_settings(
+        args.embedding_provider,
+        settings,
     )
 
     init_db()

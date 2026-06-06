@@ -166,6 +166,25 @@
 - 阶段 9 最终验证结论：deterministic provider 仍是默认配置，真实 chat/embedding 通道已接入到 provider 和评测边界；本地缺少真实模型密钥时，真实配置以 skipped 记录，不影响测试和评测可复现。
 - Phase 6 最终验证结果：`scripts/evaluate_model_configs.py --include-real-config` 输出 12 行，deterministic completed、real_config skipped；全量测试 `205 passed`。
 
+## Phase 7 Findings
+- Phase 7 是阶段 9 的补充验证，不移动 `phase-9-complete` tag。
+- 本地 `.env` 已配置 MIMO chat provider 和 Jina embedding provider；`.env` 已被 Git 忽略，不应提交。
+- 当前 Jina embedding 配置为 OpenAI-compatible endpoint：provider=`openai-compatible`，model=`jina-embeddings-v3`，base URL=`https://api.jina.ai/v1`，dimension=`1024`。
+- 本小 Phase 的关键判断不是新增 provider 代码，而是验证真实 embedding 索引能否被现有 vector/hybrid/chat/agent/brain workflow 消费。
+- 初次 Jina smoke index 返回 403；最小化请求验证发现补充 `Accept: application/json` 和明确 `User-Agent` 后可正常返回 1024 维向量，因此 `OpenAICompatibleEmbeddingProvider` 增加了这两个请求头。
+- 各评测脚本原先只传 provider 名称，没有把 `.env` 中的 model/base URL/API key/dimension/timeout 一起传入，导致真实 embedding 评测无法创建 provider；现在统一通过 settings 构建完整 embedding provider。
+- Jina 全量索引重建覆盖 997 个 chunk，其中 995 个新写入，2 个在 smoke run 中已存在并被跳过；说明 provider/model/dimension/content_hash 维度下的索引复用逻辑正常。
+- Jina vector 评测为 14/15，通过数高于阶段 9 deterministic vector baseline 的 11/15；唯一失败仍是 `mesoscopic_modeling`。
+- Jina hybrid 评测为 15/15，`rescued_vector=1`、`regressed_keyword=0`，说明真实向量增强没有破坏关键词 baseline。
+- chat、agent 和 brain workflow 评测已复跑：chat 6/6，agent 5/5，brain workflow 中 default_hybrid 5/6、keyword_baseline 6/6、vector_only 4/6。当前脚本默认 chat provider 仍保持 deterministic，不把真实 MIMO key 作为自动测试依赖。
+- 评测脚本已避免在 deterministic chat 评测结果中误写 `.env` 的真实 chat model 名称；现在 deterministic 结果明确标记为 `rule-based-chat-v1`，真实模型名只在显式选择真实 chat provider 时使用。
+- 自动化测试需要隔离本地 `.env`：`tests/test_agent_api.py` 现在同时覆盖 agent 和 chat 路由依赖，避免本地真实模型配置让回归测试误连外部服务。
+- MIMO 官方文档显示：普通按量 API Key 是 `sk-xxxxx`，OpenAI 兼容 Base URL 是 `https://api.xiaomimimo.com/v1`；Token Plan 订阅 API Key 是 `tp-xxxxx`，中国集群 OpenAI 兼容 Base URL 是 `https://token-plan-cn.xiaomimimo.com/v1`，两类 key 不能混用。
+- MIMO OpenAI-compatible curl 示例使用 `api-key` 请求头；项目的 `OpenAICompatibleChatModelProvider` 已同时发送 `Authorization: Bearer` 和 `api-key`，从而兼容常规 OpenAI-compatible 服务和 MIMO。
+- 使用普通 `sk-...` key 配 Token Plan 地址会返回 401；切到普通 API 地址后该 key 被识别但返回 402 余额不足。用户随后提供的 Token Plan `tp-...` key 在 `token-plan-cn` 地址 smoke test 通过，返回 `MIMO_OK`。
+- 真实 MIMO chat + Jina embedding 单独评测已写入独立结果文件：`mimo_jina_chat_results.csv` 为 6/6，`mimo_jina_agent_results.csv` 为 5/5，`mimo_jina_brain_workflow_results.csv` 为 15/18。
+- 真实组合的 brain workflow 失败项为：`vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。这说明真实 MIMO 能稳定按证据回答常规问题，但在纯向量模式和 unsupported 拒答边界上仍需要下一阶段优化。
+
 ## Resources
 - `AGENT.MD`
 - `README.md`

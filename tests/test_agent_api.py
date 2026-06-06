@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.agent import get_agent_chat_model_provider, get_agent_embedding_provider
+from app.api.chat import get_chat_model_provider
+from app.api.chat import get_embedding_provider as get_chat_embedding_provider
 from app.db.models import Base
 from app.db.repositories import (
     ChunkCreate,
@@ -47,6 +49,8 @@ def make_test_client(tmp_path) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_agent_chat_model_provider] = override_chat_model_provider
     app.dependency_overrides[get_agent_embedding_provider] = override_embedding_provider
+    app.dependency_overrides[get_chat_model_provider] = override_chat_model_provider
+    app.dependency_overrides[get_chat_embedding_provider] = override_embedding_provider
     try:
         with TestClient(app) as client:
             yield client

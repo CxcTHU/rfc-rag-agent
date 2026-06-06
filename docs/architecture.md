@@ -1736,6 +1736,8 @@ embedding_json
 
 阶段 9 之后，同一份 chunk 可以同时存在 deterministic 索引和真实模型索引。切换真实 embedding provider 后必须重建向量索引，检索时才会命中当前 provider/model/dimension 对应的 embedding。
 
+阶段 9.1 已使用 Jina `jina-embeddings-v3` 重建真实向量索引：997 个 chunk 中 995 个新写入，2 个已存在跳过。Jina provider 使用 1024 维向量，因此检索时必须继续按 provider=`openai-compatible`、model=`jina-embeddings-v3`、dimension=`1024` 查询，不能混用 deterministic 索引。
+
 ### 模型配置评测
 
 阶段 9 新增模型配置汇总评测：
@@ -1773,6 +1775,44 @@ real_config:
 
 这说明阶段 9 已具备真实模型接入和可对比评测入口，但默认仍保留 deterministic，避免本地测试依赖 API key、网络、限流和模型供应商状态。
 
+### 阶段 9.1 真实 Jina 与 MIMO 补充验证
+
+阶段 9.1 没有改变外部 API contract，而是验证真实 provider 能被现有 RAG 链路消费：
+
+```text
+Jina embeddings
+-> chunk_embeddings(provider/model/dimension/content_hash)
+-> vector / hybrid retrieval
+-> Brain workflow
+-> MIMO chat answer
+-> citations / sources / refusal evaluation
+```
+
+实现上的关键点：
+
+```text
+OpenAICompatibleEmbeddingProvider
+  增加 Accept 和 User-Agent 请求头，兼容 Jina API 行为
+
+OpenAICompatibleChatModelProvider
+  同时发送 Authorization: Bearer 和 api-key
+  保留 Accept、Content-Type 和 User-Agent
+  兼容常规 OpenAI-compatible 服务和 MIMO Token Plan
+```
+
+真实组合评测结果：
+
+```text
+Jina vector: 14/15
+Jina hybrid: 15/15
+MIMO + Jina chat: 6/6
+MIMO + Jina agent: 5/5
+MIMO + Jina brain_workflow: 15/18
+full tests: 208 passed
+```
+
+架构结论：真实 MIMO + Jina 组合证明 provider 边界有效，业务层无需知道具体供应商差异。剩余 3 个 brain workflow 失败项集中在 `vector_only` 和 `unsupported` 边界，说明下一阶段不应继续扩 provider，而应优化检索置信度、拒答判断和 hybrid/rerank 策略。
+
 ### 阶段 9 完成标准
 
 ```text
@@ -1781,7 +1821,7 @@ OpenAICompatibleEmbeddingProvider implemented
 build_vector_index supports provider/model/dimension/API parameters
 model config evaluation output exists
 search/vector/hybrid/chat/agent APIs remain stable
-full tests: 205 passed
+full tests: 208 passed
 ```
 
 ### 阶段 7 完成标准

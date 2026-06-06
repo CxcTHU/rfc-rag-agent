@@ -8,7 +8,7 @@
 阶段 9 不做登录系统、不做部署优化、不做大规模前端重构、不做写入型 Agent 工具。重点是真实模型配置、模型边界、向量索引重建、评测可复现和质量对比。
 
 ## Current Phase
-Phase 6 complete。阶段 9 开发、评测、普通文档和 Obsidian 本地知识库收尾已完成；最终功能提交和 `phase-9-complete` tag 由 Git 验证。
+Phase 7 complete。阶段 9 主体已完成并由 `phase-9-complete` 固定；本次追加小 Phase 已完成 Jina 真实向量索引重建、真实 MIMO chat + Jina embedding 单独评测，以及 vector / hybrid / chat / agent / brain workflow 验证，不移动既有阶段 tag。
 
 ## Phases
 
@@ -82,6 +82,17 @@ Phase 6 complete。阶段 9 开发、评测、普通文档和 Obsidian 本地知
 - [x] 创建阶段最终功能提交。
 - [x] 创建 `phase-9-complete` tag，确保 tag 指向阶段 9 最终功能提交。
 - **验证方式:** 全量测试、评测脚本、Obsidian 10 项模板检查、Git tag 检查。
+- **Status:** complete
+
+### Phase 7: Jina 真实向量检索评测
+- [x] 确认本地 `.env` 已配置 Jina embedding provider、model、base URL、dimension 和 API key，且 `.env` 被 Git 忽略。
+- [x] 使用 `jina-embeddings-v3` 重建 provider/model/dimension 对应的向量索引。
+- [x] 复跑 vector 评测，记录 Jina 向量检索相对 deterministic baseline 的变化。
+- [x] 复跑 hybrid 评测，确认关键词 baseline 与真实向量融合后不破坏关键问题命中。
+- [x] 复跑 chat、agent 和 brain workflow 评测，记录真实 Jina embedding 进入现有问答链路后的表现；脚本默认 chat provider 仍保持 deterministic，避免把 MIMO key 作为自动测试依赖。
+- [x] 接入 Token Plan 订阅 MIMO key，使用真实 MIMO chat + Jina embedding 单独复跑 chat、agent 和 brain workflow 评测，并写入独立 CSV。
+- [x] 更新 `task_plan.md`、`findings.md`、`progress.md`，明确阶段 9 主 tag 不移动，本小 Phase 作为补充验证。
+- **验证方式:** 向量索引脚本输出、vector/hybrid/chat/agent/brain workflow 评测脚本输出、Git tag 检查、全量测试。
 - **Status:** complete
 
 ## Final Verification Targets

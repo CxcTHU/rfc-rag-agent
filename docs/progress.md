@@ -2,11 +2,11 @@
 
 ## 最新状态：2026-06-06
 
-当前阶段：阶段 9，真实模型接入与模型评测已完成。下一步建议在用户确认后进入阶段 10，优先考虑 Agent 权限审计与写入工具安全设计，或进入部署工程化、日志观测和更大规模用户问题评测。
+当前阶段：阶段 9.1，真实 Jina 向量检索和真实 MIMO chat + Jina embedding 单独评测已完成。下一步建议进入阶段 10：真实 RAG 质量校准与拒答边界优化，重点处理 vector-only 误召回、unsupported 问题拒答和 hybrid 置信度保护。
 
 当前关键证据：
 
-- `task_plan.md` 当前阶段为 `Phase 6 complete`，阶段 9 已完成收尾。
+- `task_plan.md` 当前阶段为 `Phase 7 complete`，阶段 9.1 补充验证已完成收尾。
 - 当前分支：`codex/phase-9-real-model-evaluation`。
 - 阶段 3 tag：`phase-3-complete -> 7c22e7ccd5e9b8d325f3cb4b71d2dbb351bb6954`，未移动。
 - 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
@@ -21,6 +21,8 @@
 - 阶段 8 tag：`phase-8-complete`。
 - 阶段 9 最终功能提交：由 `phase-9-complete` tag 指向的提交标识。
 - 阶段 9 tag：`phase-9-complete`。
+- 阶段 9.1 补充提交：由 `phase-9.1-complete` tag 指向的提交标识。
+- 阶段 9.1 tag：`phase-9.1-complete`。
 - 阶段 4 分支和 tag 已推送到 GitHub。
 - `sources` 来源登记表已实现。
 - `SourceRepository` 和 `SourceRegistryService` 已实现。
@@ -73,19 +75,78 @@
 - `scripts/build_vector_index.py` 已支持 provider、model、API key、base URL、dimension、timeout 参数。
 - `scripts/evaluate_model_configs.py` 已新增。
 - `data/evaluation/model_config_results.csv` 已生成。
-- 模型配置评测：deterministic baseline completed；real_config 因本地未配置真实模型密钥和参数而 skipped。
+- 模型配置评测：deterministic baseline completed；阶段 9.1 已另行完成真实 MIMO + Jina 单独评测。
 - 前端工作台已实现：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、聊天问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口。
 - 浏览器验证：桌面加载 sources=125、documents=136、chunks=997；移动视口 390x844 无横向溢出。
 - 阶段 6 浏览器 smoke check：搜索模式包含 `keyword/vector/hybrid`，聊天检索模式包含 `auto/hybrid/vector/keyword`。
 - 阶段 7 浏览器 smoke check：Agent 面板提交“检索 filling capacity 相关资料”后状态为 `answered`，工具调用为 `hybrid_search_knowledge`，返回 5 条混合检索结果。
-- 全量测试：205 个测试通过。
+- Jina 真实向量索引重建：997 个 chunk，995 个新写入，2 个已存在跳过。
+- Jina vector 评测：14/15 通过。
+- Jina hybrid 评测：15/15 通过。
+- 真实 MIMO chat + Jina embedding：chat 6/6、agent 5/5、brain workflow 15/18。
+- 全量测试：208 个测试通过。
 
 下一步：
 
 - 阶段 9 分支 `codex/phase-9-real-model-evaluation` 已完成核心开发、验证和普通文档收尾。
 - 阶段 9 收尾时确认 `phase-9-complete` tag 指向阶段 9 最终功能提交。
-- 阶段 9 之后，建议先由用户确认阶段 10 方向：Agent 权限审计与写入工具安全设计、部署工程化或更大规模用户问题评测。
+- 阶段 9.1 之后，建议进入阶段 10：真实 RAG 质量校准与拒答边界优化。
 - 不要移动已有阶段 tag：`phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`。
+
+## 2026-06-06 阶段 9.1 补充记录：Jina 向量与 MIMO 真实评测
+
+当前分支：`codex/phase-9-real-model-evaluation`
+
+当前阶段：阶段 9.1 已完成。该补充阶段不移动 `phase-9-complete`，新增 `phase-9.1-complete` 作为真实 Jina + MIMO 补充验证提交的标识。
+
+阶段补充 tag：`phase-9.1-complete`。
+
+已完成：
+
+- 本地 `.env` 配置 Jina embedding：`openai-compatible`、`jina-embeddings-v3`、1024 维；`.env` 已被 Git 忽略。
+- 为 `OpenAICompatibleEmbeddingProvider` 增加 `Accept` 和 `User-Agent` 请求头，解决 Jina smoke index 初次返回 403 的问题。
+- 使用 Jina 重建真实向量索引：997 个 chunk，995 个新写入，2 个 smoke run 已存在并跳过。
+- 更新 vector/hybrid/chat/agent/brain workflow 评测脚本，让它们从 settings 读取完整 embedding provider 配置。
+- 根据 MIMO 官方文档校准 Token Plan 接入：订阅 key 使用 `tp-...`，中国集群 OpenAI-compatible base URL 使用 `https://token-plan-cn.xiaomimimo.com/v1`。
+- 为 `OpenAICompatibleChatModelProvider` 增加 `api-key`、`Accept` 和 `User-Agent` 请求头，同时保留 `Authorization: Bearer`，兼容 MIMO 和常规 OpenAI-compatible 服务。
+- 使用真实 MIMO `mimo-v2.5-pro` 做 smoke test，返回 `MIMO_OK`。
+- 单独生成真实组合评测文件：`mimo_jina_chat_results.csv`、`mimo_jina_agent_results.csv`、`mimo_jina_brain_workflow_results.csv`。
+- 保持 deterministic provider 仍是自动测试默认路径；真实模型评测通过显式 `--chat-provider openai-compatible` 运行，避免 CI 或本地回归依赖真实密钥和余额。
+
+验证结果：
+
+- Jina smoke index：2 个 chunk 成功写入。
+- Jina full index：total=997，indexed=995，skipped=2。
+- `python scripts\evaluate_vector_search.py --skip-index-build`：Jina vector 14/15 通过。
+- `python scripts\evaluate_hybrid_search.py`：Jina hybrid 15/15 通过，`rescued_vector=1`，`regressed_keyword=0`。
+- `python scripts\evaluate_chat.py --chat-provider openai-compatible --out data\evaluation\mimo_jina_chat_results.csv`：6/6 通过，`refused=1`，`citation_failures=0`。
+- `python scripts\evaluate_agent.py --chat-provider openai-compatible --out data\evaluation\mimo_jina_agent_results.csv`：5/5 通过，`refused=1`，`tool_failures=0`，`citation_failures=0`。
+- `python scripts\evaluate_brain_workflow.py --chat-provider openai-compatible --out data\evaluation\mimo_jina_brain_workflow_results.csv`：15/18 通过；`default_hybrid=5/6`，`keyword_baseline=6/6`，`vector_only=4/6`。
+- `python -m pytest tests\test_chat_model_provider.py tests\test_evaluate_chat.py tests\test_evaluate_agent.py tests\test_evaluate_brain_workflow.py -q`：26 个测试通过。
+- `python -m pytest -q`：208 个测试通过。
+
+遗留问题：
+
+- `mimo_jina_brain_workflow_results.csv` 中仍有 3 个失败项：`vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。
+- 当前 unsupported 拒答主要依赖检索结果是否为空；真实向量模型更容易为无意义词召回相似但无关片段，因此需要低置信度保护。
+- 当前 hybrid 对真实向量召回已有提升，但还没有基于 query 类型动态调整 keyword/vector 权重。
+
+下一阶段任务：
+
+- 建议阶段 10：真实 RAG 质量校准与拒答边界优化。
+- 增加低置信度拒答规则，例如最低相似度、关键词交叉验证、证据覆盖率和多来源一致性。
+- 分析 `filling_capacity` 在 vector-only 下的失败原因，决定是优化 query expansion、hybrid 权重还是加入 rerank。
+- 保留 deterministic baseline 和真实 MIMO + Jina 评测入口，持续做前后指标对比。
+
+面试表达：
+
+```text
+阶段 9.1 我没有移动阶段 9 的完成 tag，而是把真实模型接入后的效果做成补充验证。
+
+我先用 Jina 的真实 embedding 重建了 997 个 chunk 的向量索引，并复跑 vector 和 hybrid 评测。结果 vector 从 deterministic 的 11/15 提升到 14/15，hybrid 仍保持 15/15，说明真实 embedding 提升了语义召回，但 hybrid 仍是更稳的默认选择。
+
+然后我按 MIMO 官方文档修正 Token Plan 接入方式：Token Plan key 是 tp 前缀，base URL 使用 token-plan-cn，并且请求头需要 api-key。我让 ChatModelProvider 同时支持 api-key 和 Bearer，既兼容 MIMO，也不破坏其他 OpenAI-compatible 服务。真实 MIMO + Jina 下，chat 6/6、agent 5/5、brain workflow 15/18。剩余失败集中在纯向量召回和 unsupported 拒答边界，这为阶段 10 的质量校准提供了清晰目标。
+```
 
 ## 2026-06-06 阶段 9 完成记录：真实模型接入与模型评测
 

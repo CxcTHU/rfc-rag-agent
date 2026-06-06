@@ -146,6 +146,8 @@ def test_openai_compatible_embedding_provider_posts_embeddings_request(monkeypat
     assert captured["url"] == "https://models.example/v1/embeddings"
     assert captured["timeout"] == 7
     assert captured["headers"]["Authorization"] == "Bearer test-key"
+    assert captured["headers"]["Accept"] == "application/json"
+    assert captured["headers"]["User-agent"] == "rfc-rag-agent/embedding-provider"
     assert captured["payload"] == {
         "model": "text-embedding-test",
         "input": ["thermal control", "filling capacity"],

@@ -1,0 +1,13 @@
+query_id,question,passed,expected_tool,actual_tools,tool_matched,expected_refused,refused,refusal_matched,source_count,citations,citations_valid,expected_source_hit,tool_call_count,answer,reasoning_summary,error,notes
+agent_answer_filling,What affects filling capacity in rock-filled concrete?,yes,answer_with_citations,answer_with_citations,yes,no,no,yes,4,1|3,yes,yes,1,"根据现有资料，影响堆石混凝土中自密实混凝土填充能力的因素主要可归纳为以下两个方面：
+
+1.  **自密实混凝土的流变性能**：特别是其**屈服应力**对填充率有显著影响[1][3]。
+2.  **堆石骨架的特性**：包括**岩石颗粒的尺寸**和**形状**（或堆石的孔隙结构）[1][3]。
+
+具体而言，一项研究通过模拟试验考察了骨料尺寸、屈服应力等因素对填充率、截面孔隙率和界面微结构的影响[1]。另一项理论研究与数值模拟则指出，自密实混凝土的屈服应力以及多孔介质中颗粒（岩石）的尺寸和形状是影响其填充能力的关键因素[3]。
+
+请注意，以上结论均基于所提供的特定文献摘要信息。",识别为引用式问答意图，调用 answer_with_citations 复用现有问答、引用和拒答链路。,,Agent answer should use cited RAG answer tool.
+agent_search_filling,检索 filling capacity 相关资料,yes,hybrid_search_knowledge,hybrid_search_knowledge,yes,no,no,yes,5,,yes,yes,1,找到 5 条混合检索结果。,识别为资料检索意图，调用 hybrid_search_knowledge 复用阶段 6 的混合检索。,,Agent search should use hybrid search tool.
+agent_list_sources,请列出资料来源列表,yes,list_sources,list_sources,yes,no,no,yes,5,,yes,yes,1,找到 5 条来源记录。,识别为来源列表查询，调用 list_sources 获取来源登记记录。,,
+agent_source_detail,查看来源详情,yes,get_source_detail,get_source_detail,yes,no,no,yes,1,,yes,yes,1,来源 openalex_0c0b0b985d9c: Study on rock-fill concrete dam,识别为来源详情查询，调用 get_source_detail 查询 openalex_0c0b0b985d9c。,,
+agent_missing_source,查看来源详情,yes,get_source_detail,get_source_detail,yes,yes,yes,yes,0,,yes,yes,1,没有找到对应来源。,识别为来源详情查询，调用 get_source_detail 查询 missing_source_for_agent_eval。,,

@@ -60,7 +60,17 @@ def test_build_model_config_summaries_outputs_deterministic_baseline(tmp_path) -
 
 def test_build_model_config_summaries_skips_incomplete_real_config(tmp_path) -> None:
     seed_suite_results(tmp_path)
-    settings = Settings()
+    settings = Settings(
+        chat_model_provider="",
+        chat_model_name="",
+        chat_model_api_key="",
+        chat_model_base_url="",
+        embedding_provider="",
+        embedding_model_name="",
+        embedding_api_key="",
+        embedding_base_url="",
+        embedding_dimension=0,
+    )
 
     results = build_model_config_summaries(
         settings=settings,

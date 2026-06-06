@@ -185,6 +185,61 @@
   - `obsidian-vault/阶段汇报/阶段 9 - 真实模型接入与模型评测/Phase 5 - 回归验证与阶段评测.md`
   - `obsidian-vault/阶段汇报/阶段 9 - 真实模型接入与模型评测/Phase 6 - 文档知识库提交与标签.md`
 
+### Phase 7: Jina 真实向量检索评测
+- **Status:** complete
+- **Started:** 2026-06-06
+- **Completed:** 2026-06-06
+- Phase 目标：
+  - 在不移动 `phase-9-complete` tag 的前提下，使用本地 `.env` 中的 Jina embedding 配置真正重建向量索引。
+  - 复跑 vector、hybrid、chat、agent 和 brain workflow 评测，记录真实 embedding 对 RAG 链路的影响。
+  - 验证阶段 9 新增的 OpenAI-compatible embedding provider 能被现有检索、问答和 Agent 链路消费。
+- Actions taken:
+  - 确认当前分支仍为 `codex/phase-9-real-model-evaluation`，HEAD 为 `phase-9-complete` 指向的阶段 9 主体完成提交。
+  - 确认 `.env` 已被 Git 忽略，且本地已配置 Jina embedding provider、model、base URL、dimension 和 API key。
+  - 已将 Phase 7 追加到 `task_plan.md`、`findings.md` 和 `progress.md`。
+  - 首次 Jina smoke index 返回 403；通过最小请求确认补充 `Accept: application/json` 和明确 `User-Agent` 后可正常返回 1024 维向量。
+  - 更新 `OpenAICompatibleEmbeddingProvider`，为真实 embedding 请求增加 `Accept` 和 `User-Agent` 请求头，并补充单元测试。
+  - 更新 vector/hybrid/chat/agent/brain workflow 评测脚本，让它们从 settings 读取完整 embedding provider 配置，而不是只传 provider 名称。
+  - 使用 `jina-embeddings-v3` 执行 smoke index：2 个 chunk 成功写入。
+  - 使用 `jina-embeddings-v3` 执行全量向量索引重建：total=997，indexed=995，skipped=2。
+  - 复跑 vector 评测：14/15 passed，唯一失败为 `mesoscopic_modeling`。
+  - 复跑 hybrid 评测：15/15 passed，rescued_vector=1，regressed_keyword=0。
+  - 复跑 chat 评测：6/6 passed，refused=1，citation_failures=0；脚本默认 chat provider 仍为 deterministic。
+  - 复跑 agent 评测：5/5 passed，refused=1，tool_failures=0，citation_failures=0。
+  - 复跑 brain workflow 评测：default_hybrid 5/6，keyword_baseline 6/6，vector_only 4/6。
+  - 修复 API 测试对本地 `.env` 的泄漏影响，避免 `/chat` 测试误连真实 MIMO provider。
+  - 复跑相关测试和全量测试：provider/index/evaluation 相关测试 25 passed，chat/agent/brain 评测测试 11 passed，agent API 5 passed，全量测试 207 passed。
+  - 按 MIMO 官方文档校准 chat provider：为 OpenAI-compatible chat 请求增加 `api-key`、`Accept` 和 `User-Agent` 请求头，同时保留 `Authorization: Bearer` 兼容常规服务。
+  - 将本地 `.env` 的 MIMO 配置切换为 Token Plan 订阅 key 和 `https://token-plan-cn.xiaomimimo.com/v1`。
+  - 执行 MIMO smoke test：真实 `mimo-v2.5-pro` 返回 `MIMO_OK`，确认 Token Plan key 与 base URL 配置可用。
+  - 使用真实 MIMO chat + Jina embedding 单独复跑 chat 评测，输出 `data/evaluation/mimo_jina_chat_results.csv`：6/6 passed，refused=1，citation_failures=0。
+  - 使用真实 MIMO chat + Jina embedding 单独复跑 agent 评测，输出 `data/evaluation/mimo_jina_agent_results.csv`：5/5 passed，refused=1，tool_failures=0，citation_failures=0。
+  - 使用真实 MIMO chat + Jina embedding 单独复跑 brain workflow 评测，输出 `data/evaluation/mimo_jina_brain_workflow_results.csv`：15/18 passed；default_hybrid 5/6，keyword_baseline 6/6，vector_only 4/6。
+  - 复跑 MIMO/chat 相关测试和全量测试：chat provider/chat/agent/brain 评测相关测试 26 passed，全量测试 208 passed。
+- Files created/modified:
+  - `app/services/retrieval/embedding.py`
+  - `scripts/evaluate_vector_search.py`
+  - `scripts/evaluate_hybrid_search.py`
+  - `scripts/evaluate_chat.py`
+  - `scripts/evaluate_agent.py`
+  - `scripts/evaluate_brain_workflow.py`
+  - `tests/test_embedding_provider.py`
+  - `tests/test_evaluate_model_configs.py`
+  - `tests/test_evaluate_vector_search.py`
+  - `tests/test_agent_api.py`
+  - `tests/test_chat_model_provider.py`
+  - `data/evaluation/vector_results.csv`
+  - `data/evaluation/hybrid_results.csv`
+  - `data/evaluation/chat_results.csv`
+  - `data/evaluation/agent_results.csv`
+  - `data/evaluation/brain_workflow_results.csv`
+  - `data/evaluation/mimo_jina_chat_results.csv`
+  - `data/evaluation/mimo_jina_agent_results.csv`
+  - `data/evaluation/mimo_jina_brain_workflow_results.csv`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
 ## Current Evidence
 
 | Item | Evidence | Status |
@@ -203,6 +258,16 @@
 | Obsidian template check | 7 phase reports each contain 10 required headings | pass |
 | Final model config evaluation | deterministic completed; real_config skipped with missing env reason | pass |
 | Final full tests | 205 passed | pass |
+| Phase 7 tag policy | `phase-9-complete` remains on `9bdc8b0 feat: complete phase 9 real model evaluation` | pass |
+| Phase 7 Jina config | `.env` uses OpenAI-compatible Jina embedding with `jina-embeddings-v3` and 1024 dimensions; key remains local/ignored | pass |
+| Phase 7 Jina index | full index rebuild total=997, indexed=995, skipped=2 | pass |
+| Phase 7 vector evaluation | Jina vector search 14/15 passed | pass |
+| Phase 7 hybrid evaluation | Jina hybrid search 15/15 passed, no keyword regression | pass |
+| Phase 7 full tests | 208 passed | pass |
+| Phase 7 MIMO smoke | Token Plan key + `token-plan-cn` base URL returns `MIMO_OK` | pass |
+| Phase 7 real MIMO + Jina chat | 6/6 passed | pass |
+| Phase 7 real MIMO + Jina agent | 5/5 passed | pass |
+| Phase 7 real MIMO + Jina brain workflow | 15/18 passed; failures remain on vector-only/unsupported boundaries | pass |
 
 ## Test Results
 
@@ -233,12 +298,31 @@
 | phase 6 Obsidian template check | Phase 0-6 report heading count | 10 headings per report | 7 reports passed | pass |
 | phase 6 final model config evaluation | `.venv\Scripts\python.exe scripts\evaluate_model_configs.py --include-real-config` | model config comparison remains reproducible | 12 rows; deterministic completed; real skipped | pass |
 | phase 6 final full tests | `.venv\Scripts\python.exe -m pytest -q` | all tests pass after docs and closeout | 205 passed | pass |
+| phase 7 Jina smoke request | minimal Jina embeddings request with local `.env` key | returns 1024-dimensional embedding | status ok; dimension=1024 | pass |
+| phase 7 Jina smoke index | `.venv\Scripts\python.exe scripts\build_vector_index.py --limit 2 --batch-size 2` | provider/model/dimension can write index | total=2; indexed=2; skipped=0 | pass |
+| phase 7 Jina full index | `.venv\Scripts\python.exe scripts\build_vector_index.py --batch-size 16` | all chunks indexed for Jina provider/model/dimension | total=997; indexed=995; skipped=2 | pass |
+| phase 7 vector evaluation | `.venv\Scripts\python.exe scripts\evaluate_vector_search.py --skip-index-build` | vector evaluation consumes Jina index | 14/15 passed | pass |
+| phase 7 hybrid evaluation | `.venv\Scripts\python.exe scripts\evaluate_hybrid_search.py` | hybrid evaluation consumes Jina index without keyword regression | 15/15 passed; rescued_vector=1; regressed_keyword=0 | pass |
+| phase 7 chat evaluation | `.venv\Scripts\python.exe scripts\evaluate_chat.py` | chat evaluation remains green with current retrieval chain | 6/6 passed; refused=1; citation_failures=0 | pass |
+| phase 7 agent evaluation | `.venv\Scripts\python.exe scripts\evaluate_agent.py` | agent evaluation remains green | 5/5 passed; refused=1; tool_failures=0; citation_failures=0 | pass |
+| phase 7 brain workflow evaluation | `.venv\Scripts\python.exe scripts\evaluate_brain_workflow.py` | workflow comparison can run with Jina embedding config | default_hybrid 5/6; keyword_baseline 6/6; vector_only 4/6 | pass |
+| phase 7 targeted tests | `.venv\Scripts\python.exe -m pytest tests\test_embedding_provider.py tests\test_build_vector_index.py tests\test_evaluate_model_configs.py tests\test_evaluate_vector_search.py -q` | provider/index/evaluation tests pass | 25 passed | pass |
+| phase 7 chat/agent/brain evaluation tests | `.venv\Scripts\python.exe -m pytest tests\test_evaluate_chat.py tests\test_evaluate_agent.py tests\test_evaluate_brain_workflow.py -q` | deterministic chat label and workflow evaluation tests pass | 11 passed | pass |
+| phase 7 agent API test | `.venv\Scripts\python.exe -m pytest tests\test_agent_api.py -q` | API test isolates local `.env` real model settings | 5 passed | pass |
+| phase 7 MIMO smoke test | real `mimo-v2.5-pro` request with Token Plan key | key/base URL/header configuration works | `MIMO_OK` | pass |
+| phase 7 real MIMO + Jina chat evaluation | `.venv\Scripts\python.exe scripts\evaluate_chat.py --chat-provider openai-compatible --out data\evaluation\mimo_jina_chat_results.csv` | real chat evaluation can run with Jina embedding config | 6/6 passed; refused=1; citation_failures=0 | pass |
+| phase 7 real MIMO + Jina agent evaluation | `.venv\Scripts\python.exe scripts\evaluate_agent.py --chat-provider openai-compatible --out data\evaluation\mimo_jina_agent_results.csv` | agent evaluation can run with real chat and Jina embedding | 5/5 passed; refused=1; tool_failures=0; citation_failures=0 | pass |
+| phase 7 real MIMO + Jina brain workflow evaluation | `.venv\Scripts\python.exe scripts\evaluate_brain_workflow.py --chat-provider openai-compatible --out data\evaluation\mimo_jina_brain_workflow_results.csv` | brain workflow comparison can run with real chat and Jina embedding | 15/18 passed; default_hybrid 5/6; keyword_baseline 6/6; vector_only 4/6 | pass |
+| phase 7 MIMO/chat tests | `.venv\Scripts\python.exe -m pytest tests\test_chat_model_provider.py tests\test_evaluate_chat.py tests\test_evaluate_agent.py tests\test_evaluate_brain_workflow.py -q` | MIMO header support and evaluation helpers remain green | 26 passed | pass |
+| phase 7 full tests | `.venv\Scripts\python.exe -m pytest -q` | all tests pass after MIMO + Jina integration fixes | 208 passed | pass |
 
 ## Error Log
 
 | Timestamp | Error | Attempt | Resolution |
 |-----------|-------|---------|------------|
-| 无 | 无 | 无 | 暂无 |
+| 2026-06-06 | Jina smoke index 初次返回 403 | 使用最小 embeddings 请求定位 HTTP 头差异 | 在 `OpenAICompatibleEmbeddingProvider` 中增加 `Accept: application/json` 和明确 `User-Agent`，随后 smoke request 与索引构建通过 |
+| 2026-06-06 | 全量测试中 `/chat` 因本地 `.env` 的 MIMO provider 返回 401 | 检查 `tests/test_agent_api.py` 与 `app/api/chat.py` 的依赖注入关系 | 测试中同时覆写 agent 与 chat 路由依赖，保证自动测试使用 deterministic provider，不依赖本地真实 key |
+| 2026-06-06 | 普通 `sk-...` MIMO key 配 Token Plan base URL 返回 401；切到普通 API URL 后返回 402 余额不足 | 查阅 MIMO 官方文档并用最小请求验证 key 类型、base URL 和请求头 | 用户提供 Token Plan `tp-...` key 后，切回 `token-plan-cn` base URL，并在 provider 中补充 `api-key` 头，smoke test 通过 |
 
 ## 5-Question Reboot Check
 

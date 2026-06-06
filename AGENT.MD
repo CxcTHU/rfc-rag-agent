@@ -1216,7 +1216,13 @@ tag: phase-8-complete
 tag: phase-9-complete
 ```
 
-不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete` 或 `phase-9-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+阶段 9.1 真实 Jina + MIMO 补充验证由以下 tag 标识：
+
+```text
+tag: phase-9.1-complete
+```
+
+不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete` 或 `phase-9.1-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
 阶段 6 已实现检索优化与评测闭环：
 
@@ -1316,18 +1322,39 @@ real_config: skipped because local real model configuration is incomplete
 full tests: 205 passed
 ```
 
+阶段 9.1 已完成真实 Jina + MIMO 补充验证：
+
+```text
+Jina vector: 14/15
+Jina hybrid: 15/15
+MIMO + Jina chat: 6/6
+MIMO + Jina agent: 5/5
+MIMO + Jina brain_workflow: 15/18
+full tests: 208 passed
+```
+
+阶段 9.1 关键经验：
+
+```text
+Token Plan 的 MIMO key 是 tp- 前缀，必须配 token-plan-cn / token-plan-sgp / token-plan-ams 这类 Token Plan base URL。
+普通 sk- 前缀 key 应配普通 API base URL，两者不能混用。
+MIMO OpenAI-compatible 调用需要 api-key 请求头；项目同时保留 Authorization: Bearer 以兼容其他 provider。
+真实模型评测要输出独立 CSV，不覆盖 deterministic baseline。
+```
+
 当前最权威的进度依据是：
 
 ```text
 docs/progress.md
 ```
 
-下一步最适合由用户确认方向后再开新阶段。候选方向：
+下一步最适合新开阶段 10。优先方向：
 
 ```text
-Agent 权限审计与写入工具安全设计
-部署工程化与日志观测
-更大规模用户问题评测集
+真实 RAG 质量校准与拒答边界优化
+vector-only 误召回分析
+unsupported 问题低置信度拒答
+hybrid 权重、query expansion 或 rerank 调优
 ```
 
 阶段 7 已经把稳定 RAG 能力包装成受控工具，让 Agent 能调用 RAG 系统，但不能绕过来源、权限、引用和评测约束。后续如果加入 LLM 规划、写入工具或部署能力，必须继续保留只读优先、最大步数、显式权限、工具调用记录、引用溯源和评测回归。
@@ -1335,3 +1362,5 @@ Agent 权限审计与写入工具安全设计
 阶段 8 已经把 `/chat` 和 Agent `answer_with_citations` 收拢到 Brain workflow。后续如果加入真实模型、query rewrite、rerank 或更复杂 workflow，应优先扩展 `RetrievalConfig`、`WorkflowConfig` 和 `BrainService`，而不是重新在 chat 或 Agent 工具里复制编排逻辑。
 
 阶段 9 已经补齐真实模型 provider 边界。后续如果切换真实 chat 或 embedding 模型，必须保留 deterministic baseline，先按 provider/model/dimension 重建向量索引，再复跑 model config、vector、hybrid、chat、agent 和 brain workflow 评测，不能只凭单次回答效果判断质量。
+
+阶段 9.1 已证明真实 MIMO + Jina 可以运行，但失败项集中在 `vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。阶段 10 应优先优化证据置信度和拒答边界，而不是继续扩展模型 provider。

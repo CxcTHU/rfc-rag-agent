@@ -2,6 +2,7 @@ import csv
 
 from sqlalchemy.orm import sessionmaker
 
+from app.core.config import Settings
 from app.db.models import Base
 from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository
 from app.db.session import create_sqlite_engine
@@ -9,6 +10,7 @@ from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from app.services.retrieval.vector_index import VectorIndexService
 from scripts.evaluate_vector_search import (
     ExpectedQuery,
+    create_embedding_provider_from_settings,
     evaluate_queries,
     read_expected_queries,
     read_keyword_passed,
@@ -145,3 +147,22 @@ def test_read_keyword_passed_and_write_results(tmp_path) -> None:
     assert rows[0]["query_id"] == "missing_index"
     assert rows[0]["passed"] == "no"
     assert rows[0]["keyword_passed"] == "no"
+
+
+def test_create_embedding_provider_from_settings_passes_real_embedding_config() -> None:
+    settings = Settings(
+        embedding_provider="openai-compatible",
+        embedding_model_name="jina-embeddings-v3",
+        embedding_api_key="embedding-key",
+        embedding_base_url="https://api.jina.ai/v1",
+        embedding_dimension=1024,
+        embedding_timeout_seconds=9,
+    )
+
+    provider = create_embedding_provider_from_settings("", settings)
+
+    assert provider.provider_name == "openai-compatible"
+    assert provider.model_name == "jina-embeddings-v3"
+    assert provider.base_url == "https://api.jina.ai/v1"
+    assert provider.dimension == 1024
+    assert provider.timeout_seconds == 9
