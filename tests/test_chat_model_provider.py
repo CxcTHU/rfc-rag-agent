@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app.services.generation.chat_model import (
@@ -107,6 +109,53 @@ def test_openai_compatible_provider_requires_configuration() -> None:
             api_key="",
             base_url="https://example.test/v1",
         )
+
+
+def test_openai_compatible_provider_posts_chat_request_headers(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {"choices": [{"message": {"content": "Answer with [1]."}}]}
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["headers"] = dict(request.header_items())
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="mimo-v2.5-pro",
+        api_key="test-key",
+        base_url="https://api.xiaomimimo.com/v1",
+        timeout_seconds=9,
+    )
+
+    result = provider.generate(
+        [
+            ChatMessage(role="system", content="Use citations."),
+            ChatMessage(role="user", content="What is RFC?"),
+        ]
+    )
+
+    assert result.answer == "Answer with [1]."
+    assert captured["url"] == "https://api.xiaomimimo.com/v1/chat/completions"
+    assert captured["timeout"] == 9
+    assert captured["headers"]["Authorization"] == "Bearer test-key"
+    assert captured["headers"]["Api-key"] == "test-key"
+    assert captured["headers"]["Accept"] == "application/json"
+    assert captured["headers"]["User-agent"] == "rfc-rag-agent/chat-model-provider"
+    assert captured["payload"]["model"] == "mimo-v2.5-pro"
 
 
 def test_parse_openai_compatible_answer() -> None:

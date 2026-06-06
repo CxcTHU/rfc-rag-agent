@@ -1,10 +1,13 @@
 import math
+import json
 
 import pytest
 
 from app.services.retrieval.embedding import (
     DeterministicEmbeddingProvider,
+    OpenAICompatibleEmbeddingProvider,
     create_embedding_provider,
+    parse_openai_compatible_embeddings,
     tokenize,
 )
 
@@ -59,6 +62,135 @@ def test_create_embedding_provider_defaults_to_deterministic() -> None:
 def test_create_embedding_provider_rejects_unknown_provider() -> None:
     with pytest.raises(ValueError, match="Unsupported embedding provider"):
         create_embedding_provider("unknown")
+
+
+def test_create_embedding_provider_builds_openai_compatible_embedding_provider() -> None:
+    provider = create_embedding_provider(
+        "openai-compatible",
+        model_name="text-embedding-test",
+        api_key="test-key",
+        base_url="https://models.example/v1",
+        dimension=3,
+    )
+
+    assert provider.provider_name == "openai-compatible"
+    assert provider.model_name == "text-embedding-test"
+    assert provider.dimension == 3
+
+
+def test_openai_compatible_embedding_provider_requires_configuration() -> None:
+    with pytest.raises(ValueError, match="model_name"):
+        OpenAICompatibleEmbeddingProvider(
+            model_name="",
+            api_key="test-key",
+            base_url="https://models.example/v1",
+            dimension=3,
+        )
+
+    with pytest.raises(ValueError, match="api_key"):
+        OpenAICompatibleEmbeddingProvider(
+            model_name="text-embedding-test",
+            api_key="",
+            base_url="https://models.example/v1",
+            dimension=3,
+        )
+
+    with pytest.raises(ValueError, match="dimension"):
+        create_embedding_provider(
+            "openai-compatible",
+            model_name="text-embedding-test",
+            api_key="test-key",
+            base_url="https://models.example/v1",
+        )
+
+
+def test_openai_compatible_embedding_provider_posts_embeddings_request(monkeypatch) -> None:
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "data": [
+                        {"index": 0, "embedding": [1, 0, 0]},
+                        {"index": 1, "embedding": [0, 1, 0]},
+                    ]
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["headers"] = dict(request.header_items())
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr("app.services.retrieval.embedding.urllib.request.urlopen", fake_urlopen)
+    provider = OpenAICompatibleEmbeddingProvider(
+        model_name="text-embedding-test",
+        api_key="test-key",
+        base_url="https://models.example/v1",
+        dimension=3,
+        timeout_seconds=7,
+    )
+
+    embeddings = provider.embed_texts(["thermal control", "filling capacity"])
+
+    assert embeddings == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+    assert captured["url"] == "https://models.example/v1/embeddings"
+    assert captured["timeout"] == 7
+    assert captured["headers"]["Authorization"] == "Bearer test-key"
+    assert captured["headers"]["Accept"] == "application/json"
+    assert captured["headers"]["User-agent"] == "rfc-rag-agent/embedding-provider"
+    assert captured["payload"] == {
+        "model": "text-embedding-test",
+        "input": ["thermal control", "filling capacity"],
+    }
+
+
+def test_openai_compatible_embedding_provider_rejects_dimension_mismatch(monkeypatch) -> None:
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self):
+            return json.dumps({"data": [{"index": 0, "embedding": [1, 0]}]}).encode("utf-8")
+
+    monkeypatch.setattr(
+        "app.services.retrieval.embedding.urllib.request.urlopen",
+        lambda request, timeout: FakeResponse(),
+    )
+    provider = OpenAICompatibleEmbeddingProvider(
+        model_name="text-embedding-test",
+        api_key="test-key",
+        base_url="https://models.example/v1/embeddings",
+        dimension=3,
+    )
+
+    with pytest.raises(RuntimeError, match="dimension"):
+        provider.embed_query("thermal control")
+
+
+def test_parse_openai_compatible_embeddings_orders_by_index() -> None:
+    embeddings = parse_openai_compatible_embeddings(
+        {
+            "data": [
+                {"index": 1, "embedding": [0, 1]},
+                {"index": 0, "embedding": [1, 0]},
+            ]
+        }
+    )
+
+    assert embeddings == [[1.0, 0.0], [0.0, 1.0]]
 
 
 def vector_norm(vector: list[float]) -> float:

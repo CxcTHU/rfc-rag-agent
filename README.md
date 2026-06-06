@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 8：Brain 中控层与 RAG Workflow 配置化已完成，当前分支为 `codex/phase-8-brain-workflow`。
+阶段 9：真实模型接入与模型评测已完成；阶段 9.1 已补充完成真实 Jina 向量检索和真实 MIMO chat + Jina embedding 单独评测，当前分支为 `codex/phase-9-real-model-evaluation`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -36,7 +36,15 @@
 
 阶段 8 tag：`phase-8-complete`。
 
-下一步建议：在用户确认后进入阶段 9，优先考虑真实模型接入与模型评测，或进入 Agent 权限审计、部署工程化准备。
+阶段 9 最终功能提交：由 `phase-9-complete` tag 指向的提交标识。
+
+阶段 9 tag：`phase-9-complete`。
+
+阶段 9.1 补充提交：由 `phase-9.1-complete` tag 指向的提交标识。
+
+阶段 9.1 tag：`phase-9.1-complete`。
+
+下一步建议：进入阶段 10，优先做真实 RAG 质量校准与拒答边界优化，重点处理 vector-only 误召回、unsupported 问题拒答和 hybrid 置信度保护。
 
 当前已经实现：
 
@@ -78,6 +86,17 @@
 - `CitationAnswerService` 作为兼容门面复用 Brain workflow，`POST /chat` 和 Agent `answer_with_citations` 共享同一条回答路径
 - `scripts/evaluate_brain_workflow.py` Brain 配置化评测脚本
 - `data/evaluation/brain_workflow_results.csv` Brain 配置化评测结果
+- `docs/model_provider_evaluation.md` 阶段 9 真实模型接入与模型评测设计文档
+- `OpenAICompatibleEmbeddingProvider`，支持兼容 `/embeddings` 的真实向量模型服务
+- `.env.example` 真实 chat/embedding provider 配置字段
+- `scripts/build_vector_index.py` provider/model/dimension/API 参数
+- `scripts/evaluate_model_configs.py` 模型配置评测汇总脚本
+- `data/evaluation/model_config_results.csv` 模型配置评测结果
+- Jina `jina-embeddings-v3` 真实向量索引和评测结果
+- MIMO Token Plan `mimo-v2.5-pro` 真实 chat provider 接入验证
+- `data/evaluation/mimo_jina_chat_results.csv` 真实 MIMO chat + Jina embedding 问答评测结果
+- `data/evaluation/mimo_jina_agent_results.csv` 真实 MIMO chat + Jina embedding Agent 评测结果
+- `data/evaluation/mimo_jina_brain_workflow_results.csv` 真实 MIMO chat + Jina embedding Brain workflow 评测结果
 - `ChatModelProvider` 聊天模型抽象，支持 deterministic provider 和 OpenAI-compatible provider
 - RAG prompt/context builder，把检索结果组织成带 `[1]`、`[2]` 编号的上下文
 - `CitationAnswerService` 最小引用式问答链路
@@ -94,7 +113,7 @@
 - FastAPI 静态前端入口：`GET /`
 - 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 189 个自动化测试
+- 205 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -106,7 +125,7 @@
 3. `docs/architecture.md`
 4. `docs/data_sources.md`
 
-阶段 8 的开发记忆：
+阶段 9 的开发记忆：
 
 - `task_plan.md`
 - `findings.md`
@@ -163,7 +182,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-189 passed
+208 passed
 ```
 
 当前测试覆盖：
@@ -366,6 +385,63 @@ vector_only: 2/6 passed
 ```
 
 说明：该结果反映当前 deterministic embedding 和现有 chat 评测集下的配置差异。它证明 Brain workflow 可复现、可对比，也说明后续真实 embedding、rerank 或 query rewrite 仍有优化空间。
+
+## 真实模型接入与模型评测
+
+阶段 9 补齐真实模型接入边界。默认仍使用 deterministic provider，保证本地开发和自动化测试不依赖真实 API key；需要真实模型效果时，再通过本地 `.env` 或命令行显式配置 OpenAI-compatible chat/embedding provider。
+
+新增真实 embedding 配置字段：
+
+```powershell
+EMBEDDING_PROVIDER=openai-compatible
+EMBEDDING_MODEL_NAME=your-embedding-model
+EMBEDDING_API_KEY=your-local-secret
+EMBEDDING_BASE_URL=https://your-provider.example/v1
+EMBEDDING_DIMENSION=1024
+EMBEDDING_TIMEOUT_SECONDS=30
+```
+
+使用真实 embedding 前必须按相同 provider/model/dimension 重建向量索引：
+
+```powershell
+python scripts/build_vector_index.py `
+  --provider openai-compatible `
+  --model-name your-embedding-model `
+  --base-url https://your-provider.example/v1 `
+  --api-key your-local-secret `
+  --dimension 1024
+```
+
+运行模型配置汇总评测：
+
+```powershell
+python scripts/evaluate_model_configs.py --include-real-config
+```
+
+当前阶段 9 结果：
+
+```text
+deterministic_baseline:
+  keyword 15/15
+  vector 11/15
+  hybrid 15/15
+  chat 6/6
+  agent 5/5
+  brain_workflow 12/18
+
+real_config:
+  skipped，本地未配置真实 chat/embedding API key、base URL、model 和 embedding dimension
+
+phase_9_1_real_mimo_jina:
+  Jina vector 14/15
+  Jina hybrid 15/15
+  MIMO + Jina chat 6/6
+  MIMO + Jina agent 5/5
+  MIMO + Jina brain_workflow 15/18
+  full tests 208 passed
+```
+
+设计结论：真实模型接入已经具备工程边界和评测入口，但默认配置不切到真实模型。阶段 9.1 证明真实 Jina embedding 和真实 MIMO chat 能被现有 RAG 链路消费；剩余问题集中在纯向量召回质量和无依据问题拒答边界，适合作为阶段 10 的优化目标。
 
 ## 引用式问答
 

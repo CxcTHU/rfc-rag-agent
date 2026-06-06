@@ -11,10 +11,11 @@ sys.path.insert(0, str(ROOT))
 
 from app.core.config import get_settings  # noqa: E402
 from app.db.session import SessionLocal, init_db  # noqa: E402
-from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider  # noqa: E402
+from app.services.retrieval.embedding import EmbeddingProvider  # noqa: E402
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService  # noqa: E402
 from scripts.evaluate_vector_search import ExpectedQuery  # noqa: E402
 from scripts.evaluate_vector_search import contains_any  # noqa: E402
+from scripts.evaluate_vector_search import create_embedding_provider_from_settings  # noqa: E402
 from scripts.evaluate_vector_search import read_expected_queries  # noqa: E402
 
 
@@ -104,8 +105,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = get_settings()
-    provider_name = args.provider or settings.embedding_provider or "deterministic"
-    provider = create_embedding_provider(provider_name)
+    provider = create_embedding_provider_from_settings(args.provider, settings)
     expected_queries = read_expected_queries(Path(args.queries), top_k_override=args.top_k)
     keyword_passed_by_id = read_passed_by_id(Path(args.keyword_results))
     vector_passed_by_id = read_passed_by_id(Path(args.vector_results))

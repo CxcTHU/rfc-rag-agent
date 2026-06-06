@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import sessionmaker
 
+from app.core.config import Settings
 from app.db.models import Base
 from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository
 from app.db.session import create_sqlite_engine
@@ -16,6 +17,7 @@ from app.services.generation.chat_model import (
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from scripts.evaluate_chat import (
     ExpectedChatQuery,
+    chat_model_name_for_provider,
     evaluate_answer,
     evaluate_queries,
     read_expected_queries,
@@ -66,6 +68,13 @@ class FixedChatModelProvider:
             provider=self.provider_name,
             model_name=self.model_name,
         )
+
+
+def test_chat_model_name_for_provider_keeps_deterministic_label_local() -> None:
+    settings = Settings(chat_model_name="mimo-v2.5-pro")
+
+    assert chat_model_name_for_provider("deterministic", settings) is None
+    assert chat_model_name_for_provider("openai-compatible", settings) == "mimo-v2.5-pro"
 
 
 def test_evaluate_queries_marks_supported_answer_as_passed(tmp_path) -> None:
