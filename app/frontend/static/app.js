@@ -8,6 +8,7 @@ const apiEndpoints = {
   vectorSearch: "/search/vector",
   hybridSearch: "/search/hybrid",
   chat: "/chat",
+  agent: "/agent/query",
 };
 
 const state = {
@@ -338,6 +339,68 @@ function renderCitations(sources) {
     .join("");
 }
 
+function renderAgentToolCalls(toolCalls) {
+  const list = document.querySelector("[data-agent-tools-list]");
+  const count = document.querySelector("[data-agent-tools-count]");
+  if (!list) {
+    return;
+  }
+  if (count) {
+    count.textContent = String(toolCalls.length);
+  }
+  if (!toolCalls.length) {
+    list.innerHTML = '<div class="empty-state">暂无工具调用</div>';
+    return;
+  }
+  list.innerHTML = toolCalls
+    .map(
+      (call) => `
+        <article class="tool-call-item">
+          <h3>${escapeHtml(call.tool_name)}</h3>
+          <p>${escapeHtml(call.succeeded ? "success" : "failed")}</p>
+          <div class="result-snippet">${escapeHtml(call.input_summary)}</div>
+          <div class="result-snippet">${escapeHtml(call.output_summary)}</div>
+          ${
+            call.error
+              ? `<p class="meta-line">${escapeHtml(call.error)}</p>`
+              : ""
+          }
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function renderAgentAnswer(result) {
+  const answerBox = document.querySelector("[data-agent-answer-box]");
+  const status = document.querySelector("[data-agent-status]");
+  if (!answerBox) {
+    return;
+  }
+  if (status) {
+    status.textContent = result.refused ? "refused" : "answered";
+  }
+  const citationBadges = (result.citations || [])
+    .map((citation) => `<span class="pill">[${escapeHtml(citation)}]</span>`)
+    .join("");
+  const sourceBadges = (result.sources || [])
+    .slice(0, 5)
+    .map((source) => `<span class="pill neutral">${escapeHtml(source.source_id)}</span>`)
+    .join("");
+  const refused = result.refused
+    ? `<div class="refusal"><strong>拒答</strong><p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`
+    : "";
+  answerBox.innerHTML = `
+    ${refused}
+    <div class="answer-text">${escapeHtml(result.answer)}</div>
+    <div class="answer-meta">
+      ${citationBadges || '<span class="pill neutral">无引用</span>'}
+      ${sourceBadges || '<span class="pill neutral">无来源</span>'}
+    </div>
+    <p class="meta-line">${escapeHtml(result.reasoning_summary || "")}</p>
+  `;
+}
+
 async function submitChat() {
   const question = document.querySelector("[data-chat-question]")?.value.trim();
   const topK = Number(document.querySelector("[data-chat-top-k]")?.value || 5);
@@ -360,6 +423,33 @@ async function submitChat() {
   renderAnswer(result);
   renderCitations(result.sources || []);
   setApiStatus(result.refused ? "已拒答" : "已回答");
+}
+
+async function submitAgent() {
+  const question = document.querySelector("[data-agent-question]")?.value.trim();
+  const topK = Number(document.querySelector("[data-agent-top-k]")?.value || 5);
+  const maxToolCalls = Number(document.querySelector("[data-agent-max-tool-calls]")?.value || 2);
+  const sourceId = document.querySelector("[data-agent-source-id]")?.value.trim();
+  if (!question) {
+    setApiStatus("请输入 Agent 任务");
+    return;
+  }
+  setApiStatus("Agent 运行中");
+  const body = {
+    question,
+    top_k: topK,
+    max_tool_calls: maxToolCalls,
+  };
+  if (sourceId) {
+    body.source_id = sourceId;
+  }
+  const result = await fetchJson(apiEndpoints.agent, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  renderAgentAnswer(result);
+  renderAgentToolCalls(result.tool_calls || []);
+  setApiStatus(result.refused ? "Agent 已拒答" : "Agent 已完成");
 }
 
 function renderAll() {
@@ -414,6 +504,12 @@ function bindCommands() {
     event.preventDefault();
     submitSearch().catch((error) => {
       setApiStatus(`检索失败：${error.message}`);
+    });
+  });
+  document.querySelector("[data-agent-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitAgent().catch((error) => {
+      setApiStatus(`Agent 失败：${error.message}`);
     });
   });
   document.querySelector("[data-sync-sources]")?.addEventListener("click", () => {

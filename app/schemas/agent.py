@@ -1,0 +1,75 @@
+from pydantic import BaseModel, Field, field_validator
+
+
+class AgentQueryRequest(BaseModel):
+    question: str = Field(min_length=1)
+    top_k: int = Field(default=5, ge=1, le=50)
+    max_tool_calls: int = Field(default=2, ge=1, le=5)
+    source_id: str | None = None
+
+    @field_validator("question")
+    @classmethod
+    def question_must_not_be_blank(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("question must not be empty")
+        return normalized
+
+    @field_validator("source_id")
+    @classmethod
+    def source_id_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("source_id must not be empty")
+        return normalized
+
+
+class AgentToolCallItem(BaseModel):
+    tool_name: str
+    input_summary: str
+    output_summary: str
+    succeeded: bool
+    error: str | None
+
+
+class AgentSearchResultItem(BaseModel):
+    document_id: int
+    document_title: str
+    source_type: str
+    source_path: str | None
+    file_name: str
+    chunk_id: int
+    chunk_index: int
+    content: str
+    heading_path: str | None
+    score: float
+
+
+class AgentSourceItem(BaseModel):
+    source_id: str
+    title: str
+    source_type: str
+    status: str | None
+    trust_level: str | None
+    fulltext_permission: str | None
+    document_id: int | None
+    chunk_id: int | None
+    chunk_index: int | None
+    url: str | None
+    doi: str | None
+    content: str | None
+    score: float | None
+
+
+class AgentQueryResponse(BaseModel):
+    question: str
+    answer: str
+    tool_calls: list[AgentToolCallItem]
+    search_results: list[AgentSearchResultItem]
+    sources: list[AgentSourceItem]
+    citations: list[int]
+    refused: bool
+    refusal_reason: str | None
+    reasoning_summary: str

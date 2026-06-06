@@ -16,6 +16,7 @@
 -> 组织上下文
 -> 大模型回答
 -> 返回答案和引用来源
+-> Agent 工具编排
 -> 前端工作台展示和操作
 ```
 
@@ -25,6 +26,7 @@
 API 层：FastAPI 路由
 Schema 层：Pydantic 请求和响应模型
 Service 层：导入、切分、检索、问答业务逻辑
+Agent 层：受控工具封装、意图路由、工具调用记录和拒答约束
 DB 层：文档、chunk、问答日志元数据
 Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
 Model Provider 层：聊天模型和 embedding 模型适配
@@ -1317,5 +1319,215 @@ hybrid search service/API/chat mode 已实现
 hybrid_results.csv 可对比优化前后指标
 旧 search/vector/chat/sources/frontend 测试不被破坏
 前端能最小展示 hybrid 检索模式
+全量自动化测试通过
+```
+
+## 阶段 7 总体框架
+
+阶段 7 的目标是把阶段 6 稳定的 RAG 能力包装成受控、只读优先、可测试、可追踪的 Agent 工具调用链路。
+
+```text
+用户任务
+-> POST /agent/query
+-> AgentService
+-> AgentToolbox
+-> search / hybrid search / citation chat / sources
+-> AgentQueryResult
+-> answer + tool_calls + sources + citations + refused + reasoning_summary
+-> 前端 Agent 面板展示
+```
+
+阶段 7 不做：
+
+- 复杂 LangGraph workflow。
+- 登录系统。
+- 部署优化。
+- 联网爬虫扩展。
+- 自动执行写入型 source reindex。
+
+### Agent 目录
+
+阶段 7 新增：
+
+```text
+app/
+  api/
+    agent.py
+  schemas/
+    agent.py
+  services/
+    agent/
+      __init__.py
+      tools.py
+      service.py
+scripts/
+  evaluate_agent.py
+data/
+  evaluation/
+    agent_queries.csv
+    agent_results.csv
+docs/
+  agent_design.md
+```
+
+### 工具层
+
+`AgentToolbox` 是 Agent 的工具封装层。
+
+当前只读工具：
+
+```text
+search_knowledge
+  复用 KeywordSearchService，保留关键词 baseline。
+
+hybrid_search_knowledge
+  复用 HybridSearchService，作为搜索类任务默认工具。
+
+answer_with_citations
+  复用 CitationAnswerService，返回 answer、citations、sources 和 refused。
+
+list_sources
+  复用 SourceRepository，列出已登记来源。
+
+get_source_detail
+  复用 SourceRepository，查询单条来源详情。
+```
+
+工具返回统一结构：
+
+```text
+AgentToolResult
+  answer
+  search_results
+  sources
+  citations
+  refused
+  refusal_reason
+  tool_call
+```
+
+工具调用记录：
+
+```text
+AgentToolCallRecord
+  tool_name
+  input_summary
+  output_summary
+  succeeded
+  error
+```
+
+这样设计的原因：
+
+- API 和前端可以直接展示工具调用过程。
+- 评测脚本可以检查工具是否选对。
+- 失败时可以返回可理解的失败记录，而不是让异常逃逸。
+
+### 编排层
+
+`AgentService` 是阶段 7 的轻量编排服务。
+
+职责：
+
+- 校验 `question`、`top_k` 和 `max_tool_calls`。
+- 用规则式意图路由判断任务类型。
+- 控制最多工具调用步数。
+- 调用 `AgentToolbox`。
+- 汇总 `answer`、`tool_calls`、`sources`、`search_results`、`citations`、`refused` 和 `reasoning_summary`。
+
+当前意图路由：
+
+```text
+搜索 / 检索 / 查找
+-> hybrid_search_knowledge
+
+来源列表
+-> list_sources
+
+来源详情 + source_id
+-> get_source_detail
+
+来源详情但缺少 source_id
+-> 拒答，提示需要 source_id
+
+其他问答
+-> answer_with_citations
+```
+
+第一版不用 LLM 做规划，是为了保证阶段 7 的行为稳定、可解释、可自动测试。后续如果接入 LLM 规划，也必须保留只读优先、最大步数、权限字段、工具调用记录和评测回归。
+
+### Agent API
+
+阶段 7 新增：
+
+```text
+POST /agent/query
+```
+
+请求字段：
+
+```text
+question
+top_k
+max_tool_calls
+source_id
+```
+
+响应字段：
+
+```text
+question
+answer
+tool_calls
+search_results
+sources
+citations
+refused
+refusal_reason
+reasoning_summary
+```
+
+API 层保持薄封装：只做请求校验、依赖注入和响应映射，不直接写检索、问答或来源查询逻辑。
+
+### 评测策略
+
+阶段 7 新增：
+
+```text
+data/evaluation/agent_queries.csv
+scripts/evaluate_agent.py
+data/evaluation/agent_results.csv
+```
+
+Agent 评测检查：
+
+- 期望工具是否被调用。
+- 拒答是否符合预期。
+- 需要来源的任务是否返回 sources。
+- 需要引用的任务 citations 是否能映射到 sources。
+- 期望来源标题或内容词是否命中。
+- 工具调用次数是否受控。
+
+当前结果：
+
+```text
+agent evaluation: 5/5 passed
+refused=1
+tool_failures=0
+citation_failures=0
+full tests=163 passed
+```
+
+### 阶段 7 完成标准
+
+```text
+docs/agent_design.md 已建立
+只读 Agent 工具层已实现
+Agent 编排服务已实现
+POST /agent/query 已实现
+旧 search/vector/hybrid/chat/sources API 不被破坏
+Agent 评测脚本和结果文件已生成
+前端能最小展示 Agent 回答和工具调用记录
+keyword/vector/hybrid/chat/agent 评测通过
 全量自动化测试通过
 ```

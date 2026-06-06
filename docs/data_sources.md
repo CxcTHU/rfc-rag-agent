@@ -215,3 +215,65 @@ sources
 - `chunk_embeddings` 是由 chunks 派生出的可重建索引数据。
 - `hybrid_results.csv` 和 `retrieval_error_cases.csv` 是评测产物，不是新的资料来源。
 - 阶段 6 没有公开分发受限全文，也没有引入新的爬虫链路。
+
+## 阶段 7 Agent 化与数据来源边界
+
+阶段 7 进入 Agent 化，没有新增外部资料来源，也没有改变阶段 4 建立的 source registry 合规边界。
+
+Agent 工具只读取现有数据：
+
+```text
+sources
+documents/chunks
+chunk_embeddings
+qa_logs
+data/evaluation/*.csv
+```
+
+阶段 7 新增的 Agent 工具：
+
+```text
+search_knowledge
+hybrid_search_knowledge
+answer_with_citations
+list_sources
+get_source_detail
+```
+
+这些工具复用现有 service 和 repository：
+
+```text
+KeywordSearchService
+HybridSearchService
+CitationAnswerService
+SourceRepository
+```
+
+阶段 7 新增的评测输入和输出：
+
+```text
+data/evaluation/agent_queries.csv
+data/evaluation/agent_results.csv
+```
+
+它们不包含新的受限全文，只记录 Agent 任务、期望工具、期望拒答、来源命中、引用有效性和工具调用结果。
+
+阶段 7 的核心关系是：
+
+```text
+sources
+-> documents/chunks
+-> keyword/vector/hybrid retrieval
+-> citation chat
+-> Agent read-only tools
+-> agent evaluation results
+-> frontend tool call display
+```
+
+合规结论：
+
+- Agent 不新增联网爬虫链路。
+- Agent 不绕过 `sources` 的可信度、全文权限和状态记录。
+- Agent 不自动执行 `POST /sources/{source_id}/reindex` 等写入型动作。
+- `agent_results.csv` 是评测产物，不是新的资料来源。
+- 受限全文仍只保存在本地授权环境中，不公开分发。

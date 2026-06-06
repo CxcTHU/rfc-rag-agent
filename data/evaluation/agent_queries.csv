@@ -1,0 +1,6 @@
+query_id,question,top_k,source_id,expected_tool,expected_refused,require_sources,require_citations,expected_source_title_terms,expected_source_content_terms,notes
+agent_answer_filling,What affects filling capacity in rock-filled concrete?,5,,answer_with_citations,no,yes,yes,Filling|Self-Compacting|填充,filling capacity|flowability|self-compacting,Agent answer should use cited RAG answer tool.
+agent_search_filling,检索 filling capacity 相关资料,5,,hybrid_search_knowledge,no,yes,no,Filling|Self-Compacting|填充,filling capacity|flowability|self-compacting,Agent search should use hybrid search tool.
+agent_list_sources,请列出资料来源列表,5,,list_sources,no,yes,no,,,,Agent should list registered sources.
+agent_source_detail,查看来源详情,5,openalex_0c0b0b985d9c,get_source_detail,no,yes,no,Study on rock-fill concrete dam,,,Agent should retrieve a specific source detail.
+agent_missing_source,查看来源详情,5,missing_source_for_agent_eval,get_source_detail,yes,no,no,,,,Missing source should produce an auditable refusal.

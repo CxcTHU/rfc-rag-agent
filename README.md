@@ -10,11 +10,11 @@
 - 基于检索资料的引用式问答
 - 国产大模型接入
 - 检索与回答质量评测
-- 后续 Agent 工具调用与前端界面
+- 受控 Agent 工具调用与前端界面
 
 ## 当前阶段
 
-阶段 6：检索优化与评测已完成，当前分支为 `codex/phase-6-evaluation`。
+阶段 7：Agent 化已完成，当前分支为 `codex/phase-7-agent-tools`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -28,7 +28,11 @@
 
 阶段 6 tag：`phase-6-complete`。
 
-下一阶段准备进入：阶段 7，Agent 化。
+阶段 7 最终功能提交：由 `phase-7-complete` tag 指向的提交标识。
+
+阶段 7 tag：`phase-7-complete`。
+
+下一步建议：在用户确认后进入真实模型接入、权限审计或部署工程化准备。
 
 当前已经实现：
 
@@ -58,6 +62,12 @@
 - `docs/evaluation_plan.md` 阶段 6 评测计划
 - `scripts/analyze_retrieval_errors.py` 检索错误案例分析脚本
 - `data/evaluation/retrieval_error_cases.csv` 检索错误案例表
+- `docs/agent_design.md` 阶段 7 Agent 化设计文档
+- `app/services/agent/` 受控 Agent 工具层和编排服务
+- `POST /agent/query` Agent 查询 API
+- `data/evaluation/agent_queries.csv` Agent 评测集
+- `scripts/evaluate_agent.py` Agent 评测脚本
+- `data/evaluation/agent_results.csv` Agent 评测结果
 - `ChatModelProvider` 聊天模型抽象，支持 deterministic provider 和 OpenAI-compatible provider
 - RAG prompt/context builder，把检索结果组织成带 `[1]`、`[2]` 编号的上下文
 - `CitationAnswerService` 最小引用式问答链路
@@ -72,9 +82,9 @@
 - `scripts/evaluate_sources.py` 来源登记库评测脚本
 - `data/evaluation/source_registry_metrics.csv` 来源治理指标
 - FastAPI 静态前端入口：`GET /`
-- 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、引用来源侧栏、source sync 和 source reindex 入口
+- 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 141 个自动化测试
+- 163 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -86,7 +96,7 @@
 3. `docs/architecture.md`
 4. `docs/data_sources.md`
 
-阶段 6 的开发记忆：
+阶段 7 的开发记忆：
 
 - `task_plan.md`
 - `findings.md`
@@ -143,7 +153,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-141 passed
+163 passed
 ```
 
 当前测试覆盖：
@@ -177,6 +187,12 @@ python -m pytest
 - source sync 脚本、sources API、source reindex
 - source registry 评测脚本
 - 前端首页、静态资源挂载和工作台入口
+- Agent 设计文档断言
+- Agent 只读工具层
+- Agent 编排服务
+- Agent API
+- Agent 评测脚本
+- 前端 Agent 面板和工具调用展示入口
 
 ## 向量索引、混合检索与评测
 
@@ -222,6 +238,7 @@ keyword baseline: 15/15 passed
 vector search: 11/15 passed
 hybrid search: 15/15 passed, rescued_vector=4, regressed_keyword=0
 chat evaluation: 6/6 passed
+agent evaluation: 5/5 passed
 ```
 
 说明：当前向量检索使用 deterministic embedding，主要用于稳定开发和自动化测试，不代表真实语义 embedding 的最终效果。阶段 6 新增的 hybrid search 会同时召回关键词和向量结果，按 chunk 去重，对两路分数归一化并加权排序。它保留 keyword 和 vector baseline，便于持续对比。
@@ -243,6 +260,63 @@ data/evaluation/retrieval_error_cases.csv
 - `Citation Accuracy`：chat 6/6，citation_failures=0。
 - `Refusal Quality`：chat 评测中 1 条无依据问题正确拒答。
 - `Error Cases`：4 个 vector-only 失败均被 hybrid 标记为 `fixed_by_hybrid`。
+
+## Agent 化
+
+阶段 7 的最小 Agent 链路是：
+
+```text
+用户任务
+-> AgentService 意图路由
+-> 只读 Agent 工具
+-> search / hybrid search / citation chat / sources
+-> 结构化返回 answer、tool_calls、sources、citations、refused、reasoning_summary
+-> 前端展示工具调用和引用
+```
+
+当前 Agent 工具：
+
+- `search_knowledge`：关键词检索工具，保留阶段 1 baseline。
+- `hybrid_search_knowledge`：混合检索工具，默认用于搜索类任务。
+- `answer_with_citations`：引用式问答工具，复用 `CitationAnswerService`。
+- `list_sources`：来源列表工具。
+- `get_source_detail`：来源详情工具。
+
+调用 `/agent/query` 示例：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/agent/query `
+  -ContentType "application/json" `
+  -Body '{"question":"检索 filling capacity 相关资料","top_k":5,"max_tool_calls":2}'
+```
+
+响应字段要点：
+
+- `answer`：Agent 汇总后的回答或检索说明。
+- `tool_calls`：工具调用记录，包含工具名、输入摘要、输出摘要、成功状态和错误信息。
+- `sources` / `citations`：来源和引用信息。
+- `search_results`：搜索类任务返回的片段结果。
+- `refused` / `refusal_reason`：资料或参数不足时的拒答状态与原因。
+- `reasoning_summary`：面向审计的工具选择摘要，不暴露内部敏感推理。
+
+运行 Agent 评测：
+
+```powershell
+python scripts/evaluate_agent.py
+```
+
+当前结果：
+
+```text
+agent evaluation: 5/5 passed
+refused=1
+tool_failures=0
+citation_failures=0
+```
+
+阶段 7 只做只读工具优先，不自动执行 source reindex 等写入型动作；后续如接入写入工具，必须有显式请求字段、权限约束和测试。
 
 ## 引用式问答
 
@@ -374,6 +448,7 @@ app/frontend/
 - 查看指定 document 的 chunks。
 - 使用关键词检索、向量检索或混合检索查看召回片段。
 - 调用 `/chat` 提问，展示回答、引用编号、模型信息和引用来源侧栏。
+- 调用 `/agent/query` 提交 Agent 任务，展示回答、引用编号、工具调用记录和来源。
 - 触发 source sync。
 - 触发单条 source reindex，并在失败时展示可理解错误。
 
@@ -419,6 +494,7 @@ rfc-rag-agent/
     api/
       chat.py
       documents.py
+      agent.py
       frontend.py
       health.py
       search.py
@@ -432,10 +508,12 @@ rfc-rag-agent/
     schemas/
       chat.py
       document.py
+      agent.py
       health.py
       search.py
       source.py
     services/
+      agent/
       generation/
       ingestion/
       retrieval/
@@ -540,3 +618,11 @@ rfc-rag-agent/
 我新增了 `docs/evaluation_plan.md`，把 Recall@K、Citation Accuracy、Faithfulness、Answer Coverage 和 Refusal Quality 映射到当前 keyword、vector、chat 评测脚本和 CSV 结果。然后复跑 baseline：关键词检索 15/15，向量检索 11/15，chat 6/6，并用 `retrieval_error_cases.csv` 记录 4 个向量检索失败案例。
 
 优化上我选择混合检索，而不是直接接更复杂的外部模型或 Agent。`HybridSearchService` 同时调用关键词和向量检索，按 chunk 去重，对两路分数归一化，再用权重和双路命中奖励重排。最终 hybrid search 达到 15/15，救回 4 个 vector-only 失败，且没有相对关键词 baseline 的退化。这样阶段 6 能清楚说明：优化不是凭感觉，而是有 baseline、有错误案例、有指标对比和回归测试。
+
+## 阶段 7 面试表达
+
+阶段 7 我把已经稳定的 RAG 能力包装成受控 Agent 工具调用链路，而不是直接引入复杂 LangGraph workflow。
+
+我先写 `docs/agent_design.md` 固定工具边界和权限约束，然后新增 `AgentToolbox`，把关键词检索、混合检索、引用式问答和来源查询封装成只读工具。`AgentService` 使用保守规则做意图路由：搜索类任务调用 `hybrid_search_knowledge`，问答类任务调用 `answer_with_citations`，来源类任务调用 sources 工具。API 通过 `POST /agent/query` 返回 answer、tool_calls、sources、citations、refused 和 reasoning_summary，前端也能展示工具调用记录。
+
+这个阶段的重点不是让 Agent “自由发挥”，而是让它不能绕过 sources、documents/chunks、hybrid search、引用和拒答链路。验证上我新增 Agent 评测集和脚本，结果 5/5 通过，同时复跑 keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6 和全量 163 个测试。面试里可以强调：这是一个可审计、可回归、只读优先的 RAG Agent，而不是不可控的多工具 demo。

@@ -192,7 +192,8 @@ textarea {
 
 .content-grid,
 .operations-grid,
-.answer-grid {
+.answer-grid,
+.agent-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(340px, 0.8fr);
   gap: 16px;
@@ -200,7 +201,8 @@ textarea {
 }
 
 .operations-grid,
-.answer-grid {
+.answer-grid,
+.agent-grid {
   padding-top: 16px;
 }
 
@@ -345,6 +347,13 @@ td {
   align-items: end;
 }
 
+.agent-controls {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.45fr) minmax(110px, 0.5fr) minmax(140px, 0.8fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
 .answer-box {
   min-height: 220px;
   padding: 16px;
@@ -384,7 +393,8 @@ td {
 }
 
 .result-list,
-.chunk-list {
+.chunk-list,
+.tool-call-list {
   display: grid;
   gap: 12px;
   padding: 16px;
@@ -394,7 +404,8 @@ td {
 
 .citation-item,
 .result-item,
-.chunk-item {
+.chunk-item,
+.tool-call-item {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 12px;
@@ -403,7 +414,8 @@ td {
 
 .citation-item h3,
 .result-item h3,
-.chunk-item h3 {
+.chunk-item h3,
+.tool-call-item h3 {
   margin: 0 0 8px;
   font-size: 15px;
   line-height: 1.35;
@@ -412,7 +424,8 @@ td {
 
 .citation-item p,
 .result-item p,
-.chunk-item p {
+.chunk-item p,
+.tool-call-item p {
   margin-bottom: 8px;
   font-size: 13px;
 }
@@ -450,7 +463,9 @@ td {
   .content-grid,
   .operations-grid,
   .answer-grid,
-  .chat-controls {
+  .agent-grid,
+  .chat-controls,
+  .agent-controls {
     grid-template-columns: 1fr;
   }
 
