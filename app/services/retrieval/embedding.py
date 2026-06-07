@@ -92,6 +92,7 @@ class OpenAICompatibleEmbeddingProvider:
             data=json.dumps(payload).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {self.api_key}",
+                "api-key": self.api_key,
                 "Accept": "application/json",
                 "Content-Type": "application/json",
                 "User-Agent": "rfc-rag-agent/embedding-provider",

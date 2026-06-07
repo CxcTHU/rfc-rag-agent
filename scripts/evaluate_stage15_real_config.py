@@ -449,7 +449,16 @@ def redact_sensitive_text(text: str, settings: Settings) -> str:
     for secret in [settings.embedding_api_key, settings.chat_model_api_key]:
         if secret:
             redacted = redacted.replace(secret, "[REDACTED]")
-    return redacted[:500]
+    return compact_error_summary(redacted)
+
+
+def compact_error_summary(text: str, limit: int = 500) -> str:
+    normalized = text.strip()
+    if len(normalized) <= limit:
+        return normalized
+    head_length = max(120, limit // 2)
+    tail_length = max(120, limit - head_length - 7)
+    return f"{normalized[:head_length].rstrip()} ... {normalized[-tail_length:].lstrip()}"
 
 
 def write_status(path: Path, statuses: list[RealConfigStatus]) -> None:

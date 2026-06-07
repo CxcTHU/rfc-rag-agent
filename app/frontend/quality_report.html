@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>阶段 15 质量审阅报告</title>
+  <title>阶段 16 质量风险闭环报告</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -11,13 +11,13 @@
     <section class="hero">
       <div>
         <p class="eyebrow">只读质量报告</p>
-        <h1>阶段 15 质量审阅报告</h1>
-        <p class="hero-copy">汇总真实配置复跑、回答覆盖复核和 Decompose provenance 风险，不触发真实 API 调用。</p>
+        <h1>阶段 16 质量风险闭环报告</h1>
+        <p class="hero-copy">汇总 real decompose 诊断、Answer Coverage 闭环和 quality gate，不触发真实 API 调用。</p>
       </div>
       <a class="secondary-link" href="/">返回工作台</a>
     </section>
     <section class="panel">
-      <h2>质量汇总</h2>
+      <h2>质量闭环汇总</h2>
       <div class="table-wrap">
         <table>
           <thead>
@@ -27,35 +27,28 @@
               <th>Status</th>
               <th>Value</th>
               <th>Baseline</th>
-              <th>Risk</th>
+              <th>Risk Before</th>
+              <th>Risk After</th>
               <th>Recommendation</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>real_config</td><td>agent</td><td>completed</td><td>5/5 (1.000)</td><td>5/5 (1.000)</td><td>low</td><td>agent 真实配置结果可作为发布前校准证据。</td></tr>
-<tr><td>real_config</td><td>brain_workflow</td><td>completed</td><td>18/18 (1.000)</td><td>18/18 (1.000)</td><td>low</td><td>brain_workflow 真实配置结果可作为发布前校准证据。</td></tr>
-<tr><td>real_config</td><td>chat</td><td>completed</td><td>6/6 (1.000)</td><td>6/6 (1.000)</td><td>low</td><td>chat 真实配置结果可作为发布前校准证据。</td></tr>
-<tr><td>real_config</td><td>decompose</td><td>error</td><td>0/0</td><td>10/10 (1.000)</td><td>high</td><td>优先排查 decompose 真实配置错误；不要用 deterministic 结果伪造成真实通过。</td></tr>
-<tr><td>real_config</td><td>hybrid</td><td>completed</td><td>15/15 (1.000)</td><td>15/15 (1.000)</td><td>low</td><td>hybrid 真实配置结果可作为发布前校准证据。</td></tr>
-<tr><td>real_config</td><td>user_questions</td><td>completed</td><td>27/30 (0.900)</td><td>25/30 (0.833)</td><td>medium</td><td>user_questions 真实结果与 deterministic baseline 不同，保留差异用于人工审阅。</td></tr>
-<tr><td>real_config</td><td>vector</td><td>completed</td><td>15/15 (1.000)</td><td>13/15 (0.867)</td><td>medium</td><td>vector 真实结果与 deterministic baseline 不同，保留差异用于人工审阅。</td></tr>
-<tr><td>answer_coverage</td><td>review_rows</td><td>completed</td><td>9</td><td>stage14 medium/review rows</td><td>high</td><td>将 high 样例作为发布前阻断风险，将 medium 样例保留为人工审阅样例。</td></tr>
-<tr><td>answer_coverage</td><td>risk_high</td><td>completed</td><td>1</td><td></td><td>high</td><td>发布前优先处理 high 风险回答，通常是超时、无答案或来源不匹配。</td></tr>
-<tr><td>answer_coverage</td><td>risk_medium</td><td>completed</td><td>8</td><td></td><td>medium</td><td>保留 medium 样例进入人工审阅，检查回答是否真正覆盖期望要点。</td></tr>
-<tr><td>provenance</td><td>evidence_rows</td><td>completed</td><td>50</td><td>50 stage14 evidence rows</td><td>low</td><td>保留证据级 provenance 作为人工审阅和报告依据。</td></tr>
-<tr><td>provenance</td><td>both_match_rows</td><td>completed</td><td>37</td><td>37 stage14 both-match rows</td><td>low</td><td>both_match 越多，说明 keyword/vector 双路证据更一致。</td></tr>
-<tr><td>provenance</td><td>decomposed_evidence_rows</td><td>completed</td><td>15</td><td>15 stage14 decomposed rows</td><td>low</td><td>保留 decomposed evidence rows 解释复杂问题证据来源。</td></tr>
-<tr><td>overall</td><td>stage15_quality_gate</td><td>review_required</td><td>high</td><td>stage14 quality tables</td><td>high</td><td>阶段 15 已形成真实配置和回答复核报告；发布前优先处理 high 风险和真实 decompose error。</td></tr>
+            <tr><td>decompose</td><td>decompose</td><td>retry_completed</td><td>embedding_header_compatibility_and_chat_timeout</td><td>stage15 status=error</td><td>high</td><td>low</td><td>保留阶段 16 显式真实 decompose 重试结果；后续真实复跑建议使用兼容 embedding 请求头和更长 chat timeout。</td></tr>
+<tr><td>answer_coverage</td><td>closure_rows</td><td>completed</td><td>9</td><td>before high=1, medium=8</td><td>high</td><td>high</td><td>阶段 16 已为 high/medium 样例补充 risk_after、root_cause、decision 和 next_action。</td></tr>
+<tr><td>answer_coverage</td><td>risk_after_high</td><td>completed</td><td>1</td><td>stage15 risk_before high/medium</td><td>high</td><td>high</td><td>仍有 high 样例，通常是超时、无答案或证据不足；必须人工核验。</td></tr>
+<tr><td>answer_coverage</td><td>risk_after_medium</td><td>completed</td><td>3</td><td>stage15 risk_before high/medium</td><td>high</td><td>medium</td><td>medium 样例保留为人工审阅项，通常是来源细节不足。</td></tr>
+<tr><td>answer_coverage</td><td>risk_after_low</td><td>completed</td><td>5</td><td>stage15 risk_before high/medium</td><td>high</td><td>low</td><td>low 样例可作为阶段 16 闭环通过证据。</td></tr>
+<tr><td>overall</td><td>stage16_quality_gate</td><td>review_required</td><td>high</td><td>stage15 overall=review_required/high</td><td>high</td><td>high</td><td>real decompose 已完成阶段 16 显式重试；当前剩余 high 阻断来自 Answer Coverage 样例，需要人工核验或重跑真实回答。</td></tr>
           </tbody>
         </table>
       </div>
     </section>
     <section class="panel">
-      <h2>数据安全边界</h2>
+      <h2>人工核验边界</h2>
       <ul class="compact-list">
+        <li>阶段 16 当前不执行 git add、commit、tag、push 或 PR。</li>
         <li>报告只读取本地 CSV 质量产物，不调用真实模型或检索 API。</li>
-        <li>报告不保存 API key、Bearer token、供应商原始敏感响应或受限全文。</li>
-        <li>真实回答只以脱敏摘要和指标进入审阅表。</li>
+        <li>真实 API key、Bearer token、供应商原始敏感响应和受限全文不得写入报告。</li>
       </ul>
     </section>
   </main>

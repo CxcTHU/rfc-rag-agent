@@ -1,5 +1,59 @@
 # 项目进度
 
+## 最新状态：2026-06-07（阶段 16 开发完成，待人工核验）
+
+当前阶段：阶段 16，真实质量风险闭环已完成开发、测试、普通文档和 Obsidian 草稿收尾。当前状态按用户要求停在人工核验前：尚未执行 `git add`、`git commit`、`git tag`、`git push`，也未创建 PR。
+
+当前关键证据：
+
+- 当前分支：`codex/phase-16-real-quality-risk-closure`。
+- 阶段 15 已合并到 `main`，`main` 当前阶段 15 合并提交为 `b5bad50 Merge phase 15 real review report`。
+- `phase-15-complete -> a844948`，未移动任何已有阶段 tag。
+- 阶段 16 新增 `docs/stage16_quality_risk_closure.md`。
+- 阶段 16 新增 `scripts/analyze_stage16_decompose_diagnostics.py` 与 `data/evaluation/stage16_decompose_diagnostics.csv`。
+- real decompose 当前闭环结论：追加显式真实重试后为 `status_after=retry_completed`，`root_cause=embedding_header_compatibility_and_chat_timeout`，`blocking_status=not_blocking`。
+- 阶段 16 新增 `scripts/evaluate_stage16_answer_coverage_closure.py` 与 `data/evaluation/stage16_answer_coverage_closure.csv`。
+- Answer Coverage 闭环表：9 行，`risk_after high=1`、`medium=3`、`low=5`。
+- high 阻断样例仍为 `user_mixed_itz_strength`，根因为真实回答超时，不能证明 ITZ 与强度回答覆盖度。
+- 阶段 16 新增 `scripts/build_stage16_quality_closure_report.py`、`data/evaluation/stage16_quality_closure_summary.csv`、`docs/stage16_quality_closure_report.md`。
+- `GET /quality-report` 当前展示阶段 16 只读质量风险闭环报告，不触发真实 API。
+- 阶段 16 quality gate：`review_required/high`，当前 high 阻断来自 Answer Coverage，不再来自 decompose。
+- 阶段 16 脚本复跑稳定：decompose 诊断、Answer Coverage 闭环和质量报告均可重复生成。
+- 阶段 16 聚焦回归测试：80 个测试通过。
+- 阶段 16 全量测试：322 个测试通过。
+
+阶段 16 完成内容：
+
+- 使用 Planning with Files 维护阶段 16 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 建立阶段 16 设计文档，明确风险分级、排查流程、复核标准、安全边界和人工核验前收尾要求。
+- 排查阶段 15 real decompose SSL EOF，将笼统 high/error 先分类为 provider/network 层 SSL EOF；随后追加真实重试，补齐 embedding provider `api-key` 兼容请求头，并用更长 chat timeout 跑通 decompose 10/10。
+- 改进阶段 15 真实配置复跑的错误摘要压缩方式，长错误保留开头和结尾，避免未来丢失 traceback 尾部关键字。
+- 对 `stage15_answer_coverage_review.csv` 中 1 条 high 和 8 条 medium 样例逐条闭环，输出 `risk_before`、`risk_after`、`root_cause`、`decision` 和 `next_action`。
+- 生成阶段 16 质量闭环汇总表、Markdown 报告和 `/quality-report` 静态只读页面。
+- 确认阶段 16 不改变 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`。
+- 确认阶段 16 不保存 API key、Bearer token、供应商原始敏感响应或受限全文。
+
+遗留问题：
+
+- `user_mixed_itz_strength` 仍为 Answer Coverage high/blocking，需要人工确认是否重跑真实回答或调整 timeout。
+- 3 条 medium 样例为 `source_detail_limited`，建议保留人工审阅或后续补充更细证据。
+- 阶段 16 当前未提交、未打 `phase-16-complete` tag、未推送 GitHub，等待用户人工核验和明确确认。
+
+下一阶段任务：
+
+- 用户人工核验阶段 16 质量表、报告页和 high/medium 风险结论。
+- 如确认通过，再执行提交、创建 `phase-16-complete` tag 并推送；tag 应指向阶段 16 最终功能提交。
+- 如人工核验认为仍需增强，可追加阶段 16 小 Phase，优先处理真实 decompose 重试、timeout 配置或 high 样例真实回答复跑。
+- 后续阶段 17 可进入检索架构升级，但必须先确认阶段 16 阻断项是否放行。
+
+面试表达：
+
+```text
+阶段 16 我没有用 deterministic 结果掩盖真实失败，而是把阶段 15 质量报告里的 high/medium 风险逐条闭环。real decompose 的 SSL EOF 先被分类为 provider/network 层问题，随后通过补齐 embedding 的 `api-key` 兼容请求头并把真实 chat timeout 提到 120 秒完成显式重试，结果 10/10 通过。Answer Coverage 的 9 条 high/medium 样例被拆成 1 high、3 medium、5 low，每条都有 root_cause、decision 和 next_action。
+
+报告层面，我生成了阶段 16 quality closure summary、Markdown 报告和 /quality-report 只读页面。质量门禁仍是 review_required/high，但当前 high 阻断已经转为 Answer Coverage 样例，而不是 decompose。验证上，阶段 16 聚焦回归 80 个测试通过，全量测试 320 个通过，核心 search/vector/hybrid/chat/agent API 没有被破坏。
+```
+
 ## 最新状态：2026-06-07（阶段 15 完成）
 
 当前阶段：阶段 15，真实配置复跑与质量审阅报告已完成。下一步建议进入阶段 16：处理阶段 15 报告暴露的发布前质量风险，优先排查真实 decompose SSL EOF、复核 1 条 Answer Coverage high 风险样例，并继续推进 medium 样例人工审阅闭环；HyDE 仍只做离线实验，不进入默认链路或自动回归。

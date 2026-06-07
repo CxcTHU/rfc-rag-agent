@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 15：真实配置复跑与质量审阅报告已完成，当前分支为 `codex/phase-15-real-review-report`。
+阶段 16：真实质量风险闭环已完成开发与验证，当前分支为 `codex/phase-16-real-quality-risk-closure`，等待用户人工核验。阶段 16 按要求尚未执行 `git add`、`git commit`、`git tag`、`git push` 或创建 PR。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -68,7 +68,9 @@
 
 阶段 15 tag：`phase-15-complete`。
 
-下一步建议：进入阶段 16，优先处理阶段 15 质量报告暴露的发布前风险，包括真实 decompose 复跑错误、Answer Coverage 高风险样例和 medium 样例人工审阅闭环；HyDE 仍只做离线实验，不进入默认链路或自动回归。
+阶段 16 当前状态：开发和验证完成，尚未提交、尚未创建 `phase-16-complete` tag，等待用户人工核验后再决定是否提交、打 tag 和推送。
+
+下一步建议：人工核验阶段 16 的 high 阻断项，重点是真实 decompose SSL EOF 是否需要显式重试，以及 `user_mixed_itz_strength` 是否需要真实回答重跑；确认后再进入提交和 `phase-16-complete` 标记流程。HyDE 仍只做离线实验，不进入默认链路或自动回归。
 
 当前已经实现：
 
@@ -156,8 +158,16 @@
 - `scripts/build_stage15_quality_report.py` 阶段 15 质量汇总与只读报告生成脚本
 - `data/evaluation/stage15_quality_summary.csv` 阶段 15 质量汇总表
 - `docs/stage15_quality_report.md` 阶段 15 Markdown 质量审阅报告
-- `GET /quality-report` 阶段 15 只读质量报告页
-- `app/frontend/quality_report.html` 阶段 15 静态只读质量报告
+- `GET /quality-report` 阶段 15/16 只读质量报告页
+- `app/frontend/quality_report.html` 阶段 16 静态只读质量风险闭环报告
+- `docs/stage16_quality_risk_closure.md` 阶段 16 真实质量风险闭环设计文档
+- `scripts/analyze_stage16_decompose_diagnostics.py` 阶段 16 real decompose SSL EOF 诊断脚本
+- `data/evaluation/stage16_decompose_diagnostics.csv` 阶段 16 decompose 诊断结果表
+- `scripts/evaluate_stage16_answer_coverage_closure.py` 阶段 16 Answer Coverage high/medium 闭环脚本
+- `data/evaluation/stage16_answer_coverage_closure.csv` 阶段 16 回答覆盖风险闭环表
+- `scripts/build_stage16_quality_closure_report.py` 阶段 16 质量闭环汇总与报告生成脚本
+- `data/evaluation/stage16_quality_closure_summary.csv` 阶段 16 质量闭环汇总表
+- `docs/stage16_quality_closure_report.md` 阶段 16 Markdown 质量风险闭环报告
 - Brain `rewrite_query` 最小上下文补全，支持基于可选 `history` 的“它/这个技术/这类问题”等代词或省略问法补全
 - `/chat` 和 `/agent/query` 可选 `history` 字段，旧请求保持兼容
 - 跨语言 query expansion 增强，补充 ITZ/界面、creep/徐变、freeze-thaw/抗冻、porosity/孔隙率、emission/碳排放、steel fiber/钢纤维、rock shear key/剪力键等术语
@@ -247,7 +257,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-300 passed
+322 passed
 ```
 
 当前测试覆盖：
@@ -565,6 +575,42 @@ overall quality gate: review_required/high
 ```
 
 阶段 15 结论：真实配置已经能支撑 vector、hybrid、chat、agent 和 Brain workflow 的发布前校准，但真实 decompose error 和 1 条 Answer Coverage high 风险不能被掩盖。deterministic baseline 继续负责稳定回归，真实配置结果只作为发布前质量审阅依据；只读报告页只展示本地质量产物，不触发真实 API 调用，也不重构核心前端工作台。
+
+## 真实质量风险闭环
+
+阶段 16 把阶段 15 报告中的 high/medium 风险推进到可解释闭环：真实 decompose SSL EOF 被分类为 provider/network 层风险，Answer Coverage high/medium 样例被逐条复核，并生成新的质量门禁报告。本阶段仍不改变核心 RAG API，不让真实 API 成为全量测试前提，也不新增爬虫或外部资料来源。
+
+阶段 16 核心产物：
+
+```text
+docs/stage16_quality_risk_closure.md
+data/evaluation/stage16_decompose_diagnostics.csv
+data/evaluation/stage16_answer_coverage_closure.csv
+data/evaluation/stage16_quality_closure_summary.csv
+docs/stage16_quality_closure_report.md
+app/frontend/quality_report.html
+```
+
+运行阶段 16 闭环脚本：
+
+```powershell
+python scripts/analyze_stage16_decompose_diagnostics.py
+python scripts/evaluate_stage16_answer_coverage_closure.py
+python scripts/build_stage16_quality_closure_report.py
+```
+
+当前质量闭环结果：
+
+```text
+real decompose: retry_completed, root_cause=embedding_header_compatibility_and_chat_timeout, blocking_status=not_blocking
+stage16 answer coverage closure: 9 rows, risk_after high=1, medium=3, low=5
+stage16 quality gate: review_required/high
+stage16 real decompose retry: 10/10 passed with compatible embedding header and longer chat timeout
+focused regression: 80 passed
+full tests: 322 passed
+```
+
+阶段 16 结论：本阶段没有把 deterministic baseline 当成真实成功，也没有伪造 real decompose 通过。追加重试后，真实 decompose 已在兼容 embedding 请求头和更长 chat timeout 下跑通 10/10；当前剩余发布前 high 阻断来自 Answer Coverage，`user_mixed_itz_strength` 仍需人工核验或重跑真实回答。阶段 16 当前停在用户人工核验前状态，尚未提交、尚未打 `phase-16-complete` tag、尚未推送 GitHub。
 
 ## Agent 化
 

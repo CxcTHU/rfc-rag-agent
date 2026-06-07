@@ -5,206 +5,226 @@
 ### Phase 0: 阶段启动与规划校准
 
 - Status: complete
-- 解决的问题：从阶段 14 完成并合并后的 `main` 起步，把当前线程、分支、tag 和规划文件切换到阶段 15。
-- 在 RAG 链路中的位置：阶段启动前置工作，确保真实配置复跑、Answer Coverage 复核和质量报告基于阶段 14 的最新质量表推进。
-- 为什么现在做：阶段 14 已建立真实 embedding 对比、回答覆盖校准和 Decompose provenance 可读化，但真实配置结果仍缺失，medium/review 样例也需要复核，质量表还没有形成报告入口。
+- 解决的问题：从阶段 15 完成并合并后的 `main` 起步，把当前线程、goal、分支、tag 和规划文件切换到阶段 16。
+- 在 RAG 链路中的位置：阶段启动前置工作，确保真实 decompose 风险排查、Answer Coverage 复核和质量报告更新基于阶段 15 的真实质量表推进。
+- 为什么现在做：阶段 15 已把真实配置复跑和质量报告落地，但报告仍有 real decompose error、1 条 Answer Coverage high 风险和 8 条 medium 审阅项；阶段 16 需要先把这些风险变成可闭环、可解释、可人工核验的状态。
 - 已完成工作：
-  - 将线程标题修改为 `阶段15-真实配置复跑与质量审阅报告`。
+  - 设置本线程 goal。
+  - 将线程标题修改为 `阶段16-真实质量风险闭环`。
   - 阅读 Planning with Files 技能说明。
-  - 读取并确认当前 Git 状态、`main`、`phase-14-complete` 和最近提交。
-  - 确认 `main` 当前为 `b9cb019 Merge phase 14 real quality calibration`。
-  - 确认 `phase-14-complete -> e5df149`，不移动已有阶段 tag。
-  - 从阶段 14 合并后的 `main` 创建并切换到 `codex/phase-15-real-review-report`。
-  - 阅读阶段 15 启动所需文档、阶段 14 设计文档、旧规划文件和关键进度记录。
-  - 用 Planning with Files 重写阶段 15 的 `task_plan.md`、`findings.md`、`progress.md`。
-- 验证结果：
-  - 起点全量测试通过：`.venv\Scripts\python.exe -m pytest -q` -> `275 passed`。
+  - 读取并确认当前 Git 状态、`main`、`phase-15-complete` 和最近提交。
+  - 确认 `main` 当前为 `b5bad50 Merge phase 15 real review report`。
+  - 确认 `phase-15-complete -> a844948`，不移动已有阶段 tag。
+  - 从阶段 15 合并后的 `main` 创建并切换到 `codex/phase-16-real-quality-risk-closure`。
+  - 阅读阶段 16 启动所需文档、阶段 15 设计文档、阶段 15 质量报告、旧规划文件和关键质量表。
+  - 用 Planning with Files 重写阶段 16 的 `task_plan.md`、`findings.md`、`progress.md`。
+  - 明确阶段 16 收尾状态：不执行 `git add`、`git commit`、`git tag`、`git push` 或 PR，等待用户人工核验。
 
 ## Current Evidence
 
 | Evidence | Result | Status |
 |---|---|---|
-| Thread title | `阶段15-真实配置复跑与质量审阅报告` | pass |
-| Starting branch | `main` tracking `origin/main` before branch creation | pass |
-| Main merge | `b9cb019 Merge phase 14 real quality calibration` | pass |
-| Phase 14 tag | `phase-14-complete -> e5df149` | pass |
-| Stage 15 branch | `codex/phase-15-real-review-report` created | pass |
-| Planning files | Rewritten for stage 15 | pass |
-| Baseline tests | `.venv\Scripts\python.exe -m pytest -q` -> `275 passed` | pass |
+| Goal | active, 阶段 16 开发到人工核验前状态 | pass |
+| Thread title | `阶段16-真实质量风险闭环` | pass |
+| Starting branch | `main` before branch creation | pass |
+| Main merge | `b5bad50 Merge phase 15 real review report` | pass |
+| Phase 15 tag | `phase-15-complete -> a844948` | pass |
+| Stage 16 branch | `codex/phase-16-real-quality-risk-closure` created | pass |
+| Planning files | Rewritten for stage 16 | pass |
+| Submit boundary | no add/commit/tag/push/PR until user approval | pass |
 
 ## Test Results
 
 | Test | Expected | Actual | Status |
 |---|---|---|---|
-| Phase 0 baseline tests | Full suite passes | 275 passed | pass |
-| Phase 1 design tests | Stage 15 design document covers artifacts, rubric, skip rules and read-only report boundaries | 3 passed | pass |
-| Phase 2 real config tests | Real config script handles completed, skipped, error, redaction and incremental status | 12 passed | pass |
-| Phase 2 real vector | Real config vector result generated | 15/15 passed | pass |
-| Phase 2 real hybrid | Real config hybrid result generated | 15/15 passed | pass |
-| Phase 2 real user questions | Real config user question result generated | 27/30 passed | pass |
-| Phase 2 real decompose | Real config decompose result generated or error recorded | error: SSL EOF during embedding request | pass |
-| Phase 2 real chat | Real config chat result generated | 6/6 passed | pass |
-| Phase 2 real agent | Real config agent result generated | 5/5 passed | pass |
-| Phase 2 real brain workflow | Real config brain workflow result generated | 18/18 passed | pass |
-| Phase 3 answer coverage review tests | Stage 15 review script handles real summaries, skipped rows and high-risk errors | 7 passed | pass |
-| Phase 3 answer coverage review run | `stage15_answer_coverage_review.csv` generated | 9 rows; high=1, medium=8 | pass |
-| Phase 4 quality report tests | Stage 15 report script builds summary, markdown and html | 2 passed | pass |
-| Phase 4 quality report run | `stage15_quality_summary.csv`, `stage15_quality_report.md` and `quality_report.html` generated | 14 rows; high=4, low=7, medium=3 | pass |
-| Phase 4 frontend report route | `/quality-report` serves read-only report | 1 passed | pass |
-| Phase 5 deterministic vector | Vector baseline remains stable | 13/15; keyword baseline 15/15 | pass |
-| Phase 5 deterministic hybrid | Hybrid baseline remains stable | 15/15; rescued_vector=2; regressed_keyword=0 | pass |
-| Phase 5 deterministic user questions | User question baseline remains stable | 25/30; refusal_matched=30/30 | pass |
-| Phase 5 deterministic decompose | Decompose baseline remains stable | 10/10 | pass |
-| Phase 5 deterministic chat | Chat baseline remains stable | 6/6 | pass |
-| Phase 5 deterministic agent | Agent baseline remains stable | 5/5 | pass |
-| Phase 5 deterministic brain workflow | Brain workflow baseline remains stable | 18/18 | pass |
-| Phase 5 focused regression | Stage 15 + RAG/API/frontend focused tests pass | 112 passed | pass |
-| Phase 6 final full tests | Full test suite passes before commit/tag | 300 passed | pass |
-| Phase 6 secret scan | Generated evaluation/docs/frontend/Obsidian files do not contain loaded API keys or token-like literals | exact_secret_hits=0; pattern_hits=0 | pass |
+| Phase 0 Git checks | Stage 15 merged, tag stable, branch created | pass | pass |
+| Phase 1 design tests | Stage 16 design document covers artifacts, risk closure, API safety and manual verification boundary | 3 passed | pass |
+| Phase 2 decompose diagnostic tests | SSL EOF, timeout, traceback, skipped and redaction are classified | 7 passed | pass |
+| Phase 2 stage15 real config regression | Existing stage15 real config behavior still passes after compact error summary change | 13 passed | pass |
+| Phase 2 diagnostic run | `stage16_decompose_diagnostics.csv` generated | root_cause=provider_network_ssl_eof; blocking_status=manual_retry_required | pass |
+| Phase 3 answer coverage closure tests | High timeout, medium review, Chinese domain coverage and schema are handled | 7 passed | pass |
+| Phase 3 answer coverage closure run | `stage16_answer_coverage_closure.csv` generated | 9 rows; high=1, medium=3, low=5 | pass |
+| Phase 4 quality closure report tests | Stage 16 quality summary and reports are generated from closure CSVs | 2 passed | pass |
+| Phase 4 quality closure report run | Stage 16 summary/report/frontend generated | 6 rows; quality gate=review_required/high | pass |
+| Phase 5 stage16 script rerun | Stage 16 diagnostics, coverage closure and quality report regenerate deterministically | decompose=provider_network_ssl_eof; coverage=9 rows; gate=review_required/high | pass |
+| Phase 5 focused regression | Stage 16 + frontend/search/vector/hybrid/decompose/chat/brain/agent/sources/documents tests | 80 passed | pass |
+| Phase 5 full test suite | Entire repository test suite | 320 passed | pass |
+| Phase 6 ordinary docs | README, docs/progress, architecture, data_sources and AGENT synced to stage 16 | pass | pass |
+| Phase 6 Obsidian drafts | Stage 16 page, Phase index, Phase 0-6 reports, indexes and knowledge point updated | 7 phase reports; 10-section checks pass | pass |
+| Phase 6 submit boundary | Confirm no stage/add/commit/tag/push/PR actions were intentionally performed | waiting for manual verification | pass |
+| Final full test after docs | Entire repository test suite after ordinary docs and Obsidian drafts | 320 passed | pass |
+| Final Git state | Branch and tag state before handoff | branch=`codex/phase-16-real-quality-risk-closure`; no tag points at HEAD; changes unstaged/uncommitted | pass |
+| Phase 7 real decompose retry | Real embedding + real chat decompose retry with compatible embedding header and 120s chat timeout | 10/10 passed | pass |
+| Phase 7 focused tests | Embedding provider, decompose diagnostics and stage16 report tests | 23 passed | pass |
+| Phase 7 full test suite | Entire repository test suite after real decompose fix | 322 passed | pass |
 
 ## Error Log
 
 | Error | Attempt | Resolution |
 |---|---|---|
-| Planning with Files session catchup script not found | Tried `C:\Users\admin\.claude\skills\planning-with-files\scripts\session-catchup.py` | Not blocking; restored context by reading Git state, required docs, planning files and code |
-| Stage 15 real rerun outer timeout | First `evaluate_stage15_real_config.py --run-real` exceeded the outer command timeout after writing partial result files | Added incremental status writing, monitored remaining child process to natural completion, and used final status/output files as evidence |
-| Stage 15 real decompose SSL EOF | `evaluate_decompose.py --embedding-provider openai-compatible --chat-provider openai-compatible --include-all` failed on a real embedding request | Recorded `decompose=error` in `real_config_status.csv` and `stage14_embedding_comparison.csv`; did not fake a result file |
+| No error in Phase 0 | N/A | N/A |
+| Stage 15 error summary lost traceback tail | `real_config_status.csv` decompose row is truncated before SSL keyword | Added stage16 diagnosis using progress evidence and changed future compaction to preserve both head and tail |
+| Chinese expected point check too coarse | First Phase 3 test kept a clear porosity/compression answer at medium | Added stage16 domain term groups; reran tests successfully |
+| Frontend test still expected stage 15 title | Focused regression failed once in `test_quality_report_is_served_read_only` | Updated the test to assert the stage 16 report title and manual verification boundary; focused/full tests then passed |
+| Phase 16 must stop before submission | User required manual verification before local/GitHub submission | Completed docs and Obsidian drafts, kept no add/commit/tag/push/PR state |
+
+### Phase 1: 阶段 16 设计文档与闭环口径
+
+- Status: complete
+- 解决的问题：阶段 16 既要排查真实 decompose 的外部错误，又要复核回答覆盖风险；如果不先固定口径，后续容易把真实网络失败、回答缺口、人工审阅和质量门槛混成一个笼统 high。
+- 在 RAG 链路中的位置：evaluation/reporting 层，位于真实配置诊断、Answer Coverage 闭环表和质量报告实现之前。
+- 为什么现在做：阶段 15 已有质量报告，但还没有阶段 16 的 root_cause、risk_before/risk_after 和 quality gate 定义。
+- 完成工作：
+  - 新增 `docs/stage16_quality_risk_closure.md`。
+  - 明确阶段 16 输入、输出、错误分类、Answer Coverage 闭环规则、质量门槛和只读报告边界。
+  - 明确阶段 16 仍不改变 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`。
+  - 明确阶段 16 收尾等待用户人工核验，不执行 `git add`、`git commit`、`git tag`、`git push` 或 PR。
+  - 新增 `tests/test_stage16_quality_risk_closure.py`。
+- 验证结果：
+  - `.venv\Scripts\python.exe -m pytest tests\test_stage16_quality_risk_closure.py -q` -> `3 passed`。
+
+### Phase 2: real decompose SSL EOF 排查与错误分类
+
+- Status: complete
+- 解决的问题：阶段 15 质量报告只说明 real decompose 是 high/error，但阶段 16 需要知道它是本地 Decompose 逻辑失败、真实 provider 网络失败、超时、配置缺失，还是脚本编排问题。
+- 在 RAG 链路中的位置：位于真实 embedding provider 调用和 Decompose 评测之间，是发布前质量校准的错误分类层。
+- 为什么现在做：如果不先分类真实 decompose error，后续 quality gate 只能停留在 `review_required/high`，无法说明是否可以人工重试或是否阻断核心链路。
+- 完成工作：
+  - 阅读并复核阶段 15 真实配置复跑脚本、Decompose 评测脚本、embedding provider 和 Decompose 服务。
+  - 新增 `scripts/analyze_stage16_decompose_diagnostics.py`。
+  - 新增 `tests/test_analyze_stage16_decompose_diagnostics.py`。
+  - 生成 `data/evaluation/stage16_decompose_diagnostics.csv`。
+  - 改进 `scripts/evaluate_stage15_real_config.py` 的错误摘要压缩方式，长错误保留开头和结尾，避免未来丢失 traceback 尾部关键错误。
+- 验证结果：
+  - `.venv\Scripts\python.exe -m pytest tests\test_analyze_stage16_decompose_diagnostics.py -q` -> `7 passed`。
+  - `.venv\Scripts\python.exe -m pytest tests\test_evaluate_stage15_real_config.py -q` -> `13 passed`。
+  - `.venv\Scripts\python.exe scripts\analyze_stage16_decompose_diagnostics.py` -> `root_cause=provider_network_ssl_eof`，`blocking_status=manual_retry_required`。
+- 当前结论：
+  - real decompose 仍没有被伪造成 completed。
+  - 当前根因归类为真实 provider/network 层 SSL EOF。
+  - 该风险需要人工核验时显式重试；默认 deterministic 回归不访问真实 API。
+
+### Phase 3: Answer Coverage high/medium 风险闭环
+
+- Status: complete
+- 解决的问题：阶段 15 的 Answer Coverage 复核表还有 1 条 high 和 8 条 medium，但没有逐条说明 risk_after、root_cause、decision 和 next_action。
+- 在 RAG 链路中的位置：回答生成后的质量复核层，用来判断真实回答摘要、来源标题和引用质量是否足够支撑发布前结论。
+- 为什么现在做：Phase 2 已完成真实 decompose 错误分类；当前需要把回答覆盖风险也闭环，供 Phase 4 生成新的 quality gate。
+- 完成工作：
+  - 新增 `scripts/evaluate_stage16_answer_coverage_closure.py`。
+  - 新增 `tests/test_evaluate_stage16_answer_coverage_closure.py`。
+  - 生成 `data/evaluation/stage16_answer_coverage_closure.csv`。
+  - 对 `user_mixed_itz_strength` high 风险进行优先闭环，确认为 `provider_timeout`，仍为 high/blocking。
+  - 对 8 条 medium 进行规则复核，确认 5 条降为 low，3 条保持 medium。
+  - 增加阶段 16 领域关键词检查，改善中文 expected_answer_points 的覆盖判断。
+- 验证结果：
+  - `.venv\Scripts\python.exe -m pytest tests\test_evaluate_stage16_answer_coverage_closure.py -q` -> `7 passed`。
+  - `.venv\Scripts\python.exe scripts\evaluate_stage16_answer_coverage_closure.py` -> `9 rows`，`risk_after high=1, low=5, medium=3`。
+- 当前结论：
+  - high 风险没有被掩盖，仍需人工核验重试真实回答。
+  - 3 条 medium 是资料细节不足，不是明显 hallucination 或引用失败。
+  - 5 条 low 可作为阶段 16 回答覆盖闭环通过证据。
+
+### Phase 4: 质量汇总与只读报告更新
+
+- Status: complete
+- 解决的问题：阶段 16 已有 decompose 诊断表和 Answer Coverage 闭环表，但还需要一个统一的质量汇总，把 risk_before/risk_after、quality gate 和下一步动作汇总给发布前人工核验。
+- 在 RAG 链路中的位置：evaluation/reporting 层，位于检索、回答和 Agent API 之后，是质量审阅入口，不参与默认检索或回答链路。
+- 为什么现在做：Phase 2 和 Phase 3 已完成风险分类；现在必须把这些结论写入报告和 `/quality-report`，避免阶段 15 的 high 风险仍停留在旧报告里。
+- 完成工作：
+  - 新增 `scripts/build_stage16_quality_closure_report.py`。
+  - 新增 `tests/test_build_stage16_quality_closure_report.py`。
+  - 生成 `data/evaluation/stage16_quality_closure_summary.csv`。
+  - 生成 `docs/stage16_quality_closure_report.md`。
+  - 更新 `app/frontend/quality_report.html` 为阶段 16 只读质量闭环报告。
+  - 明确 quality gate 为 `review_required/high`，仍需人工核验，不伪造成通过。
+- 验证结果：
+  - `.venv\Scripts\python.exe -m pytest tests\test_build_stage16_quality_closure_report.py -q` -> `2 passed`。
+  - `.venv\Scripts\python.exe scripts\build_stage16_quality_closure_report.py` -> `6 rows`，`quality gate=review_required/high`。
+- 当前结论：
+  - real decompose SSL EOF 已分类为外部 provider/network 风险，但仍需人工显式重试。
+  - Answer Coverage high/medium 已有 risk_after 和 next_action。
+  - `/quality-report` 仍是只读页面，不调用真实 API，不写数据库。
+
+### Phase 5: 回归验证与阶段 16 质量结论
+
+- Status: complete
+- 解决的问题：阶段 16 已修改评测脚本、报告生成逻辑、前端质量报告页面和一个阶段 15 错误摘要函数，需要证明这些改动没有破坏现有 documents/search/vector/hybrid/decompose/chat/brain/agent/sources/frontend 链路。
+- 在 RAG 链路中的位置：阶段收尾验证层，位于质量报告生成之后、普通文档和 Obsidian 收尾之前。
+- 为什么现在做：只有聚焦回归和全量测试通过后，普通文档才能写入可靠的阶段结论。
+- 完成工作：
+  - 复跑 `scripts/analyze_stage16_decompose_diagnostics.py`。
+  - 复跑 `scripts/evaluate_stage16_answer_coverage_closure.py`。
+  - 复跑 `scripts/build_stage16_quality_closure_report.py`。
+  - 运行阶段 16、frontend、search、vector、hybrid、decompose、chat、brain、agent、sources、documents 聚焦回归。
+  - 运行全量测试。
+  - 修正前端测试中仍检查阶段 15 报告标题的旧断言。
+- 验证结果：
+  - `.venv\Scripts\python.exe scripts\analyze_stage16_decompose_diagnostics.py` -> `root_cause=provider_network_ssl_eof`，`blocking_status=manual_retry_required`。
+  - `.venv\Scripts\python.exe scripts\evaluate_stage16_answer_coverage_closure.py` -> `9 rows`，`risk_after high=1, low=5, medium=3`。
+  - `.venv\Scripts\python.exe scripts\build_stage16_quality_closure_report.py` -> `6 rows`，`quality gate=review_required/high`。
+  - 聚焦回归 -> `80 passed`。
+  - 全量测试 -> `320 passed`。
+- 当前结论：
+  - 阶段 16 新增逻辑和只读质量报告没有破坏核心 API。
+  - 真实失败没有被 deterministic baseline 掩盖。
+  - 当前仍是“开发与验证完成，等待用户人工核验前”的状态，不提交、不打 tag、不推送。
+
+### Phase 6: 普通文档、Obsidian 草稿与待人工核验收尾
+
+- Status: complete
+- 解决的问题：阶段 16 已完成开发和验证，但项目入口文档、AGENT 判断和 Obsidian 本地知识库需要同步，否则后续线程可能仍以阶段 15 或“准备进入阶段 16”为依据。
+- 在 RAG 链路中的位置：阶段收尾与知识沉淀层，位于质量验证之后、用户人工核验和版本提交之前。
+- 为什么现在做：用户要求阶段完成后先不要提交和推送，因此必须把“开发完成但待人工核验”的状态写清楚，避免误创建 tag。
+- 完成工作：
+  - 更新 `README.md`，写入阶段 16 当前状态、产物、脚本、质量结论、测试结果和人工核验边界。
+  - 更新 `docs/progress.md`，新增阶段 16 最新状态和面试表达。
+  - 更新 `docs/architecture.md`，补充阶段 16 evaluation/reporting 闭环数据流和 API 边界。
+  - 更新 `docs/data_sources.md`，说明阶段 16 不新增资料来源、不保存敏感响应或受限全文。
+  - 更新 `AGENT.MD`，记录阶段 16 经验、分支、测试结果和“人工核验后再提交/tag/push”规则。
+  - 新增 Obsidian 阶段 16 阶段页、Phase 汇报索引、Phase 0 到 Phase 6 汇报和知识点。
+  - 更新 Obsidian 首页、阶段索引、阶段汇报索引、评测体系分类和相关知识点双链。
+- 验证结果：
+  - `obsidian-vault/阶段汇报/阶段 16 - 真实质量风险闭环/` 下共有 7 篇 Phase 汇报和 1 篇 Phase 索引。
+  - Phase 0 到 Phase 6 均包含 `## 1. 本 Phase 目标` 和 `## 10. 面试表达`，数量均为 7。
+  - `.gitignore` 确认包含 `obsidian-vault/` 和 `obsidian-vault/**`。
+  - 文档与 Obsidian 收尾后再次运行全量测试：`320 passed`。
+  - `git tag --points-at HEAD` 无输出，确认当前未创建 `phase-16-complete` tag。
+- 当前结论：
+  - 阶段 16 收尾文档已同步。
+  - 当前仍未提交、未打 tag、未推送，等待用户人工核验。
+
+### Phase 7: 追加 real decompose 运行修复
+
+- Status: complete
+- 解决的问题：用户看不懂 decompose high 阻断后，要求先解决当前 decompose 的运行问题。
+- 在 RAG 链路中的位置：真实 embedding provider 调用、Decompose 子 query 检索和真实 chat 生成之间。
+- 为什么现在做：阶段 16 原结论是 decompose 需要人工重试；用户希望先把这个运行问题处理掉，而不是直接提交。
+- 完成工作：
+  - 显式复跑 real decompose，复现 `SSL: UNEXPECTED_EOF_WHILE_READING`。
+  - 通过最小 embedding POST 探针确认 provider 需要或兼容 `api-key` 请求头。
+  - 修复 `OpenAICompatibleEmbeddingProvider`，同时发送 `Authorization` 和 `api-key`。
+  - 修复后，real decompose 越过 embedding SSL EOF，暴露出真实 chat 30 秒读取超时。
+  - 用真实 embedding + deterministic chat 验证 decompose 检索链路，结果 10/10。
+  - 用真实 embedding + 真实 chat，并设置 `CHAT_MODEL_TIMEOUT_SECONDS=120`，完整 decompose 结果 10/10。
+  - 更新 stage16 diagnostics 和 quality report，decompose 变为 `retry_completed/not_blocking`。
+- 验证结果：
+  - `.venv\Scripts\python.exe -m pytest tests\test_embedding_provider.py -q` -> `12 passed`。
+  - 真实 embedding + deterministic chat decompose retry -> `10/10 passed`。
+  - 真实 embedding + 真实 chat decompose retry with 120s timeout -> `10/10 passed`。
+  - diagnostics/report/embedding 聚焦测试 -> `23 passed`。
+  - 全量测试 -> `322 passed`。
+- 当前结论：
+  - decompose 当前问题已解决，不再是阶段 16 high 阻断。
+  - quality gate 仍为 `review_required/high`，剩余 high 来自 Answer Coverage 的 `user_mixed_itz_strength`。
+  - 当前仍未提交、未打 tag、未推送，等待用户继续核验。
 
 ## 5-Question Reboot Check
 
 | Question | Answer |
 |---|---|
-| Where am I? | Phase 0 of stage 15: startup, planning and baseline verification |
-| Where am I going? | Toward real config rerun, Answer Coverage review, quality summary/report, regression, docs, Obsidian, commit and `phase-15-complete` |
-| What's the goal? | Complete stage 15: Real config rerun and quality review report |
-| What have I learned? | Stage 14 is merged; `phase-14-complete` points to `e5df149`; real_config results are still missing/skipped; stage 15 should make the quality state explicit and reportable |
-| What have I done? | Renamed thread, confirmed main/tag, created branch, rewrote planning files for stage 15 |
-
-### Phase 1: 阶段 15 设计文档与质量报告口径
-
-- Status: complete
-- 解决的问题：阶段 15 同时涉及真实配置复跑、回答复核和报告入口，如果没有先固定口径，后续脚本容易把真实 API 缺失、deterministic baseline、人工复核和报告展示混在一起。
-- 在 RAG 链路中的位置：这是 evaluation/reporting 层的设计入口，位于真实配置复跑脚本、Answer Coverage 复核表和报告实现之前。
-- 为什么现在做：阶段 14 已经生成质量表，但真实配置结果和复核结论仍缺失；阶段 15 需要先明确结果目录、skip 规则和只读报告边界。
-- 完成工作：
-  - 新增 `docs/stage15_real_review_report.md`。
-  - 明确真实配置复跑、`stage14_real` 目录、Answer Coverage 复核、质量汇总和只读报告的输入输出。
-  - 明确 graceful skip 规则：真实 API 缺失、限流、超时、余额不足或维度不匹配不能伪造成成功。
-  - 明确报告入口只读展示，不触发真实 API 调用，不改变旧 API schema。
-  - 新增 `tests/test_stage15_real_review_report.py`。
-- 验证结果：
-  - `.venv\Scripts\python.exe -m pytest tests\test_stage15_real_review_report.py -q` -> `3 passed`。
-
-### Phase 2: 真实配置复跑脚本与 stage14_real 结果目录
-
-- Status: complete
-- 解决的问题：阶段 14 只有 real_config missing/skipped 状态，阶段 15 需要明确当前真实配置到底能产出哪些结果、哪些失败、失败原因是什么。
-- 在 RAG 链路中的位置：位于阶段 14 quality tables 之后，把真实 provider 结果输出到 `stage14_real`，供后续 Answer Coverage 复核和质量报告使用。
-- 为什么现在做：如果没有真实结果或明确 error 状态，后续报告只能重复“缺结果”，不能支持发布前质量判断。
-- 完成工作：
-  - 新增 `scripts/evaluate_stage15_real_config.py`。
-  - 新增 `tests/test_evaluate_stage15_real_config.py`。
-  - 生成 `data/evaluation/stage14_real/real_config_status.csv`。
-  - 显式真实复跑 vector、hybrid、user_questions、decompose、chat、agent、brain_workflow。
-  - 修复脚本：comparison 更新失败不阻断 status 输出；真实复跑长任务支持增量写 status；status 可合并回 `stage14_embedding_comparison.csv`。
-  - 同步 `data/evaluation/stage14_embedding_comparison.csv`，使 real_config decompose 显示为 error 而不是单纯 missing_results。
-- 验证结果：
-  - `.venv\Scripts\python.exe -m pytest tests\test_evaluate_stage15_real_config.py -q` -> `12 passed`。
-  - `.venv\Scripts\python.exe scripts\evaluate_stage15_real_config.py` -> 7 suites skipped because `--run-real` was not passed，且写出 status。
-  - `.venv\Scripts\python.exe scripts\evaluate_stage15_real_config.py --run-real` -> 外层命令超时，但子任务自然完成并写出最终 status。
-  - real vector：15/15。
-  - real hybrid：15/15。
-  - real user_questions：27/30。
-  - real decompose：error，真实 embedding 请求 SSL EOF。
-  - real chat：6/6。
-  - real agent：5/5。
-  - real brain_workflow：18/18。
-
-### Phase 3: Answer Coverage 复核表
-
-- Status: complete
-- 解决的问题：阶段 14 的 medium/review 行只能说明“需要复核”，阶段 15 需要把真实回答结果纳入判断，区分可接受风险和真实失败。
-- 在 RAG 链路中的位置：位于真实 user question 结果之后，用真实回答摘要、来源命中、引用有效性和错误信息复核回答质量。
-- 为什么现在做：Phase 2 已产出真实 user question 结果，当前可以把真实回答接到阶段 14 校准表上，形成发布前质量判断。
-- 完成工作：
-  - 新增 `scripts/evaluate_stage15_answer_coverage_review.py`。
-  - 新增 `tests/test_evaluate_stage15_answer_coverage_review.py`。
-  - 生成 `data/evaluation/stage15_answer_coverage_review.csv`。
-  - 对阶段 14 的 9 条 default_hybrid medium/review 样例进行真实结果辅助复核。
-  - 记录 query_id、expected_answer_points、answer_summary、evidence_titles、Faithfulness、Answer Coverage、Citation Quality、risk_level、review_note 和 next_action。
-- 验证结果：
-  - `.venv\Scripts\python.exe -m pytest tests\test_evaluate_stage15_answer_coverage_review.py -q` -> `7 passed`。
-  - `.venv\Scripts\python.exe scripts\evaluate_stage15_answer_coverage_review.py` -> `9 rows`，`high=1`，`medium=8`。
-
-### Phase 4: 质量汇总与只读报告入口
-
-- Status: complete
-- 解决的问题：阶段 14/15 已有多张质量 CSV，但缺少一个统一汇总入口，难以一眼判断真实配置、回答覆盖和 Decompose provenance 的当前风险。
-- 在 RAG 链路中的位置：位于 evaluation/reporting 层，读取既有质量产物并生成只读报告，不进入检索、问答或 Agent 执行链路。
-- 为什么现在做：Phase 2 和 Phase 3 已生成真实配置状态和 Answer Coverage 复核表，现在可以把这些证据汇总成阶段质量结论。
-- 完成工作：
-  - 新增 `scripts/build_stage15_quality_report.py`。
-  - 新增 `tests/test_build_stage15_quality_report.py`。
-  - 生成 `data/evaluation/stage15_quality_summary.csv`。
-  - 生成 `docs/stage15_quality_report.md`。
-  - 生成 `app/frontend/quality_report.html`。
-  - 在 `app/api/frontend.py` 新增 `/quality-report` 只读报告路由。
-  - 在 `tests/test_frontend_app.py` 新增只读报告入口测试。
-- 验证结果：
-  - `.venv\Scripts\python.exe scripts\build_stage15_quality_report.py` -> `14 rows`，风险统计 `high=4, low=7, medium=3`。
-  - `.venv\Scripts\python.exe -m pytest tests\test_build_stage15_quality_report.py -q` -> `2 passed`。
-  - `.venv\Scripts\python.exe -m pytest tests\test_frontend_app.py::test_quality_report_is_served_read_only -q` -> `1 passed`。
-- 当前质量结论：
-  - real_config vector 15/15、hybrid 15/15、chat 6/6、agent 5/5、brain_workflow 18/18。
-  - real_config user_questions 27/30，优于 deterministic baseline 25/30，但差异仍需保留供人工审阅。
-  - real_config decompose 为 error，原因是此前真实 embedding 请求 SSL EOF。
-  - Answer Coverage 复核保留 1 条 high 风险、8 条 medium 风险。
-  - overall quality gate 为 `review_required/high`。
-
-### Phase 5: 阶段 15 回归验证与质量结论
-
-- Status: complete
-- 解决的问题：确认阶段 15 的真实配置复跑、复核表和只读报告没有破坏既有检索、问答、Agent、Brain 和前端入口。
-- 在 RAG 链路中的位置：发布前回归层，覆盖 retrieval、generation、Brain orchestration、Agent tools、source/frontend API 和 evaluation/reporting。
-- 为什么现在做：Phase 4 已完成报告入口，阶段收尾前必须重新确认主链路仍然可运行。
-- 完成工作：
-  - 复跑 deterministic vector、hybrid、user_questions、decompose、chat、agent、brain_workflow 评测。
-  - 复跑阶段 15 Answer Coverage 复核脚本和质量报告脚本。
-  - 运行阶段 15 新增测试、前端报告测试和核心 RAG/API 聚焦回归。
-- 验证结果：
-  - `.venv\Scripts\python.exe scripts\evaluate_vector_search.py --provider deterministic --skip-index-build` -> `13/15`，keyword baseline `15/15`。
-  - `.venv\Scripts\python.exe scripts\evaluate_hybrid_search.py --provider deterministic` -> `15/15`，`rescued_vector=2`，`regressed_keyword=0`。
-  - `.venv\Scripts\python.exe scripts\evaluate_user_questions.py --embedding-provider deterministic` -> `25/30`，`refusal_matched=30/30`。
-  - `.venv\Scripts\python.exe scripts\evaluate_decompose.py --embedding-provider deterministic --include-all` -> `10/10`。
-  - `.venv\Scripts\python.exe scripts\evaluate_chat.py --embedding-provider deterministic` -> `6/6`，`citation_failures=0`。
-  - `.venv\Scripts\python.exe scripts\evaluate_agent.py --embedding-provider deterministic` -> `5/5`，`tool_failures=0`，`citation_failures=0`。
-  - `.venv\Scripts\python.exe scripts\evaluate_brain_workflow.py --embedding-provider deterministic` -> `18/18`。
-  - `.venv\Scripts\python.exe scripts\evaluate_stage15_answer_coverage_review.py` -> `9 rows`，`high=1`，`medium=8`。
-  - `.venv\Scripts\python.exe scripts\build_stage15_quality_report.py` -> `14 rows`，`high=4`，`low=7`，`medium=3`。
-  - 聚焦回归测试 -> `112 passed`。
-- 质量结论：
-  - 阶段 15 新增能力没有破坏旧 API、检索、问答、Brain、Agent 或 source/frontend 关键路径。
-  - 真实配置结果已能支撑多数发布前校准，但真实 decompose error 和 Answer Coverage high 风险必须在报告中保留。
-
-### Phase 6: 普通文档、Obsidian、最终测试、提交与 tag
-
-- Status: complete
-- 解决的问题：阶段 15 功能完成后，入口文档、知识库、最终测试和版本标记必须同步，保证后续线程和用户复盘能看到同一份事实。
-- 在 RAG 链路中的位置：阶段收尾与版本治理层，不改变检索、问答或报告功能。
-- 为什么现在做：Phase 5 已证明主链路稳定，当前需要把完成状态沉淀到普通文档、Obsidian 和 Git tag。
-- 已完成工作：
-  - 更新 `README.md`：补充阶段 15 当前状态、产物、真实配置结果、报告入口和质量结论。
-  - 更新 `docs/progress.md`：新增阶段 15 完成记录、关键证据、遗留问题、下一阶段建议和面试表达。
-  - 更新 `docs/architecture.md`：补充阶段 15 evaluation/reporting 数据流和 `/quality-report` 边界。
-  - 更新 `docs/data_sources.md`：说明阶段 15 只新增评测/报告产物，不新增文献来源或受限全文。
-  - 更新 `AGENT.MD`：记录阶段 15 已完成、`phase-15-complete` tag 规则、阶段 15 结果和阶段 16 建议。
-  - 补齐 Obsidian 阶段 15 阶段页、Phase 汇报索引、Phase 0-6 汇报和知识点。
-  - 确认 7 篇 Phase 汇报均包含 10 个固定小节。
-  - 确认 `obsidian-vault/` 被 `.gitignore` 忽略。
-  - 完成安全扫描：已加载的 2 个本地 API key 在评测、文档、前端、Obsidian 和阶段记忆文件中精确命中 0；常见 secret/token 形态命中 0。
-  - 最终全量测试：`.venv\Scripts\python.exe -m pytest -q` -> `300 passed`。
-  - 检查 Git 变更范围，确认 Obsidian 文件被忽略。
-  - 创建阶段 15 最终功能提交。
-  - 创建 `phase-15-complete` tag 并确认指向最终提交。
-- 收尾说明：
-  - 阶段最终提交号和 tag 指向由 Git 命令结果确认，并在最终汇报中给出。
+| Where am I? | Phase 6 complete; waiting for final verification and manual-review handoff |
+| Where am I going? | Toward final sanity checks, then user manual verification before any submit/tag/push |
+| What's the goal? | Complete stage 16 real quality risk closure, then stop before local/GitHub submission |
+| What have I learned? | Stage 16 is development-complete but intentionally not versioned yet; the correct final state is a transparent manual-review handoff |
+| What have I done? | Added stage 16 design doc, diagnostics, closure tables, quality summary/report, frontend report page, tests, docs and Obsidian drafts |

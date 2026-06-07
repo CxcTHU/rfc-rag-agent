@@ -49,9 +49,10 @@ def test_quality_report_is_served_read_only() -> None:
     response = client.get("/quality-report")
 
     assert response.status_code == 200
-    assert "阶段 15 质量审阅报告" in response.text
+    assert "阶段 16 质量风险闭环报告" in response.text
     assert "只读质量报告" in response.text
     assert "不触发真实 API 调用" in response.text
+    assert "当前不执行 git add、commit、tag、push 或 PR" in response.text
 
 
 def test_favicon_request_does_not_404() -> None:
