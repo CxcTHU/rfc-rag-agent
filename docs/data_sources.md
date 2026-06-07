@@ -543,3 +543,43 @@ data/evaluation/user_questions.csv
 - sub query provenance 只说明证据由哪个子问题召回，不改变资料来源归属。
 - 真实 API key 仍只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。
 - HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
+
+## 阶段 14 真实 Embedding 与回答覆盖校准产物
+
+阶段 14 新增或更新的工程与评测产物：
+
+```text
+docs/stage14_real_quality_calibration.md
+scripts/evaluate_stage14_embedding_comparison.py
+data/evaluation/stage14_embedding_comparison.csv
+scripts/evaluate_stage14_answer_coverage.py
+data/evaluation/stage14_answer_coverage_review.csv
+scripts/evaluate_stage14_decompose_provenance.py
+data/evaluation/stage14_decompose_provenance_review.csv
+```
+
+这些文件不是新的文献资料来源。它们只记录：
+
+- deterministic baseline 与 real_config 的评测状态、指标和失败 query。
+- Answer Coverage、Faithfulness、Citation Quality、risk_level 和 recommendation。
+- Decompose provenance、topic_terms、both_match、source_type、raw_score、final_score 等证据级审阅字段。
+- 真实配置缺失或真实结果文件缺失时的 `skipped` / `missing_results` 原因。
+
+阶段 14 不新增外部资料来源，不新增爬虫链路，不保存受限全文。它只读取现有：
+
+```text
+sources
+documents/chunks
+chunk_embeddings
+data/evaluation/user_questions.csv
+data/evaluation/user_question_results.csv
+data/evaluation/stage13_decompose_results.csv
+```
+
+合规结论：
+
+- `stage14_embedding_comparison.csv` 是评测汇总表，不是资料库。
+- `stage14_answer_coverage_review.csv` 是质量审阅表，不保存受限论文全文或供应商原始敏感响应。
+- `stage14_decompose_provenance_review.csv` 是证据解释表，不改变来源归属。
+- 真实 API key 仍只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。
+- HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。

@@ -1,6 +1,60 @@
 # 项目进度
 
-## 最新状态：2026-06-07（阶段 13 完成）
+## 最新状态：2026-06-07（阶段 14 完成）
+
+当前阶段：阶段 14，真实 Embedding 与回答覆盖校准已完成。下一步建议进入阶段 15：复跑真实配置结果、建立真实回答人工审阅闭环，或将阶段 14 的质量校准表接入只读报告页；HyDE 仍只做离线实验，不进入默认链路或自动回归。
+
+当前关键证据：
+
+- 当前分支：`codex/phase-14-real-quality-calibration`。
+- 阶段 13 已合并到 `main`，`main` 阶段 13 合并提交为 `27b25d3 Merge phase 13 decompose evidence merge`。
+- `phase-13-complete -> 69a28cd`，未移动已有阶段 tag。
+- 阶段 14 新增 `docs/stage14_real_quality_calibration.md`。
+- 阶段 14 新增 `scripts/evaluate_stage14_embedding_comparison.py` 与 `data/evaluation/stage14_embedding_comparison.csv`。
+- 阶段 14 新增 `scripts/evaluate_stage14_answer_coverage.py` 与 `data/evaluation/stage14_answer_coverage_review.csv`。
+- 阶段 14 新增 `scripts/evaluate_stage14_decompose_provenance.py` 与 `data/evaluation/stage14_decompose_provenance_review.csv`。
+- 显式 deterministic embedding 对比结果：vector 13/15、hybrid 15/15、user questions 25/30、decompose 10/10、chat 6/6、agent 5/5、Brain workflow 18/18。
+- real_config 当前记录为 `missing_results` 或 `skipped`，因为 `data/evaluation/stage14_real/` 下没有阶段 14 真实结果 CSV；阶段 14 没有伪造真实模型成功结果。
+- Answer Coverage 校准表：20 行，`low=1`、`medium=9`、`skipped=10`。
+- Decompose provenance 可读化表：50 行证据级记录，`decomposed_rows=15`、`both_match_rows=37`。
+- 阶段 14 聚焦测试：49 个测试通过。
+- API/前端聚焦测试：28 个测试通过。
+- 核心服务聚焦测试：75 个测试通过。
+- 全量测试：275 个测试通过。
+- 阶段 14 tag：`phase-14-complete`，阶段最终提交完成后指向该提交。
+
+阶段 14 完成内容：
+
+- 使用 Planning with Files 维护阶段 14 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 新增阶段 14 设计文档，明确真实 embedding 对比、Answer Coverage 校准、graceful skip、API 兼容和 HyDE 边界。
+- 建立 embedding comparison 结果表，显式区分 deterministic baseline、real_config missing_results/skipped 和失败 query。
+- 建立 Answer Coverage 校准表，把 Faithfulness、Answer Coverage、Citation Quality、risk_level 和 recommendation 结构化。
+- 建立 Decompose provenance 可读化表，把长字符串 rerank explanation 拆成 evidence_rank、topic_terms、both_match、source_type、raw_score、final_score 等字段。
+- 确认前端无需重构，因为阶段 14 的只读审阅需求已由 CSV 产物满足，旧 API schema 未改变。
+
+遗留问题：
+
+- `data/evaluation/stage14_real/` 尚无真实配置结果文件，因此真实 embedding / 真实 chat 的阶段 14 completed 指标仍待显式复跑。
+- deterministic user questions 为 25/30，保留了 vector_only 来源命中不匹配边界，说明真实 embedding 或更强 rerank 仍有后续价值。
+- deterministic answer 多数只能标为 Answer Coverage `review`，不能证明真实语言覆盖度。
+- 阶段 14 质量表目前是 CSV，可读但还不是前端报告页。
+
+下一阶段任务：
+
+- 在明确成本、限流和 API key 边界后，把真实 vector/hybrid/user/decompose/chat/agent/brain workflow 结果输出到 `data/evaluation/stage14_real/`。
+- 对 `stage14_answer_coverage_review.csv` 中 medium/review 样例做真实模型回答或人工摘要复核。
+- 可把阶段 14 的三张质量表做成只读报告页，但不改变核心 RAG API。
+- 继续保留 deterministic baseline，真实配置结果只作为发布前质量校准依据。
+
+面试表达：
+
+```text
+阶段 14 我没有把真实模型结果和本地回归混在一起，而是先建立清晰的质量校准层。系统保留 deterministic baseline，用它稳定复跑 vector、hybrid、user questions、Decompose、chat、agent 和 Brain workflow；真实 embedding 或真实 chat 没有结果文件时，只记录 missing/skipped，不伪造成成功。
+
+回答质量上，我把 Answer Coverage、Faithfulness 和 Citation Quality 拆开审阅。来源命中只能说明找到了资料，不代表回答覆盖了用户要点。所以阶段 14 新增校准表，把问题、期望要点、回答、证据、风险和建议放在一起；同时把 Decompose 的 provenance 和 rerank explanation 拆成证据级字段，让后续能判断每条证据为什么进入上下文。
+```
+
+## 历史状态：2026-06-07（阶段 13 完成）
 
 当前阶段：阶段 13，Decompose 与可解释证据合并已完成。下一步建议进入阶段 14：真实 embedding 对比、真实模型 Answer Coverage 校准，或将 Decompose provenance 做成前端/评测可视化；HyDE 仍只做离线实验，不进入默认链路或自动回归。
 
