@@ -1640,6 +1640,105 @@ docs/progress.md
 HyDE 仍只做离线实验，不进入默认链路或自动回归
 ```
 
+## 阶段 15 之后的开发计划
+
+阶段 15 之后不要把后续路线拆得过细。建议保持 3 到 4 个大阶段，每个大阶段内部再用小 Phase 拆任务。后续优先顺序是：
+
+```text
+阶段 16：真实质量风险闭环
+阶段 17：检索架构升级
+阶段 18：质量报告与评测体系增强
+阶段 19：产品化、Agent 增强与框架评估
+```
+
+### 阶段 16：真实质量风险闭环
+
+目标是处理阶段 15 质量报告已经暴露的问题，而不是继续加新功能。
+
+优先任务：
+
+```text
+排查 real decompose 的 SSL EOF 错误
+复核 stage15_answer_coverage_review.csv 中 1 条 high 风险样例
+审阅 8 条 medium 样例，确认 Faithfulness、Answer Coverage 和 Citation Quality
+必要时调整真实 provider 超时、重试或错误分类
+让 quality gate 从 review_required/high 降到更可接受状态
+```
+
+阶段 16 仍然不做写入型 Agent 工具，不做复杂 LangGraph workflow，不做部署优化，不让真实 API 成为 CI 或本地全量测试前提。
+
+### 阶段 17：检索架构升级
+
+阶段 17 比 LangChain / LangGraph 更优先。当前项目最值得增强的是检索工程本身。
+
+推荐能力：
+
+```text
+父子块切片策略：child chunk 负责精准召回，parent chunk 负责回答上下文扩展
+检索流水线：query normalize -> query expansion -> 多路召回 -> merge -> deduplicate -> rerank -> evidence confidence -> context assembly
+BM25 lexical retriever：替代或增强当前简单 keyword baseline
+BM25 + vector 双通道召回：保留关键词可解释性，同时保留语义召回
+RRF 融合：用排名融合 BM25 和 vector 结果，避免直接硬拼不同尺度分数
+与现有 hybrid baseline 对比：必须保留旧结果，证明升级没有 regression
+```
+
+HNSW 暂时不是第一优先级。只有当资料量扩大、SQLite 向量全量扫描明显变慢，或需要接入 FAISS/Qdrant/PGVector 这类向量索引时，再把 HNSW 作为阶段 17 后半段或后续小 Phase。不要为了简历关键词过早引入复杂索引。
+
+阶段 17 的面试表达重点：
+
+```text
+我先升级检索架构，而不是先套 Agent 框架。父子块解决“召回精准但上下文不足”的问题；BM25 + vector 双通道解决“术语精确匹配和语义召回互补”的问题；RRF 解决“两路分数尺度不同、直接加权不稳定”的问题。
+```
+
+### 阶段 18：质量报告与评测体系增强
+
+阶段 18 的目标是把阶段 15 的静态报告升级成长期可用的质量评估体系。
+
+推荐任务：
+
+```text
+增强 /quality-report 的只读筛选、风险详情和导出能力
+把 high/medium/low 风险样例变成可持续审阅队列
+补充更结构化的人工审阅 rubric
+可选引入 LLM-as-judge 离线评测，但不能进入 CI 必跑
+对比 keyword、vector、hybrid、BM25+vector、RRF 等多套检索配置
+沉淀质量门槛：什么情况下可以继续下一阶段，什么情况必须人工复核
+```
+
+阶段 18 仍然保持报告只读优先，不做登录系统，不把报告页扩展成复杂后台。
+
+### 阶段 19：产品化、Agent 增强与框架评估
+
+阶段 19 再考虑产品体验、Agent 能力和外部框架。
+
+推荐任务：
+
+```text
+前端体验优化和质量报告体验优化
+更多只读 Agent 工具，例如质量报告查询、来源质量查询、评测结果查询
+Agent 多步查询规划，但仍保留工具权限、最大步数、调用记录和引用约束
+来源库扩展和 source registry 质量治理
+部署、日志、观测、配置分环境等工程化能力
+评估 LangChain / LangGraph 是否值得接入
+```
+
+LangChain / LangGraph 不建议早于阶段 19 引入。引入条件是：
+
+```text
+Brain workflow 已经难以表达复杂条件分支
+Agent 工具数量明显增多，手写编排开始难维护
+需要多步计划、重试、checkpoint、human-in-the-loop 或可视化 workflow
+已有测试能证明迁移不会破坏引用、拒答、来源追踪和评测回归
+```
+
+如果当前链路仍主要是：
+
+```text
+检索 -> 组织上下文 -> 生成回答
+```
+
+则继续使用本项目已有 `BrainService`、`RetrievalConfig` 和 `WorkflowConfig`。不要为了框架名提前引入 LangChain 或 LangGraph。更好的面试表达是：先把 RAG 底层链路、检索质量、引用溯源和评测闭环做清楚，等系统进入多工具、多步骤、状态机编排时，再评估 LangGraph 承接 Brain workflow。
+
 阶段 7 已经把稳定 RAG 能力包装成受控工具，让 Agent 能调用 RAG 系统，但不能绕过来源、权限、引用和评测约束。后续如果加入 LLM 规划、写入工具或部署能力，必须继续保留只读优先、最大步数、显式权限、工具调用记录、引用溯源和评测回归。
 
 阶段 8 已经把 `/chat` 和 Agent `answer_with_citations` 收拢到 Brain workflow。后续如果加入真实模型、query rewrite、rerank 或更复杂 workflow，应优先扩展 `RetrievalConfig`、`WorkflowConfig` 和 `BrainService`，而不是重新在 chat 或 Agent 工具里复制编排逻辑。
