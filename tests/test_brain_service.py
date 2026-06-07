@@ -79,6 +79,33 @@ def seed_context_documents(db) -> None:
     )
 
 
+def seed_decompose_documents(db) -> None:
+    DocumentRepository(db).create_with_chunks(
+        DocumentCreate(
+            title="Integrated evaluation of cost schedule and emission performance",
+            source_type="open_access_pdf",
+            source_path="cost-schedule-emission.md",
+            file_name="cost-schedule-emission.md",
+            file_extension=".md",
+            content_hash="brain-service-decompose-cost-hash",
+            raw_path="data/raw/cost-schedule-emission.md",
+        ),
+        [
+            ChunkCreate(
+                chunk_index=0,
+                content=(
+                    "Rock-filled concrete dam construction can be evaluated by cost, "
+                    "schedule and emission performance using discrete event simulation."
+                ),
+                char_count=130,
+                heading_path="Cost schedule emission",
+                start_char=0,
+                end_char=130,
+            )
+        ],
+    )
+
+
 def make_brain_service(db, embedding_provider=None, log_answers=True) -> BrainService:
     return BrainService(
         db=db,
@@ -156,6 +183,25 @@ def test_brain_service_optional_rerank_truncates_context(tmp_path) -> None:
     rerank_step = result.workflow_steps[3]
     assert rerank_step.name == "optional_rerank"
     assert rerank_step.output_summary == "kept=1"
+
+
+def test_brain_service_uses_decompose_evidence_for_multi_topic_hybrid_question(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        embedding_provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_decompose_documents(db)
+        VectorIndexService(db, embedding_provider).build_index()
+
+        result = make_brain_service(db, embedding_provider=embedding_provider).answer(
+            "RFC dam construction 的成本工期和碳排放怎么评估？",
+            config=RetrievalConfig(retrieval_mode="hybrid", top_k=3),
+        )
+
+    assert not result.refused
+    assert result.retrieval_mode == "hybrid"
+    assert result.sources[0].document_title == "Integrated evaluation of cost schedule and emission performance"
+    assert result.sources[0].score > 1.0
 
 
 def test_rewrite_contextual_question_uses_recent_history_for_pronoun() -> None:

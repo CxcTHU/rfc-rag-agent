@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 12：质量审阅与上下文最小补全已完成，当前分支为 `codex/phase-12-quality-review-context-calibration`。
+阶段 13：Decompose 与可解释证据合并已完成，当前分支为 `codex/phase-13-decompose-evidence-merge`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -56,7 +56,11 @@
 
 阶段 12 tag：`phase-12-complete`。
 
-下一步建议：进入阶段 13，优先做规则式 Decompose、子 query 检索、证据合并、按 chunk_id 去重和可解释 rerank；HyDE 只做离线实验，不进入默认链路或自动回归。
+阶段 13 最终功能提交：由 `phase-13-complete` tag 指向的提交标识。
+
+阶段 13 tag：`phase-13-complete`。
+
+下一步建议：进入阶段 14，优先做真实 embedding 对比、真实模型 Answer Coverage 校准，或把 Decompose provenance 做成前端/评测的可视化说明；HyDE 仍只做离线实验，不进入默认链路或自动回归。
 
 当前已经实现：
 
@@ -126,6 +130,9 @@
 - `data/evaluation/stage12_quality_review_results.csv` 阶段 12 质量审阅结果表
 - `docs/stage12_quality_review.md` 阶段 12 质量审阅报告，说明 Faithfulness、Answer Coverage、Citation Quality 的人工判定标准和风险结论
 - `docs/stage13_decompose_plan.md` 阶段 13 Decompose 与可解释证据合并预研计划
+- `app/services/retrieval/decompose.py` 阶段 13 规则式 Decompose、子 query 检索、证据合并、`chunk_id` 去重、sub query provenance 和可解释 rerank 服务
+- `scripts/evaluate_decompose.py` 阶段 13 Decompose 评测脚本
+- `data/evaluation/stage13_decompose_results.csv` 阶段 13 Decompose 评测结果
 - Brain `rewrite_query` 最小上下文补全，支持基于可选 `history` 的“它/这个技术/这类问题”等代词或省略问法补全
 - `/chat` 和 `/agent/query` 可选 `history` 字段，旧请求保持兼容
 - 跨语言 query expansion 增强，补充 ITZ/界面、creep/徐变、freeze-thaw/抗冻、porosity/孔隙率、emission/碳排放、steel fiber/钢纤维、rock shear key/剪力键等术语
@@ -215,7 +222,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-244 passed
+257 passed
 ```
 
 当前测试覆盖：
@@ -364,6 +371,47 @@ data/evaluation/user_question_review_samples.csv
 - `Cross-language Quality`：default_hybrid 与 keyword_baseline 在用户问题集上均为 10/10，说明中英术语增强对默认链路有效。
 - `Refusal Quality`：用户问题评测 `refusal_matched=30/30`，unsupported 随机问题保持拒答。
 - `Residual Risk`：deterministic vector_only 在用户问题集上为 5/10，剩余失败集中在来源命中不匹配，适合作为下一阶段 rerank 或真实 embedding 校准依据。
+
+## Decompose 与证据合并
+
+阶段 13 把阶段 12 的预研计划落成可运行能力。默认 hybrid 链路遇到明显多主题问题时，会先做规则式 Decompose，把问题拆成最多 3 个子 query；每个子 query 使用 hybrid 检索，随后合并候选证据、按 `chunk_id` 去重、保留 sub query provenance，并用可解释 rerank 排序。
+
+当前 Decompose 数据流：
+
+```text
+original question
+-> rule-based decompose
+-> sub query retrieval
+-> merge candidates
+-> deduplicate by chunk_id
+-> explainable rerank
+-> Brain evidence confidence
+-> generate answer with citations
+```
+
+阶段 13 不改变旧 API schema。`POST /chat` 和 Agent `answer_with_citations` 继续复用 Brain；`POST /search`、`POST /search/vector`、`POST /search/hybrid` 仍保持原响应结构。
+
+运行阶段 13 评测：
+
+```powershell
+python scripts/evaluate_decompose.py
+```
+
+当前结果：
+
+```text
+decompose evaluation: 6/6 passed
+all-user decompose evaluation: 10/10 passed
+user question evaluation: 29/30 passed
+chat evaluation: 6/6 passed
+agent evaluation: 5/5 passed
+brain workflow evaluation: 18/18 passed
+deterministic hybrid evaluation: 15/15 passed
+deterministic vector baseline: 13/15 passed
+full tests: 257 passed
+```
+
+阶段 13 结论：Decompose 对复杂问题的来源命中有帮助，并且 unsupported 问题仍由 Brain evidence confidence 正确拒答。vector-only 的剩余失败边界继续保留，不用静默 fallback 掩盖。
 
 ## Agent 化
 

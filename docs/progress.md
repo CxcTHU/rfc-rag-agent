@@ -1,6 +1,57 @@
 # 项目进度
 
-## 最新状态：2026-06-06（阶段 12 完成）
+## 最新状态：2026-06-07（阶段 13 完成）
+
+当前阶段：阶段 13，Decompose 与可解释证据合并已完成。下一步建议进入阶段 14：真实 embedding 对比、真实模型 Answer Coverage 校准，或将 Decompose provenance 做成前端/评测可视化；HyDE 仍只做离线实验，不进入默认链路或自动回归。
+
+当前关键证据：
+
+- 当前分支：`codex/phase-13-decompose-evidence-merge`。
+- 阶段 12 已合并到 `main`，`main` 最新阶段 12 合并提交为 `5c7bb58 merge phase 12 quality review context calibration`。
+- `phase-12-complete -> d7b5bff`，未移动已有阶段 tag。
+- 阶段 13 新增 `app/services/retrieval/decompose.py`，实现规则式 Decompose、子 query 检索、证据合并、`chunk_id` 去重、sub query provenance 和可解释 rerank。
+- 阶段 13 已接入 Brain hybrid 检索路径：只有复杂问题被规则判断为 decomposed 时才走子 query 检索，单主题问题继续走原 hybrid。
+- 阶段 13 新增 `scripts/evaluate_decompose.py` 与 `data/evaluation/stage13_decompose_results.csv`。
+- 阶段 13 Decompose 评测：`6/6 passed`；全用户问题 Decompose 评测：`10/10 passed`。
+- 用户问题评测：`29/30 passed`，`refusal_matched=30/30`，`source_hit_matched=29/30`。
+- deterministic 回归保持稳定：chat 6/6、agent 5/5、Brain workflow 18/18、hybrid 15/15、vector 13/15。
+- 聚焦测试：31 个测试通过。
+- 全量测试：257 个测试通过。
+- 阶段 13 tag：`phase-13-complete`，阶段最终提交完成后指向该提交。
+
+阶段 13 完成内容：
+
+- 使用 Planning with Files 维护阶段 13 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 将 `docs/stage13_decompose_plan.md` 从预研计划升级为设计文档，明确拆解规则、数据结构、评测指标和失败保护。
+- 实现 `DecomposeRetrievalService`，支持按 keyword/vector/hybrid 检索子 query。
+- 实现 `MergedEvidence`，让合并后的证据仍能作为 Brain 的普通检索结果，同时保留 sub query provenance 和 rerank explanation。
+- 在 Brain hybrid 检索路径接入 Decompose，并继续复用 evidence confidence。
+- 新增阶段 13 专属评测脚本和结果表，记录子 query、去重数量、provenance、source hit 和 answer coverage proxy。
+- 确认前端无需重构，因为旧 API schema 未改变。
+
+遗留问题：
+
+- deterministic answer 仍不能单独证明真实 Answer Coverage，发布前仍需要真实模型或人工审阅。
+- vector-only 在用户问题集上仍保留 1 条来源命中不匹配，作为真实 embedding 对比或更强 rerank 的后续输入。
+- Decompose provenance 目前主要保存在内部结构和评测 CSV，尚未在前端可视化。
+- HyDE 仍未进入默认链路，只适合阶段 14 以后离线实验。
+
+下一阶段任务：
+
+- 对比 deterministic、Jina 或其他真实 embedding 在用户问题与 Decompose 场景下的差异。
+- 用真实模型或人工审阅复核 Decompose 后的 Answer Coverage。
+- 评估是否把 sub query provenance 和 rerank explanation 以只读方式展示到前端。
+- 如实验 HyDE，必须保持离线、显式、不可进入默认自动回归。
+
+面试表达：
+
+```text
+阶段 13 我没有直接换更大的模型，而是先解决复杂问题的证据覆盖。系统会把明显多主题问题拆成最多 3 个子 query，分别用 hybrid 检索，再按 chunk_id 去重合并，并保留每条证据来自哪个 sub query。排序上使用可解释规则，综合原始分数、主题词命中、source_type、keyword/vector 双路命中和子问题覆盖度。
+
+这样做的好处是：复杂问题能召回更完整的依据，同时不会破坏引用溯源和拒答边界。unsupported 问题不会被强行拆成可回答问题，最终仍经过 Brain evidence confidence。阶段 13 的评测脚本会输出子 query、去重数量、provenance 和 rerank explanation，因此质量提升是可复现、可解释的。
+```
+
+## 历史状态：2026-06-06（阶段 12 完成）
 
 当前阶段：阶段 12，质量审阅与上下文最小补全已完成。下一步建议进入阶段 13：规则式 Decompose、子 query 检索、证据合并、按 `chunk_id` 去重和可解释 rerank；HyDE 只做离线实验，不进入默认链路或自动回归。
 
