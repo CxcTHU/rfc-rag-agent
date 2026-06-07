@@ -1,0 +1,33 @@
+query_id,question,passed,returned_answer,expected_refused,refused,refusal_matched,source_count,citations,citations_valid,expected_source_hit,forbidden_terms_absent,retrieval_mode,model_provider,model_name,answer,top_source_titles,error,notes
+rfc_concept,What is rock-filled concrete?,yes,yes,no,no,yes,4,1|3,yes,yes,yes,keyword,openai-compatible,mimo-v2.5-pro,"根据提供的资料，堆石混凝土（Rock-Filled Concrete, RFC）是一种创新的混凝土材料。
+
+**核心定义**：RFC 是一种将大粒径块石（堆石体）与高性能自密实混凝土相结合的材料，主要用于大坝建设 [1]。
+
+**技术构成**：其核心技术包含两部分：
+1.  **堆石体**：由大粒径块石自然堆放形成骨架结构。
+2.  **自密实混凝土**：依靠其高流动性和抗离析能力，在重力作用下流动并填充堆石体中的空隙，从而形成完整、密实且具有较高强度的混凝土结构 [3]。
+
+**关键特点**：与常规混凝土（如常态混凝土、碾压混凝土）不同，RFC 的施工方式并非将所有骨料与水泥浆体一起拌和，而是先将大块石作为骨架，再用自密实混凝土进行胶结和充填 [3]。","Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Integrated evaluation of cost, schedule and emission performance on rock-filled concrete dam construction operation using discrete event simulation || 堆石混凝土及堆石混凝土大坝 / Study on rock-fill concrete dam || Progressive failure mechanism of water glass modified recycled rock-filled concrete based on radon monitoring and resistivity monitoring",,Concept question should return an answer with traceable sources.
+construction_quality,How is construction quality controlled in rock-filled concrete?,yes,yes,no,no,yes,4,1|4,yes,yes,yes,keyword,openai-compatible,mimo-v2.5-pro,"根据提供的资料，关于堆石混凝土（RFC）的施工质量控制，可总结出以下两点：
+
+1. **质量控制相对简化**：堆石混凝土因其施工技术特点，展现出“施工管理更简单、质量控制更容易”的优势 [1][4]。
+
+2. **关键控制环节在于自密实混凝土（SCC）的性能保障**：为确保堆石混凝土的质量，核心是保证用于填充石料空隙的自密实混凝土的工作性能。为此，需要基于其流变特性进行配合比设计，以保证其良好的流动性和抗离析性 [1][4]。
+
+然而，现有的上下文资料**并未提供**关于RFC施工质量控制的具体操作步骤、检测方法、频率或验收标准等详细流程信息。因此，对于“如何控制”的具体技术细节，当前知识库中的证据不足。","Rock-filled concrete, the new norm of SCC in hydraulic engineering in China || Integrated evaluation of cost, schedule and emission performance on rock-filled concrete dam construction operation using discrete event simulation || Heterogeneous temperature characteristics considering rainfall effect during construction of an integrally-poured rock-filled concrete arch dam || Rock-filled concrete, the new norm of SCC in hydraulic engineering in China",,Construction and quality-control question.
+thermal_control,What does thermal control focus on for rock-filled concrete dams?,yes,yes,no,no,yes,4,1,yes,yes,yes,keyword,openai-compatible,mimo-v2.5-pro,根据所提供的文献，对于岩堆混凝土坝，热控主要关注在高海拔寒冷地区环境下控制温度应力并防止开裂[1]。,Simulation of thermal stress and control measures for rock-filled concrete dam in high-altitude and cold regions || Construction information management system for rock-filled concrete dam (CIM4R) || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology,,Temperature-control question.
+filling_capacity,What affects filling capacity in rock-filled concrete?,yes,yes,no,no,yes,4,1|2|3,yes,yes,yes,keyword,openai-compatible,mimo-v2.5-pro,"Based on the provided context, the filling capacity of rock-filled concrete (RFC) is primarily affected by the rheological properties of the self-compacting concrete (SCC) and the characteristics of the rock skeleton.
+
+Specifically, the following factors are identified:
+
+1.  **Yield stress of the Self-Compacting Concrete (SCC):** The yield stress of the SCC is a critical parameter influencing its ability to flow and fill the voids within the rock assembly [1][2].
+2.  **Size of the aggregates/grains:** The size of the rocks or aggregates forming the skeleton affects the filling capacity, as it determines the void structure that the SCC must penetrate [1][2].
+3.  **Shape of the aggregates/grains:** The shape of the rock pieces or porous medium grains also plays a role in the filling process [2].
+
+These factors collectively influence the final filling rate, the porosity of the composite, and the microstructure of the interface between the SCC and the rock, which are key to the quality of the rock-filled concrete [1].
+
+**Engineering Judgment/Uncertainty Note:** The context also implies that the workability and mix design of the SCC, which govern its rheology, are fundamental for achieving the necessary filling performance in RFC [3]. However, the explicit list of influencing factors as stated above is directly supported by the research described in [1] and [2].","Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete || Rock-filled concrete, the new norm of SCC in hydraulic engineering in China || Advancing rock-filled concrete (RFC) technology: Comprehensive insights into filling quality, mechanical properties, durability, and numerical simulation",,Filling and SCC question.
+engineering_case,Give an engineering application example for rock-filled concrete dams.,yes,yes,no,no,yes,4,1|2|3|4,yes,yes,yes,keyword,openai-compatible,mimo-v2.5-pro,"Based on the provided context, a specific engineering application example for rock-filled concrete (RFC) dams is the construction of the **Weitan Hydropower Station**. In this project, self-compacting rock-filled concrete was used to build the dam structure. To verify the feasibility and performance of this technique, large samples were directly cut from the RFC placed on-site for testing. The results indicated an average cleavage and tensile performance of 1.75 MPa, meeting the engineering requirements [1].
+
+The other provided sources discuss the development of a management system for RFC dam construction [2] and mesoscale material analysis for structural applications [3][4], but they do not provide additional concrete examples of specific dam projects.",Test Analysis of the Cleavage and Tensile Performance of the Self-compacting Rock-filled Concrete in Weitan Hydropower Station || Construction information management system for rock-filled concrete dam (CIM4R) || A Mesoscale Comparative Analysis of the Elastic Modulus in Rock-Filled Concrete for Structural Applications || A Mesoscale Comparative Analysis of the Elastic Modulus in Rock-Filled Concrete for Structural Applications,,Engineering application question.
+unsupported,zqxjvblorptasticprotocol,yes,yes,yes,yes,yes,0,,yes,yes,yes,keyword,openai-compatible,mimo-v2.5-pro,当前资料库中没有找到足够可靠的依据。,,,Synthetic out-of-corpus token should be refused.

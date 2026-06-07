@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 14：真实 Embedding 与回答覆盖校准已完成，当前分支为 `codex/phase-14-real-quality-calibration`。
+阶段 15：真实配置复跑与质量审阅报告已完成，当前分支为 `codex/phase-15-real-review-report`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -64,7 +64,11 @@
 
 阶段 14 tag：`phase-14-complete`。
 
-下一步建议：进入阶段 15，优先做真实配置结果复跑、真实回答人工审阅闭环，或把阶段 14 的质量校准表接入只读报告页；HyDE 仍只做离线实验，不进入默认链路或自动回归。
+阶段 15 最终功能提交：由 `phase-15-complete` tag 指向的提交标识。
+
+阶段 15 tag：`phase-15-complete`。
+
+下一步建议：进入阶段 16，优先处理阶段 15 质量报告暴露的发布前风险，包括真实 decompose 复跑错误、Answer Coverage 高风险样例和 medium 样例人工审阅闭环；HyDE 仍只做离线实验，不进入默认链路或自动回归。
 
 当前已经实现：
 
@@ -144,6 +148,16 @@
 - `data/evaluation/stage14_answer_coverage_review.csv` 阶段 14 回答覆盖校准表
 - `scripts/evaluate_stage14_decompose_provenance.py` 阶段 14 Decompose provenance 可读化脚本
 - `data/evaluation/stage14_decompose_provenance_review.csv` 阶段 14 证据级 provenance 审阅表
+- `docs/stage15_real_review_report.md` 阶段 15 真实配置复跑与质量审阅设计文档
+- `scripts/evaluate_stage15_real_config.py` 阶段 15 真实配置复跑脚本，输出到 `data/evaluation/stage14_real/`
+- `data/evaluation/stage14_real/real_config_status.csv` 阶段 15 真实配置 completed/error/skipped 状态表
+- `scripts/evaluate_stage15_answer_coverage_review.py` 阶段 15 Answer Coverage 复核脚本
+- `data/evaluation/stage15_answer_coverage_review.csv` 阶段 15 回答覆盖复核结果表
+- `scripts/build_stage15_quality_report.py` 阶段 15 质量汇总与只读报告生成脚本
+- `data/evaluation/stage15_quality_summary.csv` 阶段 15 质量汇总表
+- `docs/stage15_quality_report.md` 阶段 15 Markdown 质量审阅报告
+- `GET /quality-report` 阶段 15 只读质量报告页
+- `app/frontend/quality_report.html` 阶段 15 静态只读质量报告
 - Brain `rewrite_query` 最小上下文补全，支持基于可选 `history` 的“它/这个技术/这类问题”等代词或省略问法补全
 - `/chat` 和 `/agent/query` 可选 `history` 字段，旧请求保持兼容
 - 跨语言 query expansion 增强，补充 ITZ/界面、creep/徐变、freeze-thaw/抗冻、porosity/孔隙率、emission/碳排放、steel fiber/钢纤维、rock shear key/剪力键等术语
@@ -233,7 +247,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-257 passed
+300 passed
 ```
 
 当前测试覆盖：
@@ -482,6 +496,75 @@ both_match_rows=37
 ```
 
 阶段 14 结论：deterministic baseline 继续适合自动回归，但显式 deterministic 用户问题集为 25/30，说明真实 embedding 或更强 rerank 仍有价值。真实配置没有伪造成成功结果，而是记录为 missing/skipped，等待 `data/evaluation/stage14_real/` 中的真实评测文件。Answer Coverage 校准表把默认链路多数样例标为 review，因为 deterministic 回答只能证明链路稳定，不能证明真实语言覆盖度。
+
+## 真实配置复跑与质量审阅报告
+
+阶段 15 把阶段 14 的“质量表可审阅”继续推进到“真实配置状态和质量结论可报告”。本阶段不改变核心 RAG API，不把真实 API 调用变成自动测试前提，而是把真实结果、错误状态和人工复核风险都显式写入质量产物。
+
+阶段 15 核心产物：
+
+```text
+data/evaluation/stage14_real/
+data/evaluation/stage15_answer_coverage_review.csv
+data/evaluation/stage15_quality_summary.csv
+docs/stage15_quality_report.md
+app/frontend/quality_report.html
+```
+
+运行真实配置复跑状态脚本：
+
+```powershell
+python scripts/evaluate_stage15_real_config.py --run-real
+```
+
+不传 `--run-real` 时脚本只记录 skipped，不会偷偷调用真实模型。真实 API key 仍只允许放在本地 `.env`，不得写入 CSV、文档、测试或 Obsidian。
+
+阶段 15 当前真实配置结果：
+
+```text
+real vector: 15/15
+real hybrid: 15/15
+real user_questions: 27/30
+real decompose: error，真实 embedding 请求 SSL EOF
+real chat: 6/6
+real agent: 5/5
+real brain_workflow: 18/18
+```
+
+运行阶段 15 Answer Coverage 复核：
+
+```powershell
+python scripts/evaluate_stage15_answer_coverage_review.py
+```
+
+当前结果：
+
+```text
+stage15_answer_coverage_review.csv: 9 rows
+risk counts: high=1, medium=8
+```
+
+运行阶段 15 质量报告：
+
+```powershell
+python scripts/build_stage15_quality_report.py
+```
+
+报告入口：
+
+```text
+GET /quality-report
+```
+
+当前质量汇总结论：
+
+```text
+stage15_quality_summary.csv: 14 rows
+risk counts: high=4, low=7, medium=3
+overall quality gate: review_required/high
+```
+
+阶段 15 结论：真实配置已经能支撑 vector、hybrid、chat、agent 和 Brain workflow 的发布前校准，但真实 decompose error 和 1 条 Answer Coverage high 风险不能被掩盖。deterministic baseline 继续负责稳定回归，真实配置结果只作为发布前质量审阅依据；只读报告页只展示本地质量产物，不触发真实 API 调用，也不重构核心前端工作台。
 
 ## Agent 化
 

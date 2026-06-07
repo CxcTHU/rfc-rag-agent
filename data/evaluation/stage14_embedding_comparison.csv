@@ -6,10 +6,25 @@ deterministic_baseline,decompose,completed,10,10,0,1.000,deterministic,hash-toke
 deterministic_baseline,chat,completed,6,6,0,1.000,deterministic,hash-token-v1,64,deterministic,rule-based-chat-v1,data\evaluation\chat_results.csv,,,Stable offline baseline. Real API is not required.
 deterministic_baseline,agent,completed,5,5,0,1.000,deterministic,hash-token-v1,64,deterministic,rule-based-chat-v1,data\evaluation\agent_results.csv,,,Stable offline baseline. Real API is not required.
 deterministic_baseline,brain_workflow,completed,18,18,0,1.000,deterministic,hash-token-v1,64,deterministic,rule-based-chat-v1,data\evaluation\brain_workflow_results.csv,,,Stable offline baseline. Real API is not required.
-real_config,vector,missing_results,0,0,0,,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\vector_results.csv,,Missing result file: data\evaluation\stage14_real\vector_results.csv,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
-real_config,hybrid,missing_results,0,0,0,,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\hybrid_results.csv,,Missing result file: data\evaluation\stage14_real\hybrid_results.csv,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
-real_config,user_questions,missing_results,0,0,0,,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\user_question_results.csv,,Missing result file: data\evaluation\stage14_real\user_question_results.csv,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
-real_config,decompose,missing_results,0,0,0,,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\stage13_decompose_results.csv,,Missing result file: data\evaluation\stage14_real\stage13_decompose_results.csv,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
-real_config,chat,missing_results,0,0,0,,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\chat_results.csv,,Missing result file: data\evaluation\stage14_real\chat_results.csv,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
-real_config,agent,missing_results,0,0,0,,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\agent_results.csv,,Missing result file: data\evaluation\stage14_real\agent_results.csv,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
-real_config,brain_workflow,missing_results,0,0,0,,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\brain_workflow_results.csv,,Missing result file: data\evaluation\stage14_real\brain_workflow_results.csv,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
+real_config,vector,completed,15,15,0,1.000,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\vector_results.csv,,,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
+real_config,hybrid,completed,15,15,0,1.000,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\hybrid_results.csv,,,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
+real_config,user_questions,completed,27,30,3,0.900,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\user_question_results.csv,vector_only:user_cn_colloquial_compactness|default_hybrid:user_mixed_itz_strength|vector_only:user_cn_porosity_compression,,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
+real_config,decompose,error,0,0,0,,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\stage13_decompose_results.csv,,"Traceback (most recent call last):
+  File ""G:\Codex\program\rfc-rag-agent\scripts\evaluate_decompose.py"", line 292, in <module>
+    main()
+    ~~~~^^
+  File ""G:\Codex\program\rfc-rag-agent\scripts\evaluate_decompose.py"", line 139, in main
+    evaluate_question(
+    ~~~~~~~~~~~~~~~~~^
+        expected=expected,
+        ^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        ),
+        ^^
+    )
+    ^
+  File ""G:\Codex\program\rfc-rag-agent\scripts\evaluate_decompose.py"", line 175, in evaluate_question
+    b",Command failed with exit code 1.
+real_config,chat,completed,6,6,0,1.000,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\chat_results.csv,,,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
+real_config,agent,completed,5,5,0,1.000,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\agent_results.csv,,,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.
+real_config,brain_workflow,completed,18,18,0,1.000,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,data\evaluation\stage14_real\brain_workflow_results.csv,,,Real embedding comparison. Requires precomputed result CSVs for this provider/model/dimension.

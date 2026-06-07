@@ -1,0 +1,23 @@
+suite,status,output_file,embedding_provider,embedding_model_name,embedding_dimension,chat_provider,chat_model_name,skipped_reason,error_summary,notes
+vector,completed,data\evaluation\stage14_real\vector_results.csv,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,,,Real config command completed and wrote a result file.
+hybrid,completed,data\evaluation\stage14_real\hybrid_results.csv,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,,,Real config command completed and wrote a result file.
+user_questions,completed,data\evaluation\stage14_real\user_question_results.csv,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,,,Real config command completed and wrote a result file.
+decompose,error,data\evaluation\stage14_real\stage13_decompose_results.csv,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,,"Traceback (most recent call last):
+  File ""G:\Codex\program\rfc-rag-agent\scripts\evaluate_decompose.py"", line 292, in <module>
+    main()
+    ~~~~^^
+  File ""G:\Codex\program\rfc-rag-agent\scripts\evaluate_decompose.py"", line 139, in main
+    evaluate_question(
+    ~~~~~~~~~~~~~~~~~^
+        expected=expected,
+        ^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+        ),
+        ^^
+    )
+    ^
+  File ""G:\Codex\program\rfc-rag-agent\scripts\evaluate_decompose.py"", line 175, in evaluate_question
+    b",Command failed with exit code 1.
+chat,completed,data\evaluation\stage14_real\chat_results.csv,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,,,Real config command completed and wrote a result file.
+agent,completed,data\evaluation\stage14_real\agent_results.csv,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,,,Real config command completed and wrote a result file.
+brain_workflow,completed,data\evaluation\stage14_real\brain_workflow_results.csv,openai-compatible,jina-embeddings-v3,1024,openai-compatible,mimo-v2.5-pro,,,Real config command completed and wrote a result file.

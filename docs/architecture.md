@@ -2459,6 +2459,149 @@ POST /agent/query
 
 架构结论：阶段 14 把质量校准放在 evaluation/reporting 层，而不是把真实模型调用塞进默认链路。deterministic baseline 继续负责稳定回归，真实配置结果必须显式生成并与 baseline 分开记录。
 
+## 阶段 15 真实配置复跑与质量审阅报告
+
+阶段 15 的目标是在阶段 14 质量表基础上，把真实配置状态、回答覆盖复核和只读报告入口落地为可重复生成的发布前质量证据。
+
+核心数据流：
+
+```text
+stage14 quality tables
+-> evaluate_stage15_real_config.py
+-> data/evaluation/stage14_real/
+-> stage14_embedding_comparison.csv
+-> evaluate_stage15_answer_coverage_review.py
+-> data/evaluation/stage15_answer_coverage_review.csv
+-> build_stage15_quality_report.py
+-> data/evaluation/stage15_quality_summary.csv
+-> docs/stage15_quality_report.md
+-> app/frontend/quality_report.html
+-> GET /quality-report
+```
+
+阶段 15 新增：
+
+```text
+docs/stage15_real_review_report.md
+scripts/evaluate_stage15_real_config.py
+data/evaluation/stage14_real/real_config_status.csv
+scripts/evaluate_stage15_answer_coverage_review.py
+data/evaluation/stage15_answer_coverage_review.csv
+scripts/build_stage15_quality_report.py
+data/evaluation/stage15_quality_summary.csv
+docs/stage15_quality_report.md
+app/frontend/quality_report.html
+GET /quality-report
+```
+
+### 真实配置复跑
+
+`evaluate_stage15_real_config.py` 统一调度阶段 14/15 相关评测入口：
+
+```text
+vector
+hybrid
+user_questions
+decompose
+chat
+agent
+brain_workflow
+```
+
+脚本只有显式传入 `--run-real` 才运行真实配置；否则只记录 skipped，避免把真实 API 调用变成默认回归前提。真实结果统一输出到 `data/evaluation/stage14_real/`，并写入 `real_config_status.csv`。外部服务失败时记录 `error` 和脱敏错误摘要，不伪造成成功。
+
+当前真实配置状态：
+
+```text
+vector: completed 15/15
+hybrid: completed 15/15
+user_questions: completed 27/30
+decompose: error, SSL EOF during embedding request
+chat: completed 6/6
+agent: completed 5/5
+brain_workflow: completed 18/18
+```
+
+### Answer Coverage 复核
+
+`evaluate_stage15_answer_coverage_review.py` 读取阶段 14 的 medium/review 样例，并结合 `stage14_real/user_question_results.csv` 中的真实回答摘要和来源命中状态，输出：
+
+```text
+query_id
+question
+expected_answer_points
+answer_summary
+evidence_titles
+faithfulness
+answer_coverage
+citation_quality
+risk_level
+review_method
+review_note
+next_action
+```
+
+这张表继续把 Faithfulness、Answer Coverage 和 Citation Quality 分开审阅。来源命中不等于回答覆盖；真实回答超时、无答案或缺少引用会被提升为高风险。
+
+当前结果：
+
+```text
+9 review rows
+high=1
+medium=8
+```
+
+### 质量汇总与只读报告
+
+`build_stage15_quality_report.py` 汇总四类证据：
+
+```text
+stage14_embedding_comparison.csv
+stage14_real/real_config_status.csv
+stage15_answer_coverage_review.csv
+stage14_decompose_provenance_review.csv
+```
+
+输出：
+
+```text
+data/evaluation/stage15_quality_summary.csv
+docs/stage15_quality_report.md
+app/frontend/quality_report.html
+```
+
+只读报告通过 FastAPI 前端路由暴露：
+
+```text
+GET /quality-report
+```
+
+这个入口只返回静态 HTML，不调用真实模型，不写数据库，不触发 source reindex，也不改变现有核心 API schema。
+
+当前质量门槛：
+
+```text
+stage15_quality_summary.csv: 14 rows
+risk counts: high=4, low=7, medium=3
+overall: review_required/high
+```
+
+### API 与前端边界
+
+阶段 15 不改变以下 API schema：
+
+```text
+POST /search
+POST /search/vector
+POST /search/hybrid
+POST /chat
+POST /agent/query
+```
+
+前端只新增静态报告路由 `/quality-report`，没有重构工作台。核心工作台仍负责来源、文档、检索、问答和 Agent 展示；质量报告页只负责展示阶段 14/15 的评测结论。
+
+架构结论：阶段 15 把真实配置复跑和回答质量复核放在 evaluation/reporting 层，继续保持 deterministic baseline 与真实配置结果分离。系统现在能说明“哪些链路真实配置已通过、哪些失败是外部服务错误、哪些回答仍需人工审阅”，而不是只给一个笼统的通过率。
+
 ### 阶段 9 完成标准
 
 ```text
