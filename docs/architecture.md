@@ -2345,6 +2345,120 @@ full tests: 257 passed
 
 架构结论：阶段 13 把复杂问题处理放在检索证据层，而不是让模型自行长回答。系统继续保留引用、拒答、来源治理和 API 兼容边界。
 
+## 阶段 14 真实 Embedding 与回答覆盖校准
+
+阶段 14 的目标是在阶段 13 证据合并稳定后，把质量判断从“检索是否命中”推进到“真实配置状态和回答覆盖是否可审阅”。
+
+核心数据流：
+
+```text
+sources/documents/chunks/chunk_embeddings
+-> deterministic baseline
+-> stage14 embedding comparison
+-> stage14 answer coverage review
+-> stage14 decompose provenance review
+-> docs/progress / README / Obsidian quality conclusion
+```
+
+阶段 14 新增：
+
+```text
+docs/stage14_real_quality_calibration.md
+scripts/evaluate_stage14_embedding_comparison.py
+data/evaluation/stage14_embedding_comparison.csv
+scripts/evaluate_stage14_answer_coverage.py
+data/evaluation/stage14_answer_coverage_review.csv
+scripts/evaluate_stage14_decompose_provenance.py
+data/evaluation/stage14_decompose_provenance_review.csv
+```
+
+### Embedding Comparison
+
+`stage14_embedding_comparison.csv` 汇总多套 suite：
+
+```text
+vector
+hybrid
+user_questions
+decompose
+chat
+agent
+brain_workflow
+```
+
+每行记录：
+
+```text
+config_name
+suite
+status
+passed / total / failed / pass_rate
+embedding_provider / embedding_model_name / embedding_dimension
+chat_provider / chat_model_name
+failed_queries
+skipped_reason
+```
+
+阶段 14 的关键边界是：真实配置没有结果文件时，记录为 `missing_results` 或 `skipped`，而不是伪造成 passed。当前 deterministic baseline 结果为：
+
+```text
+vector: 13/15
+hybrid: 15/15
+user_questions: 25/30
+decompose: 10/10
+chat: 6/6
+agent: 5/5
+brain_workflow: 18/18
+```
+
+### Answer Coverage Review
+
+`stage14_answer_coverage_review.csv` 把回答质量拆成三个维度：
+
+```text
+Faithfulness
+Answer Coverage
+Citation Quality
+```
+
+这张表不会把 deterministic answer 直接当作真实回答质量证明。当前默认链路多数样例标为 `answer_coverage=review`，意思是：检索来源和引用链路稳定，但仍需要真实模型回答或人工摘要确认是否覆盖核心技术点。
+
+unsupported 随机问题被标为低风险，因为它正确拒答且不返回来源。
+
+### Decompose Provenance Review
+
+`stage14_decompose_provenance_review.csv` 把阶段 13 的长字符串 `rerank_explanations` 拆成证据级字段：
+
+```text
+evidence_rank
+evidence_title
+evidence_sub_query_count
+topic_terms
+both_match
+source_type
+raw_score
+final_score
+review_note
+```
+
+这样能直接审阅“某条证据为什么进入上下文”，而不需要人工从长字符串中拆解。当前输出为 50 条证据级记录，其中 15 条来自真正 decomposed 的问题，37 条具有 keyword/vector both-match 信号。
+
+### API 与前端边界
+
+阶段 14 不改变外部 API schema：
+
+```text
+POST /search
+POST /search/vector
+POST /search/hybrid
+POST /chat
+POST /agent/query
+```
+
+前端暂不修改。原因是阶段 14 的只读审阅需求已经通过 CSV 产物满足；如果后续要做展示，应优先做报告页或只读表格，不重构核心工作台。
+
+架构结论：阶段 14 把质量校准放在 evaluation/reporting 层，而不是把真实模型调用塞进默认链路。deterministic baseline 继续负责稳定回归，真实配置结果必须显式生成并与 baseline 分开记录。
+
 ### 阶段 9 完成标准
 
 ```text

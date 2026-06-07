@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 13：Decompose 与可解释证据合并已完成，当前分支为 `codex/phase-13-decompose-evidence-merge`。
+阶段 14：真实 Embedding 与回答覆盖校准已完成，当前分支为 `codex/phase-14-real-quality-calibration`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -60,7 +60,11 @@
 
 阶段 13 tag：`phase-13-complete`。
 
-下一步建议：进入阶段 14，优先做真实 embedding 对比、真实模型 Answer Coverage 校准，或把 Decompose provenance 做成前端/评测的可视化说明；HyDE 仍只做离线实验，不进入默认链路或自动回归。
+阶段 14 最终功能提交：由 `phase-14-complete` tag 指向的提交标识。
+
+阶段 14 tag：`phase-14-complete`。
+
+下一步建议：进入阶段 15，优先做真实配置结果复跑、真实回答人工审阅闭环，或把阶段 14 的质量校准表接入只读报告页；HyDE 仍只做离线实验，不进入默认链路或自动回归。
 
 当前已经实现：
 
@@ -133,6 +137,13 @@
 - `app/services/retrieval/decompose.py` 阶段 13 规则式 Decompose、子 query 检索、证据合并、`chunk_id` 去重、sub query provenance 和可解释 rerank 服务
 - `scripts/evaluate_decompose.py` 阶段 13 Decompose 评测脚本
 - `data/evaluation/stage13_decompose_results.csv` 阶段 13 Decompose 评测结果
+- `docs/stage14_real_quality_calibration.md` 阶段 14 真实 embedding 与回答覆盖校准设计文档
+- `scripts/evaluate_stage14_embedding_comparison.py` 阶段 14 embedding 配置对比汇总脚本
+- `data/evaluation/stage14_embedding_comparison.csv` 阶段 14 embedding 对比结果表
+- `scripts/evaluate_stage14_answer_coverage.py` 阶段 14 Answer Coverage 校准脚本
+- `data/evaluation/stage14_answer_coverage_review.csv` 阶段 14 回答覆盖校准表
+- `scripts/evaluate_stage14_decompose_provenance.py` 阶段 14 Decompose provenance 可读化脚本
+- `data/evaluation/stage14_decompose_provenance_review.csv` 阶段 14 证据级 provenance 审阅表
 - Brain `rewrite_query` 最小上下文补全，支持基于可选 `history` 的“它/这个技术/这类问题”等代词或省略问法补全
 - `/chat` 和 `/agent/query` 可选 `history` 字段，旧请求保持兼容
 - 跨语言 query expansion 增强，补充 ITZ/界面、creep/徐变、freeze-thaw/抗冻、porosity/孔隙率、emission/碳排放、steel fiber/钢纤维、rock shear key/剪力键等术语
@@ -153,7 +164,7 @@
 - FastAPI 静态前端入口：`GET /`
 - 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 244 个自动化测试
+- 275 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -412,6 +423,65 @@ full tests: 257 passed
 ```
 
 阶段 13 结论：Decompose 对复杂问题的来源命中有帮助，并且 unsupported 问题仍由 Brain evidence confidence 正确拒答。vector-only 的剩余失败边界继续保留，不用静默 fallback 掩盖。
+
+## 真实 Embedding 与回答覆盖校准
+
+阶段 14 把阶段 13 的“证据更完整”继续推进到“质量更可审阅”。本阶段新增三类结果表：
+
+```text
+data/evaluation/stage14_embedding_comparison.csv
+data/evaluation/stage14_answer_coverage_review.csv
+data/evaluation/stage14_decompose_provenance_review.csv
+```
+
+运行阶段 14 embedding 对比汇总：
+
+```powershell
+python scripts/evaluate_stage14_embedding_comparison.py --include-real-config
+```
+
+当前结果：
+
+```text
+deterministic vector: 13/15
+deterministic hybrid: 15/15
+deterministic user questions: 25/30
+deterministic decompose: 10/10
+deterministic chat: 6/6
+deterministic agent: 5/5
+deterministic brain_workflow: 18/18
+real_config: missing_results，缺少 data/evaluation/stage14_real/*.csv
+full tests: 275 passed
+```
+
+运行回答覆盖校准：
+
+```powershell
+python scripts/evaluate_stage14_answer_coverage.py --include-real-config
+```
+
+当前结果：
+
+```text
+stage14_answer_coverage_review.csv: 20 rows
+risk counts: low=1, medium=9, skipped=10
+```
+
+运行 Decompose provenance 可读化：
+
+```powershell
+python scripts/evaluate_stage14_decompose_provenance.py
+```
+
+当前结果：
+
+```text
+stage14_decompose_provenance_review.csv: 50 evidence rows
+decomposed_rows=15
+both_match_rows=37
+```
+
+阶段 14 结论：deterministic baseline 继续适合自动回归，但显式 deterministic 用户问题集为 25/30，说明真实 embedding 或更强 rerank 仍有价值。真实配置没有伪造成成功结果，而是记录为 missing/skipped，等待 `data/evaluation/stage14_real/` 中的真实评测文件。Answer Coverage 校准表把默认链路多数样例标为 review，因为 deterministic 回答只能证明链路稳定，不能证明真实语言覆盖度。
 
 ## Agent 化
 
