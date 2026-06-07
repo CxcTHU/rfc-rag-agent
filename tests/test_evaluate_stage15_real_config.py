@@ -6,6 +6,7 @@ from pathlib import Path
 from app.core.config import Settings
 from scripts.evaluate_stage15_real_config import (
     SUITES,
+    compact_error_summary,
     command_for_suite,
     evaluate_real_config,
     missing_chat_settings,
@@ -158,6 +159,16 @@ def test_redact_sensitive_text_replaces_known_keys() -> None:
     redacted = redact_sensitive_text("embedding-secret and chat-secret failed", real_settings())
 
     assert redacted == "[REDACTED] and [REDACTED] failed"
+
+
+def test_compact_error_summary_preserves_head_and_tail() -> None:
+    long_error = "Traceback start " + ("middle " * 200) + "SSL: UNEXPECTED_EOF_WHILE_READING"
+
+    compact = compact_error_summary(long_error, limit=120)
+
+    assert compact.startswith("Traceback start")
+    assert "..." in compact
+    assert compact.endswith("SSL: UNEXPECTED_EOF_WHILE_READING")
 
 
 def test_update_embedding_comparison_returns_error_when_output_path_is_directory(tmp_path) -> None:

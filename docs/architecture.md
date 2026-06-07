@@ -2602,6 +2602,103 @@ POST /agent/query
 
 架构结论：阶段 15 把真实配置复跑和回答质量复核放在 evaluation/reporting 层，继续保持 deterministic baseline 与真实配置结果分离。系统现在能说明“哪些链路真实配置已通过、哪些失败是外部服务错误、哪些回答仍需人工审阅”，而不是只给一个笼统的通过率。
 
+## 阶段 16 真实质量风险闭环
+
+阶段 16 的目标不是增加新的检索或 Agent 功能，而是把阶段 15 报告中的发布前风险变成可解释、可复核、可人工放行或阻断的质量闭环。
+
+核心数据流：
+
+```text
+stage15 quality report
+-> stage14_real/real_config_status.csv
+-> analyze_stage16_decompose_diagnostics.py
+-> data/evaluation/stage16_decompose_diagnostics.csv
+-> stage15_answer_coverage_review.csv
+-> evaluate_stage16_answer_coverage_closure.py
+-> data/evaluation/stage16_answer_coverage_closure.csv
+-> build_stage16_quality_closure_report.py
+-> data/evaluation/stage16_quality_closure_summary.csv
+-> docs/stage16_quality_closure_report.md
+-> app/frontend/quality_report.html
+-> GET /quality-report
+```
+
+阶段 16 新增：
+
+```text
+docs/stage16_quality_risk_closure.md
+scripts/analyze_stage16_decompose_diagnostics.py
+data/evaluation/stage16_decompose_diagnostics.csv
+scripts/evaluate_stage16_answer_coverage_closure.py
+data/evaluation/stage16_answer_coverage_closure.csv
+scripts/build_stage16_quality_closure_report.py
+data/evaluation/stage16_quality_closure_summary.csv
+docs/stage16_quality_closure_report.md
+```
+
+### Decompose 真实错误诊断
+
+阶段 16 没有默认重跑真实 API，而是读取阶段 15 已保存的脱敏状态和进度证据，把 real decompose error 分类为：
+
+```text
+status_after=retry_completed
+error_type=none_after_retry
+root_cause=embedding_header_compatibility_and_chat_timeout
+blocking_status=not_blocking
+```
+
+这表示阶段 15 的真实 provider/network 层失败没有被伪造成通过，而是在阶段 16 追加显式重试后得到真实结果。修复点包括 embedding provider 补齐 `api-key` 兼容请求头，以及将真实 chat 读取 timeout 临时提高到 120 秒。
+
+### Answer Coverage 闭环
+
+阶段 16 读取 `stage15_answer_coverage_review.csv` 中 high/medium 样例，输出：
+
+```text
+query_id
+risk_before
+risk_after
+faithfulness
+answer_coverage
+citation_quality
+root_cause
+evidence
+decision
+next_action
+```
+
+当前结果：
+
+```text
+high=1
+medium=3
+low=5
+```
+
+`user_mixed_itz_strength` 仍保持 high/blocking，因为真实回答超时，不能证明回答覆盖 ITZ 与强度的期望要点。3 条 medium 是 `source_detail_limited`，适合作为人工审阅项。
+
+### Quality Gate 与 API 边界
+
+阶段 16 的 quality gate 为：
+
+```text
+review_required/high
+```
+
+这是一种诚实阻断状态：decompose 已完成真实重试并降为 low，但 Answer Coverage 仍有 high 样例，需要用户人工核验。阶段 16 继续保持以下 API schema 不变：
+
+```text
+POST /search
+POST /search/vector
+POST /search/hybrid
+POST /chat
+POST /agent/query
+GET /quality-report
+```
+
+`GET /quality-report` 仍只返回静态只读报告，不调用真实模型，不写数据库，不触发 source reindex，也不改变核心工作台交互。
+
+架构结论：阶段 16 把质量风险闭环放在 evaluation/reporting 层，通过诊断表、闭环表和质量汇总报告连接阶段 15 的真实风险与人工核验流程。核心 RAG 检索、Brain、chat 和 Agent 编排保持稳定，deterministic baseline 与真实配置状态继续分离。
+
 ### 阶段 9 完成标准
 
 ```text

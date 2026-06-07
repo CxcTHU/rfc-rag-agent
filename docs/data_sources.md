@@ -633,3 +633,48 @@ data/evaluation/stage14_real/*.csv
 - `app/frontend/quality_report.html` 是只读静态报告页，不触发真实 API 调用，不写数据库，不重新索引来源。
 - 真实 API key、Bearer token 和供应商原始敏感响应仍只允许存在本地 `.env` 或内存调用中，不得写入源码、文档、CSV、测试、Git 或 Obsidian。
 - HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
+
+## 阶段 16 真实质量风险闭环产物
+
+阶段 16 新增或更新的工程与评测产物：
+
+```text
+docs/stage16_quality_risk_closure.md
+scripts/analyze_stage16_decompose_diagnostics.py
+data/evaluation/stage16_decompose_diagnostics.csv
+scripts/evaluate_stage16_answer_coverage_closure.py
+data/evaluation/stage16_answer_coverage_closure.csv
+scripts/build_stage16_quality_closure_report.py
+data/evaluation/stage16_quality_closure_summary.csv
+docs/stage16_quality_closure_report.md
+app/frontend/quality_report.html
+```
+
+这些文件不是新的文献资料来源。它们只记录：
+
+- real decompose SSL EOF 的脱敏错误分类、根因、可重试状态和阻断状态。
+- 阶段 15 high/medium Answer Coverage 样例的 `risk_before`、`risk_after`、Faithfulness、Answer Coverage、Citation Quality、根因、证据摘要、决策和 next action。
+- 阶段 16 quality gate、报告建议和人工核验边界。
+- 脱敏来源标题、回答摘要和必要指标，不保存供应商原始敏感响应。
+
+阶段 16 不新增外部资料来源，不新增爬虫链路，不保存受限全文。它只读取现有：
+
+```text
+sources
+documents/chunks
+chunk_embeddings
+data/evaluation/stage14_real/real_config_status.csv
+data/evaluation/stage14_embedding_comparison.csv
+data/evaluation/stage15_answer_coverage_review.csv
+docs/progress.md
+```
+
+合规结论：
+
+- `stage16_decompose_diagnostics.csv` 是真实错误诊断表，不是资料库，也不保存 API key 或完整供应商响应。
+- `stage16_answer_coverage_closure.csv` 是质量复核闭环表，不保存受限论文全文。
+- `stage16_quality_closure_summary.csv` 和 `docs/stage16_quality_closure_report.md` 是报告产物，不改变来源归属。
+- `app/frontend/quality_report.html` 仍是只读静态报告页，不触发真实 API 调用，不写数据库，不重新索引来源。
+- 真实 API key、Bearer token、供应商原始敏感响应和受限全文仍不得写入源码、文档、CSV、测试、Git 或 Obsidian。
+- 阶段 16 当前停在用户人工核验前状态，尚未提交、尚未打 tag、尚未推送。
+- HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
