@@ -1,0 +1,266 @@
+config_name,query_id,question,language_type,passed,returned_answer,expected_refused,refused,refusal_matched,expected_source_hit,actual_source_hit,source_hit_matched,source_count,citations,citations_valid,forbidden_terms_absent,expected_answer_points,configured_retrieval_mode,actual_retrieval_mode,top_k,workflow_steps,workflow_succeeded,model_provider,model_name,answer,top_source_titles,failed_reason,error,notes
+default_hybrid,user_cn_colloquial_compactness,现场怎么判断堆石混凝土有没有灌满以及密实度够不够？,zh_colloquial,yes,yes,no,no,yes,yes,yes,yes,4,2,yes,yes,说明密实度或灌满判断需要质量控制和检测依据,hybrid,hybrid,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，关于**堆石混凝土现场如何判断是否灌满及密实度**，目前可检索到的信息如下：
+
+**现有可靠证据：**
+- 存在针对堆石混凝土（RFC）中自密实混凝土（SCC）填充密实度的**现场检测实验方法**研究 [2]。该类方法聚焦于**新鲜自密实混凝土**的填充密实度检测，而非常见的硬化后检测（如钻孔取芯、孔内电视等）。其技术思路涉及在堆石体空隙的不同空间结构中预先布置监测仪器 [2]。
+
+**信息不足说明：**
+当前知识库中，关于**具体现场判断方法的详细技术细节**（例如使用何种仪器、如何布点、如何读取和判断数据、验收标准等）的描述尚不充分。资料[2]的摘要仅提出了研究方向和总体思路，未展开说明具体的操作流程或标准 [2]。
+
+**结论：**
+综上所述，虽然可确认存在针对新鲜阶段填充密实度的现场检测方法研究 [2]，但**当前知识库未提供足够详细的信息来全面回答“现场如何具体判断”的操作性问题**。获取更深入的技术细节需要查阅相关规范、工法或更完整的文献。",Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || On-site experiment methods on the compaction detection of rock-filled concrete || 自密实混凝土充填堆石体试验研究 || Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete,,,中文口语问法 覆盖施工质量和密实度检测
+keyword_baseline,user_cn_colloquial_compactness,现场怎么判断堆石混凝土有没有灌满以及密实度够不够？,zh_colloquial,yes,yes,no,no,yes,yes,yes,yes,4,1|4,yes,yes,说明密实度或灌满判断需要质量控制和检测依据,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献资料，目前可以找到关于**新鲜自密实混凝土（SCC）灌注密实度现场检测方法**的信息，但关于具体如何“判断”堆石混凝土是否“灌满”的直观、成熟的方法，现有上下文中的直接描述有限。以下是从上下文中可提取的事实和判断：
+
+### 现场检测方法（针对新鲜SCC的灌注）
+为了解决堆石混凝土（RFC）中自密实混凝土是否充分填充岩石间空隙（即灌注密实度）的问题，有研究开展了现场实验。核心方法是 **预埋监测仪器** [1]。
+具体做法是：在RFC浇筑仓内的岩石堆积体空隙的不同空间结构中，预先布置监测仪器，以此来检测新鲜SCC的灌注情况[1]。这是一种探索性的现场实验方法[1]。
+
+### 密实度的重要性与检测概念
+RFC的灌注密实度是工程界关注的核心问题之一，它直接关系到大坝的安全性[1][4]。灌注密实度是指自密实混凝土（文中也称为HSCC）是否能彻底填充岩石间的空隙[4]。需要指出，传统上许多现场检测方法（如钻孔取芯、红外孔内电视）主要针对**硬化后的RFC**进行密实度检测[1]。
+
+### 总结与说明
+综上所述，现有文献提供的信息显示：
+1.  **现场判断的核心思路**：通过在浇筑前于岩石堆积体内部**预埋监测仪器**，可以监测新鲜混凝土的灌注过程，从而判断其填充情况[1]。
+2.  **证据的局限性**：所提供的文献摘要并未详细说明具体使用何种类型的仪器（如传感器）、如何根据仪器读数进行量化判断，也未描述其他直观的现场验收方法（例如视觉观察、简易探测等）。
+3.  **建议**：要获得具体的、可操作的现场判断细则，需要查阅相关工程规范、施工指南或更详细的技术文献，特别是关于文中提到的探索性现场实验方法[1]的完整论文。
+
+因此，基于当前知识库，可以明确现场检测新鲜SCC灌注密实度的一种**研究性方法**是预埋仪器监测[1]，但完整的现场判断标准和直观方法需要更详尽的资料支持。",On-site experiment methods on the compaction detection of rock-filled concrete || Filling Process of HSCC and Compactness of RFC || Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology,,,中文口语问法 覆盖施工质量和密实度检测
+vector_only,user_cn_colloquial_compactness,现场怎么判断堆石混凝土有没有灌满以及密实度够不够？,zh_colloquial,no,no,no,no,no,yes,no,no,0,,yes,yes,说明密实度或灌满判断需要质量控制和检测依据,vector,none,5,,no,openai-compatible,mimo-v2.5-pro,,,error,The read operation timed out,中文口语问法 覆盖施工质量和密实度检测
+default_hybrid,user_mixed_itz_strength,RFC 里 rock 和 SCC 的界面 ITZ 会怎样影响强度？,mixed,no,no,no,no,no,yes,no,no,0,,yes,yes,说明 rock/SCC 界面或 ITZ 对强度和破坏的影响,hybrid,none,5,,no,openai-compatible,mimo-v2.5-pro,,,error,The read operation timed out,中英混合术语 覆盖界面过渡区
+keyword_baseline,user_mixed_itz_strength,RFC 里 rock 和 SCC 的界面 ITZ 会怎样影响强度？,mixed,yes,yes,no,no,yes,yes,yes,yes,4,1|4|3,yes,yes,说明 rock/SCC 界面或 ITZ 对强度和破坏的影响,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"在岩石充填混凝土（RFC）中，岩石（骨料）与自密实砂浆（SCC）之间的界面过渡区（ITZ）对强度的影响具有以下特点：
+
+1.  **ITZ孔隙率降低能提升强度**：采用自密实浇筑法（RFC的施工方式）可以显著降低ITZ的孔隙率，特别是岩石侧面的ITZ孔隙率，并因此提高RFC的抗压强度 [1]。
+
+2.  **ITZ的作用强度取决于其与SCC的相对性能**：RFC的单轴抗压性能会随着ITZ力学性能的增强而提高。然而，当ITZ的强度（σ_ITZ）与SCC强度（σ_SCC）的比值（σ_ITZ/σ_SCC）大于0.7时，性能提升幅度较小；主要的性能增强体现在该比值小于0.7的阶段 [4]。
+
+3.  **ITZ对RFC强度的影响弱于对传统混凝土的影响**：与传统混凝土相比，ITZ在RFC中的作用有所不同。在传统混凝土中，改善ITZ性能能显著提高抗压强度。但在RFC中，这种显著的提升效果并不明显，这可能是由于两种材料中骨料-ITZ界面的结构存在差异 [4]。
+
+4.  **骨料特性的影响比ITZ更大**：骨料力学性能的提升也能改善RFC的单轴抗压性能，并且骨料特性对RFC的影响比ITZ的影响更为显著。这表明RFC的强度在更大程度上依赖于骨料本身的特性 [3]。
+
+**结论**：在RFC中，ITZ的孔隙率和力学性能确实会影响强度，降低孔隙率和提高其力学性能有益于强度提升。但是，这种影响的程度受到ITZ与SCC相对强度比值的调节，并且相较于传统混凝土，ITZ对RFC强度的贡献相对较小，RFC的强度更显著地依赖于大粒径岩石骨料自身的性质。
+
+**重要提示**：以上结论基于对所选文献片段的分析。本系统仅用于学习和资料检索，不能替代规范审查、工程设计和专家判断。","Experimental Study on Effects of Casting Procedures on Compressive Strength, Water Permeability, and Interfacial Transition Zone Porosity of Rock-Filled Concrete || Experimental study of the interfacial transition zone (ITZ) of model rock-filled concrete (RFC) || 3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties || 3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties",,,中英混合术语 覆盖界面过渡区
+vector_only,user_mixed_itz_strength,RFC 里 rock 和 SCC 的界面 ITZ 会怎样影响强度？,mixed,yes,yes,no,no,yes,yes,yes,yes,4,1|2|3|4,yes,yes,说明 rock/SCC 界面或 ITZ 对强度和破坏的影响,vector,vector,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"在RFC中，岩石与自密实混凝土（SCC）之间的界面过渡区（ITZ）对强度的影响机制与常规混凝土不同，主要体现在以下几个方面：
+
+1.  **ITZ结构特性**：研究表明，由于岩石骨架为SCC提供了有效的流动通道，RFC中的ITZ结构可能比常规混凝土更致密[1]。然而，RFC中的超大骨料会产生更大的内部ITZ，并且由于骨料之间存在直接接触，有些区域可能完全没有ITZ[2]。
+
+2.  **对强度的具体影响**：
+    *   数值模拟结果表明，在RFC中，ITZ对整体力学性能的影响**并不显著**[3]。这是因为骨料间的接触点起主导作用，它们形成了穿过SCC的主要破坏面[3]。
+    *   与常规混凝土相比，改善ITZ性能对RFC强度的提升效果**较小**。例如，对于常规混凝土，ITZ性能提升10%可使强度增加4.87%；而在RFC中，类似改善带来的强度增长要小得多，这主要归因于两者在骨料-ITZ界面结构上的差异[4]。
+    *   ITZ自身的强度（以σITZ/σSCC表示）对RFC的弹性模量（E）和抗压强度（ACS）有影响，但效果有限。具体来说，当ITZ强度较低（σITZ/σSCC < 0.7）时，提升其性能带来的强度增长相对更明显[4]。
+
+**总结**：与常规混凝土中ITZ常被视为最薄弱环节不同，在RFC中，由于骨料直接接触形成的“岩桥效应”和更大的ITZ区域，ITZ对整体强度的影响被削弱。其强度更多地受骨料接触点和SCC基体本身性质的控制[2, 3]。改善ITZ性能虽能提升RFC强度，但效果不如在常规混凝土中显著[4]。",3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties || 3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties || Full-Scale micromechanical simulation of rock-filled concretes using Peridynamics || 3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties,,,中英混合术语 覆盖界面过渡区
+default_hybrid,user_en_freeze_thaw,Are there studies about freeze-thaw resistance of rock-filled concrete?,en,yes,yes,no,no,yes,yes,yes,yes,4,2|1|3|4,yes,yes,说明抗冻或 freeze-thaw 与耐久性相关研究,hybrid,hybrid,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"是的，根据提供的资料，有关于岩石充填混凝土（RFC）抗冻融性能的研究。
+
+一项专门的实验研究对此进行了探讨：**《岩石充填混凝土的抗冻融性能与抗渗性实验研究》[2]**。该研究对经历冻融循环后的RFC试件进行了抗冻融性能和抗渗性的测试。结果表明，施工冷缝的粘结界面是渗流的主要路径，冷缝的渗透性大于热缝；同时，冷缝的劈裂抗拉强度和抗压强度均低于热缝，且强度损失率更大 [2]。
+
+提供的其他文献未直接涉及抗冻融性能的研究。其中，[1] 关注冷缝的剪切性能，[3] 比较RFC与常规混凝土的抗震性能，[4] 研究孔隙率和孔径对RFC损伤特性的影响。",Experimental studies on shear properties of cold joints of rock-filled concrete || Experimental Research on Freeze-thaw Resistence Property and Impermeability for Rock-filled Concrete || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || Study on the effect of porosity and aperture on the damage characterization of rock-filled concrete (RFC),,,英文耐久性问题
+keyword_baseline,user_en_freeze_thaw,Are there studies about freeze-thaw resistance of rock-filled concrete?,en,yes,yes,no,no,yes,yes,yes,yes,4,3,yes,yes,说明抗冻或 freeze-thaw 与耐久性相关研究,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"是的，关于堆石混凝土抗冻融性能的研究是存在的。具体来说，有一项实验研究专门针对堆石混凝土的抗冻融性能和抗渗性进行了研究 [3]。
+
+该研究指出，堆石混凝土的抗冻融性能和抗渗性直接影响其结构的安全性和可靠性。研究对经过冻融循环力学性能测试后的堆石混凝土试样，以及水压下的抗渗性进行了实验研究。测试结果表明，施工冷缝的粘结界面是主要的渗水路径，并且冷缝的渗透性大于热缝；冷缝的劈裂抗拉强度和抗压强度均低于热缝，并且强度损失率更大 [3]。
+
+需要注意的是，当前提供的知识库主要包含上述这项研究。如果需要更全面的了解，可能需要检索更多的相关文献。",Experimental studies on shear properties of cold joints of rock-filled concrete || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || Experimental Research on Freeze-thaw Resistence Property and Impermeability for Rock-filled Concrete || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method,,,英文耐久性问题
+vector_only,user_en_freeze_thaw,Are there studies about freeze-thaw resistance of rock-filled concrete?,en,yes,yes,no,no,yes,yes,yes,yes,4,1|3,yes,yes,说明抗冻或 freeze-thaw 与耐久性相关研究,vector,vector,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"Yes, there are studies on the freeze-thaw resistance of rock-filled concrete (RFC).
+
+Specifically, an experimental research paper directly investigates this property. The study, titled ""Experimental Research on Freeze-thaw Resistence Property and Impermeability for Rock-filled Concrete"" by Jianjun Shi (2009), examines the freeze-thaw resistance and impermeability of RFC [1].
+
+Furthermore, a comprehensive literature review on RFC identifies freeze-thaw resistance as a key area requiring additional research to understand the material's long-term behavior and durability [3].
+
+**Engineering Judgment/Uncertainty:**
+While a direct study [1] exists, a recent review [3] suggests that further investigation is still recommended, particularly regarding the effects on larger dimensions. The provided context does not detail the specific findings or performance metrics of the freeze-thaw resistance.",Experimental Research on Freeze-thaw Resistence Property and Impermeability for Rock-filled Concrete || A Comprehensive Literature Review on the Elastic Modulus of Rock-filled Concrete || A Comprehensive Literature Review on the Elastic Modulus of Rock-filled Concrete || Experimental studies on shear properties of cold joints of rock-filled concrete,,,英文耐久性问题
+default_hybrid,user_cn_creep,堆石混凝土长期变形和徐变有什么研究？,zh_colloquial,yes,yes,no,no,yes,yes,yes,yes,4,1|2|3|4,yes,yes,说明长期变形或 creep 行为的研究对象,hybrid,hybrid,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，关于堆石混凝土（RFC）长期变形和徐变的研究，目前的知识库中包含以下信息：
+
+1.  **主要研究**：一项针对堆石混凝土和自密实混凝土徐变行为的实验研究已被明确记录。该研究发表于2018年，题为《Experimental study on the creep behaviour of rock-filled concrete and self-compacting concrete》[1]。这项研究聚焦于“徐变（Creep）”行为，这是与材料长期变形直接相关的力学特性。因此，该文献是回答您问题的核心依据。
+
+2.  **研究内容确认**：该文献在另一篇综述性论文中被引用为关于堆石混凝土性能的关键研究之一[2]，进一步证实了其在这一领域的代表性。
+
+**总结**：
+现有的上下文资料表明，堆石混凝土的徐变（即一种长期变形）已有专门的实验研究[1]。然而，其他相关上下文片段主要涉及地震分析[3]和新型堆石混凝土（振动堆石混凝土）的初步研究[4]，并未涉及长期变形或徐变的进一步细节。
+
+因此，**关于堆石混凝土长期变形和徐变的研究，当前知识库中的可靠证据指向2018年发表的一项实验研究[1]**。如需了解其具体实验方法、数据和结论，建议直接查阅该文献。请注意，本系统仅用于学习和资料检索，不能替代规范审查、工程设计和专家判断。",Experimental study on the creep behaviour of rock-filled concrete and self-compacting concrete || Full-Scale micromechanical simulation of rock-filled concretes using Peridynamics || Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Pilot Study on Vibrated Rock-filled Concrete,,,中文口语问法 覆盖徐变
+keyword_baseline,user_cn_creep,堆石混凝土长期变形和徐变有什么研究？,zh_colloquial,yes,yes,no,no,yes,yes,yes,yes,4,1|4,yes,yes,说明长期变形或 creep 行为的研究对象,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献资料，关于堆石混凝土（RFC）长期变形和徐变的研究，现有知识库中的直接证据如下：
+
+**核心研究发现：**
+已有研究对堆石混凝土的徐变行为进行了实验分析。具体来说，有一项专门的实验研究，对比了堆石混凝土与自密实混凝土的徐变性能 [1]。
+
+**研究背景与定位：**
+在对堆石混凝土技术进行的综合性文献综述中，上述关于徐变的实验研究被列为该材料基本力学性能研究的重要组成部分之一 [4]。
+
+**结论与信息边界：**
+目前提供的文献内容主要明确了存在针对堆石混凝土徐变的实验研究。然而，所给的上下文未包含该研究的具体结论、实验方法细节或关于长期变形（如温度变形、干缩等）其他方面的详细数据。因此，关于堆石混凝土长期变形的更广泛特性，现有知识库未提供足够信息。
+
+本系统仅用于学习和资料检索，不能替代规范审查、工程设计和专家判断。",Experimental study on the creep behaviour of rock-filled concrete and self-compacting concrete || Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Pilot Study on Vibrated Rock-filled Concrete || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology,,,中文口语问法 覆盖徐变
+vector_only,user_cn_creep,堆石混凝土长期变形和徐变有什么研究？,zh_colloquial,yes,yes,no,no,yes,yes,yes,yes,4,2|1|3|4,yes,yes,说明长期变形或 creep 行为的研究对象,vector,vector,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据当前知识库中的资料，关于堆石混凝土长期变形和徐变的研究，可以提供以下信息：
+
+有明确的研究专门探讨了堆石混凝土的徐变行为。一篇题为《Experimental study on the creep behaviour of rock-filled concrete and self-compacting concrete》的文献，其核心研究内容即为堆石混凝土与自密实混凝土的徐变特性 [2]。该研究发表于2018年的《Construction and Building Materials》期刊，关键词包括“徐变”、“收缩”和“复合材料”等 [2]。
+
+然而，当前知识库中提供的该文献片段仅为元数据记录，未包含具体的研究方法、数据和结论等详细信息 [2]。
+
+所提供的其它资料主要涉及堆石混凝土的早期强度发展、施工性能（如自密实混凝土在堆石体中的流动与填充）以及基本概念介绍 [1][3][4]，并未直接涉及长期变形或徐变的研究。
+
+**总结**：
+当前知识库**确认存在**针对堆石混凝土徐变行为的专门研究 [2]，但**未能提供**该研究的具体细节以阐述其发现。对于堆石混凝土的长期变形特性，现有资料未提供足够信息。如需深入了解徐变的具体规律和数据，建议查阅参考文献[2]的全文。",堆石混凝土及堆石混凝土大坝 / Study on rock-fill concrete dam || Experimental study on the creep behaviour of rock-filled concrete and self-compacting concrete || 堆石混凝土及堆石混凝土大坝 / Study on rock-fill concrete dam || 堆石混凝土及堆石混凝土大坝 / Study on rock-fill concrete dam,,,中文口语问法 覆盖徐变
+default_hybrid,user_mixed_cost_emission,RFC dam construction 的成本工期和碳排放怎么评估？,mixed,yes,yes,no,no,yes,yes,yes,yes,4,1|2|3|4,yes,yes,说明成本 工期 排放或生命周期评价指标,hybrid,hybrid,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献，RFC大坝建设的成本、工期和碳排放评估主要通过以下两种核心方法进行，并结合了实际工程数据：
+
+### 1. **综合绩效评估方法**
+该方法采用**离散事件仿真（DES）** 对施工过程进行动态模拟，以集成评估成本、工期和排放因子之间的相互作用关系。研究表明，在RFC大坝项目中，这三者高度相关[1]。该方法允许管理者在规划阶段对比不同方案的综合绩效。
+
+### 2. **生命周期评价方法**
+该方法采用**混合生命周期评估（LCA）模型**，对大坝全生命周期（包括材料生产、运输、施工、运维等阶段）的环境负荷进行量化，从而评估RFC相对于传统混凝土的碳排放影响[2]。
+
+### 3. **基于工程实践的统计结果**
+对实际RFC项目的统计分析显示：
+*   **成本方面**：RFC大坝的综合单价比常规混凝土或碾压混凝土大坝**低10%-30%** [3][4]。
+*   **碳排放方面**：与传统混凝土相比，RFC在以下阶段能显著减少二氧化碳排放：
+    *   材料生产阶段：**减少72%**
+    *   运输阶段：**减少25%**
+    *   施工阶段：**减少51%**
+    *   运维阶段：**减少15.6%** [3][4]。
+
+### 结论
+评估RFC大坝建设的综合绩效（成本、工期、碳排放）需结合**过程仿真（DES）** 和**全周期评估（LCA）** 方法。现有工程数据表明，RFC技术在成本节约和碳减排方面具有显著优势。","Integrated evaluation of cost, schedule and emission performance on rock-filled concrete dam construction operation using discrete event simulation || Life-Cycle Assessment of Concrete Dam Construction: Comparison of Environmental Impact of Rock-Filled and Conventional Concrete || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology",,,中英混合工程管理问题
+keyword_baseline,user_mixed_cost_emission,RFC dam construction 的成本工期和碳排放怎么评估？,mixed,yes,yes,no,no,yes,yes,yes,yes,4,3|1|4|2,yes,yes,说明成本 工期 排放或生命周期评价指标,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，可以对RFC大坝建设的成本、工期和碳排放评估方法进行如下总结：
+
+**1. 成本评估**
+RFC大坝的成本具有优势。统计数据表明，其综合单价比常规混凝土大坝或碾压混凝土大坝低10%–30% [3]。集成评估方法可以用于比较不同RFC施工方案的成本绩效 [1]。
+
+**2. 工期评估**
+工期的评估可以借助**离散事件仿真**方法来动态模拟和优化施工过程 [1]。研究显示，成本、工期和碳排放绩效在RFC大坝项目中高度相互关联 [1]。采用RFC技术通常能简化施工流程，有助于提升施工效率 [4]。
+
+**3. 碳排放评估**
+对碳排放（或环境影响）的评估主要采用**生命周期评估**方法 [2]。具体研究显示，与常规混凝土相比，RFC在多个阶段均表现出减排优势：
+*   在材料生产阶段，可减少约72%的二氧化碳排放 [3]。
+*   在运输阶段，可减少约25%的排放 [3]。
+*   在施工阶段，可减少约51%的排放 [3]。
+*   在运行维护阶段，可减少约15.6%的排放 [3]。
+
+**综合评估方法**
+为了全面评估，研究提出了**集成评估框架**，例如利用离散事件仿真模型来同时分析和优化成本、工期和碳排放这三个相互关联的绩效指标 [1]。此外，也有研究应用混合生命周期评估模型来量化大坝整个生命周期内的环境影响 [2]。","Integrated evaluation of cost, schedule and emission performance on rock-filled concrete dam construction operation using discrete event simulation || Life-Cycle Assessment of Concrete Dam Construction: Comparison of Environmental Impact of Rock-Filled and Conventional Concrete || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology",,,中英混合工程管理问题
+vector_only,user_mixed_cost_emission,RFC dam construction 的成本工期和碳排放怎么评估？,mixed,yes,yes,no,no,yes,yes,yes,yes,4,1|2|3|4,yes,yes,说明成本 工期 排放或生命周期评价指标,vector,vector,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的资料，对RFC大坝建设在成本、工期和碳排放方面的评估，主要涉及以下方法和结论：
+
+**1. 评估方法：采用集成模拟与生命周期评估**
+- **集成评估方法**：一项研究提出了使用**离散事件模拟（DES）**来动态评估和优化大坝建设过程中的**成本、工期和排放性能**。该方法强调这三者在RFC项目中具有高度的交互相关性[1]。
+- **环境影响评估方法**：对RFC的环境影响评估采用了**生命周期评估（LCA）**，涵盖了材料生产、运输、施工、运行维护等阶段[2]。
+
+**2. 各维度评估要点与结果示例**
+- **成本评估**：评估通常比较RFC与其他方案（如常规混凝土CVC）的综合造价。有统计指出，RFC大坝的**综合单价比CVC大坝或碾压混凝土（RCC）大坝低10%-30%** [3]。
+- **工期评估**：工期评估常通过施工过程模拟来进行。例如，DES模型可用于验证和优化施工进度计划[1]。
+- **碳排放评估**：碳排放评估主要通过生命周期分析。具体结果包括：
+    - RFC相比传统混凝土，可减少约**64%**的温室气体排放和**55%**的能源消耗[2]。
+    - 在生命周期各阶段，RFC在**材料生产阶段**减排效果最为显著（CO₂排放减少72%），在施工阶段减少51%，在运输阶段减少25%，在运营维护阶段减少15.6%[2][4]。
+
+**3. 评估的意义**
+通过上述方法进行的集成评估，旨在为规划阶段提供可靠预测，帮助管理者比较RFC大坝建设中不同方案的综合性能，从而做出更优决策[1]。","Integrated evaluation of cost, schedule and emission performance on rock-filled concrete dam construction operation using discrete event simulation || Life-Cycle Assessment of Concrete Dam Construction: Comparison of Environmental Impact of Rock-Filled and Conventional Concrete || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method",,,中英混合工程管理问题
+default_hybrid,user_cn_porosity_compression,孔隙率会怎么影响堆石混凝土抗压表现？,zh_colloquial,yes,yes,no,no,yes,yes,yes,yes,4,3|1,yes,yes,说明孔隙率或初始孔洞对抗压行为的影响,hybrid,hybrid,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献，孔隙率对堆石混凝土的抗压性能有明确的负面影响。
+
+核心证据来自一项直接研究该问题的论文 [3]。其研究结果表明：
+1.  在相同的孔径条件下，**试件的抗压强度随着孔隙率的增长而线性下降** [3]。
+2.  同时，该研究发现**抗压强度对孔隙率的敏感性高于对孔径的敏感性** [3]。
+
+这一结论的工程背景在于，孔隙率通常反映了堆石混凝土中自密实混凝土对堆石骨架的填充质量。另一篇文献 [1] 指出，填充能力不足会导致“孔隙残留”，这正是高孔隙率的成因之一，并会引发“局部松散、界面缺陷”等问题，从而影响整体性能。
+
+综上所述，根据现有知识库，孔隙率的增加会导致堆石混凝土抗压强度的降低，且这种影响较为显著。",Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || Study on the Influence of Specimen Size and Aggregate Size on the Compressive Strength of Rock-Filled Concrete || Study on the effect of porosity and aperture on the damage characterization of rock-filled concrete (RFC) || 3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties,,,中文口语问法 覆盖孔隙率
+keyword_baseline,user_cn_porosity_compression,孔隙率会怎么影响堆石混凝土抗压表现？,zh_colloquial,yes,yes,no,no,yes,yes,yes,yes,3,1|2,yes,yes,说明孔隙率或初始孔洞对抗压行为的影响,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献，孔隙率对堆石混凝土（RFC）抗压强度的影响主要体现在以下方面：
+
+1.  **孔隙率增加会直接导致抗压强度下降**。在孔径相同的条件下，RFC试件的抗压强度随孔隙率的增长呈**线性下降**[1]。
+
+2.  **相较于孔径，抗压强度对孔隙率的变化更为敏感**。研究表明，抗压强度对孔隙率的敏感性高于对孔径的敏感性[1]。
+
+3.  **孔隙率（特别是界面过渡区孔隙率）受浇筑工艺影响**。与传统的振捣方法相比，RFC采用的自密实浇筑工艺能显著降低界面过渡区（ITZ）的孔隙率，这有助于提升RFC的抗压强度[2]。
+
+**总结**：孔隙率是影响RFC抗压性能的关键负面因素。更高的孔隙率会线性降低其抗压强度，并且该强度对孔隙率的大小非常敏感[1]。通过优化浇筑工艺（如采用自密实法）降低界面过渡区的孔隙率，是提升RFC抗压强度的有效途径[2]。","Study on the effect of porosity and aperture on the damage characterization of rock-filled concrete (RFC) || Experimental Study on Effects of Casting Procedures on Compressive Strength, Water Permeability, and Interfacial Transition Zone Porosity of Rock-Filled Concrete || Study on the Influence of Specimen Size and Aggregate Size on the Compressive Strength of Rock-Filled Concrete",,,中文口语问法 覆盖孔隙率
+vector_only,user_cn_porosity_compression,孔隙率会怎么影响堆石混凝土抗压表现？,zh_colloquial,no,yes,no,no,yes,yes,no,no,4,2|4|1|3,yes,yes,说明孔隙率或初始孔洞对抗压行为的影响,vector,vector,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献资料，孔隙率对堆石混凝土（RFC）的抗压表现有明确的负面影响，具体影响如下：
+
+1.  **抗压强度随孔隙率增加而下降**：研究表明，对于孔径相同的试件，堆石混凝土的抗压强度随孔隙率的增长呈现**线性下降**的趋势 [2]。并且，抗压强度对孔隙率的敏感性要高于对孔径的敏感性 [2]。
+
+2.  **对力学性能的定量影响**：数值模拟结果显示，骨料内部孔隙率的增加会导致堆石混凝土的整体**弹性模量（E）和单轴抗压强度（ACS）下降**。例如，在一项研究中，E和ACS分别降低了0.58 GPa（降幅1.72%）和0.78 MPa（降幅3.93%）[4]。比较降幅可知，孔隙率对抗压强度的负面影响比对弹性模量的影响更为显著 [4]。
+
+3.  **影响机制**：骨料内部的孔隙属于天然缺陷 [1][3]。这些缺陷的存在会**改变裂纹的扩展路径**，使裂纹更倾向于围绕缺陷发展。这导致骨料内部的损伤更加明显，从而削弱了堆石混凝土作为整体的承载能力 [4]。
+
+**总结**：孔隙率的增加会降低堆石混凝土的单轴抗压强度，且这种影响在强度指标上比在刚度（弹性模量）指标上更为明显。其微观机制在于孔隙改变了材料内部的应力分布和裂纹扩展路径 [1][3][4]。",3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties || Research on Damage Characterization of Rock-filled Concrete with Defects Using Super Absorbent Polymer || 3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties || 3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties,source_hit_mismatch,,中文口语问法 覆盖孔隙率
+default_hybrid,user_en_steel_fiber_filling,Does steel fiber reinforced mortar affect filling performance in RFC?,en,yes,yes,no,no,yes,yes,yes,yes,4,1,yes,yes,说明钢纤维或 steel fiber 对填充性能的影响,hybrid,hybrid,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"是的，钢纤维增强砂浆会影响（并且通常是降低）其在堆石混凝土（RFC）中的填充性能。
+
+根据提供的上下文，一项直接相关的研究明确指出：
+- **负面影响**：研究表明，无纤维增强的自密实砂浆（SCM）的填充性能优于钢纤维增强自密实砂浆（SFRSCM）。这是因为添加纤维段会改变砂浆的流变性能[1]。
+- **研究方法**：该结论是基于使用计算流体动力学（CFD）程序对不同纤维长径比和体积分数的钢纤维砂浆进行模拟研究得出的[1]。
+
+**总结**：现有证据表明，钢纤维的加入会恶化砂浆的流动性，从而对其填充堆石骨架空隙的能力产生不利影响[1]。
+
+---
+**本回答基于有限上下文**：当前知识库主要包含一项针对该问题的专门研究。关于影响的具体程度、优化方法或在实际工程中的权衡，可能需要查阅更多文献或工程规范。","Evaluating the Filling Performance of Steel Fiber-Reinforced Self-Compacted Mortar into Rock-Filled Concrete || Analyzing the filling performance parameters of self-compacted mortar in rock filled concrete || Advancing rock-filled concrete (RFC) technology: Comprehensive insights into filling quality, mechanical properties, durability, and numerical simulation || Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete",,,英文材料改性问题
+keyword_baseline,user_en_steel_fiber_filling,Does steel fiber reinforced mortar affect filling performance in RFC?,en,yes,yes,no,no,yes,yes,yes,yes,4,1|4,yes,yes,说明钢纤维或 steel fiber 对填充性能的影响,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，钢纤维增强砂浆（Steel Fiber-Reinforced Self-Compacted Mortar, SFRSCM）确实会影响堆石混凝土（RFC）的填充性能。具体而言，研究表明，添加钢纤维会对自密实砂浆（SCM）的流变性能产生影响，从而影响其在堆石骨架中的填充效果。
+
+一项专门针对此问题的研究明确指出：**未掺加纤维的砂浆（SCM）比钢纤维增强砂浆（SFRSCM）具有更好的填充性能** [1]。该研究通过计算流体动力学模拟和实验校准，发现钢纤维的加入会改变砂浆的流变特性，进而降低其填充能力。
+
+**总结：**
+*   **事实陈述**：钢纤维的添加会降低自密实砂浆在堆石骨架中的填充性能 [1]。
+*   **工程判断与不确定性**：该结论基于一项特定的数值模拟与校准研究 [1]。在实际工程中，钢纤维的添加可能带来其他方面的性能提升（如动态抗拉性能 [4]），但其对填充性的负面影响是确定的。因此，在设计RFC配合比时，需要在填充性能和力学性能之间进行权衡。
+
+---
+**参考文献**
+[1] Evaluating the Filling Performance of Steel Fiber-Reinforced Self-Compacted Mortar into Rock-Filled Concrete. (Abstract). https://doi.org/10.1520/acem20240098",Evaluating the Filling Performance of Steel Fiber-Reinforced Self-Compacted Mortar into Rock-Filled Concrete || Analyzing the filling performance parameters of self-compacted mortar in rock filled concrete || Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || Effect of basalt fiber content on the dynamic tensile properties of rock-filled concrete: Insights from split-hopkinson tensile bar and split-hopkinson pressure bar Brazilian testing,,,英文材料改性问题
+vector_only,user_en_steel_fiber_filling,Does steel fiber reinforced mortar affect filling performance in RFC?,en,yes,yes,no,no,yes,yes,yes,yes,5,1,yes,yes,说明钢纤维或 steel fiber 对填充性能的影响,vector,vector,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"是的，钢纤维增强砂浆会影响岩石充填混凝土（RFC）中的填充性能。具体来说，研究表明，**未添加纤维的砂浆（SCM）比钢纤维增强自密实砂浆（SFRSCM）具有更好的填充性能** [1]。
+
+这项研究通过计算流体动力学模拟发现，向砂浆中添加钢纤维段会影响其流变特性，从而对SFRSCM在岩石颗粒堆积体中的流动和填充过程产生负面影响 [1]。因此，从填充性能的角度看，使用钢纤维增强砂浆可能会降低RFC的填充密实度。
+
+需要说明的是，上述结论基于特定研究中的数值模拟结果。实际工程中的填充性能还受纤维类型、掺量、岩石堆积结构等多种因素影响，应结合具体工况综合评估。
+
+**系统提示：** 本系统仅用于学习和资料检索，不能替代规范审查、工程设计和专家判断。",Evaluating the Filling Performance of Steel Fiber-Reinforced Self-Compacted Mortar into Rock-Filled Concrete || Evaluating the Filling Performance of Steel Fiber-Reinforced Self-Compacted Mortar into Rock-Filled Concrete || Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete || A Mesoscale Comparative Analysis of the Elastic Modulus in Rock-Filled Concrete for Structural Applications || Experimental study of Self-Compacting Concrete filled prepacked rock,,,英文材料改性问题
+default_hybrid,user_cn_shear_key,岩石剪力键会影响冷缝剪切性能吗？,engineering_cn,yes,yes,no,no,yes,yes,yes,yes,4,1|2,yes,yes,说明岩石剪力键和冷缝剪切性能关系,hybrid,hybrid,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献信息，**岩石剪力键会影响填充混凝土（RFC）结构中冷缝的剪切性能。**
+
+主要证据如下：
+
+1.  **直接的研究主题**：一篇直接相关的文献标题即为“**岩石剪力键对填充混凝土结构中冷缝剪切性能的影响：实验与数值研究**”[1]。这明确表明，岩石剪力键对冷缝剪切性能的影响是一个被专门研究的科学问题，其存在关联性是该领域关注的重点。
+
+2.  **冷缝性能的重要性**：另一项早期研究指出，RFC冷缝的抗剪能力对坝体的抗滑稳定性有显著影响[2]。这为研究如何改善冷缝性能（例如通过设置岩石剪力键）提供了工程背景。
+
+**结论**：现有知识库中的文献标题直接指向了岩石剪力键对冷缝剪切性能的影响研究，因此可以确定两者之间存在影响关系。
+
+**需要说明的是**，当前知识库仅提供了这些研究的元数据和标题，并未包含详细的研究结果、数据或结论（例如影响是增强还是削弱、具体机理等）。因此，关于影响的具体方式、程度和机理，当前知识库中的证据尚不充分，无法做出进一步判断。本回答仅基于文献研究主题的指向性得出结论。",Effect of rock shear keys on the shear performance of cold joints in rock-filled concrete structures: Experimental and numerical investigation || Experimental studies on shear properties of cold joints of rock-filled concrete || Shear tests and meso-scale simulation of cold joint structures in rock-filled concrete: Considering the mutual contact effects between component materials || Full-Scale micromechanical simulation of rock-filled concretes using Peridynamics,,,工程场景问题 覆盖冷缝剪切
+keyword_baseline,user_cn_shear_key,岩石剪力键会影响冷缝剪切性能吗？,engineering_cn,yes,yes,no,no,yes,yes,yes,yes,4,1,yes,yes,说明岩石剪力键和冷缝剪切性能关系,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"是的，根据提供的文献资料，岩石剪力键会影响冷缝的剪切性能。
+
+[1] 中明确指出，其研究主题即为“岩石剪力键对岩石填充混凝土结构冷缝剪切性能的影响”（Effect of rock shear keys on the shear performance of cold joints in rock-filled concrete structures）[1]。这表明，岩石剪力键是影响冷缝剪切性能的一个关键因素，并已被针对性地进行实验与数值研究。",Effect of rock shear keys on the shear performance of cold joints in rock-filled concrete structures: Experimental and numerical investigation || Experimental studies on shear properties of cold joints of rock-filled concrete || Shear tests and meso-scale simulation of cold joint structures in rock-filled concrete: Considering the mutual contact effects between component materials || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method,,,工程场景问题 覆盖冷缝剪切
+vector_only,user_cn_shear_key,岩石剪力键会影响冷缝剪切性能吗？,engineering_cn,yes,yes,no,no,yes,yes,yes,yes,4,1|4,yes,yes,说明岩石剪力键和冷缝剪切性能关系,vector,vector,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献，**岩石剪力键会影响冷缝的剪切性能**。
+
+这一结论主要基于以下研究证据：
+*   一项2022年发表的研究，其标题直接表明了研究内容为“岩石剪力键对填充岩石混凝土结构中冷缝剪切性能的影响”[1]。
+*   另一项2024年的研究，在探讨填充岩石混凝土冷缝结构的剪切性能时，也考虑了各组成材料之间的相互接触效应[4]，这间接支持了结构组件（如岩石剪力键）对界面行为存在影响的观点。
+
+**注意**：当前提供的上下文（包括摘要）未包含关于影响机制、程度或具体测试结果的详细数据。以上回答仅基于文献标题和主题所揭示的直接关联。",Effect of rock shear keys on the shear performance of cold joints in rock-filled concrete structures: Experimental and numerical investigation || Full-Scale micromechanical simulation of rock-filled concretes using Peridynamics || Full-Scale micromechanical simulation of rock-filled concretes using Peridynamics || Shear tests and meso-scale simulation of cold joint structures in rock-filled concrete: Considering the mutual contact effects between component materials,,,工程场景问题 覆盖冷缝剪切
+default_hybrid,user_en_seismic_ratio,How do rock-fill ratios affect seismic analysis of RFC dams?,en,yes,yes,no,no,yes,yes,yes,yes,4,1|2|3,yes,yes,说明堆石率与抗震或 seismic analysis 的关系,hybrid,hybrid,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，目前关于岩石填充率（rock-fill ratio）对RFC大坝地震分析影响的**直接研究证据有限**，主要信息来源于一篇专门研究该变量的文献。
+
+### 主要发现
+1.  **直接研究证据**：一项专门研究不同岩石填充率（50%、55%、60%）对RFC大坝地震响应影响的分析表明，在位移和应力分布方面呈现出一致的规律，其中**55%的岩石填充率模型显示出略低于50%和60%模型的最大位移和应力值** [1]。这表明在该研究设定的条件下，填充率存在一个可能的优化范围。
+
+### 相关背景信息
+虽然上下文中的其他文献没有直接对比不同填充率，但它们提供了RFC材料整体抗震性能的背景：
+2.  **与传统混凝土的对比**：与传统振动混凝土（CVC）大坝相比，RFC大坝在相同荷载下的自然振动特性和地震响应相似，但**最大计算值（如位移和应力）通常略小** [2][3]。在非线性地震分析中，**RFC大坝的损伤程度显著降低**，这归因于RFC具有更高的断裂能，即破坏所需吸收更多能量 [2][3]。
+
+### 结论
+基于当前知识库：
+*   已有初步研究表明，**岩石填充率会影响RFC大坝在地震荷载下的应力和位移分布**，且可能存在一个使响应最小化的优化比例（如研究中提到的55%）[1]。
+*   更普遍地，RFC材料因其较高的断裂能，展现出优于传统混凝土的抗震潜力，这体现在更小的地震响应和更少的损伤上 [2][3]。
+
+**需要注意的是**，现有证据仅来自对三种特定填充率（50%、55%、60%）的分析 [1]，尚不足以概括所有填充率的影响规律。本系统仅用于学习和资料检索，不能替代规范审查、工程设计和专家判断。",Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || The Experimental Study of Influence of Recycled Aggregates on Mechanical Property of Self-compacting Rock-filled Concrete,,,英文坝体抗震问题
+keyword_baseline,user_en_seismic_ratio,How do rock-fill ratios affect seismic analysis of RFC dams?,en,yes,yes,no,no,yes,yes,yes,yes,4,1,yes,yes,说明堆石率与抗震或 seismic analysis 的关系,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据现有文献，岩石填充比例对RFC大坝地震分析的影响主要体现在结构位移和应力分布方面。
+
+研究具体分析了岩石填充比例分别为50%、55%和60%的RFC重力坝模型。分析结果显示，不同比例下模型的位移和应力分布规律一致[1]。值得注意的是，**55%岩石填充比例的模型其最大位移和应力值略低于50%和60%的模型**[1]。这表明，在特定范围内调整岩石填充比例会对地震响应的峰值产生细微影响。
+
+**总结**：岩石填充比例是影响RFC大坝地震性能的一个设计参数。现有研究表明，比例的变化会导致地震分析中最大位移和应力值的差异，且在本研究中，55%的比例表现出略优的性能[1]。
+
+**注意**：以上结论基于特定研究模型，实际工程性能需通过详细设计和分析确定。",Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || The Experimental Study of Influence of Recycled Aggregates on Mechanical Property of Self-compacting Rock-filled Concrete,,,英文坝体抗震问题
+vector_only,user_en_seismic_ratio,How do rock-fill ratios affect seismic analysis of RFC dams?,en,yes,yes,no,no,yes,yes,yes,yes,5,1|2|4|5|3,yes,yes,说明堆石率与抗震或 seismic analysis 的关系,vector,vector,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"岩石填料比对岩石填料混凝土（RFC）坝的地震分析有显著影响，主要体现在优化该比例能够显著提升坝体的抗震性能。
+
+1.  **存在最优填料比**：针对不同岩石填料比（50%、55%和60%）的研究表明，**55%的岩石填料比模型**在地震分析中表现出最少的损伤，其地震性能优于其他比例的模型[1][2]。这表明，在RFC材料中，岩石填料含量与混凝土强度之间存在一个最佳平衡点[1]。
+
+2.  **性能优化的机理**：
+    *   **强度与韧性的平衡**：55%的填料比被认为达到了岩石填料含量与混凝土基体强度之间的“最优平衡”，从而表现出更优的地震韧性[1]。
+    *   **更高的断裂能**：RFC材料本身具有比传统振动混凝土（CVC）更高的断裂能，破坏需要消耗更多能量，这是其抗震性能更好的主要原因之一[4]。
+    *   **独特的破坏机制**：在RFC结构中，裂缝倾向于沿着岩石与高性能自密实混凝土（HSCC）之间的界面过渡区（ITZ）扩展，而不是穿透岩石本身，这种特性使其具有相对更高的抗地震能力[5]。
+
+3.  **总体对比优势**：与传统振动混凝土坝相比，RFC坝在相似地震荷载下通常表现出更少的损伤区域，显示了更好的整体抗震性能[3][4]。有研究推断，现行的针对CVC坝的地震设计规范也适用于RFC坝[3]。
+
+综上所述，岩石填料比是影响RFC坝地震响应的关键设计参数。通过优化该比例（例如55%），可以有效提升坝体的抗震韧性和安全性，这得益于RFC材料优异的断裂性能和独特的裂缝扩展机制。",Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method,,,英文坝体抗震问题
+default_hybrid,user_unsupported_random,zqxjvblorptasticprotocol,unsupported,yes,yes,yes,yes,yes,no,no,yes,0,,yes,yes,应拒答且不返回来源,hybrid,hybrid,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,当前资料库中没有找到足够可靠的依据。,,,,无语料依据的随机协议问题
+keyword_baseline,user_unsupported_random,zqxjvblorptasticprotocol,unsupported,yes,yes,yes,yes,yes,no,no,yes,0,,yes,yes,应拒答且不返回来源,keyword,keyword,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,当前资料库中没有找到足够可靠的依据。,,,,无语料依据的随机协议问题
+vector_only,user_unsupported_random,zqxjvblorptasticprotocol,unsupported,yes,yes,yes,yes,yes,no,no,yes,0,,yes,yes,应拒答且不返回来源,vector,vector,5,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,当前资料库中没有找到足够可靠的依据。,,,,无语料依据的随机协议问题

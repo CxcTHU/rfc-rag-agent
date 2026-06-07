@@ -583,3 +583,53 @@ data/evaluation/stage13_decompose_results.csv
 - `stage14_decompose_provenance_review.csv` 是证据解释表，不改变来源归属。
 - 真实 API key 仍只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。
 - HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
+
+## 阶段 15 真实配置复跑与质量审阅报告产物
+
+阶段 15 新增或更新的工程与评测产物：
+
+```text
+docs/stage15_real_review_report.md
+scripts/evaluate_stage15_real_config.py
+data/evaluation/stage14_real/real_config_status.csv
+data/evaluation/stage14_real/vector_results.csv
+data/evaluation/stage14_real/hybrid_results.csv
+data/evaluation/stage14_real/user_question_results.csv
+data/evaluation/stage14_real/chat_results.csv
+data/evaluation/stage14_real/agent_results.csv
+data/evaluation/stage14_real/brain_workflow_results.csv
+scripts/evaluate_stage15_answer_coverage_review.py
+data/evaluation/stage15_answer_coverage_review.csv
+scripts/build_stage15_quality_report.py
+data/evaluation/stage15_quality_summary.csv
+docs/stage15_quality_report.md
+app/frontend/quality_report.html
+```
+
+这些文件不是新的文献资料来源。它们只记录：
+
+- 真实配置复跑的 completed、skipped 或 error 状态。
+- 脱敏后的评测通过数、失败数、provider/model 名称和错误摘要。
+- Answer Coverage、Faithfulness、Citation Quality、risk_level、review_note 和 next_action。
+- 质量汇总、报告建议和只读展示所需的指标。
+
+阶段 15 不新增外部资料来源，不新增爬虫链路，不保存受限全文。它只读取现有：
+
+```text
+sources
+documents/chunks
+chunk_embeddings
+data/evaluation/stage14_embedding_comparison.csv
+data/evaluation/stage14_answer_coverage_review.csv
+data/evaluation/stage14_decompose_provenance_review.csv
+data/evaluation/stage14_real/*.csv
+```
+
+合规结论：
+
+- `data/evaluation/stage14_real/` 是真实配置评测结果目录，不是资料库。
+- `stage15_answer_coverage_review.csv` 是质量复核表，不保存受限论文全文或供应商原始敏感响应。
+- `stage15_quality_summary.csv` 和 `docs/stage15_quality_report.md` 是报告产物，不改变来源归属。
+- `app/frontend/quality_report.html` 是只读静态报告页，不触发真实 API 调用，不写数据库，不重新索引来源。
+- 真实 API key、Bearer token 和供应商原始敏感响应仍只允许存在本地 `.env` 或内存调用中，不得写入源码、文档、CSV、测试、Git 或 Obsidian。
+- HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。

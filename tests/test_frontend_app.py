@@ -43,6 +43,17 @@ def test_frontend_static_assets_are_served() -> None:
     assert "reindexSource" in response.text
 
 
+def test_quality_report_is_served_read_only() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/quality-report")
+
+    assert response.status_code == 200
+    assert "阶段 15 质量审阅报告" in response.text
+    assert "只读质量报告" in response.text
+    assert "不触发真实 API 调用" in response.text
+
+
 def test_favicon_request_does_not_404() -> None:
     client = TestClient(create_app())
 

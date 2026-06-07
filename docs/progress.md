@@ -1,5 +1,60 @@
 # 项目进度
 
+## 最新状态：2026-06-07（阶段 15 完成）
+
+当前阶段：阶段 15，真实配置复跑与质量审阅报告已完成。下一步建议进入阶段 16：处理阶段 15 报告暴露的发布前质量风险，优先排查真实 decompose SSL EOF、复核 1 条 Answer Coverage high 风险样例，并继续推进 medium 样例人工审阅闭环；HyDE 仍只做离线实验，不进入默认链路或自动回归。
+
+当前关键证据：
+
+- 当前分支：`codex/phase-15-real-review-report`。
+- 阶段 14 已合并到 `main`，`main` 阶段 14 合并提交为 `b9cb019 Merge phase 14 real quality calibration`。
+- `phase-14-complete -> e5df149`，未移动已有阶段 tag。
+- 阶段 15 新增 `docs/stage15_real_review_report.md`。
+- 阶段 15 新增 `scripts/evaluate_stage15_real_config.py` 与 `data/evaluation/stage14_real/real_config_status.csv`。
+- 阶段 15 真实配置复跑结果：vector 15/15、hybrid 15/15、user_questions 27/30、chat 6/6、agent 5/5、Brain workflow 18/18。
+- 阶段 15 真实 decompose 复跑记录为 `error`，原因是真实 embedding 请求出现 `SSL: UNEXPECTED_EOF_WHILE_READING`，没有伪造成成功。
+- 阶段 15 新增 `scripts/evaluate_stage15_answer_coverage_review.py` 与 `data/evaluation/stage15_answer_coverage_review.csv`。
+- Answer Coverage 复核表：9 行，`high=1`、`medium=8`。
+- 阶段 15 新增 `scripts/build_stage15_quality_report.py`、`data/evaluation/stage15_quality_summary.csv`、`docs/stage15_quality_report.md` 与 `app/frontend/quality_report.html`。
+- 只读质量报告入口：`GET /quality-report`。
+- 阶段 15 质量汇总表：14 行，风险统计 `high=4`、`low=7`、`medium=3`，overall quality gate 为 `review_required/high`。
+- deterministic 回归保持稳定：vector 13/15、hybrid 15/15、user_questions 25/30、decompose 10/10、chat 6/6、agent 5/5、Brain workflow 18/18。
+- 阶段 15 聚焦回归测试：112 个测试通过。
+- 阶段 15 全量测试：300 个测试通过。
+- 阶段 15 tag：`phase-15-complete`，阶段最终提交完成后指向该提交。
+
+阶段 15 完成内容：
+
+- 使用 Planning with Files 维护阶段 15 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 建立阶段 15 设计文档，明确真实配置复跑、graceful skip、Answer Coverage 复核、质量汇总和只读报告边界。
+- 建立 `stage14_real` 真实配置结果目录，显式记录 completed/error/skipped 状态。
+- 将真实配置状态合并回 `stage14_embedding_comparison.csv`，保留 deterministic baseline 与 real_config 对比。
+- 建立阶段 15 Answer Coverage 复核表，记录 Faithfulness、Answer Coverage、Citation Quality、风险等级、回答摘要和 next action。
+- 建立阶段 15 质量汇总表和只读报告页，展示真实配置状态、回答覆盖风险和 Decompose provenance 证据。
+- 确认阶段 15 不改变 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`。
+
+遗留问题：
+
+- 真实 decompose 复跑仍有外部 embedding 请求 SSL EOF，属于发布前高优先级排查项。
+- `user_mixed_itz_strength` 在真实 default_hybrid 结果中出现读取超时，被标为 Answer Coverage high 风险。
+- 其余 8 条 medium 样例仍需要人工审阅确认回答是否真正覆盖期望技术点。
+- 阶段 15 报告页是静态只读入口，还没有交互式筛选或在线表格钻取；这是有意保守，不在本阶段重构前端。
+
+下一阶段任务：
+
+- 复跑或重试真实 decompose，区分供应商网络问题、超时配置问题和 embedding provider 稳定性问题。
+- 对 Answer Coverage high/medium 样例做人工审阅或真实模型摘要复核，形成可发布的质量门槛。
+- 如需增强报告体验，优先做只读筛选和下载，不要改动核心 RAG API。
+- 继续保留 deterministic baseline，真实配置只作为发布前质量校准依据。
+
+面试表达：
+
+```text
+阶段 15 我把阶段 14 的质量校准表推进成了真实配置复跑和质量审阅报告。系统仍然保留 deterministic baseline 作为稳定回归，用它复跑 vector、hybrid、user questions、Decompose、chat、agent 和 Brain workflow；真实配置结果单独输出到 stage14_real，并显式记录 completed、skipped 或 error，不把真实 API 的失败伪造成成功。
+
+回答质量上，我用阶段 15 复核表承接阶段 14 的 medium/review 样例，把 Faithfulness、Answer Coverage 和 Citation Quality 分开记录，并用真实回答摘要和来源命中辅助判断。报告层面，我新增了 quality summary、Markdown 报告和 /quality-report 只读页面，用来展示真实配置状态、回答覆盖风险和 Decompose provenance。这个阶段的重点不是继续加功能，而是让发布前质量风险可见、可追踪、可复查。
+```
+
 ## 最新状态：2026-06-07（阶段 14 完成）
 
 当前阶段：阶段 14，真实 Embedding 与回答覆盖校准已完成。下一步建议进入阶段 15：复跑真实配置结果、建立真实回答人工审阅闭环，或将阶段 14 的质量校准表接入只读报告页；HyDE 仍只做离线实验，不进入默认链路或自动回归。

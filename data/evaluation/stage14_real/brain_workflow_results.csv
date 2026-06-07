@@ -1,0 +1,135 @@
+config_name,query_id,question,passed,returned_answer,expected_refused,refused,refusal_matched,source_count,citations,citations_valid,expected_source_hit,forbidden_terms_absent,configured_retrieval_mode,actual_retrieval_mode,top_k,min_score,rerank_top_n,workflow_steps,workflow_succeeded,model_provider,model_name,answer,top_source_titles,error,notes
+default_hybrid,rfc_concept,What is rock-filled concrete?,yes,yes,no,no,yes,4,1|3,yes,yes,yes,hybrid,hybrid,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"Based on the provided context, rock-filled concrete (RFC) is defined as follows:
+
+Rock-filled concrete (RFC) is an innovative construction material that combines large rocks with high-performance self-compacting concrete, and is primarily used in dam construction [1]. Its core technical concept involves two main components: a rock skeleton formed by pre-placed large-granularity stones, and self-compacting concrete, which, due to its high fluidity and segregation resistance, fills the voids within the rock mass under gravity to form a complete, dense, and high-strength concrete structure [3]. This construction method is distinct from conventional concrete, roller-compacted concrete, or rubble concrete, as it does not mix all aggregates and cement paste together [3].
+
+*   **Composition**: Large rocks (forming the skeleton) + High-performance self-compacting concrete (filling the voids) [1][3].
+*   **Construction Process**: First, a rock body is formed by natural placement, then self-compacting concrete is used to flow and fill the voids [3].
+*   **Primary Application**: Dam construction [1].","Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Integrated evaluation of cost, schedule and emission performance on rock-filled concrete dam construction operation using discrete event simulation || 堆石混凝土及堆石混凝土大坝 / Study on rock-fill concrete dam || Progressive failure mechanism of water glass modified recycled rock-filled concrete based on radon monitoring and resistivity monitoring",,Concept question should return an answer with traceable sources.
+keyword_baseline,rfc_concept,What is rock-filled concrete?,yes,yes,no,no,yes,4,1|3,yes,yes,yes,keyword,keyword,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，**堆石混凝土（Rock-Filled Concrete, RFC）** 的定义和核心信息如下：
+
+**堆石混凝土是一种创新的建筑材料**，它将**大粒径的块石**与**高流动性、抗离析的高性能自密实混凝土**相结合，主要用于大坝等大体积混凝土工程的建造。[1][3]
+
+其核心概念和技术特点可分解为：
+1.  **构成材料**：它由两部分组成。
+    *   **堆石体**：由大粒径的块石自然堆放，形成骨架结构。[3]
+    *   **自密实混凝土**：依靠其高流动性和抗离析能力，在重力作用下自动流动并充分填充堆石体之间的空隙。[3]
+
+2.  **施工工艺**：这与常规的混凝土施工方式不同。其工艺是**先将大块石堆放成形作为骨架，然后再浇筑自密实混凝土，让其依靠自身重力流动并完成对堆石体空隙的胶结与填充**，最终形成完整、密实的混凝土结构。[3]
+
+3.  **应用**：该技术**主要用于大坝建设**。[1] 研究表明，它可用于提出并建造多种坝型，例如堆石混凝土拱坝、重力坝、心墙堆石坝等。[3]
+
+**总结**：堆石混凝土是一种通过“先堆石、后自密实混凝土填充”工艺制成的复合材料，旨在利用大块石的骨架作用和自密实混凝土的良好填充性，以构建密实、高强度的大体积结构，尤其适用于大坝工程。[1][3]
+
+**系统提示**：本回答仅基于提供的上下文信息，不替代工程设计与专业判断。","Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Integrated evaluation of cost, schedule and emission performance on rock-filled concrete dam construction operation using discrete event simulation || 堆石混凝土及堆石混凝土大坝 / Study on rock-fill concrete dam || Progressive failure mechanism of water glass modified recycled rock-filled concrete based on radon monitoring and resistivity monitoring",,Concept question should return an answer with traceable sources.
+vector_only,rfc_concept,What is rock-filled concrete?,yes,yes,no,no,yes,4,1|3|4,yes,yes,yes,vector,vector,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，岩石充填混凝土（Rock-Filled Concrete，简称RFC）可以定义如下：
+
+1.  **基本定义**：RFC是一种创新的复合材料，它结合了自密实混凝土（SCC）和大块岩石的优势 [1]。其组成要求所使用的岩石尺寸必须超过300毫米 [1]。
+
+2.  **构造方法与特点**：该技术由2003年在中国发明。具体做法是先将大岩石（大于300mm）放入设计好的框架中，然后用高性能自密实混凝土填充岩石间的空隙 [3]。由于自密实混凝土具有出色的流动性和自密实性，它能够包裹并嵌入大岩石，形成一个均匀的基质 [1]。
+
+3.  **主要优点**：这种施工技术不需要振捣，并且使用了更少的水泥 [3]。与传统混凝土相比，RFC更具成本效益，水化热更低，对于大型建筑更为有效 [3]。它常用于水利工程项目 [3]。
+
+4.  **内部结构参考**：在研究模型中，RFC内部的岩石体积比例通常在50%至60%之间 [4]。",A Mesoscale Comparative Analysis of the Elastic Modulus in Rock-Filled Concrete for Structural Applications || A Mesoscale Comparative Analysis of the Elastic Modulus in Rock-Filled Concrete for Structural Applications || A Comprehensive Literature Review on the Elastic Modulus of Rock-filled Concrete || A Mesoscale Comparative Analysis of the Elastic Modulus in Rock-Filled Concrete for Structural Applications,,Concept question should return an answer with traceable sources.
+default_hybrid,construction_quality,How is construction quality controlled in rock-filled concrete?,yes,yes,no,no,yes,4,1,yes,yes,yes,hybrid,hybrid,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"基于提供的资料，堆石混凝土（RFC）的施工质量控制主要体现在以下方面：
+
+1.  **简化施工管理与易于质量控制**：堆石混凝土技术本身的特点使其相对于传统施工方法，具有“施工管理更简单、质量控制更容易”的优势 [1]。
+2.  **核心控制环节在于自密实混凝土（SCC）的性能**：为保证堆石混凝土的质量，关键在于确保用于填充岩石空隙的自密实混凝土（SCC）具有足够的工作性能（良好的流动性和抗离析性）。为此，发展了一种基于SCC浆体流变特性的配合比设计方法，以保障其所需的工作性 [1]。
+
+需要说明的是，所提供的资料中并未详细阐述具体的质量控制程序、检测标准或验收指标。现有信息主要强调了RFC技术在设计层面（通过SCC配合比设计）和工艺层面（因技术特性带来的管理简便性）为质量控制提供了有利条件。
+
+**总结**：根据现有资料，堆石混凝土的施工质量控制主要依赖于：1）技术本身带来的管理简化 [1]；2）对用于填充的自密实混凝土工作性能（通过配合比设计）的严格控制 [1]。更具体的质量控制措施和标准不在本次提供的资料范围内。","Rock-filled concrete, the new norm of SCC in hydraulic engineering in China || Advancing rock-filled concrete (RFC) technology: Comprehensive insights into filling quality, mechanical properties, durability, and numerical simulation || Rock-filled concrete, the new norm of SCC in hydraulic engineering in China || Integrated evaluation of cost, schedule and emission performance on rock-filled concrete dam construction operation using discrete event simulation",,Construction and quality-control question.
+keyword_baseline,construction_quality,How is construction quality controlled in rock-filled concrete?,yes,yes,no,no,yes,4,1,yes,yes,yes,keyword,keyword,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"Based on the provided context, the construction quality control for rock-filled concrete (RFC) is primarily ensured through the following key aspects:
+
+1.  **Control of Self-Compacting Concrete (SCC) Workability:** The quality of RFC depends on the SCC used to fill the voids of the rock blocks. A critical quality control step is guaranteeing the SCC's required workability, which is achieved through a specific **mix design method based on the SCC's paste rheological characteristics** [1]. This method is designed to be efficient, saving laboratory work, testing time, and raw materials [1].
+
+2.  **Performance Testing of RFC:** The integrated performance of RFC is verified through laboratory tests on key properties, including:
+    *   Compaction
+    *   Compression strength
+    *   Tensile strength
+    *   Permeability
+    These tests confirm that RFC meets the requirements of hydraulic concrete [1].
+
+3.  **Simplification through Material Properties:** The technology itself, characterized by high construction efficiency, low cost, low hydration heat, and low environmental load, leads to **simpler construction management and easier quality control** [1].
+
+**Conclusion:** The context indicates that quality control for RFC is fundamentally tied to the precise mixture design and workability of the SCC, followed by verification of the composite material's performance through standardized testing. The inherent advantages of the RFC process also contribute to streamlined quality management on site.
+
+***Note:*** The provided context focuses on the material design, performance testing, and general process advantages that facilitate quality control. It does not detail specific on-site inspection procedures, acceptance criteria, or monitoring technologies used during construction.","Rock-filled concrete, the new norm of SCC in hydraulic engineering in China || Integrated evaluation of cost, schedule and emission performance on rock-filled concrete dam construction operation using discrete event simulation || Heterogeneous temperature characteristics considering rainfall effect during construction of an integrally-poured rock-filled concrete arch dam || Rock-filled concrete, the new norm of SCC in hydraulic engineering in China",,Construction and quality-control question.
+vector_only,construction_quality,How is construction quality controlled in rock-filled concrete?,yes,yes,no,no,yes,5,2|5|4|3,yes,yes,yes,vector,vector,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献资料，岩石填充混凝土（RFC）的施工质量控制主要基于其独特的施工工艺和材料特性。具体体现在以下几个方面：
+
+1. **施工工艺简化**：RFC采用两步法施工——先填充大尺寸岩石（骨料大于300毫米），再灌注高性能自密实混凝土（HSCC）以填充岩石间的空隙[2]。这种工艺使得施工管理相对简单，质量控制也更容易实施[5]。
+
+2. **材料与配合比控制**：为确保HSCC的工作性（良好的流动性与抗离析性），开发了基于浆体流变特性的配合比设计方法。该方法减少了实验室工作量、测试时间和原材料消耗，有助于保障RFC的综合性能[5]。
+
+3. **关键性能指标监控**：RFC的质量需通过测试其密实度、抗压强度、抗拉强度和渗透性等综合性能来验证，这些指标均需满足水工混凝土的要求[5]。
+
+4. **温度控制简化**：由于大岩石能够吸收水泥的水化热，RFC施工过程中无需采取专门的温度控制措施，这本身就是质量控制的一个简化优势[2]。
+
+5. **关注核心科学问题**：RFC的质量控制也涉及对灌注密实度以及大岩石对RFC力学和物理性能影响这两个基本科学问题的把控[4]。
+
+需要注意的是，以上信息基于RFC技术原理和一般性描述，更具体的质量控制流程（如详细检测标准、仪器监测方法等）在当前上下文的有限内容中未充分展开[3]。","Advancing rock-filled concrete (RFC) technology: Comprehensive insights into filling quality, mechanical properties, durability, and numerical simulation || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method || Quality Control and Instrumentation || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || Rock-filled concrete, the new norm of SCC in hydraulic engineering in China",,Construction and quality-control question.
+default_hybrid,thermal_control,What does thermal control focus on for rock-filled concrete dams?,yes,yes,no,no,yes,4,1|2,yes,yes,yes,hybrid,hybrid,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据现有资料，岩石填充混凝土坝的热控主要关注**热应力及其相关控制措施**[1]。
+
+具体而言，相关研究重点在于模拟和应对由温度变化引起的应力问题，特别是在高海拔和寒冷地区的特殊环境下[1]。
+
+**补充说明：**
+岩石填充混凝土（RFC）技术本身的一个优点是**水泥消耗和水化热较低**[2]，这从材料角度降低了热控的部分难度。但针对已建成的RFC坝，热控工作的核心目标依然是管理温度应力，防止结构开裂。",Simulation of thermal stress and control measures for rock-filled concrete dam in high-altitude and cold regions || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || Study on the Thermal Variation of Early-Age Rock-Filled Concrete - Part Ii Mesoscopic Thermal Field Reconstruction and Parametrical Studies || Construction information management system for rock-filled concrete dam (CIM4R),,Temperature-control question.
+keyword_baseline,thermal_control,What does thermal control focus on for rock-filled concrete dams?,yes,yes,no,no,yes,4,1,yes,yes,yes,keyword,keyword,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，堆石混凝土坝的热控主要聚焦于**防止因温度应力引起的开裂**。相关文献明确将“开裂（Cracking）”、“温度控制（Temperature control）”和“温度应力（thermal stress）”列为核心关键词与研究重点 [1]。
+
+**依据与说明：**
+*   文献[1]的标题直接指向“堆石混凝土坝的温度应力模拟与控制措施”，其关键词包括“开裂”、“温度”、“温度控制”和“大体积混凝土” [1]。
+*   该文献的研究范畴（category）为“热控；数值模拟；大坝工程”，这进一步印证了热控（thermal control）是堆石混凝土坝工程中的一个关键研究领域 [1]。
+
+**局限性说明：**
+当前上下文中的文献摘要或全文内容并未提供关于热控具体措施（如冷却方式、保温方法、温度监测标准等）的详细描述。因此，基于现有资料，可以确定热控的核心目标是管理温度应力以预防开裂，但无法进一步展开其具体技术细节。",Simulation of thermal stress and control measures for rock-filled concrete dam in high-altitude and cold regions || Construction information management system for rock-filled concrete dam (CIM4R) || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology,,Temperature-control question.
+vector_only,thermal_control,What does thermal control focus on for rock-filled concrete dams?,yes,yes,no,no,yes,5,2|4,yes,yes,yes,vector,vector,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"Based on the provided context, thermal control for rock-filled concrete (RFC) dams focuses on addressing **temperature cracking** by **reducing hydration thermal increase** and, consequently, **eliminating the need for cooling pipes** as a control measure [2][4].
+
+This is achieved because the construction method of RFC uses large rocks, which reduces the volume of cementitious material (high-performance self-compacting concrete, HSCC) and thus substantially lowers the heat generated during cement hydration [2][4].",Simulation of thermal stress and control measures for rock-filled concrete dam in high-altitude and cold regions || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method,,Temperature-control question.
+default_hybrid,filling_capacity,What affects filling capacity in rock-filled concrete?,yes,yes,no,no,yes,4,1|2,yes,yes,yes,hybrid,hybrid,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，影响堆石混凝土（RFC）填充能力的因素主要包括：
+
+1.  **自密实混凝土（SCC）的屈服应力**：屈服应力是影响自密实混凝土在堆石骨架中流动和填充的关键流变学参数 [1][2]。
+2.  **堆石骨架中骨料的尺寸**：骨料尺寸的大小会影响孔隙结构和流动阻力，从而影响填充率 [1][2]。
+3.  **堆石骨架中骨料的形状**：骨料的形状会影响孔隙的几何形态和连通性，对自密实混凝土的填充能力有显著影响 [2]。
+
+这些因素共同决定了自密实混凝土能否穿过堆石空隙并保持均匀，最终影响堆石混凝土的填充率、截面孔隙率和界面微结构 [1]。
+
+**说明**：以上信息基于所提供的文献摘要。关于这些因素具体如何影响填充能力的详细机制，当前上下文中的信息不足以进行更深入的阐述。","Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete || Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || Advancing rock-filled concrete (RFC) technology: Comprehensive insights into filling quality, mechanical properties, durability, and numerical simulation",,Filling and SCC question.
+keyword_baseline,filling_capacity,What affects filling capacity in rock-filled concrete?,yes,yes,no,no,yes,4,1|2|3,yes,yes,yes,keyword,keyword,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的文献，影响堆石混凝土（Rock-Filled Concrete, RFC）中自密实混凝土（Self-Compacting Concrete, SCC）填充能力的因素主要包括以下几个方面：
+
+1.  **自密实混凝土（SCC）的屈服应力**：这是影响其在多孔介质（如堆石骨架）中流动与填充能力的关键流变参数 [1][2]。
+2.  **骨料（石料）的尺寸**：堆石骨架中骨料的尺寸会影响自密实混凝土的填充率 [1]。
+3.  **骨料（石料）的尺寸和形状**：在数值模拟研究中，颗粒（骨料）的尺寸和形状是影响自密实混凝土填充能力的重要因素 [2]。
+4.  **自密实混凝土的配合比设计和流变特性控制**：为保证其工作性能以实现有效填充，需要进行这些控制 [3]。
+
+综上所述，影响堆石混凝土填充能力的因素涉及**自密实混凝土自身的流变性质（如屈服应力）**以及**堆石骨架的骨料特性（如尺寸和形状）**，同时需要通过**严格的配合比设计与流变控制**来保障。","Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete || Rock-filled concrete, the new norm of SCC in hydraulic engineering in China || Advancing rock-filled concrete (RFC) technology: Comprehensive insights into filling quality, mechanical properties, durability, and numerical simulation",,Filling and SCC question.
+vector_only,filling_capacity,What affects filling capacity in rock-filled concrete?,yes,yes,no,no,yes,4,1|3|4,yes,yes,yes,vector,vector,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的资料，影响堆石混凝土（RFC）中自密实混凝土（SCC）填充能力的主要因素包括：
+
+1.  **骨料（或堆石）的尺寸**：研究表明，骨料尺寸是影响填充率的因素之一 [1]。具体来说，自密实混凝土需要能够填充预置的、由粒径大于300毫米的大型岩石组成的骨架空隙 [3]。
+2.  **骨料（或堆石）的形状**：颗粒的形状对填充能力有显著影响 [3][4]。使用**圆润的、大尺寸的岩石**有助于确保良好的填充质量 [3]。
+3.  **自密实混凝土（SCC）的流变性（特别是屈服应力）**：自密实混凝土的屈服应力是影响其在多孔介质（即堆石骨架）中流动与填充能力的关键因素 [1][4]。研究表明，使用**具有较低屈服应力的自密实混凝土**有利于获得良好的填充性能 [3]。
+
+**综合来看**，为了获得良好的填充能力，需要综合考虑堆石骨架的几何特征（尺寸和形状）以及自密实混凝土的材料特性（屈服应力）[4]。填充能力的优劣直接决定了堆石混凝土的最终性能，如孔隙率、界面微结构和整体质量 [1][3]。
+
+**请注意**：以上结论均基于所提供的研究摘要或元数据片段，详细的定量关系或具体参数阈值需查阅原始文献全文。",Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete || Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete,,Filling and SCC question.
+default_hybrid,engineering_case,Give an engineering application example for rock-filled concrete dams.,yes,yes,no,no,yes,3,1|2,yes,yes,yes,hybrid,hybrid,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"Based on the provided context, an engineering application example for rock-filled concrete dams is the auxiliary dam of the upper reservoir of the Baoquan pumped storage power station, which was filled with rock-filled concrete. This application helped accelerate construction, shorten duration, reduce investment, and ensure quality [1].
+
+Another example is the use of self-compacting rock-filled concrete in constructing the Weitan Hydropower station, where samples demonstrated adequate cleavage and tensile performance for engineering requirements [2].
+
+These examples are cited directly from the source abstracts. Note that this information is for learning and document retrieval only and does not constitute engineering design or expert judgment.",The Research and Application of Dam Construction Technology of Rock-Filled Concrete || Test Analysis of the Cleavage and Tensile Performance of the Self-compacting Rock-filled Concrete in Weitan Hydropower Station || Construction information management system for rock-filled concrete dam (CIM4R),,Engineering application question.
+keyword_baseline,engineering_case,Give an engineering application example for rock-filled concrete dams.,yes,yes,no,no,yes,4,1|2,yes,yes,yes,keyword,keyword,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"Based on the provided context, a direct engineering application example of rock-filled concrete (RFC) is its use in the construction of the **Weitan Hydropower Station**.
+
+This project utilized **self-compacting rock-filled concrete** as a construction material. On-site verification involved cutting large samples directly from the RFC structure to test its cleavage and tensile performance, which met the engineering requirements [1].
+
+Additionally, RFC dams are recognized as a specific application category, leading to the development of dedicated construction information management systems (such as CIM4R) to support quality control during their construction [2].
+
+**Note:** The provided sources confirm the material's application in a hydropower dam and its general use in dam construction, but they do not provide detailed engineering design parameters for the Weitan project itself.",Test Analysis of the Cleavage and Tensile Performance of the Self-compacting Rock-filled Concrete in Weitan Hydropower Station || Construction information management system for rock-filled concrete dam (CIM4R) || A Mesoscale Comparative Analysis of the Elastic Modulus in Rock-Filled Concrete for Structural Applications || A Mesoscale Comparative Analysis of the Elastic Modulus in Rock-Filled Concrete for Structural Applications,,Engineering application question.
+vector_only,engineering_case,Give an engineering application example for rock-filled concrete dams.,yes,yes,no,no,yes,5,3|1,yes,yes,yes,vector,vector,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，当前知识库中没有包含具体的工程应用案例（如具体大坝名称、地点、规模等详细信息）。
+
+不过，上下文表明，在相关的综述论文中，作者介绍了将岩填充混凝土（RFC）原理应用于大坝设计和施工实践中的创新[3]，并且这些内容在论文的后续章节（第3节）中，提供了“以项目为导向的深入评论”[3]。此外，引用的中国技术标准[1]也表明该技术在工程中已有实际应用，尤其是在中国的水电和水利工程领域。
+
+因此，虽然没有提供具体的案例细节，但可以确认RFC大坝技术已在工程实践中得到应用。如需具体的工程案例，建议查阅上述综述论文[1][3]或相关的中国技术标准文件以获取更详细的信息。
+
+**重要提示**：本系统仅用于学习和资料检索，不能替代规范审查、工程设计和专家判断。",A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology || Research on Rock-Filled Concrete Dam || Rock-Filled Concrete Dam,,Engineering application question.
+default_hybrid,unsupported,zqxjvblorptasticprotocol,yes,yes,yes,yes,yes,0,,yes,yes,yes,hybrid,hybrid,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,当前资料库中没有找到足够可靠的依据。,,,Synthetic out-of-corpus token should be refused.
+keyword_baseline,unsupported,zqxjvblorptasticprotocol,yes,yes,yes,yes,yes,0,,yes,yes,yes,keyword,keyword,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,当前资料库中没有找到足够可靠的依据。,,,Synthetic out-of-corpus token should be refused.
+vector_only,unsupported,zqxjvblorptasticprotocol,yes,yes,yes,yes,yes,0,,yes,yes,yes,vector,vector,5,0.0,0,filter_history>rewrite_query>retrieve>optional_rerank>generate_answer,yes,openai-compatible,mimo-v2.5-pro,当前资料库中没有找到足够可靠的依据。,,,Synthetic out-of-corpus token should be refused.

@@ -1,0 +1,15 @@
+section,metric,status,value,baseline_value,risk_level,evidence_file,recommendation
+real_config,agent,completed,5/5 (1.000),5/5 (1.000),low,data\evaluation\stage14_embedding_comparison.csv; data\evaluation\stage14_real\real_config_status.csv,agent 真实配置结果可作为发布前校准证据。
+real_config,brain_workflow,completed,18/18 (1.000),18/18 (1.000),low,data\evaluation\stage14_embedding_comparison.csv; data\evaluation\stage14_real\real_config_status.csv,brain_workflow 真实配置结果可作为发布前校准证据。
+real_config,chat,completed,6/6 (1.000),6/6 (1.000),low,data\evaluation\stage14_embedding_comparison.csv; data\evaluation\stage14_real\real_config_status.csv,chat 真实配置结果可作为发布前校准证据。
+real_config,decompose,error,0/0,10/10 (1.000),high,data\evaluation\stage14_embedding_comparison.csv; data\evaluation\stage14_real\real_config_status.csv,优先排查 decompose 真实配置错误；不要用 deterministic 结果伪造成真实通过。
+real_config,hybrid,completed,15/15 (1.000),15/15 (1.000),low,data\evaluation\stage14_embedding_comparison.csv; data\evaluation\stage14_real\real_config_status.csv,hybrid 真实配置结果可作为发布前校准证据。
+real_config,user_questions,completed,27/30 (0.900),25/30 (0.833),medium,data\evaluation\stage14_embedding_comparison.csv; data\evaluation\stage14_real\real_config_status.csv,user_questions 真实结果与 deterministic baseline 不同，保留差异用于人工审阅。
+real_config,vector,completed,15/15 (1.000),13/15 (0.867),medium,data\evaluation\stage14_embedding_comparison.csv; data\evaluation\stage14_real\real_config_status.csv,vector 真实结果与 deterministic baseline 不同，保留差异用于人工审阅。
+answer_coverage,review_rows,completed,9,stage14 medium/review rows,high,data\evaluation\stage15_answer_coverage_review.csv,将 high 样例作为发布前阻断风险，将 medium 样例保留为人工审阅样例。
+answer_coverage,risk_high,completed,1,,high,data\evaluation\stage15_answer_coverage_review.csv,发布前优先处理 high 风险回答，通常是超时、无答案或来源不匹配。
+answer_coverage,risk_medium,completed,8,,medium,data\evaluation\stage15_answer_coverage_review.csv,保留 medium 样例进入人工审阅，检查回答是否真正覆盖期望要点。
+provenance,evidence_rows,completed,50,50 stage14 evidence rows,low,data\evaluation\stage14_decompose_provenance_review.csv,保留证据级 provenance 作为人工审阅和报告依据。
+provenance,both_match_rows,completed,37,37 stage14 both-match rows,low,data\evaluation\stage14_decompose_provenance_review.csv,both_match 越多，说明 keyword/vector 双路证据更一致。
+provenance,decomposed_evidence_rows,completed,15,15 stage14 decomposed rows,low,data\evaluation\stage14_decompose_provenance_review.csv,保留 decomposed evidence rows 解释复杂问题证据来源。
+overall,stage15_quality_gate,review_required,high,stage14 quality tables,high,data\evaluation\stage15_quality_summary.csv,阶段 15 已形成真实配置和回答复核报告；发布前优先处理 high 风险和真实 decompose error。
