@@ -2205,6 +2205,146 @@ full tests: 244 passed
 
 架构结论：阶段 12 把质量校准和上下文补全都放在已有 Brain / evaluation 边界内，没有绕开引用、拒答和来源治理。后续阶段应优先做 Decompose 与可解释证据合并，而不是默认引入 HyDE 或复杂多轮记忆。
 
+## 阶段 13 Decompose 与可解释证据合并
+
+阶段 13 的目标是在 Brain 检索阶段增强复杂问题的证据覆盖，而不是替换 RAG 架构或改变外部 API。
+
+核心数据流：
+
+```text
+BrainService._retrieve_with_hybrid()
+-> decompose_query()
+-> DecomposeRetrievalService.retrieve()
+-> sub query hybrid retrieval
+-> merge_sub_query_results()
+-> MergedEvidence
+-> build_retrieval_outcome()
+-> evaluate_evidence_confidence()
+-> build_rag_prompt()
+-> ChatModelProvider
+```
+
+### 规则式 Decompose
+
+阶段 13 新增：
+
+```text
+app/services/retrieval/decompose.py
+tests/test_decompose_retrieval.py
+```
+
+核心结构：
+
+```text
+DecomposedQuery
+  original_question
+  sub_queries
+  decomposed
+  reason
+
+SubQueryRetrievalResult
+  sub_query
+  retrieval_mode
+  results
+
+MergedEvidence
+  普通 SearchResultLike 字段
+  sub_queries
+  keyword_score
+  vector_score
+  topic_score
+  source_type_score
+  both_match
+  final_score
+  explanation
+```
+
+规则边界：
+
+- 子 query 最多 3 个。
+- 只拆明显并列结构，例如“成本、工期和碳排放”“灌满以及密实度”“孔隙率和抗压表现”。
+- 单主题问题继续使用原始 query。
+- unsupported 乱字符串不强行拆解。
+- 不调用真实模型拆解，避免自动回归依赖 API。
+
+### Brain 集成
+
+阶段 13 只在 hybrid 路径中接入 Decompose：
+
+```text
+question
+-> decompose_query(question)
+-> if decomposed: run sub query hybrid retrieval and merge evidence
+-> else: keep original HybridSearchService
+```
+
+这样做有两个目的：
+
+- 复杂问题能获得更完整证据。
+- 单主题问题不多跑额外检索，避免 default_hybrid 退化。
+
+阶段 13 初次接入时曾因“先执行 Decompose 服务再判断是否拆解”导致 Brain workflow `default_hybrid` 从 6/6 退到 5/6。修复后改为先运行轻量 `decompose_query()`，只有真正拆解时才执行子 query 检索，Brain workflow 恢复 18/18。
+
+### 可解释 Rerank
+
+`MergedEvidence` 的排序综合：
+
+```text
+normalized_retrieval_score
+topic_match_bonus
+source_type_bonus
+both_match_bonus
+sub_query_coverage_bonus
+```
+
+`explanation` 字段记录：
+
+- 命中的 sub query 数量。
+- 命中的主题词。
+- 是否 keyword/vector 双路命中。
+- source_type。
+- raw_score 和 final_score。
+
+这些信息目前用于评测 CSV 和调试，不改变 `/chat` 或 `/agent/query` 的响应 schema。
+
+### 阶段 13 评测
+
+阶段 13 新增：
+
+```text
+scripts/evaluate_decompose.py
+data/evaluation/stage13_decompose_results.csv
+tests/test_evaluate_decompose.py
+```
+
+评测字段包括：
+
+- decompose_applied
+- sub_query_count
+- raw_result_count
+- merged_result_count
+- deduplicated_count
+- provenance_present
+- source_hit_matched
+- answer_coverage_proxy
+- rerank_explanations
+
+阶段 13 结果：
+
+```text
+decompose evaluation: 6/6
+all-user decompose evaluation: 10/10
+user question evaluation: 29/30
+Brain workflow: 18/18
+chat: 6/6
+agent: 5/5
+hybrid: 15/15
+vector baseline: 13/15
+full tests: 257 passed
+```
+
+架构结论：阶段 13 把复杂问题处理放在检索证据层，而不是让模型自行长回答。系统继续保留引用、拒答、来源治理和 API 兼容边界。
+
 ### 阶段 9 完成标准
 
 ```text

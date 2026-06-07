@@ -68,6 +68,7 @@ codex/phase-9-real-model-evaluation
 codex/phase-10-rag-quality-calibration
 codex/phase-11-user-evaluation-query-expansion
 codex/phase-12-quality-review-context-calibration
+codex/phase-13-decompose-evidence-merge
 ```
 
 协作规则：
@@ -1180,7 +1181,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6、阶段 7、阶段 8、阶段 9、阶段 9.1、阶段 10、阶段 11 和阶段 12 已完成。阶段 12 当前在 `codex/phase-12-quality-review-context-calibration` 分支完成开发、验证、文档收尾和 tag 标识。
+阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6、阶段 7、阶段 8、阶段 9、阶段 9.1、阶段 10、阶段 11、阶段 12 和阶段 13 已完成。阶段 13 当前在 `codex/phase-13-decompose-evidence-merge` 分支完成开发、验证、文档收尾和 tag 标识。
 
 阶段 4 最终提交和 tag：
 
@@ -1245,7 +1246,13 @@ tag: phase-11-complete
 tag: phase-12-complete
 ```
 
-不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`、`phase-9.1-complete`、`phase-10-complete`、`phase-11-complete` 或 `phase-12-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+阶段 13 Decompose 与可解释证据合并由以下 tag 标识：
+
+```text
+tag: phase-13-complete
+```
+
+不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`、`phase-9.1-complete`、`phase-10-complete`、`phase-11-complete`、`phase-12-complete` 或 `phase-13-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
 阶段 6 已实现检索优化与评测闭环：
 
@@ -1442,6 +1449,30 @@ API/core regression: 47 passed
 full tests: 244 passed
 ```
 
+阶段 13 已完成 Decompose 与可解释证据合并：
+
+```text
+docs/stage13_decompose_plan.md
+app/services/retrieval/decompose.py
+scripts/evaluate_decompose.py
+data/evaluation/stage13_decompose_results.csv
+Brain hybrid path -> decompose_query -> DecomposeRetrievalService -> MergedEvidence
+```
+
+阶段 13 评测结果：
+
+```text
+decompose evaluation: 6/6
+all-user decompose evaluation: 10/10
+user question evaluation: 29/30
+chat evaluation: 6/6
+agent evaluation: 5/5
+brain workflow evaluation: 18/18
+deterministic hybrid evaluation: 15/15
+deterministic vector baseline: 13/15
+full tests: 257 passed
+```
+
 阶段 9.1 关键经验：
 
 ```text
@@ -1480,6 +1511,17 @@ history 必须是可选输入，旧 /chat 和 /agent/query 请求不能被破坏
 Context 只做最近历史问题的最小补全，不扩展成长期记忆系统；HyDE 只做离线实验建议。
 ```
 
+阶段 13 关键经验：
+
+```text
+Decompose 应优先放在 Brain/retrieval 边界，而不是让 chat 或 Agent 各自复制拆解逻辑。
+规则式拆解比真实模型拆解更适合 deterministic 自动回归；子 query 最多 3 个，避免召回噪声和上下文膨胀。
+接入 Brain 时必须先判断是否真的 decomposed，再执行子 query 检索；否则单主题问题会多跑检索并可能造成 default_hybrid 退化。
+MergedEvidence 要像普通 SearchResultLike 一样能进入 Brain，同时保留 sub_query provenance、both_match、topic_score 和 explanation 供评测使用。
+unsupported 问题不能因为 Decompose 而被强行回答，最终仍要经过 Brain evidence confidence。
+阶段 13 后续最值得做的是真实 embedding 对比、真实模型 Answer Coverage 校准，以及把 provenance/rerank explanation 做成只读可视化。
+```
+
 当前最权威的进度依据是：
 
 ```text
@@ -1503,4 +1545,4 @@ HyDE 只做离线实验，不进入默认链路或自动回归
 
 阶段 9 已经补齐真实模型 provider 边界。后续如果切换真实 chat 或 embedding 模型，必须保留 deterministic baseline，先按 provider/model/dimension 重建向量索引，再复跑 model config、vector、hybrid、chat、agent 和 brain workflow 评测，不能只凭单次回答效果判断质量。
 
-阶段 9.1 已证明真实 MIMO + Jina 可以运行，但失败项集中在 `vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。阶段 10 已通过 EvidenceConfidence 和 topic anchor rerank 修复主要边界。阶段 11 已扩大真实用户问题集、补充跨语言 query expansion 和人工审阅设计。阶段 12 已落地质量审阅并实现最小上下文补全。后续阶段如果继续提升质量，应优先做 Decompose、真实 embedding 对比和可解释证据合并，而不是继续盲目扩展模型 provider 或默认引入 HyDE。
+阶段 9.1 已证明真实 MIMO + Jina 可以运行，但失败项集中在 `vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。阶段 10 已通过 EvidenceConfidence 和 topic anchor rerank 修复主要边界。阶段 11 已扩大真实用户问题集、补充跨语言 query expansion 和人工审阅设计。阶段 12 已落地质量审阅并实现最小上下文补全。阶段 13 已实现规则式 Decompose、子 query 检索、证据合并、`chunk_id` 去重和可解释 rerank。后续阶段如果继续提升质量，应优先做真实 embedding 对比、真实模型 Answer Coverage 校准和 provenance 可视化，而不是继续盲目扩展模型 provider 或默认引入 HyDE。

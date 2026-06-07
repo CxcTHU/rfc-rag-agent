@@ -509,3 +509,37 @@ docs/stage13_decompose_plan.md
 - 质量审阅只保存来源标题、答案摘要、审阅字段和必要备注，不保存完整论文正文。
 - HyDE 只保留为离线实验建议，不进入默认链路或自动回归。
 - 真实 API key 仍只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。
+
+## 阶段 13 Decompose 与证据合并产物
+
+阶段 13 新增或更新的工程与评测产物：
+
+```text
+app/services/retrieval/decompose.py
+scripts/evaluate_decompose.py
+data/evaluation/stage13_decompose_results.csv
+docs/stage13_decompose_plan.md
+```
+
+这些文件不是新的文献资料来源。它们只记录：
+
+- 规则式拆解后的 sub query。
+- 每个问题的检索、合并、去重和 rerank 解释。
+- 来源命中、拒答匹配、provenance 和 answer coverage proxy 等评测字段。
+- 阶段 13 的设计边界和质量结论。
+
+阶段 13 不新增外部资料来源，不新增爬虫链路，不保存受限全文。Decompose 只读取现有：
+
+```text
+sources
+documents/chunks
+chunk_embeddings
+data/evaluation/user_questions.csv
+```
+
+合规结论：
+
+- `stage13_decompose_results.csv` 是质量评测产物，不是资料库。
+- sub query provenance 只说明证据由哪个子问题召回，不改变资料来源归属。
+- 真实 API key 仍只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。
+- HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
