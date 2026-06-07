@@ -83,6 +83,14 @@ def seed_chat_document(db: Session) -> None:
                 start_char=69,
                 end_char=135,
             ),
+            ChunkCreate(
+                chunk_index=2,
+                content="Creep behaviour describes long-term deformation of rock-filled concrete.",
+                char_count=74,
+                heading_path="Creep",
+                start_char=136,
+                end_char=210,
+            ),
         ],
     )
 
@@ -150,6 +158,24 @@ def test_chat_api_supports_hybrid_retrieval_mode(tmp_path) -> None:
     assert payload["citations"] == [1]
     assert payload["sources"][0]["document_title"] == "Chat API thermal source"
     assert payload["sources"][0]["chunk_index"] == 1
+
+
+def test_chat_api_accepts_optional_history_for_contextual_question(tmp_path) -> None:
+    with make_test_client(tmp_path, seed_documents=True, build_index=False) as client:
+        response = client.post(
+            "/chat",
+            json={
+                "question": "它有哪些研究？",
+                "retrieval_mode": "keyword",
+                "history": ["堆石混凝土徐变有什么研究？"],
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["question"] == "它有哪些研究？"
+    assert payload["refused"] is False
+    assert payload["sources"][0]["chunk_index"] == 2
 
 
 def test_chat_api_refuses_when_context_is_missing(tmp_path) -> None:

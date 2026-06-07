@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections.abc import Sequence
 from typing import Literal
 
 from pydantic import ValidationError
@@ -56,6 +57,7 @@ class CitationAnswerService:
         top_k: int = 5,
         retrieval_mode: RetrievalMode = "auto",
         min_score: float = 0.0,
+        history: Sequence[str] | None = None,
     ) -> CitationAnswerResult:
         normalized_question = self._validate_answer_params(
             question=question,
@@ -67,10 +69,12 @@ class CitationAnswerService:
             top_k=top_k,
             retrieval_mode=retrieval_mode,
             min_score=min_score,
+            history=history,
         )
         brain_result = self._brain_service().answer(
             question=normalized_question,
             config=config,
+            history=history,
         )
         return citation_answer_result_from_brain_result(brain_result)
 
@@ -130,6 +134,7 @@ class CitationAnswerService:
         top_k: int,
         retrieval_mode: RetrievalMode,
         min_score: float,
+        history: Sequence[str] | None = None,
     ) -> RetrievalConfig:
         try:
             return RetrievalConfig.from_chat_request(
@@ -137,6 +142,7 @@ class CitationAnswerService:
                 retrieval_mode=retrieval_mode,
                 min_score=min_score,
                 model_provider=self.chat_model_provider.provider_name,
+                max_history=len([item for item in (history or ()) if item.strip()]),
             )
         except ValidationError as exc:
             raise ValueError(str(exc)) from exc

@@ -67,6 +67,7 @@ codex/phase-8-brain-workflow
 codex/phase-9-real-model-evaluation
 codex/phase-10-rag-quality-calibration
 codex/phase-11-user-evaluation-query-expansion
+codex/phase-12-quality-review-context-calibration
 ```
 
 协作规则：
@@ -268,6 +269,7 @@ workflow
 - 有 Brain 中控层：`app/services/brain/`、`RetrievalConfig`、`WorkflowConfig`、`BrainService` 和可记录的 workflow steps。
 - 有真实模型接入边界：`OpenAICompatibleChatModelProvider`、`OpenAICompatibleEmbeddingProvider`、模型配置评测和 provider/model/dimension 可追踪索引。
 - 有真实用户问题评测集和跨语言质量增强：`data/evaluation/user_questions.csv`、`scripts/evaluate_user_questions.py`、`docs/stage11_user_evaluation_plan.md`、跨语言 `SYNONYM_RULES` 和人工审阅抽样表。
+- 有质量审阅和上下文最小补全：`data/evaluation/stage12_quality_review_results.csv`、`docs/stage12_quality_review.md`、Brain `rewrite_query`、可选 `history` 字段和 `docs/stage13_decompose_plan.md`。
 - 有自动化测试和评测脚本。
 - 有文档和知识库沉淀：`README.md`、`docs/progress.md`、`obsidian-vault/`。
 
@@ -1178,7 +1180,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6、阶段 7、阶段 8、阶段 9、阶段 9.1、阶段 10 和阶段 11 已完成。阶段 11 当前在 `codex/phase-11-user-evaluation-query-expansion` 分支完成开发、验证、文档收尾和 tag 标识。
+阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6、阶段 7、阶段 8、阶段 9、阶段 9.1、阶段 10、阶段 11 和阶段 12 已完成。阶段 12 当前在 `codex/phase-12-quality-review-context-calibration` 分支完成开发、验证、文档收尾和 tag 标识。
 
 阶段 4 最终提交和 tag：
 
@@ -1237,7 +1239,13 @@ tag: phase-10-complete
 tag: phase-11-complete
 ```
 
-不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`、`phase-9.1-complete`、`phase-10-complete` 或 `phase-11-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+阶段 12 质量审阅与上下文最小补全由以下 tag 标识：
+
+```text
+tag: phase-12-complete
+```
+
+不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`、`phase-9.1-complete`、`phase-10-complete`、`phase-11-complete` 或 `phase-12-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
 阶段 6 已实现检索优化与评测闭环：
 
@@ -1410,6 +1418,30 @@ API regression: 16 passed
 full tests: 230 passed
 ```
 
+阶段 12 已完成质量审阅与上下文最小补全：
+
+```text
+data/evaluation/stage12_quality_review_results.csv
+docs/stage12_quality_review.md
+Brain rewrite_contextual_question
+ChatRequest optional history
+AgentQueryRequest optional history
+docs/stage13_decompose_plan.md
+```
+
+阶段 12 评测结果：
+
+```text
+quality review tests: 8 passed
+context rewrite focused tests: 52 passed
+user question evaluation: 25/30
+chat evaluation: 6/6
+agent evaluation: 5/5
+brain workflow evaluation: 18/18
+API/core regression: 47 passed
+full tests: 244 passed
+```
+
 阶段 9.1 关键经验：
 
 ```text
@@ -1438,20 +1470,31 @@ LLM-as-judge 适合离线质量校准，不适合做 CI 或本地自动回归前
 deterministic vector-only 在真实用户问题上剩余的 source_hit_mismatch 应保留为 honest baseline，不要用静默 fallback 掩盖。
 ```
 
+阶段 12 关键经验：
+
+```text
+自动评测能证明拒答、来源命中和引用链路稳定，但不能单独证明 Faithfulness 和 Answer Coverage。
+deterministic provider 适合稳定回归，不适合证明真实语言表达质量；发布前仍需要真实模型或人工审阅校准。
+上下文补全应放在 Brain rewrite_query step，补全后的 query 只用于检索，对外仍保留用户原始 question。
+history 必须是可选输入，旧 /chat 和 /agent/query 请求不能被破坏。
+Context 只做最近历史问题的最小补全，不扩展成长期记忆系统；HyDE 只做离线实验建议。
+```
+
 当前最权威的进度依据是：
 
 ```text
 docs/progress.md
 ```
 
-下一步最适合新开阶段 12。优先方向：
+下一步最适合新开阶段 13。优先方向：
 
 ```text
-把 user_question_review_samples.csv 用于真实人工审阅
-形成发布前质量审阅报告
-比较真实 Jina embedding 与 deterministic vector 在用户问题集上的差异
-设计更强但可解释的 rerank 或 query rewrite
-继续保持 deterministic 自动回归与真实模型离线校准分离
+实现规则式 Decompose
+把复杂问题拆成最多 3 个子 query
+分别检索、合并证据、按 chunk_id 去重
+保留 sub_query provenance，说明每条证据支持哪个子问题
+做可解释 rerank，继续复用阶段 11 SYNONYM_RULES
+HyDE 只做离线实验，不进入默认链路或自动回归
 ```
 
 阶段 7 已经把稳定 RAG 能力包装成受控工具，让 Agent 能调用 RAG 系统，但不能绕过来源、权限、引用和评测约束。后续如果加入 LLM 规划、写入工具或部署能力，必须继续保留只读优先、最大步数、显式权限、工具调用记录、引用溯源和评测回归。
@@ -1460,4 +1503,4 @@ docs/progress.md
 
 阶段 9 已经补齐真实模型 provider 边界。后续如果切换真实 chat 或 embedding 模型，必须保留 deterministic baseline，先按 provider/model/dimension 重建向量索引，再复跑 model config、vector、hybrid、chat、agent 和 brain workflow 评测，不能只凭单次回答效果判断质量。
 
-阶段 9.1 已证明真实 MIMO + Jina 可以运行，但失败项集中在 `vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。阶段 10 已通过 EvidenceConfidence 和 topic anchor rerank 修复主要边界。阶段 11 已扩大真实用户问题集、补充跨语言 query expansion 和人工审阅设计。后续阶段如果继续提升质量，应优先落地人工审阅、真实 embedding 对比和可解释 rerank，而不是继续盲目扩展模型 provider。
+阶段 9.1 已证明真实 MIMO + Jina 可以运行，但失败项集中在 `vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。阶段 10 已通过 EvidenceConfidence 和 topic anchor rerank 修复主要边界。阶段 11 已扩大真实用户问题集、补充跨语言 query expansion 和人工审阅设计。阶段 12 已落地质量审阅并实现最小上下文补全。后续阶段如果继续提升质量，应优先做 Decompose、真实 embedding 对比和可解释证据合并，而不是继续盲目扩展模型 provider 或默认引入 HyDE。

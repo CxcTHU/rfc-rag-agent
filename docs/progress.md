@@ -1,6 +1,58 @@
 # 项目进度
 
-## 最新状态：2026-06-06（阶段 11 完成）
+## 最新状态：2026-06-06（阶段 12 完成）
+
+当前阶段：阶段 12，质量审阅与上下文最小补全已完成。下一步建议进入阶段 13：规则式 Decompose、子 query 检索、证据合并、按 `chunk_id` 去重和可解释 rerank；HyDE 只做离线实验，不进入默认链路或自动回归。
+
+当前关键证据：
+
+- 当前分支：`codex/phase-12-quality-review-context-calibration`。
+- 阶段 11 已合并到 `main`，`main` 最新阶段 11 合并提交为 `09926f5 merge phase 11 user evaluation query expansion`。
+- `phase-11-complete -> fcd174e`，未移动已有阶段 tag。
+- 阶段 12 新增 `data/evaluation/stage12_quality_review_results.csv`，记录 6 条抽样的 Faithfulness、Answer Coverage、Citation Quality、风险等级和下一步建议。
+- 阶段 12 新增 `docs/stage12_quality_review.md`，说明人工审阅方法、rubric、结果、风险和质量结论。
+- 阶段 12 在 Brain workflow 的 `rewrite_query` 位置实现最小上下文补全，支持基于可选 `history` 的“它/这个技术/这类问题”等代词或省略问法补全。
+- `/chat` 和 `/agent/query` 新增可选 `history` 字段，旧请求不传该字段仍兼容。
+- 阶段 12 新增 `docs/stage13_decompose_plan.md`，为后续 Decompose、证据合并、去重排序和可解释 rerank 提供输入。
+- 用户问题评测保持 `25/30 passed`，`refusal_matched=30/30`，`source_hit_matched=25/30`。
+- deterministic 回归保持稳定：chat 6/6、agent 5/5、Brain workflow 18/18。
+- API/核心回归测试：47 个测试通过。
+- 全量测试：244 个测试通过。
+- 阶段 12 tag：`phase-12-complete`，阶段最终提交完成后指向该提交。
+
+阶段 12 完成内容：
+
+- 使用 Planning with Files 维护阶段 12 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 落地阶段 12 质量审阅结果表，把阶段 11 的审阅字段真正用于质量校准。
+- 新增阶段 12 质量审阅报告，明确 default_hybrid、keyword_baseline、vector_only 的差异和风险。
+- 在 Brain `filter_history -> rewrite_query` 中实现最小上下文补全。
+- 为 `/chat`、`/agent/query`、`CitationAnswerService` 增加可选 `history` 支持，同时保持旧请求兼容。
+- 明确 HyDE 只保留为离线实验建议，不进入默认链路或自动回归。
+- 新增阶段 13 Decompose 预研计划，建议后续做规则式拆解、子 query 检索、证据合并、按 `chunk_id` 去重和可解释 rerank。
+
+遗留问题：
+
+- deterministic answer 仍主要用于稳定回归，不能单独证明真实回答的 Answer Coverage。
+- vector_only 在真实用户问题集上仍有 5 条来源命中不匹配。
+- 上下文补全仅支持最近历史问题和明确指代词，不支持复杂多轮记忆。
+- Decompose、可解释 rerank、真实 embedding 对比和 HyDE 离线评估仍留给后续阶段。
+
+下一阶段任务：
+
+- 阶段 13 可实现规则式 Decompose：复杂问题拆成最多 3 个子 query，分别检索、合并证据、按 `chunk_id` 去重和排序。
+- 复用阶段 11 `SYNONYM_RULES` 做子 query 主题词增强。
+- 建立 Decompose 评测脚本，比较复杂问题的 Answer Coverage 是否提升。
+- 保持 unsupported 不被误拆解成可回答问题。
+
+面试表达：
+
+```text
+阶段 12 我把阶段 11 的人工审阅设计落成质量校准结果。自动评测继续检查拒答、来源命中和引用有效性，人工审阅结果表则检查 Faithfulness、Answer Coverage 和 Citation Quality。结论是默认 hybrid 来源命中可靠，但 deterministic 回答不能单独证明真实语言覆盖度，vector-only 仍有主题漂移。
+
+工程上我没有做复杂长期记忆，而是在 Brain workflow 的 rewrite_query 位置实现最小上下文补全。用户如果问“它有哪些研究”，并传入上一轮问题，系统会把最近历史问题拼入检索 query，但对外仍保留原始问题。这样既能改善省略问法检索，又不会破坏引用、拒答和 API 旧请求兼容。
+```
+
+## 历史状态：2026-06-06（阶段 11 完成）
 
 当前阶段：阶段 11，真实用户问题评测集与跨语言质量提升已完成。下一步建议进入阶段 12：把人工审阅抽样用于发布前质量校准，评估更强 rerank、真实 embedding 对比或审阅报告自动汇总；自动回归仍不要依赖真实 API key。
 

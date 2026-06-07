@@ -2085,6 +2085,126 @@ full tests: 230 passed
 
 架构结论：阶段 11 把质量提升放在“评测输入更真实”和“术语增强更可解释”上，而不是改变 API 或引入黑盒 workflow。剩余的 vector-only 用户问题失败项保留为下一阶段真实 embedding、rerank 或人工审阅校准依据。
 
+## 阶段 12 质量审阅与上下文最小补全
+
+阶段 12 不改变核心 RAG 架构，而是在质量审阅层和 Brain `rewrite_query` step 做最小增强。
+
+核心数据流：
+
+```text
+data/evaluation/user_question_review_samples.csv
+-> data/evaluation/stage12_quality_review_results.csv
+-> docs/stage12_quality_review.md
+-> BrainService.answer(history=...)
+-> filter_history
+-> rewrite_query
+-> retrieve
+-> evidence confidence
+-> generate_answer
+```
+
+### 质量审阅链路
+
+阶段 12 新增：
+
+```text
+data/evaluation/stage12_quality_review_results.csv
+docs/stage12_quality_review.md
+tests/test_stage12_quality_review.py
+```
+
+质量审阅补足自动评测的不足：
+
+- 自动评测负责检查拒答匹配、来源命中、引用编号和禁止词。
+- 人工或离线审阅负责检查 Faithfulness、Answer Coverage 和 Citation Quality。
+
+阶段 12 审阅结论：
+
+```text
+default_hybrid 来源命中可靠
+keyword_baseline 仍是稳定可解释 baseline
+vector_only 仍有主题漂移
+deterministic answer 不能单独证明真实回答覆盖度
+```
+
+### Context Rewrite
+
+阶段 12 在 `app/services/brain/service.py` 中实现最小上下文补全：
+
+```text
+history + current question
+-> filter_history
+-> rewrite_contextual_question()
+-> retrieval question
+```
+
+触发条件保持保守：
+
+- 当前问题含有“它”“这个技术”“这类问题”“上面”“刚才”等明确上下文指代。
+- 存在最近历史问题。
+- 只拼接最近历史问题，不做长期记忆、不做用户画像、不调用真实模型改写。
+
+示例：
+
+```text
+history: 堆石混凝土徐变有什么研究？
+question: 它有哪些研究？
+rewritten query: 堆石混凝土徐变有什么研究？；追问：它有哪些研究？
+```
+
+对外响应仍保留原始 `question`，补全后的 query 只用于检索、prompt 和 evidence confidence。这样既改善省略问法召回，又不改变用户看到的问题。
+
+### Chat 与 Agent 接入
+
+阶段 12 为 `/chat` 和 `/agent/query` 增加可选 `history` 字段：
+
+```text
+{
+  "question": "它有哪些研究？",
+  "history": ["堆石混凝土徐变有什么研究？"]
+}
+```
+
+旧请求不传 `history` 仍保持兼容。Agent 不新增写入型工具，只把可选 history 传入已有 `answer_with_citations` 工具。
+
+### 阶段 13 输入
+
+阶段 12 新增：
+
+```text
+docs/stage13_decompose_plan.md
+tests/test_stage13_decompose_plan.py
+```
+
+后续建议：
+
+```text
+original question
+-> rule-based decompose
+-> sub query retrieval
+-> merge candidates
+-> deduplicate by chunk_id
+-> rerank by topic/source/score
+-> Brain answer with citations
+```
+
+HyDE 只作为离线实验建议，不进入默认链路或 deterministic 自动回归。
+
+阶段 12 评测结果：
+
+```text
+quality review tests: 8 passed
+context rewrite focused tests: 52 passed
+user questions: 25/30
+chat: 6/6
+agent: 5/5
+Brain workflow: 18/18
+API/core tests: 47 passed
+full tests: 244 passed
+```
+
+架构结论：阶段 12 把质量校准和上下文补全都放在已有 Brain / evaluation 边界内，没有绕开引用、拒答和来源治理。后续阶段应优先做 Decompose 与可解释证据合并，而不是默认引入 HyDE 或复杂多轮记忆。
+
 ### 阶段 9 完成标准
 
 ```text

@@ -9,7 +9,7 @@ from app.db.repositories import (
 )
 from app.db.session import create_sqlite_engine
 from app.services.brain.config import DEFAULT_WORKFLOW_STEPS, RetrievalConfig
-from app.services.brain.service import BrainService
+from app.services.brain.service import BrainService, rewrite_contextual_question
 from app.services.brain.workflow import DEFAULT_REFUSAL_ANSWER
 from app.services.generation.chat_model import DeterministicChatModelProvider
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
@@ -50,6 +50,30 @@ def seed_brain_documents(db) -> None:
                 heading_path="Filling",
                 start_char=69,
                 end_char=134,
+            ),
+        ],
+    )
+
+
+def seed_context_documents(db) -> None:
+    DocumentRepository(db).create_with_chunks(
+        DocumentCreate(
+            title="Creep behaviour of rock-filled concrete",
+            source_type="local_file",
+            source_path="creep.md",
+            file_name="creep.md",
+            file_extension=".md",
+            content_hash="brain-service-creep-hash",
+            raw_path="data/raw/creep.md",
+        ),
+        [
+            ChunkCreate(
+                chunk_index=0,
+                content="Creep behaviour describes long-term deformation of rock-filled concrete.",
+                char_count=74,
+                heading_path="Creep",
+                start_char=0,
+                end_char=74,
             ),
         ],
     )
@@ -132,6 +156,63 @@ def test_brain_service_optional_rerank_truncates_context(tmp_path) -> None:
     rerank_step = result.workflow_steps[3]
     assert rerank_step.name == "optional_rerank"
     assert rerank_step.output_summary == "kept=1"
+
+
+def test_rewrite_contextual_question_uses_recent_history_for_pronoun() -> None:
+    rewritten = rewrite_contextual_question(
+        "它有哪些研究？",
+        ["堆石混凝土徐变有什么研究？"],
+    )
+
+    assert rewritten == "堆石混凝土徐变有什么研究？；追问：它有哪些研究？"
+
+
+def test_rewrite_contextual_question_leaves_specific_question_unchanged() -> None:
+    question = "堆石混凝土徐变有什么研究？"
+
+    assert rewrite_contextual_question(question, ["上一轮问题"]) == question
+
+
+def test_brain_service_rewrites_contextual_question_before_retrieval(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_context_documents(db)
+        result = make_brain_service(db).answer(
+            "它有哪些研究？",
+            config=RetrievalConfig(
+                retrieval_mode="keyword",
+                top_k=2,
+                max_history=1,
+            ),
+            history=["堆石混凝土徐变有什么研究？"],
+        )
+
+    assert not result.refused
+    assert result.question == "它有哪些研究？"
+    assert result.sources[0].document_title == "Creep behaviour of rock-filled concrete"
+    assert result.workflow_steps[0].output_summary == "kept_history=1"
+    assert result.workflow_steps[1].output_summary == "query rewritten from recent history"
+
+
+def test_brain_service_does_not_rewrite_when_history_is_disabled(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_context_documents(db)
+        result = make_brain_service(db).answer(
+            "它有哪些研究？",
+            config=RetrievalConfig(
+                retrieval_mode="keyword",
+                top_k=2,
+                max_history=0,
+            ),
+            history=["堆石混凝土徐变有什么研究？"],
+        )
+
+    assert result.refused
+    assert result.workflow_steps[0].output_summary == "kept_history=0"
+    assert result.workflow_steps[1].output_summary == "query unchanged"
 
 
 def test_brain_service_refuses_and_logs_when_no_results(tmp_path) -> None:

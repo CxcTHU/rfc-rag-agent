@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import replace
+import re
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,11 @@ from app.services.retrieval.embedding import EmbeddingProvider, create_embedding
 from app.services.retrieval.hybrid_search import HybridSearchService
 from app.services.retrieval.keyword_search import KeywordSearchService
 from app.services.retrieval.vector_search import VectorSearchService
+
+
+CONTEXT_REFERENCE_RE = re.compile(
+    r"(它|这个技术|这项技术|这类问题|这种技术|这个问题|其|上面|刚才)"
+)
 
 
 class BrainService:
@@ -49,6 +55,7 @@ class BrainService:
         active_config = config or RetrievalConfig()
         workflow_steps: list[BrainWorkflowStepRecord] = []
         current_question = normalized_question
+        filtered_history: tuple[str, ...] = ()
         retrieval_outcome = BrainRetrievalOutcome(
             results=[],
             used_retrieval_mode="none",
@@ -57,14 +64,16 @@ class BrainService:
 
         for step_name in active_config.workflow_config.enabled_step_names:
             if step_name == "filter_history":
-                workflow_steps.append(
-                    self._filter_history_step(
-                        history=history or (),
-                        max_history=active_config.max_history,
-                    )
+                filtered_history, step = self._filter_history_step(
+                    history=history or (),
+                    max_history=active_config.max_history,
                 )
+                workflow_steps.append(step)
             elif step_name == "rewrite_query":
-                current_question, step = self._rewrite_query_step(current_question)
+                current_question, step = self._rewrite_query_step(
+                    question=current_question,
+                    history=filtered_history,
+                )
                 workflow_steps.append(step)
             elif step_name == "retrieve":
                 retrieval_outcome, step = self._retrieve_step(
@@ -138,20 +147,32 @@ class BrainService:
         self,
         history: Sequence[str],
         max_history: int,
-    ) -> BrainWorkflowStepRecord:
-        kept_history_count = len(history[-max_history:]) if max_history else 0
-        return BrainWorkflowStepRecord(
+    ) -> tuple[tuple[str, ...], BrainWorkflowStepRecord]:
+        filtered_history = tuple(item.strip() for item in history if item.strip())
+        if max_history:
+            filtered_history = filtered_history[-max_history:]
+        else:
+            filtered_history = ()
+
+        return filtered_history, BrainWorkflowStepRecord(
             name="filter_history",
             input_summary=f"history={len(history)} max_history={max_history}",
-            output_summary=f"kept_history={kept_history_count}",
+            output_summary=f"kept_history={len(filtered_history)}",
             succeeded=True,
         )
 
-    def _rewrite_query_step(self, question: str) -> tuple[str, BrainWorkflowStepRecord]:
-        return question, BrainWorkflowStepRecord(
+    def _rewrite_query_step(
+        self,
+        question: str,
+        history: Sequence[str],
+    ) -> tuple[str, BrainWorkflowStepRecord]:
+        rewritten_question = rewrite_contextual_question(question, history)
+        changed = rewritten_question != question
+        output_summary = "query rewritten from recent history" if changed else "query unchanged"
+        return rewritten_question, BrainWorkflowStepRecord(
             name="rewrite_query",
             input_summary=f"question={question[:80]}",
-            output_summary="query unchanged",
+            output_summary=output_summary,
             succeeded=True,
         )
 
@@ -404,3 +425,21 @@ class BrainService:
             )
         )
         return result
+
+
+def rewrite_contextual_question(question: str, history: Sequence[str]) -> str:
+    normalized_question = question.strip()
+    if not normalized_question:
+        return normalized_question
+    if not history:
+        return normalized_question
+    if not CONTEXT_REFERENCE_RE.search(normalized_question):
+        return normalized_question
+
+    latest_context = next((item.strip() for item in reversed(history) if item.strip()), "")
+    if not latest_context:
+        return normalized_question
+    if latest_context in normalized_question:
+        return normalized_question
+
+    return f"{latest_context}；追问：{normalized_question}"

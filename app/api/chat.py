@@ -58,6 +58,7 @@ def chat(
             top_k=request.top_k,
             retrieval_mode=request.retrieval_mode,
             min_score=request.min_score,
+            history=request.history,
         )
     except ValueError as exc:
         raise HTTPException(

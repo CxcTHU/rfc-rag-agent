@@ -130,6 +130,25 @@ def test_agent_api_answers_with_tool_calls_and_citations(tmp_path) -> None:
     assert "引用式问答" in payload["reasoning_summary"]
 
 
+def test_agent_api_accepts_optional_history_for_contextual_answer(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "它有哪些研究？",
+                "top_k": 2,
+                "history": ["filling capacity in rock-filled concrete"],
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["question"] == "它有哪些研究？"
+    assert payload["refused"] is False
+    assert payload["tool_calls"][0]["tool_name"] == "answer_with_citations"
+    assert payload["sources"][0]["title"] == "Agent API filling source"
+
+
 def test_agent_api_search_query_returns_hybrid_results(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(

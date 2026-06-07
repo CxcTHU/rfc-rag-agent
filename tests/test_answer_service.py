@@ -56,6 +56,14 @@ def seed_answer_documents(db) -> None:
                 start_char=69,
                 end_char=134,
             ),
+            ChunkCreate(
+                chunk_index=2,
+                content="Creep behaviour describes long-term deformation of rock-filled concrete.",
+                char_count=74,
+                heading_path="Creep",
+                start_char=135,
+                end_char=209,
+            ),
         ],
     )
 
@@ -176,6 +184,28 @@ def test_answer_service_supports_hybrid_retrieval_mode(tmp_path) -> None:
     assert result.citations == [1]
     assert result.sources[0].document_title == "Thermal control guide"
     assert result.sources[0].chunk_index == 1
+
+
+def test_answer_service_accepts_history_for_contextual_rewrite(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_answer_documents(db)
+
+        result = CitationAnswerService(
+            db=db,
+            chat_model_provider=DeterministicChatModelProvider(),
+            embedding_provider=DeterministicEmbeddingProvider(dimension=32),
+        ).answer(
+            "它有哪些研究？",
+            retrieval_mode="keyword",
+            top_k=2,
+            history=["堆石混凝土徐变有什么研究？"],
+        )
+
+    assert not result.refused
+    assert result.question == "它有哪些研究？"
+    assert result.sources[0].chunk_index == 2
 
 
 def test_answer_service_filters_invalid_citations(tmp_path) -> None:
