@@ -2723,3 +2723,49 @@ Agent 评测脚本和结果文件已生成
 keyword/vector/hybrid/chat/agent 评测通过
 全量自动化测试通过
 ```
+
+## 阶段 17 检索架构升级
+
+阶段 17 在 retrieval 层新增三类能力，但不立即替换默认 `HybridSearchService`：
+
+```text
+app/services/retrieval/context_expansion.py
+app/services/retrieval/bm25_search.py
+app/services/retrieval/rrf_fusion.py
+scripts/evaluate_stage17_retrieval_upgrade.py
+```
+
+新的候选检索流水线为：
+
+```text
+query normalize
+-> query expansion
+-> BM25 lexical retrieval
+-> vector retrieval
+-> merge candidates
+-> deduplicate by chunk_id
+-> RRF ranking
+-> optional context expansion
+-> context assembly
+```
+
+`BM25SearchService` 是新的词法检索通道。它复用现有中英文术语归一化和 `SYNONYM_RULES`，并为中文无空格 query 保留“孔隙率”“抗压”等领域触发词。它输出 `matched_terms`、`title_score`、`heading_score` 和 `content_score`，便于解释为什么命中。
+
+`RRFHybridSearchService` 是新的 BM25+vector 融合通道。它不把 BM25 分数和向量余弦分数硬加权，而是记录 `bm25_rank`、`vector_rank` 和 `rrf_score`，按排名融合。每条结果保留 `matched_channels` 和 `provenance`，用于评测和人工核验。
+
+`ContextExpansionService` 是 parent-like 上下文扩展能力。当前不新增 parent chunk 表，而是按同一个 `document_id` 下的 `chunk_index` 拉取前后相邻 chunk。扩展文本可用于 prompt context assembly，但引用仍指向核心 `chunk_id`，避免引用漂移。
+
+阶段 17 评测结果：
+
+```text
+data/evaluation/stage17_retrieval_upgrade_results.csv
+docs/stage17_retrieval_upgrade_report.md
+upgraded=15/15
+baseline=15/15
+improved=0
+regression=0
+```
+
+架构结论：阶段 17 证明 BM25+vector RRF 在当前 baseline 查询集上没有 regression，但尚未证明明显优于旧 hybrid。因此默认 `POST /search/hybrid`、Brain hybrid、`POST /chat` 和 `POST /agent/query` 暂不自动切换到新检索服务。新能力先作为评测和人工核验候选保留。
+
+阶段 17 Phase 9 在 `data/evaluation/stage17_retrieval_upgrade_manual_review.csv` 对每条查询做人工复核：14 acceptable、1 needs_tuning（`mesoscopic_modeling` 排序 2 -> 7，被泛主题综述文档挤占）、0 regression。复核确认 hit 级「regression=0」掩盖了排序软退化，并把默认链路接入建议固定为 `keep_existing_hybrid`：`RRFHybridSearchService`、`BM25SearchService`、`ContextExpansionService` 保持候选/配置开关，等阶段 18 用更有区分度的难评测集和综述降权/topic-anchor rerank 对照证明更优后，再考虑默认接入。

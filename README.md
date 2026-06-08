@@ -14,7 +14,7 @@
 
 ## 当前阶段
 
-阶段 16：真实质量风险闭环已完成开发与验证，当前分支为 `codex/phase-16-real-quality-risk-closure`，等待用户人工核验。阶段 16 按要求尚未执行 `git add`、`git commit`、`git tag`、`git push` 或创建 PR。
+阶段 17：检索架构升级已完成 Phase 0-8 开发与验证，并追加完成 Phase 9「检索升级人工复核与接入建议」。当前分支为 `codex/phase-17-retrieval-architecture-upgrade`，等待用户人工核验。阶段 17 按要求尚未执行 `git add`、`git commit`、`git tag`、`git push` 或创建 PR。Phase 9 人工复核结论：BM25+vector RRF 与上下文扩展保持候选/配置开关，暂不替换默认 `HybridSearchService`。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -68,9 +68,13 @@
 
 阶段 15 tag：`phase-15-complete`。
 
-阶段 16 当前状态：开发和验证完成，尚未提交、尚未创建 `phase-16-complete` tag，等待用户人工核验后再决定是否提交、打 tag 和推送。
+阶段 16 最终功能提交：由 `phase-16-complete` tag 指向的提交标识。
 
-下一步建议：人工核验阶段 16 的 high 阻断项，重点是真实 decompose SSL EOF 是否需要显式重试，以及 `user_mixed_itz_strength` 是否需要真实回答重跑；确认后再进入提交和 `phase-16-complete` 标记流程。HyDE 仍只做离线实验，不进入默认链路或自动回归。
+阶段 16 tag：`phase-16-complete`。
+
+阶段 17 当前状态：开发和验证完成，尚未提交、尚未创建 `phase-17-complete` tag，等待用户人工核验后再决定是否提交、打 tag 和推送。
+
+下一步建议：人工核验阶段 17 的 BM25 lexical retriever、BM25+vector RRF 融合结果、`data/evaluation/stage17_retrieval_upgrade_results.csv`、Phase 9 人工复核表 `data/evaluation/stage17_retrieval_upgrade_manual_review.csv` 和 `docs/stage17_retrieval_upgrade_report.md`。当前评测为 upgraded=15/15、baseline=15/15、regression=0；Phase 9 人工复核进一步发现 `mesoscopic_modeling` 存在排序软退化（rank 2 -> 7），结论是默认链路暂不自动替换，BM25+vector RRF 保持候选/配置开关。HyDE 仍只做离线实验，不进入默认链路或自动回归。
 
 当前已经实现：
 
@@ -168,6 +172,14 @@
 - `scripts/build_stage16_quality_closure_report.py` 阶段 16 质量闭环汇总与报告生成脚本
 - `data/evaluation/stage16_quality_closure_summary.csv` 阶段 16 质量闭环汇总表
 - `docs/stage16_quality_closure_report.md` 阶段 16 Markdown 质量风险闭环报告
+- `docs/stage17_retrieval_architecture_upgrade.md` 阶段 17 检索架构升级设计文档
+- `app/services/retrieval/context_expansion.py` 阶段 17 邻近 chunk 上下文扩展服务
+- `app/services/retrieval/bm25_search.py` 阶段 17 BM25 lexical retriever
+- `app/services/retrieval/rrf_fusion.py` 阶段 17 BM25+vector RRF 融合服务
+- `scripts/evaluate_stage17_retrieval_upgrade.py` 阶段 17 检索升级评测脚本
+- `data/evaluation/stage17_retrieval_upgrade_results.csv` 阶段 17 检索升级评测表
+- `data/evaluation/stage17_retrieval_upgrade_manual_review.csv` 阶段 17 Phase 9 人工复核结果表
+- `docs/stage17_retrieval_upgrade_report.md` 阶段 17 检索架构升级评测报告（含 Phase 9 人工复核摘要）
 - Brain `rewrite_query` 最小上下文补全，支持基于可选 `history` 的“它/这个技术/这类问题”等代词或省略问法补全
 - `/chat` 和 `/agent/query` 可选 `history` 字段，旧请求保持兼容
 - 跨语言 query expansion 增强，补充 ITZ/界面、creep/徐变、freeze-thaw/抗冻、porosity/孔隙率、emission/碳排放、steel fiber/钢纤维、rock shear key/剪力键等术语

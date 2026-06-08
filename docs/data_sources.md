@@ -676,5 +676,39 @@ docs/progress.md
 - `stage16_quality_closure_summary.csv` 和 `docs/stage16_quality_closure_report.md` 是报告产物，不改变来源归属。
 - `app/frontend/quality_report.html` 仍是只读静态报告页，不触发真实 API 调用，不写数据库，不重新索引来源。
 - 真实 API key、Bearer token、供应商原始敏感响应和受限全文仍不得写入源码、文档、CSV、测试、Git 或 Obsidian。
-- 阶段 16 当前停在用户人工核验前状态，尚未提交、尚未打 tag、尚未推送。
+- 阶段 16 已完成人工核验、提交、创建 `phase-16-complete` tag 并合并到 `main`。
+
+## 阶段 17 检索架构升级产物
+
+阶段 17 新增或更新的工程与评测产物：
+
+```text
+docs/stage17_retrieval_architecture_upgrade.md
+app/services/retrieval/context_expansion.py
+app/services/retrieval/bm25_search.py
+app/services/retrieval/rrf_fusion.py
+scripts/evaluate_stage17_retrieval_upgrade.py
+data/evaluation/stage17_retrieval_upgrade_results.csv
+data/evaluation/stage17_retrieval_upgrade_manual_review.csv
+docs/stage17_retrieval_upgrade_report.md
+tests/test_stage17_manual_review.py
+```
+
+阶段 17 不新增外部资料来源，不新增爬虫链路，不新增受限全文保存。它只读取现有：
+
+```text
+documents
+chunks
+chunk_embeddings
+data/evaluation/keyword_queries.csv
+data/evaluation/hybrid_results.csv
+```
+
+数据安全边界：
+
+- `stage17_retrieval_upgrade_results.csv` 是检索评测表，不保存 API key、Bearer token、供应商原始敏感响应或受限全文。
+- `stage17_retrieval_upgrade_manual_review.csv` 是 Phase 9 人工复核结果表，只记录脱敏的复核判断（review_decision、retrieval_risk、evidence、tuning_suggestion 等），不保存 API key、Bearer token、供应商原始敏感响应或受限全文。
+- `docs/stage17_retrieval_upgrade_report.md` 是只读报告（含 Phase 9 人工复核摘要），不触发真实 API；报告由已有结果 CSV 重生成，不跑检索、不访问数据库、不调用真实 provider。
+- 阶段 17 使用 deterministic provider 运行默认评测，不让真实 API 成为 CI 或本地全量测试前提。
+- 阶段 17 当前停在用户人工核验前状态，尚未提交、尚未打 `phase-17-complete` tag、尚未推送。
 - HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。

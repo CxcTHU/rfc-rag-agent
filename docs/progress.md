@@ -1,6 +1,68 @@
 # 项目进度
 
-## 最新状态：2026-06-07（阶段 16 开发完成，待人工核验）
+## 最新状态：2026-06-08（阶段 17 含 Phase 9 人工复核完成，待人工核验）
+
+当前阶段：阶段 17，检索架构升级已完成 Phase 0-8 开发，并追加完成 Phase 9「检索升级人工复核与接入建议」。当前状态按用户要求停在人工核验前：尚未执行 `git add`、`git commit`、`git tag`、`git push`，也未创建 PR。
+
+### Phase 9 人工复核与默认链路接入建议（2026-06-08）
+
+- 新增人工复核结果表 `data/evaluation/stage17_retrieval_upgrade_manual_review.csv`：14 acceptable、1 needs_tuning、0 regression、0 defer；1 条 default_switch_blocker。
+- 逐条复核发现：headline「regression=0」是 hit 级定义，掩盖了 `mesoscopic_modeling` 的排序软退化（rank 2 -> 7，vector_rank=29，被泛主题综述文档挤占）；该样例标为 needs_tuning 与默认替换阻断证据。
+- 5 条 `source_match=no` 中 4 条为等价主题文献换位（多为中文 query 下中文母语文献上浮），仍 top-1 命中，判 acceptable。
+- 默认链路接入建议：`RRFHybridSearchService`、`BM25SearchService`、`ContextExpansionService` 保持候选/配置开关，**不替换默认 `HybridSearchService`、Brain、`/chat`、`/agent`**；阻断理由是评测集 hit 饱和零增益 + 综述上浮排序软退化。
+- `scripts/evaluate_stage17_retrieval_upgrade.py` 的 `write_report` 已可复现地把 Phase 9 摘要纳入 `docs/stage17_retrieval_upgrade_report.md`；报告用已有结果 CSV 重生成，不跑检索、不碰 DB、不触发真实 API。
+- 新增 `tests/test_stage17_manual_review.py`，强制非 acceptable / source_match=no 样例带证据与调优建议。
+- 下一阶段依据：阶段 18 需构建更有区分度的难评测集，并对综述类文档加权或 topic-anchor rerank 做对照，再决定 RRF 是否进入默认链路。
+
+当前关键证据：
+
+- 当前分支：`codex/phase-17-retrieval-architecture-upgrade`。
+- 阶段 16 已合并到 `main`，`main` 当前阶段 16 合并提交为 `ff48056 Merge phase 16 quality risk closure`。
+- `phase-16-complete -> aaba285`，且是 `main` 祖先；未移动任何已有阶段 tag。
+- 阶段 17 新增 `docs/stage17_retrieval_architecture_upgrade.md`。
+- 阶段 17 新增 `app/services/retrieval/context_expansion.py`，支持同 document 相邻 chunk 上下文扩展，引用仍指向核心 chunk。
+- 阶段 17 新增 `app/services/retrieval/bm25_search.py`，实现 BM25 lexical retriever，保留旧 keyword baseline。
+- 阶段 17 新增 `app/services/retrieval/rrf_fusion.py`，实现 BM25+vector 多通道召回、按 `chunk_id` 去重、RRF ranking 和 provenance。
+- 阶段 17 新增 `scripts/evaluate_stage17_retrieval_upgrade.py`、`data/evaluation/stage17_retrieval_upgrade_results.csv`、`docs/stage17_retrieval_upgrade_report.md`。
+- 阶段 17 评测结果：upgraded=15/15，baseline=15/15，improved=0，regression=0。
+- 默认链路决策：暂不自动替换旧 `HybridSearchService`；BM25+vector RRF 作为人工核验候选。
+- 阶段 17 聚焦回归测试：97 个测试通过。
+- 阶段 17 全量测试：343 个测试通过。
+
+阶段 17 完成内容：
+
+- 使用 Planning with Files 维护阶段 17 规划文件：`task_plan.md`、`findings.md`、`progress.md`。
+- 建立阶段 17 设计文档，明确检索流水线、BM25、RRF、context expansion、baseline 对比、安全边界和人工核验前收尾要求。
+- 建立邻近 chunk 上下文扩展服务，不新增数据库表，不改变核心引用 chunk。
+- 建立 BM25 lexical retriever，支持中英文领域术语、标题/heading/content 加权和稳定排序。
+- 建立 BM25+vector RRF 融合服务，保留 matched_channels、bm25_rank、vector_rank、rrf_score 和 provenance。
+- 生成阶段 17 检索升级评测表和报告。
+- 确认阶段 17 不改变 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`GET /quality-report`。
+- 确认阶段 17 不保存 API key、Bearer token、供应商原始敏感响应或受限全文。
+
+遗留问题：
+
+- 当前 baseline 查询集只能证明 BM25+vector RRF 无 regression，不能证明明显优于旧 hybrid；Phase 9 已确认根因是评测集 hit 饱和缺乏区分度。
+- `filling_capacity_cn` 等 `source_match=no` 样例已在 Phase 9 人工复核：4 条等价文献换位判 acceptable，`mesoscopic_modeling` 排序退化判 needs_tuning，详见 `stage17_retrieval_upgrade_manual_review.csv`。
+- `mesoscopic_modeling` 的排序软退化未即时调优修复（属检索重排调参，超出人工复核 Phase 边界），记录为 tuning_suggestion 留给阶段 18。
+- 阶段 16 的 `user_mixed_itz_strength` 质量 high 阻断不能被阶段 17 检索升级自动视为已解决。
+- 阶段 17 当前未提交、未打 `phase-17-complete` tag、未推送 GitHub，等待用户人工核验和明确确认。
+
+下一阶段任务：
+
+- 用户人工核验阶段 17 设计文档、BM25/RRF 代码、评测表、报告和默认链路决策。
+- 如确认通过，再执行提交、创建 `phase-17-complete` tag 并推送；tag 应指向阶段 17 最终功能提交。
+- 后续阶段 18 可进入质量报告与评测体系增强，把多套检索配置和风险队列接入更长期的只读报告。
+
+面试表达：
+
+```text
+阶段 17 我没有先引入复杂 Agent 框架，而是升级检索架构。旧 hybrid 是关键词分数和向量分数归一化后加权，虽然稳定，但分数尺度并不天然一致。因此我新增 BM25 作为标准词法检索通道，再用 RRF 按排名融合 BM25 和 vector 结果，避免硬加权。上下文方面，我先用同文档相邻 chunk 做 parent-like context expansion，让回答看到更多前后文，同时引用仍指向核心 chunk。
+
+评测上，我保留旧 hybrid baseline，新增 stage17_retrieval_upgrade_results.csv 对比 baseline_hit、upgraded_hit、rank_before、rank_after 和 decision。结果是 upgraded 15/15、baseline 15/15、regression 0，但没有明显优于旧 hybrid，所以默认链路暂不切换，只把 BM25+vector RRF 作为人工核验候选。
+```
+
+## 历史状态：2026-06-07（阶段 16 开发完成，待人工核验）
 
 当前阶段：阶段 16，真实质量风险闭环已完成开发、测试、普通文档和 Obsidian 草稿收尾。当前状态按用户要求停在人工核验前：尚未执行 `git add`、`git commit`、`git tag`、`git push`，也未创建 PR。
 
