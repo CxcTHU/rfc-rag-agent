@@ -32,6 +32,10 @@ data/fulltext/
 obsidian-vault/
 obsidian-vault/**
 
+# Local AI agent tool configs (Claude Code / Codex) — keep local-only
+.claude/
+.codex/
+
 # OS/editor
 .DS_Store
 Thumbs.db
