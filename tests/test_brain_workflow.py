@@ -72,7 +72,7 @@ def test_evaluate_evidence_confidence_rejects_unsupported_token() -> None:
 
     assert not confidence.sufficient
     assert confidence.score == 0
-    assert "not share enough" in (confidence.refusal_reason or "")
+    assert "share no" in (confidence.refusal_reason or "")
 
 
 def test_evaluate_evidence_confidence_accepts_cross_language_expanded_terms() -> None:

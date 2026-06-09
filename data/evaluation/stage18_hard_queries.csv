@@ -1,0 +1,21 @@
+query_id,query,difficulty_type,language_type,top_k,expected_title_terms,expected_content_terms,expected_source_types,expected_refused,expected_answer_points,distractor_topics,notes
+cp_filling_yield_stress,自密实混凝土的屈服应力如何影响堆石混凝土的填充能力,cross_passage,zh,8,Filling Capacity,,,no,屈服应力越高填充能力越差|SCC 流动性决定空隙填充,compaction detection|adiabatic temperature,跨段：填充能力受流变参数影响
+cp_lbm_dem_flow,lattice Boltzmann discrete element simulation of self-compacting concrete flow in rock-filled concrete,cross_passage,en,8,Lattice Boltzmann,,,no,LBM-DEM 模拟 SCC 在堆石间的流动,peridynamics|seismic,跨段：数值模拟流动过程
+cp_specimen_size_strength,specimen size and aggregate size effect on the compressive strength of rock-filled concrete,cross_passage,en,8,Specimen Size,,,no,试件尺寸与骨料粒径影响抗压强度,elastic modulus|filling capacity,跨段：尺寸效应与抗压强度
+cp_temperature_construction,construction parameters influence on the temperature field of rock-filled concrete,cross_passage,en,8,Temperature Field,,,no,浇筑温度与施工参数影响温度场,seismic|elastic modulus,跨段：施工参数与温控
+cp_itz_uniaxial,how do ITZ and aggregate properties affect the uniaxial compressive behavior of rock-filled concrete,cross_passage,en,8,,ITZ,,no,界面过渡区 ITZ 影响单轴抗压行为,mesoscale elastic modulus comparative,跨段：ITZ 与抗压行为
+cp_artificial_rockfill,iron ore tailings and phosphogypsum artificial rockfills used in rock-filled concrete,cross_passage,en,8,Iron Ore Tailings,,,no,尾矿与磷石膏制人工堆石,recycled aggregate,跨段：人工堆石材料
+cp_adiabatic_temp,adiabatic temperature rise and hydration heat behaviour of rock-filled concrete,cross_passage,en,8,,temperature,,no,绝热温升与水化热,seismic response|filling capacity,跨段：水化热温升
+cp_seismic_compare,seismic behavior of rock-filled concrete dam compared with conventional vibrating concrete dam,cross_passage,en,8,Seismic Behavior,,,no,RFC 坝与常态混凝土坝抗震对比,filling capacity|elastic modulus,跨段：抗震对比
+cf_elastic_vs_compressive,rock-filled concrete elastic modulus mesoscale analysis,confusable,en,8,Elastic Modulus,,,no,弹性模量而非抗压强度,compressive strength specimen size,易混淆：弹性模量 vs 抗压强度
+cf_filling_vs_compaction,filling capacity of self-compacting concrete in rock-filled concrete,confusable,en,8,Filling Capacity,,,no,填充能力而非密实度检测,compactness detection,易混淆：填充能力 vs 密实度
+cf_vibrated_vs_scc,vibrated rock-filled concrete pilot study,confusable,en,8,Vibrated,,,no,振捣堆石混凝土区别于自密实,self-compacting norm,易混淆：振捣 vs 自密实
+cf_peridynamics_vs_lbm,peridynamics micromechanical simulation of rock-filled concrete,confusable,en,8,Peridynamics,,,no,近场动力学微观力学模拟,lattice boltzmann dem,易混淆：peridynamics vs LBM-DEM
+cf_mesoscale_modulus,mesoscale comparative analysis of the elastic modulus in rock-filled concrete,confusable,en,8,Mesoscale,,,no,细观尺度弹性模量对比分析,3d mesoscopic itz compressive,易混淆：mesoscale 弹模 vs 3D 细观抗压
+cf_rfc_review_overview,brief review of rock-filled concrete dams and next-generation construction technology,confusable,en,8,Review,,,no,综述与下一代筑坝技术,single experimental study,易混淆：综述 vs 单篇实验
+cf_rfc_vs_cfrd,rock-filled concrete dam construction technology,confusable,en,8,,rock-filled concrete,,no,堆石混凝土坝而非混凝土面板堆石坝 CFRD,concrete-faced rockfill dam,易混淆：RFC dam vs CFRD false friend
+rf_unrelated_llm,transformer attention mechanism in large language models,refusal,en,8,,,,yes,,deep learning,需拒答：与堆石混凝土无关
+rf_unrelated_cooking,红烧肉的家常做法和调味技巧,refusal,zh,8,,,,yes,,cooking recipe,需拒答：完全无关
+rf_random_tokens,asdfqwer zxcv 1234 lorem ipsum random tokens,refusal,en,8,,,,yes,,noise,需拒答：无意义查询
+rf_unrelated_finance,stock market price prediction with reinforcement learning,refusal,en,8,,,,yes,,finance,需拒答：金融无关
+rf_out_of_scope_quantum,quantum entanglement experiment design,refusal,en,8,,,,yes,,physics,需拒答：物理无关

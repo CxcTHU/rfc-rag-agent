@@ -1,6 +1,69 @@
 # 项目进度
 
-## 最新状态：2026-06-08（阶段 17 含 Phase 9 人工复核完成，待人工核验）
+## 最新状态：2026-06-09（阶段 18 之后增量：中文全文语料 + 拒答边界校准，待人工核验）
+
+在 `claude/phase-18-corpus-evaluation-quality` 分支、阶段 18 主体之后，由用户驱动追加了一段工作（详见 `docs/stage18_followup_chinese_corpus.md`）。是否单列为新阶段由用户人工核验时决定；当前**未提交、未打 tag、未推送**。
+
+- **中文全文语料**：导入用户合法下载的中文文献。`scripts/import_papers_corpus.py` 扫描 `papers_NEW`（322 PDF + 2 CAJ），入库 **298 篇**；24 篇未入库（8 扫描需 OCR + 16 损坏）按用户决定放弃。新增依赖 `cryptography>=3.1` 解密知网 AES PDF。
+- **语料规模**：documents **465**、chunks **8918**、深度全文（institutional+open_access）**约 340 篇**。
+- **索引**：确定性 + 真实 Jina 均全覆盖 8918；`VectorIndexService.build_index` 新增 `sleep_seconds` 限速与 `max_retries` 退避重试（`build_vector_index.py` 暴露 `--sleep-seconds/--max-retries`），以遵守 Jina 速率限额、容忍瞬断。
+- **中文问答验收**：`data/evaluation/cn_fulltext_queries.csv` + `cn_fulltext_results.csv`，真实 MIMO+Jina 验证——可答题忠实且带引用溯源，off-topic 不胡编。
+- **off-topic 拒答校准（闭环阶段 18 high 风险）**：根因是 `EvidenceConfidence` 中文按单字切词导致 off-topic 单字偶然命中。修复：`workflow.py` 增加主题门 `has_topic_anchor` + `CORE_DOMAIN_TERMS`，作用于改写后查询。验证：off-topic 5/5 拒答（原 1/5）、on-topic 8/8 不误拒、难评测集 refusal 5/5。
+- **质量门槛**：overall quality gate **review_required/high → review_required/medium**（refusal_boundary 闭环，仅余阶段 16 ITZ 的 medium）。
+- **测试**：全量 **382 passed**（含新增 `tests/test_vector_index_retry.py`）。
+
+## 最新状态：2026-06-08（阶段 18 语料扩充与评测/质量体系增强，待人工核验）
+
+当前阶段：阶段 18，语料扩充与评测/质量体系增强。在 `claude/phase-18-corpus-evaluation-quality` 分支完成开发、测试、普通文档和 Obsidian 草稿，停在用户人工核验前：尚未执行 `git add`、`git commit`、`git tag`、`git push`，也未创建 PR。
+
+Git / tag / main 起点：
+
+- 阶段 17 已完成人工核验、提交、创建 `phase-17-complete` tag（指向最终功能提交 `5b5ef02`）并合并到 `main`（合并提交 `d633b95`）。
+- `phase-17-complete` 是 `main` 祖先；阶段 18 从含阶段 17 合并的 `main` 出发；未移动任何已有阶段 tag。
+
+阶段 18 完成内容：
+
+- 使用 Planning with Files 维护 `task_plan.md`、`findings.md`、`progress.md`。
+- 新增 `docs/stage18_corpus_evaluation_quality.md` 设计文档。
+- PDF 解析加固 `app/services/ingestion/pdf_text.py`：标题层级、表格、断词合并、公式/页眉页脚去噪；接入 `parser.read_pdf_text`，向后兼容。
+- 语料深度扩充（诚实报数）：`scripts/expand_open_access_corpus.py` 用 OpenAlex 发现 866 -> RFC 相关 90 -> 许可允许开放获取 16，真实新导入 5 篇深度全文；深度全文 11 -> 16（open_access_pdf 10 -> 15），chunks 997 -> 1332；重建 deterministic 与 jina 双索引；重置并重新 sync source registry（open_access 10 -> 15）。RFC 窄领域开放全文有限，未达 40-60，按用户决策诚实报数。
+- 难评测集 `data/evaluation/stage18_hard_queries.csv`（20 题）+ 多配置对比 `scripts/evaluate_stage18_hard_set.py`。
+- quality gate `scripts/build_stage18_quality_report.py` + 增强 `/quality-report`（筛选 / 风险队列 / 导出）+ 只读导出端点。
+
+评测结果（deterministic）：
+
+```text
+hard set 多配置 hit@8: 全部 15/15（recall 饱和）
+hard set 多配置 precision@1: keyword 1.00, hybrid 0.93, bm25_rrf 0.93, bm25_rrf_context 0.93, vector 0.73
+default_chain_decision: keep_existing_hybrid
+refusal (brain_default evidence confidence): 1/5（off-topic 多数未拒答）
+真实 Jina 校验: vector p@1 0.73 -> 1.00；refusal 仍 1/5
+quality gate: review_required/high（高风险=off-topic 拒答边界偏松）
+full tests: 377 passed
+```
+
+遗留问题：
+
+- off-topic 拒答边界偏松：deterministic 与真实 Jina 下 5 题需拒答均仅 1 题被拒。属真实风险，已在 quality gate 显式阻断并写明原因；阶段 18 不静默修改默认拒答逻辑，留待后续独立校准 Phase（为 evidence confidence 增加主题相关度下限 / off-topic 守卫）。
+- 阶段 16 `user_mixed_itz_strength` Answer Coverage 风险 carry-forward，未在阶段 18 范围内解决；阶段 18 新增 3D mesoscopic ITZ 全文后可在后续做真实回答复核。
+- 语料深度全文未达 40-60 目标（RFC 窄领域开放全文有限）。
+- 阶段 18 当前未提交、未打 `phase-18-complete` tag、未推送 GitHub，等待用户人工核验和明确确认。
+
+下一阶段任务：
+
+- 用户人工核验阶段 18 解析加固、语料扩充、难评测集、多配置对比、quality gate 和 `/quality-report` 增强。
+- 如确认通过，再执行提交、创建 `phase-18-complete` tag 并推送；tag 应指向阶段 18 最终功能提交。
+- 后续可做拒答边界校准 Phase（主题相关度下限 / off-topic 守卫），并视情评估 RRF/综述降权是否进默认链路。
+
+面试表达：
+
+```text
+阶段 18 我补的是 RAG 系统真正的短板：语料深度和评测区分度，而不是再加模型。原来 115 篇只是题录、深度全文只有 11 篇，旧评测集又饱和到 15/15，所以阶段 17 的 BM25+RRF 看起来零增益。
+
+我做了四件事：第一，加固 PDF 解析，把章节标题、表格、断词和公式噪声处理好，让全文 chunk 带上真实 heading_path；第二，用 OpenAlex 只下载许可允许的开放获取全文，加固解析后导入，深度全文从 11 提到 16——RFC 是窄领域，开放全文有限，我诚实报数没有为凑 40-60 造假；第三，专门建难评测集（跨段、易混淆、需拒答），在上面对比五种检索配置，发现 hit@8 仍饱和但 precision@1 有区分度，bm25_rrf 没赢过 hybrid，所以数据支持 keep_existing_hybrid；第四，把这些沉淀成 quality gate，并增强 /quality-report 的只读筛选、风险队列和导出。最关键的是，难评测集暴露了一个真实风险：明显 off-topic 的问题大多没被拒答，我没有掩盖，而是在 quality gate 里显式标成 high 阻断并写清原因，留给下一阶段做拒答边界校准。
+```
+
+## 历史状态：2026-06-08（阶段 17 含 Phase 9 人工复核完成，待人工核验）
 
 当前阶段：阶段 17，检索架构升级已完成 Phase 0-8 开发，并追加完成 Phase 9「检索升级人工复核与接入建议」。当前状态按用户要求停在人工核验前：尚未执行 `git add`、`git commit`、`git tag`、`git push`，也未创建 PR。
 

@@ -712,3 +712,58 @@ data/evaluation/hybrid_results.csv
 - 阶段 17 使用 deterministic provider 运行默认评测，不让真实 API 成为 CI 或本地全量测试前提。
 - 阶段 17 当前停在用户人工核验前状态，尚未提交、尚未打 `phase-17-complete` tag、尚未推送。
 - HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
+
+## 阶段 18 语料扩充与评测/质量体系增强产物
+
+阶段 18 新增或更新的工程与评测产物：
+
+```text
+docs/stage18_corpus_evaluation_quality.md
+app/services/ingestion/pdf_text.py
+scripts/expand_open_access_corpus.py
+data/metadata/stage18_oa_discovery.csv
+data/fulltext_manifest.csv（新增 5 行开放获取全文标注）
+data/evaluation/stage18_hard_queries.csv
+scripts/evaluate_stage18_hard_set.py
+data/evaluation/stage18_hard_results.csv
+data/evaluation/stage18_config_comparison.csv
+data/evaluation/stage18_config_comparison_real.csv
+data/evaluation/stage18_corpus_stats.csv
+scripts/build_stage18_quality_report.py
+data/evaluation/stage18_quality_summary.csv
+docs/stage18_quality_report.md
+app/frontend/quality_report.html
+```
+
+阶段 18 是本项目**首次新增外部资料来源**（开放获取全文），但严格限定在合规边界内：
+
+- 只下载**许可允许的开放获取**全文（cc-by / cc-by-nc / cc0 / 明确 OA），来源经 OpenAlex 元数据 API 发现。
+- 尊重 robots.txt 与网站条款；**不绕付费墙、登录、验证码**；下载有请求间隔。
+- 受限全文（如 CNKI 机构授权）只留在本地授权环境（`data/fulltext/` gitignore），不公开分发、不进 Git。
+- `data/app.sqlite`（`*.sqlite` gitignore）与 `data/fulltext/` 不提交；可提交物是解析器、manifest/source registry 条目、题录卡片和可复跑导入管线脚本。
+- 真实导入篇数诚实记录：深度全文 11 -> 16（open_access_pdf 10 -> 15），未为凑 40-60 目标造假。
+- 经 source registry 三层去重（DOI/URL/标题）与全文权限标注；`fulltext_manifest.csv` 只为真正新导入论文加行。
+
+数据安全边界：
+
+- `stage18_*` 评测/报告 CSV 与 HTML 只保存脱敏的查询、命中、排名、风险判断、来源标题和 quality gate 状态。
+- 不保存 API key、Bearer token、供应商原始敏感响应或受限全文到 Git、CSV、文档、测试或 Obsidian。
+- deterministic baseline 可复跑；真实 Jina 仅作发布前校准，不进 CI 或本地全量测试前提。
+- `/quality-report` 及其导出端点只读取本地脱敏汇总 CSV，不触发真实 API、不写库、不做登录。
+- HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
+
+## 阶段 18 之后增量：用户合法下载的中文全文语料
+
+阶段 18 主体之后，用户提供了合法下载的中文堆石混凝土全文（约 324 篇，本地 `papers_NEW`），
+通过 `scripts/import_papers_corpus.py` 入库 **298 篇**（24 篇扫描/损坏按用户决定放弃）。
+
+合规与数据安全：
+
+- 这批中文全文是用户**合法下载**的文献，仅保存到本地 DB（`data/app.sqlite`，gitignore）与
+  `data/raw`（gitignore）；原始 PDF 与 DB **不进 Git、不公开分发**。
+- 新增依赖 `cryptography>=3.1` 仅用于让 pypdf 读取用户**已合法获取**的 AES 加密 PDF，
+  不绕任何 DRM、登录或授权。
+- `source_type=institutional_access_pdf` 标注其为本地私有全文。
+- 评测产物 `data/evaluation/cn_fulltext_queries.csv` / `cn_fulltext_results.csv` 只保存问题、
+  脱敏的回答摘要、来源标题与拒答判断，不含 API key 或供应商原始响应。
+- 真实 Jina/MIMO 仅用于本地真实检索/分析；deterministic 索引仍负责离线回归。

@@ -14,7 +14,27 @@
 
 ## 当前阶段
 
-阶段 17：检索架构升级已完成 Phase 0-8 开发与验证，并追加完成 Phase 9「检索升级人工复核与接入建议」。当前分支为 `codex/phase-17-retrieval-architecture-upgrade`，等待用户人工核验。阶段 17 按要求尚未执行 `git add`、`git commit`、`git tag`、`git push` 或创建 PR。Phase 9 人工复核结论：BM25+vector RRF 与上下文扩展保持候选/配置开关，暂不替换默认 `HybridSearchService`。
+阶段 18 之后增量（中文全文语料 + 拒答边界校准，待人工核验）：在 `claude/phase-18-corpus-evaluation-quality` 分支、阶段 18 主体之后，导入了用户合法下载的中文堆石混凝土全文,并校准了 off-topic 拒答边界。详见 `docs/stage18_followup_chinese_corpus.md`。要点：
+
+- 中文全文入库 **298 篇**（`scripts/import_papers_corpus.py`，新增 `cryptography>=3.1` 解密知网 AES PDF）；语料 documents **465** / chunks **8918** / 深度全文 **约 340 篇**。
+- 确定性 + 真实 Jina 索引全覆盖；建索引支持 `--sleep-seconds` 限速与 `--max-retries` 退避重试。
+- off-topic 拒答闭环（主题门 `has_topic_anchor` + `CORE_DOMAIN_TERMS`）：off-topic 5/5 拒答、on-topic 8/8 不误拒；quality gate 由 `review_required/high` 降为 `review_required/medium`。
+- 中文问答验收：真实 MIMO+Jina 下回答忠实、可引用溯源（`data/evaluation/cn_fulltext_*.csv`）。
+- 全量测试 **382 passed**。当前未提交、未打 tag、未推送。
+
+---
+
+阶段 18：语料扩充与评测/质量体系增强，正在 `claude/phase-18-corpus-evaluation-quality` 分支开发，等待用户人工核验。阶段 17（检索架构升级）已完成人工核验、提交、创建 `phase-17-complete` tag 并合并到 `main`（合并提交 `d633b95`，tag 指向最终功能提交 `5b5ef02`）。阶段 18 从含阶段 17 合并的 `main` 出发，按要求尚未执行 `git add`、`git commit`、`git tag`、`git push` 或创建 PR。
+
+阶段 18 已完成（待人工核验）：
+
+- PDF 解析加固（`app/services/ingestion/pdf_text.py`）：标题层级、表格、断词合并、公式/页眉页脚去噪，让全文 chunk 带真实 `heading_path`。
+- 语料深度扩充（诚实报数）：`scripts/expand_open_access_corpus.py` 用 OpenAlex 发现 + 许可允许开放获取过滤 + 加固解析导入，深度全文 **11 -> 16**（open_access_pdf 10 -> 15），chunks 997 -> 1332；RFC 窄领域开放全文有限，未达 40-60 目标，按用户决策诚实报数、不造假。
+- 难评测集（`data/evaluation/stage18_hard_queries.csv`，20 题：跨段证据 / 易混淆术语 / 需拒答边界），独立 CSV，不覆盖旧 baseline。
+- 多配置检索对比（`scripts/evaluate_stage18_hard_set.py`）：keyword / vector / hybrid / bm25_rrf / bm25_rrf_context；结论 `keep_existing_hybrid`（bm25_rrf 未优于 hybrid）。
+- quality gate（`scripts/build_stage18_quality_report.py`）：overall `review_required/high`，高风险阻断原因=off-topic 拒答边界偏松（真实风险，显式记录）。
+- `/quality-report` 增强：只读筛选 + 风险队列 + 导出（CSV/JSON），新增 `/quality-report/data.json`、`/quality-report/export.csv`。
+- 全量测试 **377 passed**。
 
 阶段 4 最终提交：`b044459b9b8c2153e9225daa55af5d82cdcdb282`。
 
@@ -72,9 +92,9 @@
 
 阶段 16 tag：`phase-16-complete`。
 
-阶段 17 当前状态：开发和验证完成，尚未提交、尚未创建 `phase-17-complete` tag，等待用户人工核验后再决定是否提交、打 tag 和推送。
+阶段 17 已完成人工核验、提交、创建 `phase-17-complete` tag（指向最终功能提交 `5b5ef02`）并合并到 `main`（合并提交 `d633b95`）。
 
-下一步建议：人工核验阶段 17 的 BM25 lexical retriever、BM25+vector RRF 融合结果、`data/evaluation/stage17_retrieval_upgrade_results.csv`、Phase 9 人工复核表 `data/evaluation/stage17_retrieval_upgrade_manual_review.csv` 和 `docs/stage17_retrieval_upgrade_report.md`。当前评测为 upgraded=15/15、baseline=15/15、regression=0；Phase 9 人工复核进一步发现 `mesoscopic_modeling` 存在排序软退化（rank 2 -> 7），结论是默认链路暂不自动替换，BM25+vector RRF 保持候选/配置开关。HyDE 仍只做离线实验，不进入默认链路或自动回归。
+下一步建议：人工核验阶段 18 的 PDF 解析加固（`app/services/ingestion/pdf_text.py`）、语料扩充管线（`scripts/expand_open_access_corpus.py`，真实导入 5 篇、深度全文 11 -> 16）、难评测集与多配置对比（`data/evaluation/stage18_hard_queries.csv`、`scripts/evaluate_stage18_hard_set.py`、`stage18_config_comparison.csv`）、quality gate（`scripts/build_stage18_quality_report.py`、`docs/stage18_quality_report.md`）和增强版 `/quality-report`。多配置结论是 `keep_existing_hybrid`（bm25_rrf 未优于 hybrid）；quality gate 为 `review_required/high`，高风险阻断来自 off-topic 拒答边界偏松（真实风险，显式记录，留待后续校准 Phase，不在阶段 18 静默改默认拒答逻辑）。HyDE 仍只做离线实验，不进入默认链路或自动回归。
 
 当前已经实现：
 
@@ -180,6 +200,18 @@
 - `data/evaluation/stage17_retrieval_upgrade_results.csv` 阶段 17 检索升级评测表
 - `data/evaluation/stage17_retrieval_upgrade_manual_review.csv` 阶段 17 Phase 9 人工复核结果表
 - `docs/stage17_retrieval_upgrade_report.md` 阶段 17 检索架构升级评测报告（含 Phase 9 人工复核摘要）
+- `docs/stage18_corpus_evaluation_quality.md` 阶段 18 设计文档（语料扩充、PDF 解析加固、难评测集、多配置对比、quality gate、报告增强、安全边界）
+- `app/services/ingestion/pdf_text.py` 阶段 18 PDF 文本结构化加固（标题层级、表格、断词、公式/页眉页脚去噪）
+- `scripts/expand_open_access_corpus.py` 阶段 18 开放获取全文语料扩充管线（OpenAlex 发现 + 许可允许过滤 + 加固解析导入 + manifest 标注，诚实报数）
+- `data/metadata/stage18_oa_discovery.csv` 阶段 18 RFC 相关开放获取发现集（独立文件，不污染 curated 候选）
+- `data/evaluation/stage18_hard_queries.csv` 阶段 18 难评测集（跨段证据 / 易混淆术语 / 需拒答边界，20 题）
+- `scripts/evaluate_stage18_hard_set.py` 阶段 18 难评测集多配置检索对比脚本
+- `data/evaluation/stage18_hard_results.csv`、`stage18_config_comparison.csv` 阶段 18 多配置对比结果（deterministic）
+- `data/evaluation/stage18_config_comparison_real.csv` 阶段 18 真实 Jina 校验对照（可选）
+- `data/evaluation/stage18_corpus_stats.csv` 阶段 18 语料构成统计
+- `scripts/build_stage18_quality_report.py`、`data/evaluation/stage18_quality_summary.csv`、`docs/stage18_quality_report.md` 阶段 18 quality gate 汇总与只读报告
+- `app/frontend/quality_report.html` 阶段 18 增强只读质量报告（筛选 + 风险队列 + 导出）
+- `GET /quality-report/data.json`、`GET /quality-report/export.csv` 阶段 18 只读质量导出端点
 - Brain `rewrite_query` 最小上下文补全，支持基于可选 `history` 的“它/这个技术/这类问题”等代词或省略问法补全
 - `/chat` 和 `/agent/query` 可选 `history` 字段，旧请求保持兼容
 - 跨语言 query expansion 增强，补充 ITZ/界面、creep/徐变、freeze-thaw/抗冻、porosity/孔隙率、emission/碳排放、steel fiber/钢纤维、rock shear key/剪力键等术语
@@ -200,7 +232,7 @@
 - FastAPI 静态前端入口：`GET /`
 - 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 275 个自动化测试
+- 377 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -269,7 +301,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-322 passed
+382 passed
 ```
 
 当前测试覆盖：

@@ -49,10 +49,42 @@ def test_quality_report_is_served_read_only() -> None:
     response = client.get("/quality-report")
 
     assert response.status_code == 200
-    assert "阶段 16 质量风险闭环报告" in response.text
+    assert "阶段 18 质量门槛报告" in response.text
     assert "只读质量报告" in response.text
-    assert "不触发真实 API 调用" in response.text
+    # 阶段 18 增强：只读筛选、风险队列与导出。
+    assert 'id="filter-section"' in response.text
+    assert 'id="filter-risk"' in response.text
+    assert 'id="risk-queue"' in response.text
+    assert 'id="export-csv"' in response.text
+    assert 'id="export-json"' in response.text
     assert "当前不执行 git add、commit、tag、push 或 PR" in response.text
+
+
+def test_quality_report_data_json_is_read_only() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/quality-report/data.json")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert isinstance(payload, list)
+    # 应包含阶段 18 质量门槛行，且不泄露敏感字段。
+    if payload:
+        assert {"section", "metric", "status", "risk"}.issubset(payload[0].keys())
+        serialized = response.text.lower()
+        assert "api_key" not in serialized
+        assert "bearer" not in serialized
+
+
+def test_quality_report_export_csv_download() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/quality-report/export.csv")
+
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    assert "stage18_quality_summary.csv" in response.headers.get("content-disposition", "")
+    assert "section" in response.text
 
 
 def test_favicon_request_does_not_404() -> None:

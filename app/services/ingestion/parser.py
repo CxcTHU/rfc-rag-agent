@@ -4,6 +4,8 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
+from app.services.ingestion.pdf_text import structure_pdf_pages
+
 
 SUPPORTED_TEXT_EXTENSIONS = {".md", ".markdown", ".txt"}
 SUPPORTED_PDF_EXTENSIONS = {".pdf"}
@@ -65,14 +67,10 @@ def read_text_with_fallback(path: Path) -> str:
 
 def read_pdf_text(path: Path) -> str:
     reader = PdfReader(str(path))
-    page_texts: list[str] = []
-    for page_index, page in enumerate(reader.pages, start=1):
-        page_text = (page.extract_text() or "").strip()
-        if not page_text:
-            continue
-        page_texts.append(f"## Page {page_index}\n\n{page_text}")
-
-    return "\n\n".join(page_texts)
+    raw_pages: list[str] = [(page.extract_text() or "") for page in reader.pages]
+    # 阶段 18：对原始 PDF 文本做结构化加固（标题层级、表格、断词、去噪），
+    # 让后续 cleaner/splitter 能拿到带 Markdown 标题的文本。
+    return structure_pdf_pages(raw_pages)
 
 
 def infer_title(path: Path, content: str) -> str:

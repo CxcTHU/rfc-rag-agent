@@ -23,6 +23,8 @@ def main() -> None:
     parser.add_argument("--timeout-seconds", type=float, default=0, help="Embedding request timeout. Defaults to .env EMBEDDING_TIMEOUT_SECONDS.")
     parser.add_argument("--limit", type=int, default=0, help="Maximum chunks to inspect. 0 means all chunks.")
     parser.add_argument("--batch-size", type=int, default=32, help="Number of chunks embedded per provider call.")
+    parser.add_argument("--sleep-seconds", type=float, default=0.0, help="Sleep between batches to respect provider rate limits.")
+    parser.add_argument("--max-retries", type=int, default=0, help="Retries with backoff on transient embedding API errors.")
     args = parser.parse_args()
 
     settings = get_settings()
@@ -33,6 +35,8 @@ def main() -> None:
         result = VectorIndexService(db, provider).build_index(
             limit=args.limit or None,
             batch_size=args.batch_size,
+            sleep_seconds=args.sleep_seconds,
+            max_retries=args.max_retries,
         )
 
     print(

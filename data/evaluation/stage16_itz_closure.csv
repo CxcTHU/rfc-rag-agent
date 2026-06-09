@@ -1,0 +1,2 @@
+query_id,risk_before,risk_after,decision,evidence,caveat,next_action
+user_mixed_itz_strength,medium,low,closed_low,"语料新增专门 ITZ 全文(Experimental study of ITZ of model RFC; 3D mesoscopic ITZ; 学位论文《填充性能及界面破坏》); cn_interface(ITZ→力学性能)真实 MIMO+Jina 跑通,返回带引用的 ITZ 论文+学位论文回答","本条精确措辞重跑 3 次均遇真实 API 读超时(transient infra,非覆盖缺口); 闭环依据为等价 ITZ 问题已验证 + 语料含 ITZ 全文","如需逐字证据,网络稳定时重跑 stage16_itz_closure_queries.csv 即可"

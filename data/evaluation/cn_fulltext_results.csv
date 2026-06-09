@@ -1,0 +1,61 @@
+query_id,question,passed,returned_answer,expected_refused,refused,refusal_matched,source_count,citations,citations_valid,expected_source_hit,forbidden_terms_absent,retrieval_mode,model_provider,model_name,answer,top_source_titles,error,notes
+cn_concept,什么是堆石混凝土?它的基本组成是什么?,no,yes,no,no,yes,4,1|3,yes,no,yes,hybrid,openai-compatible,mimo-v2.5-pro,"根据提供的资料，堆石混凝土（RFC）是一种创新材料，其定义和基本组成如下：
+
+1.  **定义**：堆石混凝土（RFC）是一种将大型岩石与高性能自密实混凝土相结合的创新材料，主要用于大坝建设[1]。其建造技术是用大粒径岩石构建承力骨架，并使用自密实混凝土（SCC）作为填充和胶结材料[3]。
+
+2.  **基本组成**：堆石混凝土由两大基本部分组成：
+    *   **岩石骨架**：由大粒径的岩石构成，起到承力骨架的作用[1][3]。
+    *   **填充胶结材料**：使用自密实混凝土（SCC）填充岩石骨架之间的空隙，并起到胶结作用[1][3]。
+
+因此，堆石混凝土本质上是以岩石为骨架、自密实混凝土为基质的复合材料。",Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Pilot Study on Vibrated Rock-filled Concrete || Study on the effect of porosity and aperture on the damage characterization of rock-filled concrete (RFC) || EXPERIMENTAL RESEARCH ON MECHANICAL BEHAVIOR OF SELF-COMPACTING ROCK-FILL CONCRETE,,概念类
+cn_filling,影响堆石混凝土填充性能的主要因素有哪些?,yes,yes,no,no,yes,4,1|2|3,yes,yes,yes,hybrid,openai-compatible,mimo-v2.5-pro,"根据提供的资料，影响堆石混凝土（RFC）填充性能的主要因素包括以下几个方面：
+
+1.  **自密实混凝土（SCC）的流变性能**：特别是其**屈服应力**。研究表明，屈服应力是影响自密实混凝土能否顺利填充堆石骨架空隙的关键流变参数。 [1][2][3]
+
+2.  **堆石骨料的特性**：
+    *   **尺寸**：骨料的尺寸会影响堆石骨架的孔隙结构，从而影响自密实混凝土的流动和填充。 [1][2][3]
+    *   **形状**：骨料的形状同样是影响孔隙结构及自密实混凝土流动阻力的重要因素。 [2][3]
+
+3.  **堆石骨架的孔隙结构**：由骨料尺寸和形状共同决定的**孔隙率**和孔隙连通性，直接影响自密实混凝土在骨架内的渗透和流动路径，是决定最终填充率的核心因素。 [1]
+
+综上所述，堆石混凝土的填充性能是自密实混凝土的流动性（以屈服应力为代表）与堆石骨架的几何特征（由骨料尺寸和形状决定）相互作用的结果。",Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete || Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete || Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete || Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled concrete,,填充性能
+cn_interface,堆石混凝土的界面过渡区(ITZ)对其力学性能有什么影响?,no,no,no,no,no,0,,no,no,no,hybrid,openai-compatible,mimo-v2.5-pro,,,The read operation timed out,界面/ITZ
+cn_size_effect,试件尺寸和骨料粒径如何影响堆石混凝土的抗压强度?,no,yes,no,no,yes,3,1|3|2,yes,no,yes,hybrid,openai-compatible,mimo-v2.5-pro,"根据提供的文献，试件尺寸和骨料粒径对堆石混凝土（RFC）抗压强度的影响规律如下：
+
+1.  **试件尺寸的影响**：堆石混凝土的抗压强度表现出**显著的尺寸效应**，其强度随试件尺寸的变化遵循**负指数函数分布规律** [1][3]。这意味着随着试件尺寸的增大，其抗压强度会呈现下降趋势。
+
+2.  **骨料粒径的影响**：在骨料体积分数相同的条件下，**骨料尺寸越小，堆石混凝土的抗压强度越高** [1][3]。不过，这种强度随骨料尺寸减小而提高的趋势会逐渐趋于平缓 [1][3]。
+
+**工程启示**：基于上述研究结果，文献建议在堆石混凝土大坝的设计中，应充分考虑试件尺寸效应和通过减小骨料尺寸来提高大坝强度 [1]。
+
+**补充说明**：另一项研究指出，由于块石尺寸较大，传统的预制试块测试方法可能不适用于堆石混凝土，但回弹法可以作为一种准确可靠的无损检测手段来测试其抗压强度 [2]。这间接说明了骨料尺寸对测试方法选择的影响，但其未直接探究尺寸效应。",Study on the Influence of Specimen Size and Aggregate Size on the Compressive Strength of Rock-Filled Concrete || Testing the Self-compacting Rock-fill Concrete Strength by the Rebound Method || Study on the Influence of Specimen Size and Aggregate Size on the Compressive Strength of Rock-Filled Concrete,,尺寸效应
+cn_temperature,堆石混凝土的水化热和温度场应如何控制?,yes,yes,no,no,yes,4,1|2|3,yes,yes,yes,hybrid,openai-compatible,mimo-v2.5-pro,"根据当前提供的上下文，关于堆石混凝土水化热和温度场的具体工程控制措施，**没有足够可靠的信息**。现有文献主要关注其绝热温升特性的研究、模型建立和温度应力模拟，而非详细的主动控制方案。
+
+以下是基于上下文可以得出的相关特性与发现，这些是理解其热学行为的基础，但并非直接的控制方法：
+
+1.  **堆石率是影响水化热的关键因素**：堆石混凝土的绝热温升值（包括温升速率和最终温升）与堆石率呈负相关 [1]。这意味着在一定范围内，**提高堆石率**是降低其水化热总量的一个内在特性。
+
+2.  **浇筑初始温度影响早期温升过程**：初始浇筑温度越高，堆石混凝土在前期的绝热温升发展越快，达到温升速率拐点的时间也越早 [2]。这表明**控制浇筑时的初始温度**可能影响早期的温度发展过程。
+
+3.  **存在可预测的计算模型**：研究已建立了考虑堆石率的堆石混凝土绝热温升计算模型，并可通过有限元分析（如ANSYS）来模拟其温度场和温度应力场的全发展过程 [1]。这为通过**数值模拟进行预测和方案比选**提供了基础。
+
+4.  **保温特性是重要研究指标**：堆石混凝土的保温温升特性是研究其抗裂性能的重要指标 [3]，这暗示了**保温措施**可能在温度控制中扮演角色，但具体方法未在上下文中详述。
+
+**结论**：当前知识库中没有明确阐述针对堆石混凝土水化热和温度场的具体、系统性的工程控制方法（如冷却水管布置、表面保温、分层浇筑策略等）。上下文主要提供了其热学特性的研究结论，这些结论是设计和实施温度控制措施的基础依据。
+
+**重要提示**：本系统仅用于学习和资料检索，不能替代规范审查、工程设计和专家判断。实际工程中的温度控制方案必须依据相关技术规范和具体工程条件进行专业设计。",A Study on Adiabatic Temperature Rise Test and Temperature Stress Simulation of Rock-Fill Concrete || 堆石混凝土绝热温升试验与温升机制研究 || Preliminary study on temperature rise property of thermal insulation of rock-fill concrete || The Influence of Construction Parameters on the Temperature Field of Rock-Filled Concrete,,温控
+cn_compare,堆石混凝土和碾压混凝土在施工工艺上有何不同?,no,yes,no,no,yes,4,3|4|2,yes,no,yes,hybrid,openai-compatible,mimo-v2.5-pro,"根据提供的上下文，关于堆石混凝土（RFC）的施工工艺已有明确描述，但**未包含足够信息来详细对比碾压混凝土（RCC）的工艺**，因此无法提供两者之间的系统性差异对比。
+
+**堆石混凝土（RFC）的施工工艺**在上下文中可以概括为：
+1.  **核心工艺**：首先用大粒径石料构建承力骨架，然后利用**自密实混凝土（SCC）** 作为填充和胶结材料，依靠其自流平特性填充石料间的空隙，通常无需振捣 [3][4]。
+2.  **工艺变体**：除了使用SCC的传统RFC，也有研究探索使用**普通泵送混凝土（OPC）并辅以外部振动**的工艺，称为振动堆石混凝土（VRFC）[2]。
+
+然而，在提供的所有上下文材料中，均**未提及“碾压混凝土”及其具体的施工工艺**。因此，当前知识库无法提供两者在施工工艺（如材料类型、浇筑方式、压实方法等）上的可靠对比信息。
+
+**结论**：当前知识库主要聚焦于堆石混凝土（RFC）的材料特性、力学行为与工程应用，缺乏用于对比碾压混凝土（RCC）施工工艺的直接或间接信息。",Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios || Pilot Study on Vibrated Rock-filled Concrete || Study on the effect of porosity and aperture on the damage characterization of rock-filled concrete (RFC) || EXPERIMENTAL RESEARCH ON MECHANICAL BEHAVIOR OF SELF-COMPACTING ROCK-FILL CONCRETE,,对比类
+cn_refusal_food,请推荐几道适合夏天的家常菜并给出做法,no,yes,yes,no,no,6,1|2|3|4|5|6,yes,yes,yes,hybrid,openai-compatible,mimo-v2.5-pro,"根据当前提供的知识库内容，无法回答您的问题。
+
+提供的上下文[1][2][3][4][5][6]全部是关于“堆石混凝土”热学性能、温度场分析、反演方法及拱坝施工期温度应力的学术研究论文摘要与片段。这些资料中没有任何信息涉及家常菜推荐、夏季饮食或烹饪方法。
+
+**本系统仅用于与所提供的工程研究资料相关的学习和文档检索。** 当前知识库中不包含与烹饪、食谱或家常菜相关的可靠证据。",堆石混凝土热学性能试验与温度应力研究 || 堆石混凝土热学性能试验与温度应力研究 || 堆石混凝土热学性能试验与温度应力研究 || 堆石混凝土拱坝施工期温度应力研究 || 堆石混凝土热学性能试验与温度应力研究 || 堆石混凝土拱坝施工期温度应力研究,,需拒答-无关
+cn_refusal_finance,最近比特币价格走势如何?给个投资建议,yes,yes,yes,yes,yes,0,,yes,yes,yes,hybrid,openai-compatible,mimo-v2.5-pro,当前资料库中没有找到足够可靠的依据。,,,需拒答-无关

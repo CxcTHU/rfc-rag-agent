@@ -1208,7 +1208,18 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0、阶段 1、阶段 2、阶段 3、阶段 4、阶段 5、阶段 6、阶段 7、阶段 8、阶段 9、阶段 9.1、阶段 10、阶段 11、阶段 12、阶段 13、阶段 14、阶段 15 和阶段 16 已完成并已有阶段 tag。阶段 17 当前在 `codex/phase-17-retrieval-architecture-upgrade` 分支完成 Phase 0-8 开发验证，并追加完成 Phase 9「检索升级人工复核与接入建议」（人工复核表、默认链路接入建议 keep_existing_hybrid、报告与文档同步），但按用户要求尚未提交、尚未创建 `phase-17-complete` tag、尚未推送，等待人工核验。
+阶段 0 到阶段 17 已完成并已有阶段 tag（含 `phase-16-complete`、`phase-17-complete`）。阶段 17 已完成人工核验、提交、创建 `phase-17-complete` tag（指向最终功能提交 `5b5ef02`）并合并到 `main`（合并提交 `d633b95`）。
+
+阶段 18 主体之后，同一 `claude/phase-18-corpus-evaluation-quality` 分支上由用户驱动追加了一段增量（详见 `docs/stage18_followup_chinese_corpus.md`）：导入用户合法下载的中文全文 **298 篇**（`scripts/import_papers_corpus.py` + `cryptography` 解密知网 AES PDF；24 篇扫描/损坏放弃），重建确定性 + 真实 Jina 索引（建索引新增 `--sleep-seconds` 限速 + `--max-retries` 退避重试），并**闭环了阶段 18 的 off-topic 拒答 high 风险**（`workflow.py` 主题门 `has_topic_anchor` + `CORE_DOMAIN_TERMS`：off-topic 5/5 拒答、on-topic 8/8 不误拒）。语料现为 465 文档 / 8918 chunk / 深度全文约 340 篇；quality gate 由 high 降为 review_required/medium；全量 382 passed。这段增量也未提交、未打 tag、未推送；是否单列为 `phase-19` 由用户决定。后续 agent 注意：中文全文与 DB 均 gitignore，靠 `import_papers_corpus.py` 可复跑导入；真实索引靠 `build_vector_index.py --provider openai-compatible --batch-size 16 --sleep-seconds 10 --max-retries 5` 限速重建。
+
+阶段 18（语料扩充与评测/质量体系增强）当前在 `claude/phase-18-corpus-evaluation-quality` 分支完成开发、测试、普通文档和 Obsidian 草稿，但按用户要求尚未提交、尚未创建 `phase-18-complete` tag、尚未推送，等待人工核验。阶段 18 关键判断：
+
+- 语料深度扩充按用户决策「尽力真实下载 + 诚实报数」执行：只下载许可允许的开放获取全文，深度全文 11 -> 16，RFC 窄领域开放全文有限，未达 40-60，未造假。
+- PDF 解析加固（`app/services/ingestion/pdf_text.py`）让全文 chunk 带真实 `heading_path`。
+- 难评测集多配置对比结论 `keep_existing_hybrid`（bm25_rrf 未优于 hybrid），以数据闭环阶段 17 `mesoscopic_modeling` 软退化担忧。
+- quality gate = `review_required/high`：难评测集暴露真实的 off-topic 拒答边界偏松（deterministic 与真实 Jina 下均 1/5），已显式阻断并写明原因，**不在阶段 18 静默改默认拒答逻辑**，留待后续独立校准 Phase。
+- 后续 agent 注意：阶段 18 首次新增外部资料来源（开放获取全文），但 `data/app.sqlite` 与 `data/fulltext/` 仍 gitignore，深度全文 DB 增长靠 `scripts/expand_open_access_corpus.py` 可复跑导入管线复现。
+- 经验：阶段 17/18 都遇到「README/docs 顶部状态滞后于 Git 真相」，新线程务必以 `git tag`/`git log` 为准，文档收尾时同步修正入口文档。
 
 阶段 4 最终提交和 tag：
 
@@ -1291,9 +1302,9 @@ tag: phase-14-complete
 tag: phase-15-complete
 ```
 
-不要移动 `phase-4-complete`、`phase-5-complete`、`phase-6-complete`、`phase-7-complete`、`phase-8-complete`、`phase-9-complete`、`phase-9.1-complete`、`phase-10-complete`、`phase-11-complete`、`phase-12-complete`、`phase-13-complete`、`phase-14-complete` 或 `phase-15-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+不要移动 `phase-4-complete` 到 `phase-15-complete`，也不要移动 `phase-16-complete` 或 `phase-17-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
-阶段 17 当前没有阶段 tag。只有用户人工核验并明确确认后，才允许提交、创建 `phase-17-complete` tag 和推送 GitHub；tag 必须指向阶段 17 最终功能提交。
+阶段 18 当前没有阶段 tag。只有用户人工核验并明确确认后，才允许提交、创建 `phase-18-complete` tag 和推送 GitHub；tag 必须指向阶段 18 最终功能提交。
 
 阶段 6 已实现检索优化与评测闭环：
 

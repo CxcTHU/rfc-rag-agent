@@ -35,6 +35,31 @@ QUERY_STOPWORDS = {
     "why",
 }
 
+# 本语料的核心领域词（堆石混凝土及其材料/力学/施工/温控等子主题，中英文）。
+# 用作“主题门”：on-topic 问题几乎必含其一；明显 off-topic（烹饪/金融/LLM/量子等）
+# 一个都不含。判据作用在“改写后（含 history）”的查询上，故追问也能正确放行。
+# 全部小写，按 casefold 后的查询做子串匹配。
+CORE_DOMAIN_TERMS = (
+    # 主题与材料
+    "rock-filled", "rock filled", "rock-fill", "rockfill", "rfc", "concrete",
+    "self-compacting", "self compacting", "scc", "cementitious", "mortar",
+    "aggregate", "堆石混凝土", "堆石", "混凝土", "自密实", "胶凝", "砂浆",
+    "骨料", "粒径", "级配", "碾压", "rcc",
+    # 填充/流动/密实
+    "filling", "flowability", "compactness", "compaction", "填充", "充填",
+    "流动", "坍落", "密实", "空隙", "孔隙", "porosity", "void",
+    # 力学/耐久
+    "compressive", "tensile", "modulus", "strength", "creep", "durability",
+    "freeze-thaw", "itz", "interfacial", "mesoscopic", "peridynamics",
+    "抗压", "抗拉", "强度", "弹性模量", "力学", "徐变", "耐久", "抗冻",
+    "界面", "过渡区", "细观", "本构", "断裂", "剪切", "冷缝", "层间",
+    # 温控/施工/坝工
+    "thermal", "hydration", "temperature", "adiabatic", "seismic", "dam",
+    "construction", "emission", "水化热", "温升", "温度", "绝热", "抗震",
+    "地震", "大坝", "坝", "筑坝", "浇筑", "振捣", "施工", "碳排放", "渗透",
+    "钢纤维", "steel fiber", "rock shear", "剪力键",
+)
+
 
 @dataclass(frozen=True)
 class BrainWorkflowStepRecord:
@@ -137,7 +162,11 @@ def evaluate_evidence_confidence(
         [raw_confidence, expanded_confidence],
         key=lambda item: item[2],
     )
-    if matched_terms and score >= min_query_token_coverage:
+    # 主题锚点：防止 off-topic 问题靠零散单字（中文按单字切词）偶然在大段证据里命中、
+    # 把覆盖率顶过阈值。只有证据真正含有“领域专有词”或“查询的中文 bigram”时，
+    # 才认为问题与语料同主题，否则判为 off-topic 拒答。
+    anchor = has_topic_anchor(query)
+    if matched_terms and score >= min_query_token_coverage and anchor:
         return EvidenceConfidence(
             sufficient=True,
             score=score,
@@ -145,16 +174,35 @@ def evaluate_evidence_confidence(
             missing_terms=missing_terms,
         )
 
+    if not anchor:
+        refusal_reason = (
+            "Question appears off-topic: retrieved chunks share no domain-specific "
+            "evidence term or Chinese bigram with the query."
+        )
+    else:
+        refusal_reason = (
+            "Retrieved chunks did not share enough evidence-bearing query terms "
+            f"(coverage={score:.2f})."
+        )
     return EvidenceConfidence(
         sufficient=False,
         score=score,
         matched_terms=matched_terms,
         missing_terms=missing_terms,
-        refusal_reason=(
-            "Retrieved chunks did not share enough evidence-bearing query terms "
-            f"(coverage={score:.2f})."
-        ),
+        refusal_reason=refusal_reason,
     )
+
+
+def has_topic_anchor(query: str) -> bool:
+    """主题门：查询是否提到本语料的核心领域词。
+
+    单一领域语料里，on-topic 问题几乎必然包含一个核心领域词；明显 off-topic
+    （烹饪/金融/LLM/量子/乱码）一个都不含。判据作用在改写后（含 history）的查询上。
+    比"证据里是否出现词"更稳——证据全是 RFC，通用词必然命中，无法区分 off-topic。
+    """
+
+    normalized = (query or "").casefold()
+    return any(term in normalized for term in CORE_DOMAIN_TERMS)
 
 
 def score_evidence_terms(

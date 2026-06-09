@@ -237,6 +237,39 @@ textarea {
   overflow: auto;
 }
 
+/* 阶段 18：质量报告只读筛选 / 风险队列 */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.filter-bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.filter-bar select,
+.filter-bar button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+}
+
+tr.risk-high td {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+tr.risk-medium td {
+  background: rgba(217, 119, 6, 0.08);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

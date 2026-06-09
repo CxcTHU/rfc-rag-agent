@@ -2769,3 +2769,59 @@ regression=0
 架构结论：阶段 17 证明 BM25+vector RRF 在当前 baseline 查询集上没有 regression，但尚未证明明显优于旧 hybrid。因此默认 `POST /search/hybrid`、Brain hybrid、`POST /chat` 和 `POST /agent/query` 暂不自动切换到新检索服务。新能力先作为评测和人工核验候选保留。
 
 阶段 17 Phase 9 在 `data/evaluation/stage17_retrieval_upgrade_manual_review.csv` 对每条查询做人工复核：14 acceptable、1 needs_tuning（`mesoscopic_modeling` 排序 2 -> 7，被泛主题综述文档挤占）、0 regression。复核确认 hit 级「regression=0」掩盖了排序软退化，并把默认链路接入建议固定为 `keep_existing_hybrid`：`RRFHybridSearchService`、`BM25SearchService`、`ContextExpansionService` 保持候选/配置开关，等阶段 18 用更有区分度的难评测集和综述降权/topic-anchor rerank 对照证明更优后，再考虑默认接入。
+
+## 阶段 18 语料扩充与评测/质量体系增强
+
+阶段 18 不改外部 API contract，而是把语料深度和评测/质量体系做厚。核心数据流：
+
+```text
+OpenAlex 发现 -> RFC 相关性过滤 -> 许可允许开放获取过滤
+-> 礼貌下载（data/fulltext/open_access_auto，gitignore）
+-> 加固 PDF 解析（pdf_text.structure_pdf_pages）
+-> cleaner / splitter（带真实 heading_path）
+-> documents/chunks（source_type=open_access_pdf）
+-> deterministic + jina 双向量索引
+-> source registry 去重/权限标注
+难评测集（跨段/易混淆/需拒答）
+-> keyword / vector / hybrid / bm25_rrf / bm25_rrf_context 多配置对比
+-> 默认链路数据结论
+-> quality gate 汇总
+-> 只读 /quality-report（筛选/风险队列/导出）
+```
+
+### PDF 解析加固层
+
+阶段 18 新增 `app/services/ingestion/pdf_text.py`，位于 `parser.read_pdf_text` 内、`cleaner`/`splitter` 之前：
+
+- `structure_pdf_pages(pages)`：跨页去重页眉页脚 -> 逐页结构化 -> 保留 `## Page N`。
+- `structure_page_text`：unicode 归一 -> 断词合并 -> heading 识别（编号/关键词/多词全大写）-> 表格行成块 -> 噪声行丢弃。
+- 目的：让全文 chunk 带上真实 `heading_path`（splitter 依赖 Markdown `#` 标题），改善跨段证据定位。
+- 纯函数、deterministic，可用合成文本 fixture 测试，不依赖真实 PDF。
+
+### 语料扩充管线
+
+`scripts/expand_open_access_corpus.py` 复用 `app/services/source_collection.py`（`SourceCandidate`、相关性过滤、dedupe、`download_pdf`）和 `scripts/collect_sources.collect_openalex`：
+
+- 只下载许可允许（cc-by/cc-by-nc/cc0/明确 OA）的开放获取全文；尊重条款，不绕付费墙/登录/验证码。
+- 发现集写入独立 `data/metadata/stage18_oa_discovery.csv`，不污染 curated `data/source_candidates.csv`。
+- 仅为真正新导入（非 content-hash 重复）论文写 `fulltext_manifest.csv`（按 local_path + 归一化标题去重）。
+- `data/app.sqlite` 与 `data/fulltext/` 均 gitignore；可提交物是解析器、manifest/registry 条目、题录卡片和管线脚本；深度全文 DB 增长靠可复跑导入管线复现。
+
+### 评测与质量体系
+
+- 难评测集 `data/evaluation/stage18_hard_queries.csv`（跨段证据 / 易混淆术语 / 需拒答边界），独立 CSV，不覆盖旧 baseline。
+- `scripts/evaluate_stage18_hard_set.py` 对比 5 种检索配置，输出 hit@8 / rank@1 / precision@1 / mean_rank / distinct_wins，并用默认 Brain（evidence confidence）判定需拒答查询；不静默 fallback 掩盖配置差异。
+- `scripts/build_stage18_quality_report.py` 汇总 quality gate（corpus / hard_set / default_chain / real_config / refusal_boundary / stage17_residual / stage16_residual / overall），状态口径 pass / review_required / blocked。
+
+### Quality Report 增强（只读边界）
+
+- `GET /quality-report` 仍是静态只读页（`app/frontend/quality_report.html`），阶段 18 增强客户端筛选（section/risk）+ 风险队列（high/medium）+ 导出（CSV/JSON Blob）。
+- 新增只读端点 `GET /quality-report/data.json`、`GET /quality-report/export.csv`，只读取本地脱敏汇总 CSV，不触发真实 API、不写库、不做登录。
+
+### API 与默认链路边界
+
+阶段 18 保证 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`GET /quality-report` 不被破坏。多配置对比结论为 `keep_existing_hybrid`（bm25_rrf 未优于 hybrid），默认 Brain hybrid 链路不切换；BM25+RRF / context expansion 继续作为候选/配置开关。
+
+### 架构结论
+
+阶段 18 用更有区分度的难评测集证实了阶段 17 的 `keep_existing_hybrid` 结论（hit@8 仍饱和，但 rank@1 出现区分度，bm25_rrf 未赢过 hybrid），并以数据闭环了阶段 17 `mesoscopic_modeling` 排序软退化担忧。同时难评测集暴露出真实的 off-topic 拒答边界偏松问题（deterministic 与真实 Jina 下均 1/5），阶段 18 在 quality gate 显式标为 high 阻断并写明原因，不静默修改默认拒答逻辑，留待后续独立校准 Phase。

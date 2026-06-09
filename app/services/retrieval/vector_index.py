@@ -1,4 +1,5 @@
 import hashlib
+import time
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -34,11 +35,17 @@ class VectorIndexService:
         self,
         limit: int | None = None,
         batch_size: int = 32,
+        sleep_seconds: float = 0.0,
+        max_retries: int = 0,
     ) -> VectorIndexResult:
         if limit is not None and limit <= 0:
             raise ValueError("limit must be greater than 0")
         if batch_size <= 0:
             raise ValueError("batch_size must be greater than 0")
+        if sleep_seconds < 0:
+            raise ValueError("sleep_seconds must be greater than or equal to 0")
+        if max_retries < 0:
+            raise ValueError("max_retries must be greater than or equal to 0")
 
         chunks = self._list_chunks(limit=limit)
         indexed_chunks = 0
@@ -63,7 +70,10 @@ class VectorIndexService:
             pending_chunks.append((chunk, content_hash, existing_embedding is not None))
 
         for batch in batched(pending_chunks, batch_size):
-            embeddings = self.embedding_provider.embed_texts([chunk.content for chunk, _hash, _exists in batch])
+            embeddings = self._embed_with_retry(
+                [chunk.content for chunk, _hash, _exists in batch],
+                max_retries=max_retries,
+            )
             if len(embeddings) != len(batch):
                 raise ValueError("embedding provider returned an unexpected number of vectors")
 
@@ -88,6 +98,9 @@ class VectorIndexService:
                 else:
                     indexed_chunks += 1
             self.db.commit()
+            # 阶段18后：可选批间停顿，配合小批量以遵守真实 embedding 服务的速率限制。
+            if sleep_seconds:
+                time.sleep(sleep_seconds)
 
         return VectorIndexResult(
             total_chunks=len(chunks),
@@ -98,6 +111,22 @@ class VectorIndexService:
             model_name=self.embedding_provider.model_name,
             dimension=self.embedding_provider.dimension,
         )
+
+    def _embed_with_retry(self, texts: list[str], max_retries: int = 0) -> list[list[float]]:
+        """调用 embedding provider，对真实服务的瞬断/限流做有限次退避重试。
+
+        ``max_retries=0`` 时行为与直接调用一致（默认，不影响既有测试）。
+        """
+
+        attempt = 0
+        while True:
+            try:
+                return self.embedding_provider.embed_texts(texts)
+            except Exception:  # noqa: BLE001 - 瞬断/限流均退避重试，最后一次再抛出
+                if attempt >= max_retries:
+                    raise
+                time.sleep(min(60.0, 5.0 * (2**attempt)))
+                attempt += 1
 
     def _list_chunks(self, limit: int | None = None) -> list[Chunk]:
         statement = select(Chunk).order_by(Chunk.id)
