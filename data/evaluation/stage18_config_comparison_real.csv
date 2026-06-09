@@ -1,0 +1,6 @@
+config,answerable_total,hits,hit_rate,rank1_hits,precision_at_1,mean_hit_rank,distinct_wins,notes
+keyword,15,15,1.00,15,1.00,1.00,0,
+vector,15,15,1.00,15,1.00,1.00,0,
+hybrid,15,15,1.00,14,0.93,1.07,0,
+bm25_rrf,15,15,1.00,14,0.93,1.07,0,
+bm25_rrf_context,15,15,1.00,14,0.93,1.07,0,

@@ -1,0 +1,10 @@
+metric,value
+deep_fulltext_before,16
+deep_fulltext_after,340
+open_access_pdf,15
+institutional_access_pdf,325
+metadata_record,115
+total_documents,465
+total_chunks,8918
+papers_NEW_loaded,298
+corpus_note,user-supplied legally-downloaded Chinese RFC fulltext; 24 unloaded (8 scanned + 16 corrupt) abandoned

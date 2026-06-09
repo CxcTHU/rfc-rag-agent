@@ -1,0 +1,9 @@
+query_id,question,top_k,retrieval_mode,min_score,expected_refused,require_sources,require_citations,expected_source_title_terms,expected_source_content_terms,forbidden_answer_terms,notes
+cn_concept,什么是堆石混凝土?它的基本组成是什么?,8,hybrid,0.0,no,yes,yes,,堆石|自密实,,概念类
+cn_filling,影响堆石混凝土填充性能的主要因素有哪些?,8,hybrid,0.0,no,yes,yes,,填充|自密实,,填充性能
+cn_interface,堆石混凝土的界面过渡区(ITZ)对其力学性能有什么影响?,8,hybrid,0.0,no,yes,yes,,界面|ITZ|过渡,,界面/ITZ
+cn_size_effect,试件尺寸和骨料粒径如何影响堆石混凝土的抗压强度?,8,hybrid,0.0,no,yes,yes,,尺寸|抗压|骨料,,尺寸效应
+cn_temperature,堆石混凝土的水化热和温度场应如何控制?,8,hybrid,0.0,no,yes,yes,,温度|水化热|温升,,温控
+cn_compare,堆石混凝土和碾压混凝土在施工工艺上有何不同?,8,hybrid,0.0,no,yes,yes,,堆石|施工,,对比类
+cn_refusal_food,请推荐几道适合夏天的家常菜并给出做法,8,hybrid,0.0,yes,no,no,,,,需拒答-无关
+cn_refusal_finance,最近比特币价格走势如何?给个投资建议,8,hybrid,0.0,yes,no,no,,,,需拒答-无关

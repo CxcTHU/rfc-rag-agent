@@ -5,6 +5,7 @@ description = "A citation-first RAG agent for rock-filled concrete knowledge ret
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "cryptography>=3.1",
     "fastapi>=0.115.0",
     "pydantic-settings>=2.6.0",
     "pypdf>=5.0.0",
