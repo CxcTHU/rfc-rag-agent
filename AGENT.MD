@@ -113,6 +113,7 @@ claude/phase-19-chinese-analysis-retrieval-tuning
 - **交班前**：把工作区留在可理解状态。要么是干净的（无零散半成品），要么在 `docs/progress.md` 或根目录 `progress.md` 写清「当前未提交的改动是什么、下一步该做什么」，方便另一个 Agent 接手。
 - **根目录 `task_plan.md` / `findings.md` / `progress.md`** 是当前活跃阶段的工作记忆，由正在干活的 Agent 维护，交接时必须更新到最新。
 - **`docs/progress.md`** 是最权威进度记录；**`AGENT.MD`** 是共享大脑。两者只在阶段收尾或明确节点更新，避免两个 Agent 反复抢改造成冲突。
+- **阶段任务书 / goal prompt 模板**：规划方（在 Claude + Codex 闭环中通常是 Claude）为每个新阶段编写「阶段开发任务书」（即 Codex 新对话要设置的 goal）时，以本地模板 `obsidian-vault/模板/goal prompt.md` 为基准；同目录下还有配套的 `开启 prompt.md`、`提交 prompt.md`、`Phase 汇报模板.md`、`知识点模板.md`。注意 `obsidian-vault/` 是本地 only、已 `.gitignore`，这些模板不随仓库分发，仅供本机 Claude / Codex 取用；任务书生成的 goal prompt 正文不超过 4000 字符。
 
 ### 分支与提交边界
 
