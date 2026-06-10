@@ -12,6 +12,11 @@ UsedRetrievalMode = Literal["vector", "keyword", "hybrid", "none"]
 CITATION_RE = re.compile(r"\[(\d+)\]")
 EVIDENCE_TOKEN_RE = re.compile(r"[A-Za-z0-9]+|[\u4e00-\u9fff]")
 DEFAULT_REFUSAL_ANSWER = "当前资料库中没有找到足够可靠的依据。"
+RESPONSIBILITY_REFUSAL_ANSWER = (
+    "当前系统不能替代规范审查、工程设计、第三方检测或专家签字；"
+    "不能直接判定工程是否合格、是否符合规范或能否用于实际工程。"
+    "你可以改问：资料中有哪些指标、试验方法、影响因素或风险点可供人工审查参考。"
+)
 DEFAULT_MIN_QUERY_TOKEN_COVERAGE = 0.2
 QUERY_STOPWORDS = {
     "a",
@@ -60,6 +65,18 @@ CORE_DOMAIN_TERMS = (
     "钢纤维", "steel fiber", "rock shear", "剪力键",
 )
 
+RESPONSIBILITY_GATE_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"(判定|判断|评定|认定).{0,12}(是否)?(符合|满足|达到|通过|合格|达标|有效|可用|规范|标准|要求)",
+        r"(是否|是不是|能否|可否|能不能|可不可以).{0,10}(符合|满足|达到).{0,10}(规范|规程|标准|要求)",
+        r"(是否|是不是|能否|可否|能不能|可不可以).{0,10}(合格|达标|有效|通过|可用)",
+        r"(出具|开具|给出).{0,10}(结论|意见|报告|评定|审查|验收)",
+        r"(是否|能否|可否|能不能|可不可以|可以|能).{0,8}(直接)?(用于|应用于).{0,8}(工程|施工|设计)",
+        r"(工程|项目|现场|配合比|设计方案|检测报告).{0,12}(是否|是不是|能否|可否|能不能).{0,8}(合格|符合|满足|有效|通过|可用)",
+    )
+)
+
 
 @dataclass(frozen=True)
 class BrainWorkflowStepRecord:
@@ -83,6 +100,12 @@ class EvidenceConfidence:
     score: float
     matched_terms: tuple[str, ...]
     missing_terms: tuple[str, ...]
+    refusal_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ResponsibilityGate:
+    triggered: bool
     refusal_reason: str | None = None
 
 
@@ -191,6 +214,28 @@ def evaluate_evidence_confidence(
         missing_terms=missing_terms,
         refusal_reason=refusal_reason,
     )
+
+
+def evaluate_responsibility_gate(query: str) -> ResponsibilityGate:
+    """Reject engineering responsibility / compliance judgment requests.
+
+    This is different from ``has_topic_anchor``: a question can be clearly
+    on-topic but still ask the system to replace code review, engineering
+    design, third-party testing, acceptance inspection, or expert sign-off.
+    """
+
+    normalized = re.sub(r"\s+", "", normalize_text(query))
+    if not normalized:
+        return ResponsibilityGate(triggered=False)
+    if any(pattern.search(normalized) for pattern in RESPONSIBILITY_GATE_PATTERNS):
+        return ResponsibilityGate(
+            triggered=True,
+            refusal_reason=(
+                "responsibility_gate: question asks for engineering compliance, "
+                "acceptance, design, testing, or sign-off judgment."
+            ),
+        )
+    return ResponsibilityGate(triggered=False)
 
 
 def has_topic_anchor(query: str) -> bool:

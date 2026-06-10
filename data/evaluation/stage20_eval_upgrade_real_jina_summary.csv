@@ -1,0 +1,5 @@
+config,judge_mode,real_config_status,non_refusal_total,hits,precision_at_1,avg_coverage_ratio,deep_fulltext_top1_rate,refusal_total,refusal_accuracy,decision,next_action
+hybrid_baseline,coverage_ratio_real_jina,completed,15,2,0.133,0.323,0.267,4,1.000,baseline,作为 coverage_ratio 判定下的默认 hybrid 对照
+hybrid_fulltext_boost,coverage_ratio_real_jina,completed,15,2,0.133,0.273,0.667,4,1.000,keep_existing_hybrid,delta_precision_at_1=+0.000<0.10
+hybrid_metadata_demote,coverage_ratio_real_jina,completed,15,2,0.133,0.273,0.667,4,1.000,keep_existing_hybrid,delta_precision_at_1=+0.000<0.10
+hybrid_topic_anchor_strict,coverage_ratio_real_jina,completed,15,2,0.133,0.273,0.733,4,1.000,keep_existing_hybrid,delta_precision_at_1=+0.000<0.10

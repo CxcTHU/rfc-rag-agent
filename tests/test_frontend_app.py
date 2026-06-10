@@ -49,9 +49,9 @@ def test_quality_report_is_served_read_only() -> None:
     response = client.get("/quality-report")
 
     assert response.status_code == 200
-    assert "阶段 18 质量门槛报告" in response.text
+    assert "阶段 20 质量门槛报告" in response.text
     assert "只读质量报告" in response.text
-    # 阶段 18 增强：只读筛选、风险队列与导出。
+    # 阶段 20 报告保持只读筛选、风险队列与导出。
     assert 'id="filter-section"' in response.text
     assert 'id="filter-risk"' in response.text
     assert 'id="risk-queue"' in response.text
@@ -68,7 +68,7 @@ def test_quality_report_data_json_is_read_only() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert isinstance(payload, list)
-    # 应包含阶段 18 质量门槛行，且不泄露敏感字段。
+    # 应包含阶段 20 质量门槛行，且不泄露敏感字段。
     if payload:
         assert {"section", "metric", "status", "risk"}.issubset(payload[0].keys())
         serialized = response.text.lower()
@@ -83,7 +83,7 @@ def test_quality_report_export_csv_download() -> None:
 
     assert response.status_code == 200
     assert "text/csv" in response.headers["content-type"]
-    assert "stage18_quality_summary.csv" in response.headers.get("content-disposition", "")
+    assert "stage20_quality_summary.csv" in response.headers.get("content-disposition", "")
     assert "section" in response.text
 
 

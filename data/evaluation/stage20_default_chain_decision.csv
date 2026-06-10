@@ -1,0 +1,5 @@
+config,deterministic_decision,real_jina_decision,deterministic_delta_p1,deterministic_delta_deep_top1,deterministic_refusal_delta,real_delta_p1,real_delta_deep_top1,real_refusal_delta,final_decision,blocker,next_action
+hybrid_baseline,baseline,baseline,+0.000,+0.000,+0.000,+0.000,+0.000,+0.000,baseline,,作为默认 hybrid 对照，不切换
+hybrid_fulltext_boost,keep_existing_hybrid,keep_existing_hybrid,+0.000,+0.400,+0.000,+0.000,+0.400,+0.000,keep_existing_hybrid,delta_precision_at_1=+0.000<0.10; real:delta_precision_at_1=+0.000<0.10,不接入默认链路；保留 source_type_reweight 为候选/评测开关
+hybrid_metadata_demote,keep_existing_hybrid,keep_existing_hybrid,+0.000,+0.400,+0.000,+0.000,+0.400,+0.000,keep_existing_hybrid,delta_precision_at_1=+0.000<0.10; real:delta_precision_at_1=+0.000<0.10,不接入默认链路；保留 source_type_reweight 为候选/评测开关
+hybrid_topic_anchor_strict,keep_existing_hybrid,keep_existing_hybrid,+0.000,+0.466,+0.000,+0.000,+0.466,+0.000,keep_existing_hybrid,delta_precision_at_1=+0.000<0.10; real:delta_precision_at_1=+0.000<0.10,不接入默认链路；保留 source_type_reweight 为候选/评测开关

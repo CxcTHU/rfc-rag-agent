@@ -2885,3 +2885,87 @@ Stage19TuningWeights
 ### 架构结论
 
 阶段 19 用真实数据**首次量化**了中文查询的 metadata vs deep_fulltext 排序短板，并以纯函数对照 + 严格门槛得出诚实的 `keep_existing_hybrid` 决策；同时把三种调优作为可配置开关纳入候选模块，为后续阶段（优化 hit 判定 / 用真实 Jina 重跑 / 答案级 ratio 评测）的默认链路切换留出数据驱动入口。
+
+
+## 阶段 20 中文检索默认链路落地与评测判定增强
+
+阶段 20 不新增语料、不新增爬虫、不重做 chunk embedding，而是把阶段 19 的候选调优结论放到更严格的答案级评测与真实 Jina query 端校验里复核，再决定默认链路是否切换。同时补上阶段 19 暴露的工程责任边界拒答门。
+
+核心数据流：
+
+```text
+stage19_chinese_hard_queries.csv
+-> evaluate_stage20_eval_upgrade.py
+   -> deterministic coverage_ratio
+   -> optional real Jina query-only coverage_ratio
+-> build_stage20_default_chain_decision.py
+-> keep_existing_hybrid 或 switch_default_candidate
+-> build_stage20_quality_report.py
+-> data/evaluation/stage20_quality_summary.csv
+-> docs/stage20_quality_report.md + GET /quality-report
+```
+
+默认问答链路保持：
+
+```text
+POST /chat 或 AgentToolbox.answer_with_citations
+-> BrainService.answer()
+-> HybridSearchService (默认 0.7 keyword + 0.3 vector + 0.15 both_match)
+-> evidence confidence + has_topic_anchor
+-> responsibility_gate（生成前工程责任边界拒答）
+-> generate_answer 或责任边界拒答
+```
+
+### 答案级 coverage ratio
+
+阶段 20 新增 `scripts/evaluate_stage20_eval_upgrade.py`，复用阶段 19 中文难评测集，但把主 hit 口径从 `expected_source_hit` 关键词命中升级为 `expected_answer_points` 覆盖率：
+
+- 非拒答题：检查 top-1 证据的 `heading_path + content` 是否覆盖期望回答要点，刻意不把 `document_title` 作为 top-1 coverage 证据，降低题录标题关键词密度带来的偏置。
+- 拒答题：继续用 Brain 是否 refused 与 `expected_refused` 对齐计算 `refusal_accuracy`。
+- 输出 `data/evaluation/stage20_eval_upgrade_results.csv` 与 `stage20_eval_upgrade_summary.csv`，schema 包含 `query_id`、`config`、`judge_mode`、`hit`、`coverage_ratio`、`deep_fulltext_top1`、`refusal_matched`、`decision`、`next_action`。
+
+真实 Jina 校验通过同一脚本的 `--real-query` 模式完成，只调用真实 provider 生成 query embedding，复用已有 `jina-embeddings-v3 / dim=1024` chunk embeddings；不调用 `VectorIndexService`，不重建 8918 条 chunk 向量。缺少配置或调用失败时写 `real_config_status=skipped/error`，不把 deterministic 结果伪造成真实成功。
+
+### 默认链路决策
+
+阶段 20 新增 `scripts/build_stage20_default_chain_decision.py`，同时要求 deterministic 与真实 Jina query-only 结果满足切换门槛：
+
+```text
+delta_precision_at_1 >= 0.10
+and delta_deep_fulltext_top1_rate >= 0.20
+and refusal_accuracy >= baseline_refusal_accuracy
+```
+
+实际结果：
+
+- `hybrid_fulltext_boost`、`hybrid_metadata_demote`、`hybrid_topic_anchor_strict` 的 `delta_precision_at_1` 均为 `+0.000<0.10`。
+- 候选 deep_fulltext top-1 明显提升，但答案级 p@1 没有提升。
+- 最终决策为 `keep_existing_hybrid`，不把 `source_type_reweight` 接入默认 `HybridSearchService` / Brain hybrid 链路。
+
+这个决策避免了“只因深度全文排上来就切默认链路”的风险：默认链路必须同时改善答案覆盖、深度全文排序和拒答边界。
+
+### responsibility_gate 责任边界拒答门
+
+阶段 20 在 `app/services/brain/workflow.py` 与 `app/services/brain/service.py` 新增责任边界门：
+
+- `evaluate_responsibility_gate(query)`：纯函数判断查询是否要求系统替代工程责任判断。
+- `RESPONSIBILITY_REFUSAL_ANSWER`：统一提示系统不替代规范审查、工程设计、第三方检测或专家签字。
+- `BrainService._generate_answer_step()`：在证据置信度与模型生成前调用责任门；命中后直接返回责任边界拒答。
+
+它与阶段 18 的 `has_topic_anchor` 分工不同：`has_topic_anchor` 解决 off-topic 问题，`responsibility_gate` 解决“同主题但不应替代审查/签字”的问题。正例包括“请判定本工程配合比是否符合规范要求”，反例包括“堆石混凝土配合比通常关注哪些指标”。
+
+### Quality gate 与只读报告
+
+阶段 20 新增 `scripts/build_stage20_quality_report.py`，生成：
+
+- `data/evaluation/stage20_quality_summary.csv`
+- `docs/stage20_quality_report.md`
+- `app/frontend/quality_report.html`
+
+`GET /quality-report` 继续是静态只读质量报告页，只读取本地脱敏 CSV/HTML，不触发真实 API、不写数据库、不重新索引、不改变登录或权限体系。全量测试通过后，阶段 20 quality gate 为 `pass/low`。
+
+### API 与默认链路边界
+
+阶段 20 保证 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`GET /quality-report` 不被破坏。聚焦回归 61 passed + 67 passed，全量测试 424 passed。
+
+架构结论：阶段 20 把阶段 19 的“候选重权可能有用”升级为“经过答案级判定与真实 query 端校验后仍不足以切默认链路”的可复核结论。真正进入默认运行链路的是 `responsibility_gate`，因为它闭环的是安全责任边界，而不是检索排序偏好；`source_type_reweight` 继续保持候选/评测开关。

@@ -1210,7 +1210,7 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0 到阶段 18 已完成并已有阶段 tag（含 `phase-16-complete`、`phase-17-complete`、`phase-18-complete`）。阶段 17 tag 指向最终功能提交 `5b5ef02`、合并提交 `d633b95`。
+阶段 0 到阶段 19 已完成并已有阶段 tag（含 `phase-16-complete`、`phase-17-complete`、`phase-18-complete`、`phase-19-complete`）。阶段 17 tag 指向最终功能提交 `5b5ef02`、合并提交 `d633b95`。
 
 阶段 18（语料扩充与评测/质量体系增强 + 中文全文语料与拒答边界校准）已完成人工核验、提交、创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`，**非** merge）并合并到 `main`（合并提交 `4db90c7`），已 push 到 GitHub。阶段 18 关键结论与经验：
 
@@ -1221,18 +1221,29 @@ source = 回答依据，必须能追溯到标题和 URL
 - 真实索引重建：`build_vector_index.py --provider openai-compatible --batch-size 16 --sleep-seconds 10 --max-retries 5`（限速 + 退避重试，遵守 Jina 速率限额、容忍瞬断）。
 - 经验：阶段 17/18 都遇到「README/docs 顶部状态滞后于 Git 真相」，新线程务必以 `git tag`/`git log` 为准，文档收尾时同步修正入口文档。
 
-### 阶段 19 — 中文全文文献分析与检索/评测调优（在分支开发，待人工核验）
-
-阶段 19 在 `claude/phase-19-chinese-analysis-retrieval-tuning` 分支完成 Phase 0–4 开发、测试、普通文档和 Obsidian 草稿；从含阶段 18 合并的 `main` 出发；**尚未 git add/commit/tag/push、未创建 PR**。阶段 19 关键结论与经验：
+阶段 19（中文全文文献分析与检索/评测调优）已完成人工核验、提交、创建 `phase-19-complete` tag（指向最终功能提交 `ffb4756`，**非** merge）并合并到 `main`（合并提交 `12184d7`）。阶段 19 关键结论与经验：
 
 - **Phase 0 第一轮文献分析探索**（`scripts/explore_chinese_corpus.py`，10 题：8 on-topic + 2 拒答）：deterministic 下 `deep_top1=0/8`、`metadata_top1=5/8` 强力暴露中文查询排序短板（题录 chunks 短而关键词密度高，hybrid 默认 0.7 keyword + 0.3 vector 让题录系统性压过中文深度全文）；off-topic 拒答门按预期工作，唯独"工程责任判断"命中域词后未被默认拒答门挡住（prompt 层议题，记入遗留风险）。
 - **Phase 1 中文难评测集**（`data/evaluation/stage19_chinese_hard_queries.csv`，19 题：5 跨段证据 + 5 易混淆术语 + 5 参数细节 + 4 需拒答）：独立 CSV，不覆盖旧英文 `stage18_hard_queries.csv`。
 - **Phase 2 检索排序调优**：新增纯函数 `app/services/retrieval/source_type_reweight.py`（`Stage19TuningWeights` + 4 套默认配置 + `CORE_DOMAIN_TERMS` 与 Brain 解耦），新增 `scripts/evaluate_stage19_retrieval_tuning.py`；三候选都把 `deep_fulltext_top1_rate` 从 0.000 拉升到 0.533–0.733（`topic_anchor_strict` 最高），但 `precision@1` 因关键词判定偏向题录卡片而下降；按严格门槛（Δp@1 ≥ 0.10 且 Δdeep_top1 ≥ 0.20 且 refusal 不退化）保持 **`keep_existing_hybrid`**——三候选作为可配置开关保留在 `source_type_reweight.py`。
 - **Phase 3 文献分析快照**（`docs/stage19_literature_review.md`）：面向人读，整合 Phase 0/2 数据 + 主题速览 + 面试表达；未新增 build 脚本（阶段边界裁剪）。
 - 全量测试 **408 passed**；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 均未被破坏。
-- 经验：`expected_source_hit` 关键词判定对题录卡片偏向；后续可考虑答案级 ratio 或真实 Jina 重跑让 Δp@1 通过门槛后切默认链路。
+- 经验：`expected_source_hit` 关键词判定对题录卡片偏向；阶段 20 已用答案级 coverage ratio 与真实 Jina query-only 复核。
 
-阶段 19 沿用既有约束：不让真实 API 成为 CI/全量测试前提（deterministic 仍负责离线回归）；受版权/授权全文与本地 DB 不入库；默认链路是否切换由中文难评测集数据决定；未经人工核验不提交/打 tag/推送；tag 命名 `phase-19-complete`，指向最终功能提交。
+阶段 19 经验继续沿用：不让真实 API 成为 CI/全量测试前提（deterministic 仍负责离线回归）；受版权/授权全文与本地 DB 不入库；默认链路是否切换由中文难评测集数据决定；`phase-19-complete` 已指向阶段 19 最终功能提交 `ffb4756`。
+
+### 阶段 20 — 中文检索默认链路落地与评测判定增强（当前待人工核验前）
+
+阶段 20 当前在 `codex/phase-20-default-chain-and-eval-upgrade` 分支推进；从含阶段 19 合并的 `main` 出发。阶段 20 完成核心开发、回归和普通文档后，仍必须停在用户人工核验前：**不执行 `git add`、不 commit、不创建 `phase-20-complete` tag、不 push、不创建 PR**，直到用户明确确认。
+
+阶段 20 关键结论与经验：
+
+- 评测判定升级：`scripts/evaluate_stage20_eval_upgrade.py` 用答案级 `coverage_ratio` 复用阶段 19 中文难评测集，避免题录标题/摘要关键词偏置。
+- 真实 Jina 校验：只做 query 端真实 embedding，复用已有 8918 条 chunk embeddings，不重做索引；真实失败必须写 `skipped/error`，不伪造成成功。
+- 默认链路决策：`scripts/build_stage20_default_chain_decision.py` 同时看 deterministic 与真实 Jina。当前候选 `source_type_reweight` 虽提高 deep_fulltext top-1，但 `Δp@1=+0.000<0.10`，因此保持 **`keep_existing_hybrid`**，不改默认 `HybridSearchService` / Brain hybrid 链路。
+- 责任边界：新增 Brain 生成前 `responsibility_gate`，拦截“判定/评定/是否合格/是否符合规范/能否用于工程”等责任判断题；系统不替代规范审查、工程设计、第三方检测或专家签字。
+- 质量门槛：`scripts/build_stage20_quality_report.py` 汇总阶段 20 quality gate；全量回归通过后为 `pass/low`。
+- 面试表达：阶段 20 的重点不是盲目把重权策略焊进默认链路，而是先把评测口径修正确，再用真实 query 端校验和门槛做数据驱动决策；真正进入默认运行链路的是安全责任门，而不是排序偏好。
 
 阶段 4 最终提交和 tag：
 
@@ -1317,7 +1328,7 @@ tag: phase-15-complete
 
 不要移动 `phase-4-complete` 到 `phase-18-complete` 中的任何已有阶段 tag。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
-阶段 18 已创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`）并合并、推送到 GitHub。阶段 19 当前没有阶段 tag。只有用户人工核验并明确确认后，才允许提交、创建 `phase-19-complete` tag 和推送 GitHub；tag 必须指向阶段 19 最终功能提交。
+阶段 18 已创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`）并合并、推送到 GitHub。阶段 19 已创建 `phase-19-complete` tag（指向最终功能提交 `ffb4756`）并合并到 `main`（合并提交 `12184d7`）。阶段 20 当前不得提交、不得创建 `phase-20-complete` tag、不得推送 GitHub；只有用户人工核验并明确确认后，才允许提交、创建阶段 20 tag 和推送，tag 必须指向阶段 20 最终功能提交。
 
 阶段 6 已实现检索优化与评测闭环：
 

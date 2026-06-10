@@ -1,0 +1,7 @@
+section,metric,status,value,risk,evidence_file,recommendation
+eval_judge_upgrade,coverage_ratio,completed,"baseline p@1=0.133, best_deep=hybrid_topic_anchor_strict deep_top1=0.733",low,data\evaluation\stage20_eval_upgrade_summary.csv,已用 expected_answer_points 的 coverage_ratio 替代题录关键词命中主判定；结果显示 deep top-1 上浮但答案覆盖 p@1 未提升。
+real_jina_query_validation,query_only,completed,"completed, baseline p@1=0.133",low,data\evaluation\stage20_eval_upgrade_real_jina_summary.csv,真实 Jina 只在 query 端校验，复用已有 chunk embeddings；本轮无真实错误。
+default_chain_decision,source_type_reweight,keep_existing_hybrid,no candidate passed delta_precision_at_1 threshold,low,data\evaluation\stage20_default_chain_decision.csv,不接入默认链路；保留 source_type_reweight 为候选/评测开关。 Blockers: delta_precision_at_1=+0.000<0.10; real:delta_precision_at_1=+0.000<0.10 | delta_precision_at_1=+0.000<0.10; real:delta_precision_at_1=+0.000<0.10 | delta_precision_at_1=+0.000<0.10; real:delta_precision_at_1=+0.000<0.10
+responsibility_gate,engineering_responsibility_refusal,closed,4/4 matched,low,data\evaluation\stage20_eval_upgrade_results.csv,responsibility_gate 已闭环工程责任拒答遗留，且正反例测试覆盖学习题不误拒。
+api_regression,core_routes_and_tests,passed,full regression passed,low,progress.md,核心 API 与全量测试通过。
+overall,stage20_quality_gate,pass,low,low,data\evaluation\stage20_quality_summary.csv,阶段 20 核心质量闭环完成；等待用户人工核验。

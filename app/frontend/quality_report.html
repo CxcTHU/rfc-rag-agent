@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>阶段 18 质量门槛报告</title>
+  <title>阶段 20 质量门槛报告</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -11,8 +11,8 @@
     <section class="hero">
       <div>
         <p class="eyebrow">只读质量报告</p>
-        <h1>阶段 18 质量门槛报告</h1>
-        <p class="hero-copy">汇总语料扩充、难评测集多配置对比、默认链路决策与质量门槛。只读，不触发真实 API。</p>
+        <h1>阶段 20 质量门槛报告</h1>
+        <p class="hero-copy">汇总评测判定升级、真实 Jina query 校验、默认链路决策与责任边界拒答。只读，不触发真实 API。</p>
         <p class="hero-copy">当前质量门槛：<strong id="gate-badge">pass/low</strong></p>
       </div>
       <a class="secondary-link" href="/">返回工作台</a>
@@ -56,13 +56,13 @@
     <section class="panel">
       <h2>人工核验边界</h2>
       <ul class="compact-list">
-        <li>阶段 18 当前不执行 git add、commit、tag、push 或 PR。</li>
+        <li>阶段 20 当前不执行 git add、commit、tag、push 或 PR。</li>
         <li>报告只读取本地 CSV 质量产物，不调用真实模型或检索 API。</li>
         <li>真实 API key、Bearer token、供应商原始敏感响应和受限全文不得写入报告。</li>
       </ul>
     </section>
   </main>
-  <script id="quality-data" type="application/json">[{&quot;section&quot;: &quot;corpus&quot;, &quot;metric&quot;: &quot;deep_fulltext_depth&quot;, &quot;status&quot;: &quot;expanded&quot;, &quot;value&quot;: &quot;16 -&gt; 340 (open_access_pdf=15, chunks=8918)&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage18_corpus_stats.csv&quot;, &quot;recommendation&quot;: &quot;RFC 窄领域开放获取全文有限，未达 40-60 目标；按用户决策诚实报数，未造假。可后续接入授权全文继续扩充。&quot;}, {&quot;section&quot;: &quot;hard_set&quot;, &quot;metric&quot;: &quot;discrimination&quot;, &quot;status&quot;: &quot;discriminating&quot;, &quot;value&quot;: &quot;rank@1 differs across configs (vector p@1=0.60 vs hybrid p@1=0.87)&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage18_config_comparison.csv&quot;, &quot;recommendation&quot;: &quot;hit@8 在 deterministic 下仍饱和(15/15)，但 rank@1/precision@1 提供区分度；后续可加入更难的跨段合成题进一步拉开差距。&quot;}, {&quot;section&quot;: &quot;default_chain&quot;, &quot;metric&quot;: &quot;decision&quot;, &quot;status&quot;: &quot;keep_existing_hybrid&quot;, &quot;value&quot;: &quot;deterministic: hybrid p@1=0.87, bm25_rrf p@1=0.87&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage18_config_comparison.csv&quot;, &quot;recommendation&quot;: &quot;bm25_rrf 在难评测集上未优于 hybrid（同 hit@8、同 rank@1、mean_rank 略差），数据支持 keep_existing_hybrid；BM25+RRF/context expansion 继续作为候选/配置开关。&quot;}, {&quot;section&quot;: &quot;real_config&quot;, &quot;metric&quot;: &quot;ranking_under_real_embedding&quot;, &quot;status&quot;: &quot;validated&quot;, &quot;value&quot;: &quot;real Jina vector p@1=1.00 (vs deterministic 0.60)&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage18_config_comparison_real.csv&quot;, &quot;recommendation&quot;: &quot;真实 Jina 提升 vector 排序到 p@1=1.00，说明 deterministic 仅作稳定回归；真实配置只作发布前校准，不进 CI。&quot;}, {&quot;section&quot;: &quot;refusal_boundary&quot;, &quot;metric&quot;: &quot;off_topic_refusal&quot;, &quot;status&quot;: &quot;pass&quot;, &quot;value&quot;: &quot;5/5 off-topic queries refused (brain_default, evidence confidence)&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage18_hard_results.csv&quot;, &quot;recommendation&quot;: &quot;真实风险：明显 off-topic 查询（LLM/烹饪/金融/量子/随机串）多数未被拒答，因其与语料共享通用词使 evidence confidence(0.20) 偶然通过；deterministic 与真实 Jina 下均如此，非 deterministic 伪影。阶段 18 显式阻断并记录，不静默修改默认拒答逻辑（影响全链路，需独立校准 Phase）。建议下一阶段：为 evidence confidence 增加主题相关度下限或 off-topic 守卫。&quot;}, {&quot;section&quot;: &quot;stage17_residual&quot;, &quot;metric&quot;: &quot;mesoscopic_modeling_rank_softdrop&quot;, &quot;status&quot;: &quot;closed_with_decision&quot;, &quot;value&quot;: &quot;keep_existing_hybrid&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data/evaluation/stage17_retrieval_upgrade_manual_review.csv&quot;, &quot;recommendation&quot;: &quot;阶段 17 的排序软退化(rank 2-&gt;7)担忧已在难评测集上对照：bm25_rrf 未优于 hybrid，默认链路维持，遗留以数据结论闭环。&quot;}, {&quot;section&quot;: &quot;stage16_residual&quot;, &quot;metric&quot;: &quot;user_mixed_itz_strength_answer_coverage&quot;, &quot;status&quot;: &quot;closed_low&quot;, &quot;value&quot;: &quot;low&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data/evaluation/stage16_itz_closure.csv&quot;, &quot;recommendation&quot;: &quot;阶段 16 的 ITZ/强度 Answer Coverage 已闭环为 low：语料新增专门 ITZ 全文，等价 ITZ 问题真实 MIMO+Jina 跑通且带引用溯源；逐字措辞重跑遇真实 API 瞬时超时(非覆盖缺口)。&quot;}, {&quot;section&quot;: &quot;overall&quot;, &quot;metric&quot;: &quot;stage18_quality_gate&quot;, &quot;status&quot;: &quot;pass&quot;, &quot;value&quot;: &quot;low&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage18_quality_summary.csv&quot;, &quot;recommendation&quot;: &quot;阶段 18 质量门槛通过，可由用户人工核验后决定提交。&quot;}]</script>
+  <script id="quality-data" type="application/json">[{&quot;section&quot;: &quot;eval_judge_upgrade&quot;, &quot;metric&quot;: &quot;coverage_ratio&quot;, &quot;status&quot;: &quot;completed&quot;, &quot;value&quot;: &quot;baseline p@1=0.133, best_deep=hybrid_topic_anchor_strict deep_top1=0.733&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_eval_upgrade_summary.csv&quot;, &quot;recommendation&quot;: &quot;已用 expected_answer_points 的 coverage_ratio 替代题录关键词命中主判定；结果显示 deep top-1 上浮但答案覆盖 p@1 未提升。&quot;}, {&quot;section&quot;: &quot;real_jina_query_validation&quot;, &quot;metric&quot;: &quot;query_only&quot;, &quot;status&quot;: &quot;completed&quot;, &quot;value&quot;: &quot;completed, baseline p@1=0.133&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_eval_upgrade_real_jina_summary.csv&quot;, &quot;recommendation&quot;: &quot;真实 Jina 只在 query 端校验，复用已有 chunk embeddings；本轮无真实错误。&quot;}, {&quot;section&quot;: &quot;default_chain_decision&quot;, &quot;metric&quot;: &quot;source_type_reweight&quot;, &quot;status&quot;: &quot;keep_existing_hybrid&quot;, &quot;value&quot;: &quot;no candidate passed delta_precision_at_1 threshold&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_default_chain_decision.csv&quot;, &quot;recommendation&quot;: &quot;不接入默认链路；保留 source_type_reweight 为候选/评测开关。 Blockers: delta_precision_at_1=+0.000&lt;0.10; real:delta_precision_at_1=+0.000&lt;0.10 | delta_precision_at_1=+0.000&lt;0.10; real:delta_precision_at_1=+0.000&lt;0.10 | delta_precision_at_1=+0.000&lt;0.10; real:delta_precision_at_1=+0.000&lt;0.10&quot;}, {&quot;section&quot;: &quot;responsibility_gate&quot;, &quot;metric&quot;: &quot;engineering_responsibility_refusal&quot;, &quot;status&quot;: &quot;closed&quot;, &quot;value&quot;: &quot;4/4 matched&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_eval_upgrade_results.csv&quot;, &quot;recommendation&quot;: &quot;responsibility_gate 已闭环工程责任拒答遗留，且正反例测试覆盖学习题不误拒。&quot;}, {&quot;section&quot;: &quot;api_regression&quot;, &quot;metric&quot;: &quot;core_routes_and_tests&quot;, &quot;status&quot;: &quot;passed&quot;, &quot;value&quot;: &quot;full regression passed&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;progress.md&quot;, &quot;recommendation&quot;: &quot;核心 API 与全量测试通过。&quot;}, {&quot;section&quot;: &quot;overall&quot;, &quot;metric&quot;: &quot;stage20_quality_gate&quot;, &quot;status&quot;: &quot;pass&quot;, &quot;value&quot;: &quot;low&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_quality_summary.csv&quot;, &quot;recommendation&quot;: &quot;阶段 20 核心质量闭环完成；等待用户人工核验。&quot;}]</script>
   <script>
     (function () {
       var raw = document.getElementById("quality-data").textContent || "[]";
@@ -99,7 +99,7 @@
         URL.revokeObjectURL(url);
       }
       document.getElementById("export-json").addEventListener("click", function () {
-        download("stage18_quality_summary.json", JSON.stringify(rows, null, 2), "application/json");
+        download("stage20_quality_summary.json", JSON.stringify(rows, null, 2), "application/json");
       });
       document.getElementById("export-csv").addEventListener("click", function () {
         var fields = ["section", "metric", "status", "value", "risk", "recommendation"];
@@ -107,7 +107,7 @@
         rows.forEach(function (r) {
           lines.push(fields.map(function (f) { return '"' + String(r[f] == null ? "" : r[f]).replace(/"/g, '""') + '"'; }).join(","));
         });
-        download("stage18_quality_summary.csv", lines.join("\n"), "text/csv");
+        download("stage20_quality_summary.csv", lines.join("\n"), "text/csv");
       });
       sectionSel.addEventListener("change", render);
       riskSel.addEventListener("change", render);

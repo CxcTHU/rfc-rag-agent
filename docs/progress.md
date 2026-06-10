@@ -1,8 +1,77 @@
 # 项目进度
 
-## 最新状态：2026-06-10（阶段 19 中文全文文献分析与检索/评测调优，待人工核验）
+## 最新状态：2026-06-10（阶段 20 中文检索默认链路落地与评测判定增强，待人工核验前收尾）
 
-当前阶段：阶段 19，中文全文文献分析与检索/评测调优。在 `claude/phase-19-chinese-analysis-retrieval-tuning` 分支完成 Phase 0–4 开发、测试、普通文档和 Obsidian 草稿，停在用户人工核验前：**尚未执行** `git add`、`git commit`、`git tag`、`git push`，也未创建 PR。
+当前阶段：阶段 20，中文检索默认链路落地与评测判定增强。在 `codex/phase-20-default-chain-and-eval-upgrade` 分支完成核心开发、回归验证和普通文档收尾；当前**尚未执行** `git add`、`git commit`、`git tag`、`git push`，也未创建 PR，等待用户人工核验和明确确认后才允许进入提交、tag 和 GitHub 推送流程。
+
+Git / tag / main 起点：
+
+- 阶段 19 已完成人工核验、提交、创建 `phase-19-complete` tag（指向最终功能提交 `ffb4756`，非 merge）并合并到 `main`（合并提交 `12184d7`）。
+- `phase-19-complete` 是 `main` 祖先；阶段 20 从含阶段 19 合并的 `main` 出发；未移动任何已有阶段 tag。
+
+阶段 20 完成内容：
+
+- 使用 Planning with Files 维护 `task_plan.md`、`findings.md`、`progress.md`。
+- 新增 `docs/stage20_default_chain_and_eval_upgrade.md` 设计文档，固定答案级 coverage ratio、真实 Jina query-only 校验、默认链路切换门槛、`responsibility_gate`、安全边界和完成标准。
+- **Phase 2 评测判定升级**：新增 `scripts/evaluate_stage20_eval_upgrade.py`，复用阶段 19 中文难评测集，用 `expected_answer_points` 计算答案级 `coverage_ratio`，避免题录标题/摘要关键词偏置；输出 `stage20_eval_upgrade_results.csv` 与 `stage20_eval_upgrade_summary.csv`。
+- **Phase 3 真实 Jina query 端校验**：同一脚本增加 `--real-query`，只生成 query embedding，复用已有 `jina-embeddings-v3` chunk embeddings，不重做 8918 条 chunk embedding；输出 `stage20_eval_upgrade_real_jina_results.csv` 与 `stage20_eval_upgrade_real_jina_summary.csv`。
+- **Phase 4 默认链路接入决策**：新增 `scripts/build_stage20_default_chain_decision.py` 与 `data/evaluation/stage20_default_chain_decision.csv`；deterministic 与真实 Jina 均未满足 `Δp@1>=0.10`，因此保持 `keep_existing_hybrid`，不改默认 `HybridSearchService` / Brain hybrid 链路。
+- **Phase 5 `responsibility_gate` 责任边界拒答门**：在 Brain 生成前拦截“判定/评定/是否合格/是否符合规范/能否用于工程”等责任判断问题，返回“系统不替代规范审查、工程设计、第三方检测或专家签字”的拒答提示；on-topic 学习题不误拒。
+- **Phase 6 quality gate / 报告更新**：新增 `scripts/build_stage20_quality_report.py`、`data/evaluation/stage20_quality_summary.csv`、`docs/stage20_quality_report.md`，并更新 `GET /quality-report` 静态只读报告。
+- **Phase 7 回归验证**：聚焦回归与全量测试通过，全量测试 **424 passed**；最终 quality gate 为 **pass/low**。
+
+评测结果：
+
+```text
+Stage 20 deterministic coverage_ratio：
+  hybrid_baseline              p@1=0.133 coverage=0.323 deep_top1=0.267 refusal_acc=1.000 decision=baseline
+  hybrid_fulltext_boost        p@1=0.133 coverage=0.273 deep_top1=0.667 refusal_acc=1.000 decision=keep_existing_hybrid
+  hybrid_metadata_demote       p@1=0.133 coverage=0.273 deep_top1=0.667 refusal_acc=1.000 decision=keep_existing_hybrid
+  hybrid_topic_anchor_strict   p@1=0.133 coverage=0.273 deep_top1=0.733 refusal_acc=1.000 decision=keep_existing_hybrid
+
+Stage 20 real Jina query-only：
+  hybrid_baseline              p@1=0.133 coverage=0.323 deep_top1=0.267 refusal_acc=1.000 decision=baseline
+  hybrid_fulltext_boost        p@1=0.133 coverage=0.273 deep_top1=0.667 refusal_acc=1.000 decision=keep_existing_hybrid
+  hybrid_metadata_demote       p@1=0.133 coverage=0.273 deep_top1=0.667 refusal_acc=1.000 decision=keep_existing_hybrid
+  hybrid_topic_anchor_strict   p@1=0.133 coverage=0.273 deep_top1=0.733 refusal_acc=1.000 decision=keep_existing_hybrid
+
+Default chain decision:
+  overall=keep_existing_hybrid
+  blocker=delta_precision_at_1=+0.000<0.10
+
+Quality gate:
+  pass/low
+
+Tests:
+  focused stage20/api regression: 61 passed
+  focused documents/sources/decompose/vector regression: 67 passed
+  full tests: 424 passed
+```
+
+遗留风险：
+
+- 默认链路未切换不是失败，而是数据门槛未通过后的诚实决策：候选重权显著提高 deep_fulltext top-1，但答案级 p@1 没有提升，不能把 `source_type_reweight` 焊进默认 hybrid。
+- 真实 Jina query 校验本次为 completed，但真实 API 仍依赖本地 `.env`、网络和 provider 状态，不得成为 CI 或本地全量测试前提。
+- `responsibility_gate` 已覆盖阶段 19 遗留的工程责任判断题；后续若出现新的责任类问法，应扩展触发模式并补正反例测试。
+- 阶段 20 当前未提交、未打 `phase-20-complete` tag、未推送，等待用户人工核验。
+
+下一阶段任务：
+
+- 用户人工核验阶段 20 设计文档、评测升级脚本、真实 Jina query-only 结果、默认链路决策表、责任门、quality gate、普通文档与 Obsidian 草稿。
+- 如确认通过，再执行提交、创建 `phase-20-complete` tag 并推送；tag 应指向阶段 20 最终功能提交，不要移动已有阶段 tag。
+- 后续可考虑扩展答案级 judge：在不进入 CI 的前提下增加离线 LLM-judge 复核，或设计新的中文答案覆盖评测集继续观察 `source_type_reweight` 是否能跨过 `Δp@1` 门槛。
+
+面试表达：
+
+```text
+阶段 20 我处理的是阶段 19 留下的两个核心问题：旧评测命中偏向题录卡片，以及工程责任边界没有专门拒答门。评测上，我把命中判定从“标题/摘要关键词是否出现”升级为答案级 coverage ratio，用 expected_answer_points 衡量 top-1 证据是否覆盖回答要点，并且用真实 Jina 只做 query 端校验，复用已有 8918 条 chunk embeddings，不重做索引。
+
+默认链路决策上，我没有因为 deep_fulltext_top1 从 0.267 提升到 0.667/0.733 就直接切换，而是坚持 Δp@1、Δdeep_top1 和 refusal 三个门槛同时满足。结果候选配置的 Δp@1 仍是 0，所以保持 keep_existing_hybrid，把 source_type_reweight 留作候选开关。安全边界上，我在 Brain 生成前加 responsibility_gate，拦截“是否合格/是否符合规范/能否用于工程”这类责任判断题，避免系统替代规范审查或专家签字。最后用 quality gate 和 424 个全量测试证明默认 API 没被破坏。
+```
+
+## 历史状态：2026-06-10（阶段 19 中文全文文献分析与检索/评测调优，已完成并合并）
+
+阶段 19 已在 `claude/phase-19-chinese-analysis-retrieval-tuning` 分支完成 Phase 0–4 开发、测试、普通文档和 Obsidian 草稿，经人工核验后提交为 `ffb4756`，创建 `phase-19-complete` tag，并通过合并提交 `12184d7` 合并到 `main`。
 
 Git / tag / main 起点：
 
@@ -39,15 +108,12 @@ full tests: 408 passed
 
 遗留风险：
 
-- `cn_explore_refusal_mix_design` 等命中域词的工程责任判断题未被默认拒答门挡住，属 **prompt 层议题**，不在阶段 19 检索调优范围内。
-- `expected_source_hit` 用关键词列表判 hit，对题录卡片偏向；未来可考虑答案级 ratio 或真实 Jina 重跑。
-- 阶段 19 当前**未提交、未打 `phase-19-complete` tag、未推送 GitHub**，等待用户人工核验。
+- `cn_explore_refusal_mix_design` 等命中域词的工程责任判断题未被默认拒答门挡住，属阶段 19 遗留；阶段 20 已用 `responsibility_gate` 闭环。
+- `expected_source_hit` 用关键词列表判 hit，对题录卡片偏向；阶段 20 已用答案级 `coverage_ratio` 与真实 Jina query-only 校验闭环。
 
-下一阶段任务：
+后续承接：
 
-- 用户人工核验阶段 19 设计文档、探索/调优脚本、中文难评测集、`source_type_reweight` 模块、调优结果 CSV、文献分析快照、入口文档同步。
-- 如确认通过，再执行提交、创建 `phase-19-complete` tag 并推送；tag 应指向阶段 19 最终功能提交。
-- 后续阶段可考虑：(1) 优化 hit 判定让 Δp@1 通过门槛后切换 source_type_reweight 进默认链路；(2) prompt 层"工程责任判断"拒答边界；(3) 评测 LLM-as-judge 离线增强 Answer Coverage。
+- 阶段 20 已承接：(1) 用答案级 `coverage_ratio` 复核默认链路切换；(2) 用 `responsibility_gate` 闭环工程责任拒答边界；(3) 保留离线 LLM-judge 作为可选增强，不进入 CI 或默认链路。
 
 面试表达：
 
