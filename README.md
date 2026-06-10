@@ -14,13 +14,17 @@
 
 ## 当前阶段
 
-阶段 18 之后增量（中文全文语料 + 拒答边界校准，待人工核验）：在 `claude/phase-18-corpus-evaluation-quality` 分支、阶段 18 主体之后，导入了用户合法下载的中文堆石混凝土全文,并校准了 off-topic 拒答边界。详见 `docs/stage18_followup_chinese_corpus.md`。要点：
+阶段 19（中文全文文献分析与检索/评测调优，待人工核验）：在 `claude/phase-19-chinese-analysis-retrieval-tuning` 分支完成 Phase 0–4 开发、测试、普通文档和 Obsidian 草稿；从含阶段 18 合并的 `main` 出发；按要求**尚未提交、尚未打 tag、尚未推送、未创建 PR**。阶段 18（含中文全文 298 篇入库 + 拒答边界校准）已合并到 main 并创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`，合并提交 `4db90c7`），已 push 到 GitHub。
 
-- 中文全文入库 **298 篇**（`scripts/import_papers_corpus.py`，新增 `cryptography>=3.1` 解密知网 AES PDF）；语料 documents **465** / chunks **8918** / 深度全文 **约 340 篇**。
-- 确定性 + 真实 Jina 索引全覆盖；建索引支持 `--sleep-seconds` 限速与 `--max-retries` 退避重试。
-- off-topic 拒答闭环（主题门 `has_topic_anchor` + `CORE_DOMAIN_TERMS`）：off-topic 5/5 拒答、on-topic 8/8 不误拒；quality gate 由 `review_required/high` 降为 `review_required/medium`。
-- 中文问答验收：真实 MIMO+Jina 下回答忠实、可引用溯源（`data/evaluation/cn_fulltext_*.csv`）。
-- 全量测试 **382 passed**。当前未提交、未打 tag、未推送。
+阶段 19 要点：
+
+- **Phase 0 第一轮文献分析探索**（`scripts/explore_chinese_corpus.py`，10 题）：deterministic 下 deep_top1=0/8、metadata_top1=5/8 强力暴露中文查询排序短板。
+- **Phase 1 中文难评测集**（`data/evaluation/stage19_chinese_hard_queries.csv`，19 题：5 跨段证据 + 5 易混淆术语 + 5 参数细节 + 4 需拒答），独立 CSV，不覆盖旧英文 baseline。
+- **Phase 2 检索排序调优**（`app/services/retrieval/source_type_reweight.py` 纯函数 + `scripts/evaluate_stage19_retrieval_tuning.py`）：对照 4 配置（baseline / fulltext_boost / metadata_demote / topic_anchor_strict）；三候选均把 `deep_fulltext_top1_rate` 从 0.000 拉升到 0.533–0.733（topic_anchor_strict 最高），但 precision@1 不升反降（关键词判定偏向题录），按严格门槛保持 **`keep_existing_hybrid`**；三候选作为可配置开关。
+- **Phase 3 文献分析快照**（`docs/stage19_literature_review.md`）：面向人读，整合 Phase 0/2 数据 + 主题速览 + 面试表达。
+- 全量测试 **408 passed**；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 均未被破坏。
+
+详见 `docs/stage19_chinese_analysis_retrieval_tuning.md` 与 `docs/progress.md`。
 
 ---
 
@@ -232,7 +236,16 @@
 - FastAPI 静态前端入口：`GET /`
 - 前端工作台：来源管理、资料列表、chunk 查看、关键词/向量/混合检索、引用式问答、Agent 问答、工具调用记录、引用来源侧栏、source sync 和 source reindex 入口
 - 堆石混凝土种子资料、题录元数据语料库和来源目录
-- 377 个自动化测试
+- `docs/stage19_chinese_analysis_retrieval_tuning.md` 阶段 19 设计文档（中文文献分析、中文难评测集、调优口径、决策门槛、安全边界）
+- `scripts/explore_chinese_corpus.py` 阶段 19 第一轮中文文献分析探索脚本（默认 deterministic，可选 `--real` 走 MIMO+Jina，带重试）
+- `data/evaluation/stage19_exploration_results.csv` 阶段 19 探索结果（10 题：8 on-topic + 2 拒答）
+- `data/evaluation/stage19_chinese_hard_queries.csv` 阶段 19 中文难评测集（19 题，独立 CSV，不覆盖旧英文 baseline）
+- `app/services/retrieval/source_type_reweight.py` 阶段 19 source_type 候选重权纯函数（4 套默认配置，可配置开关）
+- `scripts/evaluate_stage19_retrieval_tuning.py` 阶段 19 中文难评测集调优评测脚本
+- `data/evaluation/stage19_retrieval_tuning_results.csv` 阶段 19 每 config × query 调优结果
+- `data/evaluation/stage19_retrieval_tuning_summary.csv` 阶段 19 每 config 调优汇总
+- `docs/stage19_literature_review.md` 阶段 19 面向人读的中文文献分析快照
+- 408 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -301,7 +314,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-382 passed
+408 passed
 ```
 
 当前测试覆盖：

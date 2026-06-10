@@ -73,6 +73,8 @@ codex/phase-14-real-quality-calibration
 codex/phase-15-real-review-report
 codex/phase-16-real-quality-risk-closure
 codex/phase-17-retrieval-architecture-upgrade
+claude/phase-18-corpus-evaluation-quality
+claude/phase-19-chinese-analysis-retrieval-tuning
 ```
 
 协作规则：
@@ -1208,18 +1210,29 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0 到阶段 17 已完成并已有阶段 tag（含 `phase-16-complete`、`phase-17-complete`）。阶段 17 已完成人工核验、提交、创建 `phase-17-complete` tag（指向最终功能提交 `5b5ef02`）并合并到 `main`（合并提交 `d633b95`）。
+阶段 0 到阶段 18 已完成并已有阶段 tag（含 `phase-16-complete`、`phase-17-complete`、`phase-18-complete`）。阶段 17 tag 指向最终功能提交 `5b5ef02`、合并提交 `d633b95`。
 
-阶段 18 主体之后，同一 `claude/phase-18-corpus-evaluation-quality` 分支上由用户驱动追加了一段增量（详见 `docs/stage18_followup_chinese_corpus.md`）：导入用户合法下载的中文全文 **298 篇**（`scripts/import_papers_corpus.py` + `cryptography` 解密知网 AES PDF；24 篇扫描/损坏放弃），重建确定性 + 真实 Jina 索引（建索引新增 `--sleep-seconds` 限速 + `--max-retries` 退避重试），并**闭环了阶段 18 的 off-topic 拒答 high 风险**（`workflow.py` 主题门 `has_topic_anchor` + `CORE_DOMAIN_TERMS`：off-topic 5/5 拒答、on-topic 8/8 不误拒）。语料现为 465 文档 / 8918 chunk / 深度全文约 340 篇；quality gate 由 high 降为 review_required/medium；全量 382 passed。这段增量也未提交、未打 tag、未推送；是否单列为 `phase-19` 由用户决定。后续 agent 注意：中文全文与 DB 均 gitignore，靠 `import_papers_corpus.py` 可复跑导入；真实索引靠 `build_vector_index.py --provider openai-compatible --batch-size 16 --sleep-seconds 10 --max-retries 5` 限速重建。
+阶段 18（语料扩充与评测/质量体系增强 + 中文全文语料与拒答边界校准）已完成人工核验、提交、创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`，**非** merge）并合并到 `main`（合并提交 `4db90c7`），已 push 到 GitHub。阶段 18 关键结论与经验：
 
-阶段 18（语料扩充与评测/质量体系增强）当前在 `claude/phase-18-corpus-evaluation-quality` 分支完成开发、测试、普通文档和 Obsidian 草稿，但按用户要求尚未提交、尚未创建 `phase-18-complete` tag、尚未推送，等待人工核验。阶段 18 关键判断：
-
-- 语料深度扩充按用户决策「尽力真实下载 + 诚实报数」执行：只下载许可允许的开放获取全文，深度全文 11 -> 16，RFC 窄领域开放全文有限，未达 40-60，未造假。
-- PDF 解析加固（`app/services/ingestion/pdf_text.py`）让全文 chunk 带真实 `heading_path`。
-- 难评测集多配置对比结论 `keep_existing_hybrid`（bm25_rrf 未优于 hybrid），以数据闭环阶段 17 `mesoscopic_modeling` 软退化担忧。
-- quality gate = `review_required/high`：难评测集暴露真实的 off-topic 拒答边界偏松（deterministic 与真实 Jina 下均 1/5），已显式阻断并写明原因，**不在阶段 18 静默改默认拒答逻辑**，留待后续独立校准 Phase。
-- 后续 agent 注意：阶段 18 首次新增外部资料来源（开放获取全文），但 `data/app.sqlite` 与 `data/fulltext/` 仍 gitignore，深度全文 DB 增长靠 `scripts/expand_open_access_corpus.py` 可复跑导入管线复现。
+- 语料：开放获取深度扩充（诚实报数）+ 用户合法下载的中文全文 **298 篇**入库；现为 465 文档 / 8918 chunk / 深度全文约 340 篇。中文全文与 `data/app.sqlite`、`data/fulltext/` 均 gitignore，靠 `scripts/import_papers_corpus.py`（统一导入器）可复跑导入；新增依赖 `cryptography` 解密用户已合法获取的 AES PDF。
+- PDF 解析加固 `app/services/ingestion/pdf_text.py`（含中文章节识别）让全文 chunk 带真实 `heading_path`。
+- 难评测集多配置对比结论 `keep_existing_hybrid`（bm25_rrf 未优于 hybrid）。
+- off-topic 拒答边界已校准闭环：`workflow.py` 主题门 `has_topic_anchor` + `CORE_DOMAIN_TERMS`（off-topic 5/5 拒答、on-topic 8/8 不误拒）；阶段 16 ITZ Answer Coverage 闭环为 low。quality gate 由 high → **pass/low**；全量 386 passed。
+- 真实索引重建：`build_vector_index.py --provider openai-compatible --batch-size 16 --sleep-seconds 10 --max-retries 5`（限速 + 退避重试，遵守 Jina 速率限额、容忍瞬断）。
 - 经验：阶段 17/18 都遇到「README/docs 顶部状态滞后于 Git 真相」，新线程务必以 `git tag`/`git log` 为准，文档收尾时同步修正入口文档。
+
+### 阶段 19 — 中文全文文献分析与检索/评测调优（在分支开发，待人工核验）
+
+阶段 19 在 `claude/phase-19-chinese-analysis-retrieval-tuning` 分支完成 Phase 0–4 开发、测试、普通文档和 Obsidian 草稿；从含阶段 18 合并的 `main` 出发；**尚未 git add/commit/tag/push、未创建 PR**。阶段 19 关键结论与经验：
+
+- **Phase 0 第一轮文献分析探索**（`scripts/explore_chinese_corpus.py`，10 题：8 on-topic + 2 拒答）：deterministic 下 `deep_top1=0/8`、`metadata_top1=5/8` 强力暴露中文查询排序短板（题录 chunks 短而关键词密度高，hybrid 默认 0.7 keyword + 0.3 vector 让题录系统性压过中文深度全文）；off-topic 拒答门按预期工作，唯独"工程责任判断"命中域词后未被默认拒答门挡住（prompt 层议题，记入遗留风险）。
+- **Phase 1 中文难评测集**（`data/evaluation/stage19_chinese_hard_queries.csv`，19 题：5 跨段证据 + 5 易混淆术语 + 5 参数细节 + 4 需拒答）：独立 CSV，不覆盖旧英文 `stage18_hard_queries.csv`。
+- **Phase 2 检索排序调优**：新增纯函数 `app/services/retrieval/source_type_reweight.py`（`Stage19TuningWeights` + 4 套默认配置 + `CORE_DOMAIN_TERMS` 与 Brain 解耦），新增 `scripts/evaluate_stage19_retrieval_tuning.py`；三候选都把 `deep_fulltext_top1_rate` 从 0.000 拉升到 0.533–0.733（`topic_anchor_strict` 最高），但 `precision@1` 因关键词判定偏向题录卡片而下降；按严格门槛（Δp@1 ≥ 0.10 且 Δdeep_top1 ≥ 0.20 且 refusal 不退化）保持 **`keep_existing_hybrid`**——三候选作为可配置开关保留在 `source_type_reweight.py`。
+- **Phase 3 文献分析快照**（`docs/stage19_literature_review.md`）：面向人读，整合 Phase 0/2 数据 + 主题速览 + 面试表达；未新增 build 脚本（阶段边界裁剪）。
+- 全量测试 **408 passed**；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 均未被破坏。
+- 经验：`expected_source_hit` 关键词判定对题录卡片偏向；后续可考虑答案级 ratio 或真实 Jina 重跑让 Δp@1 通过门槛后切默认链路。
+
+阶段 19 沿用既有约束：不让真实 API 成为 CI/全量测试前提（deterministic 仍负责离线回归）；受版权/授权全文与本地 DB 不入库；默认链路是否切换由中文难评测集数据决定；未经人工核验不提交/打 tag/推送；tag 命名 `phase-19-complete`，指向最终功能提交。
 
 阶段 4 最终提交和 tag：
 
@@ -1302,9 +1315,9 @@ tag: phase-14-complete
 tag: phase-15-complete
 ```
 
-不要移动 `phase-4-complete` 到 `phase-15-complete`，也不要移动 `phase-16-complete` 或 `phase-17-complete`。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
+不要移动 `phase-4-complete` 到 `phase-18-complete` 中的任何已有阶段 tag。如果后续只是补文档或流程规则，应该新建普通文档提交，不要把阶段完成 tag 挪到后续提交。
 
-阶段 18 当前没有阶段 tag。只有用户人工核验并明确确认后，才允许提交、创建 `phase-18-complete` tag 和推送 GitHub；tag 必须指向阶段 18 最终功能提交。
+阶段 18 已创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`）并合并、推送到 GitHub。阶段 19 当前没有阶段 tag。只有用户人工核验并明确确认后，才允许提交、创建 `phase-19-complete` tag 和推送 GitHub；tag 必须指向阶段 19 最终功能提交。
 
 阶段 6 已实现检索优化与评测闭环：
 

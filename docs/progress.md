@@ -1,6 +1,63 @@
 # 项目进度
 
-## 最新状态：2026-06-09（阶段 18 之后增量：中文全文语料 + 拒答边界校准，待人工核验）
+## 最新状态：2026-06-10（阶段 19 中文全文文献分析与检索/评测调优，待人工核验）
+
+当前阶段：阶段 19，中文全文文献分析与检索/评测调优。在 `claude/phase-19-chinese-analysis-retrieval-tuning` 分支完成 Phase 0–4 开发、测试、普通文档和 Obsidian 草稿，停在用户人工核验前：**尚未执行** `git add`、`git commit`、`git tag`、`git push`，也未创建 PR。
+
+Git / tag / main 起点：
+
+- 阶段 18 已完成人工核验、提交、创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`，非 merge）并合并到 `main`（合并提交 `4db90c7`），已 push 到 GitHub。
+- `phase-18-complete` 是 `main` 祖先；阶段 19 从含阶段 18 合并的 `main` 出发；未移动任何已有阶段 tag。
+
+阶段 19 完成内容：
+
+- 使用 Planning with Files 维护 `task_plan.md`、`findings.md`、`progress.md`。
+- 新增 `docs/stage19_chinese_analysis_retrieval_tuning.md` 设计文档（目标、Phase 0 实证、四类难度难评测集、调优口径、决策门槛、安全边界、完成标准、面试表达）。
+- **Phase 0 第一轮文献分析探索**：新增 `scripts/explore_chinese_corpus.py`（默认 deterministic，可选 `--real` 走 MIMO+Jina，带重试），产出 `data/evaluation/stage19_exploration_results.csv`（10 题：8 on-topic + 2 拒答）。
+- **Phase 1 中文难评测集**：新增独立 `data/evaluation/stage19_chinese_hard_queries.csv`（19 题：5 cross_passage + 5 confusable + 5 parameter_detail + 4 refusal），不覆盖旧英文 `stage18_hard_queries.csv`；新增 `tests/test_stage19_chinese_hard_set.py`（11 passed）。
+- **Phase 2 检索排序调优**：新增 `app/services/retrieval/source_type_reweight.py` 纯函数模块（4 套配置：baseline / fulltext_boost / metadata_demote / topic_anchor_strict），新增 `scripts/evaluate_stage19_retrieval_tuning.py` + 两份 CSV 结果，新增 `tests/test_stage19_retrieval_tuning.py`（11 passed）。
+- **Phase 3 文献分析快照**：新增 `docs/stage19_literature_review.md`（面向人读，整合 Phase 0/2 数据 + 主题速览 + 面试表达）；未新增 build 脚本（阶段边界裁剪）。
+- **Phase 4 回归 + 文档/Obsidian 收尾**：全量测试通过；同步入口文档；补 Obsidian 阶段 19。
+
+评测结果（deterministic）：
+
+```text
+Phase 0 探索（10 题，8 on-topic + 2 refusal）：
+  refused=1 refusal_matched=9/10
+  on_topic_answered=8 deep_top1=0/8 metadata_top1=5/8
+  errors=0
+
+Phase 2 中文难评测集 19 题 × 4 配置：
+  hybrid_baseline             p@1=0.400 deep_top1=0.000 meta_top1=1.000 refusal_acc=0.750
+  hybrid_fulltext_boost       p@1=0.333 deep_top1=0.533 meta_top1=0.467 refusal_acc=0.750
+  hybrid_metadata_demote      p@1=0.333 deep_top1=0.533 meta_top1=0.467 refusal_acc=0.750
+  hybrid_topic_anchor_strict  p@1=0.200 deep_top1=0.733 meta_top1=0.267 refusal_acc=0.750
+  overall=keep_existing_hybrid（Δp@1 门槛未达成，但 Δdeep_top1 全部≥0.20）
+
+full tests: 408 passed
+```
+
+遗留风险：
+
+- `cn_explore_refusal_mix_design` 等命中域词的工程责任判断题未被默认拒答门挡住，属 **prompt 层议题**，不在阶段 19 检索调优范围内。
+- `expected_source_hit` 用关键词列表判 hit，对题录卡片偏向；未来可考虑答案级 ratio 或真实 Jina 重跑。
+- 阶段 19 当前**未提交、未打 `phase-19-complete` tag、未推送 GitHub**，等待用户人工核验。
+
+下一阶段任务：
+
+- 用户人工核验阶段 19 设计文档、探索/调优脚本、中文难评测集、`source_type_reweight` 模块、调优结果 CSV、文献分析快照、入口文档同步。
+- 如确认通过，再执行提交、创建 `phase-19-complete` tag 并推送；tag 应指向阶段 19 最终功能提交。
+- 后续阶段可考虑：(1) 优化 hit 判定让 Δp@1 通过门槛后切换 source_type_reweight 进默认链路；(2) prompt 层"工程责任判断"拒答边界；(3) 评测 LLM-as-judge 离线增强 Answer Coverage。
+
+面试表达：
+
+```text
+阶段 19 我没有继续堆模型或语料，而是把已经入库的约 340 篇中文深度全文真正用起来。第一轮真实/确定性 agent 探索就暴露了一个之前没被量化过的真实排序短板：8 道 on-topic 中文问题里没有一题 top-1 是深度全文，5 题被题录卡片占据。中文难评测集进一步在 15 道非拒答题上把 deep_top1 量化到 0.000，这是阶段 18 之后的真实瓶颈。
+
+调优我没有引入新 reranker，而是用纯函数的 source_type_reweight 在 hybrid 候选之后做后处理，对照三种配置。结果是三组都能把 deep_top1 从 0.000 推到 0.53–0.73，但 precision@1 因关键词判定偏向题录而下降，按严格门槛（Δp@1 ≥ 0.10 且 Δdeep_top1 ≥ 0.20 且 refusal 不退化）保持 keep_existing_hybrid，并把三候选作为可配置开关留作后续切换依据。"先用起来 → 暴露真实问题 → 用难评测集量化 → 用纯函数对照 → 用门槛诚实决策"的闭环，是阶段 19 想传达的工程方法。
+```
+
+## 历史状态：2026-06-09（阶段 18 之后增量：中文全文语料 + 拒答边界校准，待人工核验）
 
 在 `claude/phase-18-corpus-evaluation-quality` 分支、阶段 18 主体之后，由用户驱动追加了一段工作（详见 `docs/stage18_followup_chinese_corpus.md`）。是否单列为新阶段由用户人工核验时决定；当前**未提交、未打 tag、未推送**。
 

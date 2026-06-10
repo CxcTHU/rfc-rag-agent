@@ -767,3 +767,58 @@ app/frontend/quality_report.html
 - 评测产物 `data/evaluation/cn_fulltext_queries.csv` / `cn_fulltext_results.csv` 只保存问题、
   脱敏的回答摘要、来源标题与拒答判断，不含 API key 或供应商原始响应。
 - 真实 Jina/MIMO 仅用于本地真实检索/分析；deterministic 索引仍负责离线回归。
+
+## 阶段 19 中文全文文献分析与检索/评测调优产物
+
+阶段 19 新增或更新的工程与评测产物：
+
+```text
+docs/stage19_chinese_analysis_retrieval_tuning.md
+docs/stage19_literature_review.md
+scripts/explore_chinese_corpus.py
+scripts/evaluate_stage19_retrieval_tuning.py
+app/services/retrieval/source_type_reweight.py
+data/evaluation/stage19_exploration_results.csv
+data/evaluation/stage19_chinese_hard_queries.csv
+data/evaluation/stage19_retrieval_tuning_results.csv
+data/evaluation/stage19_retrieval_tuning_summary.csv
+tests/test_stage19_chinese_hard_set.py
+tests/test_stage19_retrieval_tuning.py
+```
+
+阶段 19 **不新增外部资料来源**，不新增爬虫链路，不保存受版权/受限全文。它只读取现有：
+
+```text
+sources
+documents/chunks
+chunk_embeddings
+data/evaluation/stage18_hard_queries.csv（仅引用对比，不修改）
+```
+
+这些文件不是新的文献资料来源。它们只记录：
+
+- 中文研究问题、期望命中、期望来源类型、期望拒答、期望要点关键词、干扰主题。
+- 探索/调优配置名、source_type 分布、深度全文/题录命中名次与占比、precision@1、mean_rank、refusal_accuracy、distinct_wins、decision/next_action。
+- 真实 API 偶发失败显式写入 `error` 字段；不静默重试到成功掩盖失败。
+- 回答摘要仅截取前 200 字，且不包含 API 原始响应、API key、Bearer token。
+
+阶段 19 的核心关系是：
+
+```text
+已有 sources / documents / chunks（含约 340 篇中文深度全文）
+-> hybrid retrieval（默认 0.7 keyword + 0.3 vector + 0.15 both_match）
+-> Phase 0 真实/确定性 agent 探索（脱敏结果）
+-> Phase 1 中文难评测集（19 题，独立 CSV）
+-> Phase 2 source_type_reweight 4 配置对照（纯函数后处理）
+-> Phase 3 文献分析快照（Markdown 引用现有 CSV）
+```
+
+合规结论：
+
+- 阶段 19 不新增爬虫链路。
+- 阶段 19 不新增外部文献或受限全文。
+- 用户合法下载的中文全文继续只留在本地 `data/raw/` 与 `data/app.sqlite`（均 gitignore），不公开分发、不进 Git。
+- 真实 MIMO+Jina 仍是模型服务，不是资料来源；真实 API key / Bearer token / 供应商原始响应仍只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。
+- 自动回归继续使用 deterministic provider；真实模型只适合发布前质量校准或离线审阅。
+- HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
+- 阶段 19 当前停在用户人工核验前状态，尚未提交、尚未打 `phase-19-complete` tag、尚未推送。
