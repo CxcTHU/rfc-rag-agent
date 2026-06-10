@@ -14,17 +14,21 @@
 
 ## 当前阶段
 
-阶段 19（中文全文文献分析与检索/评测调优，待人工核验）：在 `claude/phase-19-chinese-analysis-retrieval-tuning` 分支完成 Phase 0–4 开发、测试、普通文档和 Obsidian 草稿；从含阶段 18 合并的 `main` 出发；按要求**尚未提交、尚未打 tag、尚未推送、未创建 PR**。阶段 18（含中文全文 298 篇入库 + 拒答边界校准）已合并到 main 并创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`，合并提交 `4db90c7`），已 push 到 GitHub。
+阶段 20（中文检索默认链路落地与评测判定增强，待人工核验前收尾）：当前在 `codex/phase-20-default-chain-and-eval-upgrade` 分支完成核心开发、回归验证和普通文档收尾；按要求**尚未执行 `git add`、尚未提交、尚未打 `phase-20-complete` tag、尚未推送、未创建 PR**。阶段 19 已完成并合并到 `main`：`phase-19-complete -> ffb4756`（非 merge 功能提交），合并提交为 `12184d7`。
 
-阶段 19 要点：
+阶段 20 要点：
 
-- **Phase 0 第一轮文献分析探索**（`scripts/explore_chinese_corpus.py`，10 题）：deterministic 下 deep_top1=0/8、metadata_top1=5/8 强力暴露中文查询排序短板。
-- **Phase 1 中文难评测集**（`data/evaluation/stage19_chinese_hard_queries.csv`，19 题：5 跨段证据 + 5 易混淆术语 + 5 参数细节 + 4 需拒答），独立 CSV，不覆盖旧英文 baseline。
-- **Phase 2 检索排序调优**（`app/services/retrieval/source_type_reweight.py` 纯函数 + `scripts/evaluate_stage19_retrieval_tuning.py`）：对照 4 配置（baseline / fulltext_boost / metadata_demote / topic_anchor_strict）；三候选均把 `deep_fulltext_top1_rate` 从 0.000 拉升到 0.533–0.733（topic_anchor_strict 最高），但 precision@1 不升反降（关键词判定偏向题录），按严格门槛保持 **`keep_existing_hybrid`**；三候选作为可配置开关。
-- **Phase 3 文献分析快照**（`docs/stage19_literature_review.md`）：面向人读，整合 Phase 0/2 数据 + 主题速览 + 面试表达。
-- 全量测试 **408 passed**；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 均未被破坏。
+- **评测判定升级**（`scripts/evaluate_stage20_eval_upgrade.py`）：复用 `data/evaluation/stage19_chinese_hard_queries.csv`，用答案级 `coverage_ratio` 与 `expected_answer_points` 替代偏向题录卡片的关键词 hit 主判定；结果表包含 `query_id/config/judge_mode/hit/coverage_ratio/deep_fulltext_top1/refusal_matched/decision/next_action`。
+- **真实 Jina query 端校验**：只调用真实 Jina 生成 query embedding，复用已有 8918 条 chunk embeddings，不重做 chunk embedding；真实失败必须显式写 `skipped/error`，不得用 deterministic 结果伪造成真实成功。
+- **默认链路接入决策**（`scripts/build_stage20_default_chain_decision.py`）：deterministic 与真实 Jina 均显示候选 `source_type_reweight` 的 `Δp@1=+0.000<0.10`，虽然 `Δdeep_top1` 达标，仍按门槛保持 **`keep_existing_hybrid`**，不修改默认 `HybridSearchService` / Brain hybrid 链路。
+- **`responsibility_gate` 责任边界拒答门**：新增于 Brain 生成前，拦截“判定/评定/是否合格/是否符合规范/能否用于工程”等责任判断题，即使证据充足也提示系统不替代规范审查、工程设计、第三方检测或专家签字；on-topic 学习题不误拒。
+- **质量门槛与报告**（`scripts/build_stage20_quality_report.py`、`data/evaluation/stage20_quality_summary.csv`、`docs/stage20_quality_report.md`、`GET /quality-report`）：最终 quality gate 为 **pass/low**。
+- 回归验证：聚焦回归 61 passed + 67 passed；全量测试 **424 passed**；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 均未被破坏。
 
-详见 `docs/stage19_chinese_analysis_retrieval_tuning.md` 与 `docs/progress.md`。
+阶段 19 要点（已合并基线）：
+
+- `docs/stage19_chinese_analysis_retrieval_tuning.md` 与 `docs/stage19_literature_review.md` 记录中文全文文献分析与检索调优结论。
+- `app/services/retrieval/source_type_reweight.py` 保留为候选/评测开关；阶段 20 升级判定后仍未达到默认链路切换门槛。
 
 ---
 
@@ -245,7 +249,15 @@
 - `data/evaluation/stage19_retrieval_tuning_results.csv` 阶段 19 每 config × query 调优结果
 - `data/evaluation/stage19_retrieval_tuning_summary.csv` 阶段 19 每 config 调优汇总
 - `docs/stage19_literature_review.md` 阶段 19 面向人读的中文文献分析快照
-- 408 个自动化测试
+- `docs/stage20_default_chain_and_eval_upgrade.md` 阶段 20 设计文档（答案级 coverage ratio、真实 Jina query 端校验、默认链路切换门槛、`responsibility_gate`、安全边界）
+- `scripts/evaluate_stage20_eval_upgrade.py` 阶段 20 评测判定升级脚本（deterministic + 可选真实 Jina query-only）
+- `data/evaluation/stage20_eval_upgrade_results.csv`、`data/evaluation/stage20_eval_upgrade_summary.csv` 阶段 20 deterministic 评测结果与汇总
+- `data/evaluation/stage20_eval_upgrade_real_jina_results.csv`、`data/evaluation/stage20_eval_upgrade_real_jina_summary.csv` 阶段 20 真实 Jina query 端校验结果与汇总
+- `scripts/build_stage20_default_chain_decision.py`、`data/evaluation/stage20_default_chain_decision.csv` 阶段 20 默认链路接入决策
+- Brain `responsibility_gate` 责任边界拒答门，位于 `app/services/brain/workflow.py` 与 `app/services/brain/service.py`
+- `scripts/build_stage20_quality_report.py`、`data/evaluation/stage20_quality_summary.csv`、`docs/stage20_quality_report.md` 阶段 20 quality gate 汇总与报告
+- `GET /quality-report` 当前展示阶段 20 只读质量门槛报告，不触发真实 API、不写库
+- 424 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明

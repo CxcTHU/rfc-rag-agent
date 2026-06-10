@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from app.services.brain.workflow import (
     build_retrieval_outcome,
     evaluate_evidence_confidence,
+    evaluate_responsibility_gate,
     extract_citations,
 )
 
@@ -88,6 +89,24 @@ def test_evaluate_evidence_confidence_accepts_cross_language_expanded_terms() ->
 
     assert confidence.sufficient
     assert "porosity" in confidence.matched_terms
+
+
+def test_responsibility_gate_triggers_engineering_compliance_judgment() -> None:
+    gate = evaluate_responsibility_gate(
+        "请判定本工程的堆石混凝土配合比设计是否符合规范要求？"
+    )
+
+    assert gate.triggered
+    assert "responsibility_gate" in (gate.refusal_reason or "")
+
+
+def test_responsibility_gate_allows_learning_questions() -> None:
+    for question in (
+        "堆石混凝土配合比通常关注哪些指标？",
+        "资料中提到的抗压强度影响因素有哪些？",
+        "规范审查和文献问答有什么区别？",
+    ):
+        assert not evaluate_responsibility_gate(question).triggered
 
 
 def test_extract_citations_returns_unique_allowed_source_ids() -> None:

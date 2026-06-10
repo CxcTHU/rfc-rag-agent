@@ -10,7 +10,7 @@ from app.db.repositories import (
 from app.db.session import create_sqlite_engine
 from app.services.brain.config import DEFAULT_WORKFLOW_STEPS, RetrievalConfig
 from app.services.brain.service import BrainService, rewrite_contextual_question
-from app.services.brain.workflow import DEFAULT_REFUSAL_ANSWER
+from app.services.brain.workflow import DEFAULT_REFUSAL_ANSWER, RESPONSIBILITY_REFUSAL_ANSWER
 from app.services.generation.chat_model import DeterministicChatModelProvider
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from app.services.retrieval.vector_index import VectorIndexService
@@ -101,6 +101,33 @@ def seed_decompose_documents(db) -> None:
                 heading_path="Cost schedule emission",
                 start_char=0,
                 end_char=130,
+            )
+        ],
+    )
+
+
+def seed_responsibility_documents(db) -> None:
+    DocumentRepository(db).create_with_chunks(
+        DocumentCreate(
+            title="RFC mix design compliance notes",
+            source_type="local_file",
+            source_path="responsibility.md",
+            file_name="responsibility.md",
+            file_extension=".md",
+            content_hash="brain-service-responsibility-hash",
+            raw_path="data/raw/responsibility.md",
+        ),
+        [
+            ChunkCreate(
+                chunk_index=0,
+                content=(
+                    "堆石混凝土 配合比 设计 规范 要求 自密实 流动 强度 "
+                    "指标 can provide indicators for engineering review."
+                ),
+                char_count=80,
+                heading_path="Mix design",
+                start_char=0,
+                end_char=80,
             )
         ],
     )
@@ -317,3 +344,32 @@ def test_brain_service_refuses_low_evidence_vector_results(tmp_path) -> None:
     assert result.citations == []
     assert "evidence" in (result.refusal_reason or "")
     assert result.workflow_steps[-1].output_summary == "refused=True low_evidence"
+
+
+def test_brain_service_refuses_engineering_responsibility_judgment(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_responsibility_documents(db)
+        result = make_brain_service(db).answer(
+            "请判定本工程的堆石混凝土配合比设计是否符合规范要求？",
+            config=RetrievalConfig(retrieval_mode="keyword", top_k=2),
+        )
+
+    assert result.refused
+    assert result.answer == RESPONSIBILITY_REFUSAL_ANSWER
+    assert "responsibility_gate" in (result.refusal_reason or "")
+    assert result.workflow_steps[-1].output_summary == "refused=True responsibility_gate"
+
+
+def test_brain_service_does_not_over_refuse_learning_question(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_responsibility_documents(db)
+        result = make_brain_service(db).answer(
+            "堆石混凝土 配合比 指标",
+            config=RetrievalConfig(retrieval_mode="keyword", top_k=2),
+        )
+
+    assert not result.refused

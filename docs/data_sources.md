@@ -821,4 +821,52 @@ data/evaluation/stage18_hard_queries.csv（仅引用对比，不修改）
 - 真实 MIMO+Jina 仍是模型服务，不是资料来源；真实 API key / Bearer token / 供应商原始响应仍只允许放在本地 `.env`，不得写入源码、文档、CSV、测试或 Obsidian。
 - 自动回归继续使用 deterministic provider；真实模型只适合发布前质量校准或离线审阅。
 - HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
-- 阶段 19 当前停在用户人工核验前状态，尚未提交、尚未打 `phase-19-complete` tag、尚未推送。
+- 阶段 19 已提交、创建 `phase-19-complete` tag 并合并到 `main`，成为阶段 20 的正确基线。
+
+## 阶段 20 中文检索默认链路落地与评测判定增强产物
+
+阶段 20 **不新增外部资料来源**，不新增爬虫链路，不保存受版权/受限全文，不重做 chunk embedding。它只读取现有阶段 18/19 语料、索引和评测集，并新增评测/报告产物：
+
+```text
+docs/stage20_default_chain_and_eval_upgrade.md
+docs/stage20_quality_report.md
+scripts/evaluate_stage20_eval_upgrade.py
+scripts/build_stage20_default_chain_decision.py
+scripts/build_stage20_quality_report.py
+data/evaluation/stage20_eval_upgrade_results.csv
+data/evaluation/stage20_eval_upgrade_summary.csv
+data/evaluation/stage20_eval_upgrade_real_jina_results.csv
+data/evaluation/stage20_eval_upgrade_real_jina_summary.csv
+data/evaluation/stage20_default_chain_decision.csv
+data/evaluation/stage20_quality_summary.csv
+tests/test_stage20_default_chain_and_eval_upgrade.py
+tests/test_stage20_eval_upgrade.py
+tests/test_stage20_default_chain_decision.py
+tests/test_stage20_quality_report.py
+```
+
+阶段 20 读取边界：
+
+```text
+data/evaluation/stage19_chinese_hard_queries.csv
+data/evaluation/stage19_retrieval_tuning_summary.csv（只作历史对照）
+sources
+documents/chunks
+chunk_embeddings（deterministic 与已有 Jina 索引）
+```
+
+这些文件不是新的文献资料来源。它们只记录：
+
+- 查询编号、配置名、judge 模式、答案级 `coverage_ratio`、deep_fulltext top-1、拒答匹配、默认链路决策和下一步动作。
+- 真实 Jina query-only 校验状态：`completed` / `skipped` / `error`，以及脱敏错误摘要。
+- quality gate section、status、risk_level、evidence、decision、next_action。
+
+合规结论：
+
+- 阶段 20 不新增论文、PDF、CAJ、网页抓取或外部资料库。
+- 中文全文继续只留在本地 `data/raw/`、`data/fulltext/`、`data/app.sqlite` 和已有 chunk/index 中，均不进入 Git。
+- 真实 Jina 只在 query 端按需调用，不重做 8918 条 chunk embedding；真实 API key / Bearer token / 供应商原始响应不得写入 CSV、文档、测试或 Obsidian。
+- `stage20_eval_upgrade_real_jina_*` 只保存脱敏评测指标和状态，不保存供应商原始响应或受限全文。
+- `/quality-report` 当前读取阶段 20 脱敏 summary 与静态 HTML，不触发真实 API、不写库、不重新索引。
+- HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
+- 阶段 20 当前停在用户人工核验前状态，尚未提交、尚未创建 `phase-20-complete` tag、尚未推送。

@@ -8,12 +8,14 @@ from app.db.repositories import QuestionAnswerLogCreate, QuestionAnswerLogReposi
 from app.services.brain.config import RetrievalConfig
 from app.services.brain.workflow import (
     DEFAULT_REFUSAL_ANSWER,
+    RESPONSIBILITY_REFUSAL_ANSWER,
     BrainAnswerResult,
     BrainRetrievalOutcome,
     BrainWorkflowStepRecord,
     UsedRetrievalMode,
     build_retrieval_outcome,
     evaluate_evidence_confidence,
+    evaluate_responsibility_gate,
     extract_citations,
 )
 from app.services.generation.chat_model import ChatModelProvider
@@ -243,6 +245,27 @@ class BrainService:
         retrieval_outcome: BrainRetrievalOutcome,
         workflow_steps: list[BrainWorkflowStepRecord],
     ) -> BrainAnswerResult:
+        responsibility_gate = evaluate_responsibility_gate(retrieval_question)
+        if responsibility_gate.triggered:
+            workflow_steps.append(
+                BrainWorkflowStepRecord(
+                    name="generate_answer",
+                    input_summary="responsibility_gate=True",
+                    output_summary="refused=True responsibility_gate",
+                    succeeded=True,
+                )
+            )
+            return self._refuse(
+                question=original_question,
+                retrieval_mode=retrieval_outcome.used_retrieval_mode,
+                refusal_reason=(
+                    responsibility_gate.refusal_reason
+                    or "Question asks for engineering responsibility judgment."
+                ),
+                workflow_steps=workflow_steps,
+                answer=RESPONSIBILITY_REFUSAL_ANSWER,
+            )
+
         if not retrieval_outcome.results:
             workflow_steps.append(
                 BrainWorkflowStepRecord(
@@ -406,10 +429,11 @@ class BrainService:
         retrieval_mode: UsedRetrievalMode,
         refusal_reason: str,
         workflow_steps: list[BrainWorkflowStepRecord],
+        answer: str = DEFAULT_REFUSAL_ANSWER,
     ) -> BrainAnswerResult:
         result = BrainAnswerResult(
             question=question,
-            answer=DEFAULT_REFUSAL_ANSWER,
+            answer=answer,
             citations=[],
             sources=[],
             refused=True,

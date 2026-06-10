@@ -1,159 +1,197 @@
-# Task Plan: 阶段 19 - 中文全文文献分析与检索/评测调优
+# Task Plan: 阶段 20 - 中文检索默认链路落地与评测判定增强
 
 ## Goal
 
-在阶段 18「语料扩充与评测/质量体系增强 + 中文全文语料与拒答边界校准」已完成、提交、打 `phase-18-complete` tag（指向最终功能提交 `c56fc62`）并合并到 `main`（合并提交 `4db90c7`）的基础上，完成阶段 19：
+在阶段 19「中文全文文献分析与检索/评测调优」已完成、提交、创建 `phase-19-complete` tag（指向阶段 19 最终功能提交 `ffb4756`，非 merge）并合并到 `main`（合并提交 `12184d7`）的基础上，完成阶段 20「中文检索默认链路落地与评测判定增强」：
 
-1. 用真实 MIMO+Jina agent 对约 340 篇深度全文（含约 298 篇用户合法下载的中文文献）做系统性文献分析探索，定位语料厚薄、回答覆盖度与排序短板。
-2. 据此构建独立的中文难评测集（跨段证据 / 易混淆术语 / 参数细节 / 需拒答），不覆盖旧英文 baseline。
-3. 在中文难评测集上对照「深度全文加权 / metadata 降权 / topic-anchor」方案，用数据决定是否调整默认链路。
-4. （可选）把文献分析综述/研究问题清单沉淀为可复跑、带引用溯源的结构化产物。
-5. 全量回归 + 普通文档与 Obsidian 收尾 + 停在用户人工核验前状态。
+1. 用答案级 `coverage_ratio` 升级阶段 19 中文难评测集判定，削弱题录卡片关键词命中偏置。
+2. 在不重做 chunk embedding 的前提下做真实 Jina query 端校验，真实失败必须显式记录，不伪造成成功。
+3. 按数据门槛决定是否把 `source_type_reweight` 接入默认 hybrid 链路：`Δp@1>=0.10` 且 `Δdeep_top1>=0.20` 且 refusal 不退化才切换；否则诚实保持 `keep_existing_hybrid`。
+4. 新增 `responsibility_gate`，拦截“判定/评定/出具/是否合格/是否符合规范”等工程责任问题，即使检索证据充足也拒答。
+5. 更新 quality gate、阶段 20 结果表、普通文档和 Obsidian 本地阶段汇报，最终停在用户人工核验前：不 `git add`、不 commit、不 tag、不 push、不 PR。
 
 核心链路：
 
 ```text
-阶段 18 中文全文语料 + quality gate
--> 真实 MIMO+Jina agent 对中文全文做系统性文献分析
--> 定位语料厚薄、回答覆盖度、中文查询排序短板
--> 中文难评测集（跨段证据、易混淆术语、参数细节、需拒答）
--> 检索排序调优（深度全文加权 / metadata 降权 / topic-anchor 对照）
--> 用数据决定是否调默认链路
--> （可选）文献分析产物结构化沉淀
+阶段 19 中文调优结论
+-> 答案级 coverage_ratio 评测判定升级
+-> 真实 Jina query 端校验（复用已有 8918 Jina chunk embeddings）
+-> 默认链路接入决策（source_type_reweight 过门槛才切，可配置可关闭）
+-> responsibility_gate 责任边界拒答门
+-> quality gate / 报告更新
+-> 回归 + 普通文档 + Obsidian
 -> 停在人工核验待提交状态
 ```
 
-## 边界（不做）
+## Boundaries
 
 - 不做写入型 Agent 工具。
 - 不做复杂 LangGraph workflow。
 - 不做登录系统、不做部署优化。
-- 不新增爬虫或外部资料来源（已有语料够用）。
-- 不让真实 API 成为 CI 或本地全量测试前提（默认 deterministic / mock）。
+- 不新增爬虫或外部资料来源。
+- 不重做 chunk embedding；已有 deterministic 与 Jina 索引都覆盖 8918 chunks，只允许 query 端按需调用真实 Jina。
+- 不让真实 API 成为 CI 或本地全量测试前提；真实 Jina 校验必须可选，并将失败写入结果表。
 - HyDE 仍只做离线实验，不进入默认链路或自动回归。
-- 默认链路是否切换必须由中文难评测集数据决定，不拍脑袋。
-- 保留 deterministic baseline 与 real_config 边界，不用 deterministic 结果掩盖真实 API 失败。
+- 默认链路是否切换必须由升级后的中文难评测集数据决定，不拍脑袋。
+- 保留 deterministic baseline 与 real_config 边界，不用 deterministic 结果掩盖真实失败。
 - 不把 API key、Bearer token、供应商原始敏感响应、受限/受版权全文写入 Git、CSV、文档、测试或 Obsidian；中文全文与本地 DB 不入库。
-
-阶段开发完成后不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR。必须等待用户人工核验和明确确认后，才允许进入提交、tag 和 GitHub 推送流程。
-
-## 用户决策（阶段 19 关键）
-
-- 阶段 19 主要面向真实中文研究问题；评测/调优口径围绕「中文深度全文检索」展开。
-- Phase 0 第一轮探索：用真实 MIMO+Jina 跑约 8–12 个真实中文研究问题，捕捉真实 API 偶发超时（带重试）、回答覆盖度、来源命中和排序模式，作为 Phase 1/2 的输入。
-- Phase 2 调优方案对照三类轻量改动（深度全文加权 / metadata 降权 / topic-anchor），不引入新 reranker；若证据不充分则保持 `keep_existing_hybrid` 并写明阻断理由。
+- 阶段开发完成后不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR。
 
 ## Current Phase
 
-All phases complete（Phase 0–4 已完成）；阶段 19 停在用户人工核验前，未执行 git add/commit/tag/push 或 PR。
+Phase 10 complete: waiting for user manual verification.
 
 ## Phases
 
-### Phase 0: 启动校准 + 第一轮中文文献分析探索
+### Phase 0: 启动校准
 
-- [x] 阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、docs/stage18_corpus_evaluation_quality.md、docs/stage18_followup_chinese_corpus.md、旧 task_plan/findings/progress。
-- [x] 确认 Git 起点：`phase-18-complete -> c56fc62`（阶段 18 最终功能提交，**非** merge），是 `main` 祖先；`main` 已含阶段 18 合并 `4db90c7`。不移动任何已有 tag。
-- [x] 从含阶段 18 合并的 `main` 创建并切换到 `claude/phase-19-chinese-analysis-retrieval-tuning`。
-- [x] 用脚本/DB 核对当前语料构成：documents=465（institutional_access_pdf=325、metadata_record=115、open_access_pdf=15、local_file=10）；chunks=8918；深度全文≈340 篇（institutional+open_access）。embeddings：deterministic(64) + jina(1024) 各 8918。
-- [x] 确认 `data/app.sqlite`、`data/fulltext/` 被 gitignore；保留 AGENT.MD 未提交改动到新分支。
-- [x] 用 Planning with Files 编写 task_plan.md、findings.md、progress.md。
-- [x] 新增 `scripts/explore_chinese_corpus.py`：对若干真实中文研究问题（堆石混凝土自密实流动 / ITZ 强度 / 温控 / 抗冻 / 微观结构 / 综述 / 对比 / 需拒答）跑 hybrid 检索 + Brain answer，记录 top-K 来源 source_type 分布（深度全文 vs 题录）、命中 rank、回答覆盖度（基于期望关键词命中近似）、refused、耗时和真实 API 错误；默认 deterministic，可选 `--real` 走真实 MIMO+Jina；批量 agent 运行带重试。
-- [x] 产出 `data/evaluation/stage19_exploration_results.csv`（10 题；deep_top1=0/8、metadata_top1=5/8；errors=0；refusal_matched=9/10）。
-- [x] 在 findings.md 中记录探索结论与排序短板根因，作为 Phase 1/2 输入。
-- 验证方式：Git 分支/tag 检查、DB 查询、规划文件检查、探索脚本能复跑（deterministic 必跑、真实可选）。
-- 文档收尾要求：记录阶段 19 起点、tag/main 状态、语料构成、安全边界和「不提交、不打 tag、不推送」边界。
+- [x] 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/stage19_chinese_analysis_retrieval_tuning.md`、`docs/stage19_literature_review.md`、`task_plan.md`、`findings.md`、`progress.md`。
+- [x] 运行 `git status -sb` 与 `git log --oneline -5`。
+- [x] 确认阶段 19 已完成：`phase-19-complete -> ffb4756`，提交信息为 `Complete phase 19 chinese analysis and retrieval tuning`，父提交为 `4db90c7`，非 merge。
+- [x] 确认 `main` 已含阶段 19 合并提交 `12184d7 Merge phase 19 chinese analysis and retrieval tuning`，且 `phase-19-complete` 是 `main` 祖先。
+- [x] 从含阶段 19 合并的 `main` 创建并切换到 `codex/phase-20-default-chain-and-eval-upgrade`。
+- [x] 使用 Planning with Files 校准 `task_plan.md`、`findings.md`、`progress.md`。
+- 验证方式：Git/tag/main 检查命令输出；工作区状态检查；规划文件包含阶段 20 顺序、目标、验证、文档收尾和完成标准。
+- 文档收尾要求：记录阶段 20 启动证据、正确基线、安全边界和未提交边界。
 - Status: complete
 
-### Phase 1: 中文难评测集
+### Phase 1: 阶段 20 设计文档
 
-- [x] 新增 `docs/stage19_chinese_analysis_retrieval_tuning.md`（设计文档）：目标、输入、Phase 0 实证发现、第一轮文献分析方法、中文难评测集设计、排序调优口径与决策门槛、安全边界和完成标准。
-- [x] 新增 `data/evaluation/stage19_chinese_hard_queries.csv`（19 题：5 cross_passage + 5 confusable + 5 parameter_detail + 4 refusal）：包含 query_id、query、difficulty_type、language_type、expected_source_hit、expected_source_type、expected_refused、expected_answer_points、distractor_topics、notes。
-- [x] 题目锚定中文深度全文真实存在的研究主题：填充能力、温控、ITZ、抗冻抗渗、工程案例、RFC vs RCC、RFC vs 埋石混凝土、弹性模量 vs 抗压、绝热温升 vs 浇筑温度、劈裂 vs 直接抗拉、SCC 流动度、粒径级配、抗压强度尺寸效应、渗透系数、绝热温升曲线；refusal 含金融/烹饪/新闻 off-topic + 工程责任判断。
-- [x] 新增 `tests/test_stage19_chinese_hard_set.py`：CSV schema + 字段完整性 + 四类难度全覆盖 + refusal 占比 ≥ 20% + 设计文档关键字断言。
-- 验证方式：设计文档断言测试 + 难评测集结构测试通过。
-- 文档收尾要求：在 findings.md 记录设计决策与中文术语词；在 progress.md 记录测试结果。
-- Status: complete（11 passed）
+- [x] 新增 `docs/stage20_default_chain_and_eval_upgrade.md`。
+- [x] 写清目标、输入、评测判定升级口径、默认链路接入门槛与回滚、`responsibility_gate` 设计、安全边界和完成标准。
+- [x] 明确阶段 19 遗留项闭环方式：题录关键词偏置、真实 Jina query 校验、默认链路阻断/切换、工程责任拒答。
+- [x] 新增 `tests/test_stage20_default_chain_and_eval_upgrade.py`，锁住设计文档关键边界。
+- 验证方式：设计文档存在；测试或文档断言覆盖关键术语与门槛。
+- 文档收尾要求：在 `findings.md` 记录关键架构决策；在 `progress.md` 记录 Phase 1 完成与验证。
+- Status: complete
 
-### Phase 2: 检索排序调优
+### Phase 2: 评测判定升级
 
-- [x] 新增 `scripts/evaluate_stage19_retrieval_tuning.py`：在中文难评测集上对比基线 hybrid 与三种调优配置。
-- [x] 调优实现保持轻量、可关闭：`app/services/retrieval/source_type_reweight.py`（纯函数 + `Stage19TuningWeights`，不改 HybridSearchService 默认参数，不改 API schema）。
-- [x] 产出 `data/evaluation/stage19_retrieval_tuning_results.csv`（每 config × query 一行，含 decision/next_action）。
-- [x] 产出 `data/evaluation/stage19_retrieval_tuning_summary.csv`（每 config 一行汇总，含 distinct_wins_vs_baseline）。
-- [x] 默认链路决策：候选三组都满足 Δdeep_top1 ≥ 0.20 且 refusal 不退化，但都未达 Δp@1 ≥ 0.10 门槛 → 结论 `keep_existing_hybrid`，不静默 fallback。
-- [x] 补测试 `tests/test_stage19_retrieval_tuning.py`（11 passed）：纯函数 + dataclass 校验 + 不修改输入 + 与设计文档引用一致。
-- 验证方式：评测脚本可复跑；CSV 结构 + 决策口径正确；POST /search/hybrid 等 API 不变。
-- 文档收尾要求：findings.md 记录三候选数据、根因和遗留风险；progress.md 记录测试结果与决策。
-- Status: complete（overall=`keep_existing_hybrid`）
+- [x] 升级阶段 19 中文难评测集评测脚本或新增阶段 20 脚本，用答案级 `coverage_ratio` 判定替代偏向题录卡片的关键词命中。
+- [x] `coverage_ratio` 至少基于 `expected_answer_points` 覆盖情况；可选离线 LLM-judge 只能作为显式可选模式，不进入 CI 必跑。
+- [x] 去掉或降低 `expected_source_hit` 对题录卡片关键词密度的偏置，让 `precision@1` 更贴近“答案要点是否被证据覆盖”。
+- [x] 生成阶段 20 结果表，至少包含：`query_id`、`config`、`judge_mode`、`hit`、`coverage_ratio`、`deep_fulltext_top1`、`refusal_matched`、`decision`、`next_action`。
+- [x] 补充阶段 20 评测升级测试并运行聚焦测试。
+- 验证方式：脚本可 deterministic 复跑；CSV schema 测试；阶段 19 中文难评测集可重跑。
+- 文档收尾要求：记录 coverage_ratio 公式、去关键词偏置原因、结果与风险。
+- Status: complete
 
-### Phase 3（可选）: 文献分析产物结构化沉淀
+### Phase 3: 真实 Jina Query 端校验
 
-- [x] 新增 `docs/stage19_literature_review.md`（面向人读的文献分析快照），整合 Phase 0 探索 + Phase 2 调优数据，按主题速览中文深度全文覆盖度，并给出面试表达与数据安全边界。
-- [x] 未新增 `scripts/build_stage19_literature_review.py`：阶段边界裁剪——Phase 0 探索脚本与 Phase 2 调优脚本已经把数据沉淀到 CSV，可被脚本/前端任意复用；再加一个 build 脚本会引入需要 CI 维护的额外代码而无显著新增价值。该决策已写入 findings/progress。
-- 验证方式：Markdown 引用的所有 CSV/脚本/测试在仓库中实际存在；阶段 19 现有测试通过。
-- 文档收尾要求：作为面向人读的发布前文献快照；与 Phase 0/2 数据一致。
-- Status: complete（轻量做法）
+- [x] 在不重做 chunk embedding 的前提下，用已有 `openai-compatible / jina-embeddings-v3 / dim=1024` chunk 索引做 query 端真实 Jina 校验。
+- [x] 真实模式必须显式可选；API key/base URL 只从本地 `.env` 读取，不写入任何文件。
+- [x] 真实调用失败时写入 `error` / `skipped` / `real_config_status` 类字段，不伪造成成功。
+- [x] 保留 deterministic baseline 与 real_config 两套结果边界。
+- 验证方式：无真实配置时应稳定 skipped；有真实配置时只调用 query embedding，不重建索引；测试覆盖 skipped/error 状态。
+- 文档收尾要求：记录真实 Jina 成功/失败状态、是否影响默认链路决策、为何不作为全量测试前提。
+- Status: complete
 
-### Phase 4: 回归验证 + 文档/Obsidian 收尾 + 停在人工核验前
+### Phase 4: 默认链路接入决策
 
-- [x] 全量测试通过：**408 passed**（阶段 18 收尾为 386，阶段 19 新增 22 个）；无回归。
-- [x] 默认 deterministic，无真实 API 依赖；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 未被破坏。
-- [x] 更新 README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、AGENT.MD。
-- [x] 补齐 Obsidian：`obsidian-vault/阶段汇报/阶段 19 - 中文全文文献分析与检索调优/`、Phase 汇报索引、Phase 0–4 小汇报（10 项模板）；更新 `阶段汇报索引.md`、`阶段索引.md`、`首页.md`、`obsidian-vault/阶段/阶段 19 - 中文全文文献分析与检索调优.md`。
-- [x] 确认 obsidian-vault/ 仍被 Git 忽略；未执行 git add/commit/tag/push/PR。
-- [x] 最终汇报：当前分支、主要改动、测试结果、未提交状态、人工核验重点、后续提交/tag/推送建议。
-- [x] 密钥/敏感字段扫描：阶段 19 全部产物未泄露 API key / Bearer token / 受版权全文。
-- 验证方式：`.venv\Scripts\python.exe -m pytest -q` → 408 passed；Git 状态检查通过；Obsidian 文件已建立且仍 gitignore；阶段 tag 未移动。
-- 文档收尾要求：所有普通文档与 Obsidian 同步完成，停在用户人工核验前。
+- [x] 用升级后的判定结果比较 baseline 与候选 `source_type_reweight` 配置。
+- [x] 判断是否满足切换门槛：`Δp@1>=0.10` 且 `Δdeep_top1>=0.20` 且 refusal 不退化。
+- [x] 若满足：把 `source_type_reweight` 接入默认 hybrid 链路，并提供配置开关与默认回滚；保持 API schema 不变。
+- [x] 若不满足：保持 `keep_existing_hybrid`，写明阻断原因与后续 next_action。
+- [x] 接入时必须可配置、可关闭；不得静默 fallback 掩盖配置差异。
+- 验证方式：默认链路单元测试；配置开关测试；`POST /search/hybrid`、Brain、`/chat`、`/agent/query` 回归。
+- 文档收尾要求：在设计文档、结果表、quality gate 和 progress 中同步最终决策。
+- Status: complete
+
+### Phase 5: `responsibility_gate` 责任边界拒答门
+
+- [x] 新增工程责任拒答门，拦截“判定/评定/出具/是否合格/是否符合规范/配合比是否可用”等责任判断问题。
+- [x] 即使检索证据充足，也返回“系统不替代规范审查、工程设计、第三方检测或专家签字”的拒答提示。
+- [x] 补阶段 19 遗留 `cn_hq_refusal_engineering_responsibility`。
+- [x] 加正反例评测，确保 on-topic 学习题、概念解释题、资料检索题不误拒。
+- 验证方式：Brain/chat/agent 相关测试；中文难评测集 refusal 正确率；误拒反例测试。
+- 文档收尾要求：记录责任边界的业务含义、触发词、非触发场景与面试表达。
+- Status: complete
+
+### Phase 6: Quality Gate / 报告更新
+
+- [x] 建立或更新阶段 20 quality summary / report 产物。
+- [x] 明确阶段 19 的默认链路遗留与工程责任边界遗留的闭环状态。
+- [x] 如更新 `/quality-report`，保持只读，不触发真实 API、不写数据库、不改登录/权限体系。
+- [x] 阶段 20 结果表必须与报告/文档引用一致。
+- 验证方式：报告生成脚本测试；`GET /quality-report` 回归；CSV 字段测试。
+- 文档收尾要求：`docs/progress.md` 与 `docs/stage20_default_chain_and_eval_upgrade.md` 同步 quality gate 状态。
+- Status: complete
+
+### Phase 7: 回归验证
+
+- [x] 补充阶段 20 相关测试，覆盖评测判定、真实 Jina skipped/error、默认链路开关、`responsibility_gate`。
+- [x] 保证既有 documents/search/vector/hybrid/decompose/chat/brain/agent/sources/frontend 测试不被破坏。
+- [x] 确认 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`GET /quality-report` 不被破坏。
+- [x] 阶段收尾运行全量测试。
+- 验证方式：聚焦测试 + `.venv\Scripts\python.exe -m pytest -q`。
+- 文档收尾要求：在 `progress.md` 记录测试命令、结果、失败修复过程和残余风险。
+- Status: complete
+
+### Phase 8: 普通文档收尾
+
+- [x] 同步 `README.md`。
+- [x] 同步 `docs/progress.md`。
+- [x] 同步 `docs/architecture.md`。
+- [x] 同步 `docs/data_sources.md`。
+- [x] 判断并同步 `AGENT.MD` 中对阶段路线、规则或经验的更新。
+- [x] 给出阶段 20 面试表达。
+- 验证方式：文档中阶段状态、结果表、测试数、默认链路决策一致。
+- 文档收尾要求：普通文档先完成，再统一写 Obsidian 小 Phase 汇报。
+- Status: complete
+
+### Phase 9: Obsidian 本地知识库收尾
+
+- [x] 建立或更新 `obsidian-vault/阶段汇报/阶段 20 - 中文检索默认链路落地与评测判定增强/`。
+- [x] 建立阶段 20 Phase 汇报索引。
+- [x] 补齐 Phase 0 到最终 Phase 小汇报，每篇包含 10 项：本 Phase 目标、完成的主要任务、新增/修改内容、关键代码或模块、问题与解决方式、新词解释、验证结果、遗留问题、下一 Phase、面试表达。
+- [x] 更新 `obsidian-vault/阶段汇报索引.md`、`obsidian-vault/阶段索引.md`、`obsidian-vault/首页.md`、`obsidian-vault/阶段/阶段 20 - 中文检索默认链路落地与评测判定增强.md`。
+- [x] 确认 `obsidian-vault/` 仍被 Git 忽略，不纳入提交范围。
+- 验证方式：文件存在性检查；模板 10 项检查；Git ignore 检查。
+- 文档收尾要求：Obsidian 只在阶段 20 全部开发、测试、普通文档完成后统一写入。
+- Status: complete
+
+### Phase 10: 人工核验待提交状态
+
+- [x] 最终 `git status -sb`，确认未执行 `git add`、`git commit`、`git tag`、`git push` 或 PR。
+- [x] 检查无 API key、Bearer token、供应商原始敏感响应、受限/受版权全文进入 Git、CSV、文档、测试或 Obsidian。
+- [x] 最终汇报当前分支、主要改动、测试结果、未提交状态、人工核验重点，以及用户确认后再提交和打 tag 的建议。
+- 验证方式：Git 状态、敏感信息扫描、全量测试结果、文档/Obsidian 文件检查。
+- 文档收尾要求：停在用户人工核验前，不创建 `phase-20-complete` tag。
 - Status: complete
 
 ## Final Verification Targets
 
 | Check | Expected |
 |---|---|
-| Branch | `claude/phase-19-chinese-analysis-retrieval-tuning` |
-| Previous tags | `phase-18-complete` 及更早 tag 不移动 |
-| Baseline | 从含阶段 18 合并的 `main`（含 `4db90c7`）出发 |
+| Branch | `codex/phase-20-default-chain-and-eval-upgrade` |
+| Previous tag | `phase-19-complete -> ffb4756` and unchanged |
+| Baseline | `main` contains `12184d7 Merge phase 19 chinese analysis and retrieval tuning` |
 | No submit actions | no add/commit/tag/push/PR |
-| Design doc | `docs/stage19_chinese_analysis_retrieval_tuning.md` 覆盖目标/输入/方法/难评测/调优/安全/完成标准 |
-| Exploration | `scripts/explore_chinese_corpus.py` + `stage19_exploration_results.csv` 真实失败显式记录 |
-| Hard eval set | `stage19_chinese_hard_queries.csv` 独立 CSV + 测试，不覆盖旧 baseline |
-| Retrieval tuning | source_type_reweight + 多配置对比 + 默认链路数据结论 |
-| Tuning results | `stage19_retrieval_tuning_results.csv` + `stage19_retrieval_tuning_summary.csv` |
-| API contract | search/vector/hybrid/chat/agent + /quality-report 兼容 |
-| Tests | 阶段 19 测试 + 全量测试通过 |
-| Docs | README/docs/progress/architecture/data_sources/AGENT 同步 |
-| Obsidian | 阶段 19 本地知识库更新且仍被 Git 忽略 |
-| Final state | 停在用户人工核验前 |
-
-## Decisions Made
-
-| Decision | Rationale |
-|---|---|
-| 目标分支 `claude/phase-19-chinese-analysis-retrieval-tuning` | 与阶段 19 目标和 AGENT.MD 路线一致；Claude 用 `claude/` 命名空间 |
-| 从含阶段 18 合并的 `main` 创建分支 | `main` 已含 `4db90c7 Merge phase 18`，是正确起点；`phase-18-complete -> c56fc62` 是其祖先 |
-| 不移动已有阶段 tag | tag 必须稳定指向各阶段最终功能提交 |
-| 真实 agent 探索作为 Phase 0 入口 | 阶段 19 的目标是「真正用起来再调」，必须先用真实链路捕捉真实问题 |
-| 调优用 source_type 轻量重权 + topic-anchor，不引入新 reranker | 与阶段 17/18 边界一致，可解释、可关闭 |
-| 默认链路是否切换取决于中文难评测集对比 | 不拍脑袋，需可量化证据 |
-| Phase 3 设为可选 | 在 Phase 0/2 时间允许时做；不做也写明理由 |
+| Design doc | `docs/stage20_default_chain_and_eval_upgrade.md` |
+| Eval upgrade | answer-level `coverage_ratio` results table exists |
+| Real Jina | query-only validation, skipped/error explicit, no chunk re-embedding |
+| Default chain | switch only if threshold passes; otherwise `keep_existing_hybrid` with reason |
+| Responsibility gate | engineering responsibility questions refused; learning questions not over-refused |
+| API contract | search/vector/hybrid/chat/agent + /quality-report compatible |
+| Tests | focused + full tests pass |
+| Docs | README/progress/architecture/data_sources/AGENT synced as needed |
+| Obsidian | local phase 20 reports completed and gitignored |
+| Final state | waiting for user manual verification |
 
 ## Term Explanations
 
 | Term | Meaning in this project |
 |---|---|
-| 深度全文（deep fulltext） | `source_type in (open_access_pdf, institutional_access_pdf)` 的文档；含真实正文与章节结构 |
-| 题录（metadata_record） | 仅标题/摘要/元数据的轻量卡片；阶段 19 重点之一是确认这类卡片是否在中文查询下不当压过深度全文 |
-| topic-anchor | 主题锚点；中英文术语词表（堆石混凝土/ITZ/freeze-thaw 等），用于轻量重排 |
-| source_type 重权 | 召回后按文档类型加权或减权；纯后处理，不改检索算法本身 |
-| 中文难评测集 | 跨段证据 / 易混淆术语 / 参数细节 / 需拒答；锚定真实中文全文，让 deep_fulltext_top1_rate 与 metadata_top1_rate 等指标可观察 |
-| deep_fulltext_top1_rate | top-1 命中是深度全文的比率；阶段 19 关键调优指标 |
-| metadata_top1_rate | top-1 命中是题录卡片的比率；高了说明深度全文被压过，是阶段 19 想下降的指标 |
-| literature review snapshot | 文献分析快照；Phase 3 可选产物，作为面向人读的发布前结构化综述 |
+| `coverage_ratio` | 答案级覆盖率：用期望回答要点衡量证据/回答覆盖多少，而不是只看题录标题或摘要关键词是否命中 |
+| LLM-judge | 离线大模型裁判；可辅助人工审阅，但不能成为 CI 或本地全量测试前提 |
+| query 端 Jina 校验 | 只把用户问题发给 Jina 生成 query embedding，复用已有 chunk embeddings，不重新生成 8918 个 chunk 向量 |
+| `source_type_reweight` | 阶段 19 的检索后处理纯函数，按深度全文、题录、主题锚点对候选重新加权 |
+| `responsibility_gate` | 工程责任边界拒答门，防止系统替代规范审查、第三方检测、工程设计或专家签字 |
+| quality gate | 质量门禁；把评测结果、风险等级、默认链路决策和下一步动作沉淀成可复核状态 |
 
 ## Notes
 
-- 本文件由 Planning with Files 维护，是阶段 19 的任务顺序与完成标准。
-- 每个 Phase 完成后必须先更新 task_plan.md、findings.md、progress.md。
-- 阶段 19 开发过程中暂不写入 Obsidian 小 Phase 汇报；Phase 4 统一补齐。
-- 阶段 19 收尾后必须停在用户人工核验前，不提交、不打 tag、不推送。
+- 本文件由 Planning with Files 维护，是阶段 20 的任务顺序与完成标准。
+- 每个 Phase 完成后必须先更新 `task_plan.md`、`findings.md`、`progress.md`。
+- 阶段 20 开发过程中暂不写入 Obsidian 小 Phase 汇报；全部开发、测试、普通文档完成后，Phase 9 统一补齐。
+- 阶段 20 收尾后必须停在用户人工核验前，不提交、不打 tag、不推送。
