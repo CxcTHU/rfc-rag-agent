@@ -1,0 +1,20 @@
+query_id,query,difficulty_type,language_type,expected_source_hit,expected_source_type,expected_refused,expected_answer_points,distractor_topics,notes
+cn_hq_filling_capacity_factors,影响堆石混凝土填充能力的关键因素有哪些？,cross_passage,zh,填充;自密实;流动;粒径;空隙,any,false,自密实流动度;堆石粒径级配;空隙率;钢筋密度,题录摘要,跨段证据 锚定填充能力主题
+cn_hq_temperature_control_strategy,堆石混凝土大体积浇筑的温控防裂措施有哪些？,cross_passage,zh,温度;温控;水化;裂缝;大体积,institutional_access_pdf,false,绝热温升;入仓温度;分层浇筑;水化热;冷却措施,普通混凝土温控,跨段证据 锚定温控施工主题
+cn_hq_itz_mesoscale,界面过渡区如何影响堆石混凝土的强度和断裂模式？,cross_passage,zh,界面;过渡区;ITZ;强度;断裂,any,false,界面过渡区;骨料粘结;抗压强度;破坏模式;细观,普通混凝土ITZ,跨段证据 + 微观结构 承接阶段16 ITZ议题
+cn_hq_engineering_quality_control,堆石混凝土在水库或坝工应用中的质量控制要点是什么？,cross_passage,zh,质量;控制;施工;堆石;浇筑,institutional_access_pdf,false,分仓浇筑;密实性;自密实流动;强度检测;无损检测,普通施工质量,跨段证据 锚定工程案例 + 质量控制
+cn_hq_durability_freeze_thaw_permeability,堆石混凝土的抗冻和抗渗性能受哪些因素影响？,cross_passage,zh,抗冻;抗渗;冻融;渗透;耐久,any,false,冻融循环;渗透系数;配合比;界面过渡区;抗渗等级,普通混凝土耐久性,跨段证据 抗冻抗渗多因素
+cn_hq_rfc_vs_rcc_construction,堆石混凝土与碾压混凝土在筑坝施工上有什么本质区别？,confusable,zh,堆石;碾压;自密实;振捣;筑坝,any,false,自密实充填 vs 碾压振实;堆石粒径;浇筑工艺;施工设备,自密实混凝土普通应用,易混淆 RFC vs RCC
+cn_hq_rfc_vs_em_concrete,堆石混凝土与埋石混凝土有何区别？,confusable,zh,堆石;埋石;自密实;充填;密实,any,false,自密实充填 vs 人工排放;粒径;密实度;施工效率,常规混凝土,易混淆 RFC vs 埋石混凝土
+cn_hq_elastic_vs_compressive,堆石混凝土的弹性模量和抗压强度有何区别？两者如何评价？,confusable,zh,弹性模量;抗压;强度;力学,open_access_pdf,false,弹性模量定义;抗压强度试验;两者关系;尺寸效应,泊松比,易混淆 弹性模量 vs 抗压强度
+cn_hq_adiabatic_vs_pour_temp,绝热温升和浇筑入仓温度在大体积温控中分别起什么作用？,confusable,zh,绝热;温升;入仓;温度,institutional_access_pdf,false,绝热温升曲线;入仓温度控制;温升上限;温控措施,室外气温,易混淆 绝热温升 vs 浇筑温度
+cn_hq_splitting_vs_tensile,劈裂抗拉强度与直接抗拉强度之间有什么关系？,confusable,zh,劈裂;抗拉;强度;破坏,institutional_access_pdf,false,劈裂试验;直接拉伸;破坏机理;经验关系,抗压强度,易混淆 劈裂 vs 直接抗拉
+cn_hq_scc_flow_requirement,堆石混凝土用自密实混凝土的坍落扩展度一般要求是多少？,parameter_detail,zh,自密实;坍落;扩展;流动,any,false,坍落扩展度范围;V漏斗;流动度试验;高流动性,普通泵送混凝土,参数细节 SCC 流动度
+cn_hq_rock_size_grading,堆石混凝土的堆石粒径和级配一般如何选择？,parameter_detail,zh,粒径;级配;堆石;最大,any,false,最大粒径;粒径范围;级配要求;粒径与流动关系,水库蓄水,参数细节 堆石粒径级配
+cn_hq_compressive_strength_range,堆石混凝土试件的抗压强度一般在什么范围？影响因素有哪些？,parameter_detail,zh,抗压;强度;试件;尺寸,any,false,强度等级;尺寸效应;骨料粒径;试件尺寸;龄期,水化反应温度,参数细节 抗压强度 + 尺寸效应
+cn_hq_permeability_coefficient,堆石混凝土坝体的渗透系数一般是多少？,parameter_detail,zh,渗透;系数;抗渗;堆石,institutional_access_pdf,false,渗透系数数量级;抗渗等级;界面渗透;施工因素,大坝沉降,参数细节 渗透系数
+cn_hq_adiabatic_temperature_rise,堆石混凝土的绝热温升曲线特征如何？速率有哪些影响因素？,parameter_detail,zh,绝热;温升;速率;曲线,institutional_access_pdf,false,绝热温升上限;温升速率;水化热模型;龄期,空气湿度,参数细节 绝热温升 速率模型
+cn_hq_refusal_unrelated_finance,当前 A 股市场对建材板块的影响有哪些？,refusal,zh,,any,true,,股票 财经,需拒答 off-topic 金融
+cn_hq_refusal_unrelated_cooking,怎样煮一锅好喝的鸡汤？,refusal,zh,,any,true,,烹饪 食谱,需拒答 off-topic 烹饪
+cn_hq_refusal_engineering_responsibility,请判定本工程的堆石混凝土配合比设计是否符合规范要求？,refusal,zh,,any,true,,工程责任 规范判定,需拒答 工程责任判断超系统范围
+cn_hq_refusal_unrelated_news,今天有什么科技新闻？,refusal,zh,,any,true,,新闻 时事,需拒答 off-topic 新闻

@@ -2825,3 +2825,63 @@ OpenAlex 发现 -> RFC 相关性过滤 -> 许可允许开放获取过滤
 ### 架构结论
 
 阶段 18 用更有区分度的难评测集证实了阶段 17 的 `keep_existing_hybrid` 结论（hit@8 仍饱和，但 rank@1 出现区分度，bm25_rrf 未赢过 hybrid），并以数据闭环了阶段 17 `mesoscopic_modeling` 排序软退化担忧。同时难评测集暴露出真实的 off-topic 拒答边界偏松问题（deterministic 与真实 Jina 下均 1/5），阶段 18 在 quality gate 显式标为 high 阻断并写明原因，不静默修改默认拒答逻辑，留待后续独立校准 Phase。
+
+
+## 阶段 19 中文全文文献分析与检索/评测调优
+
+阶段 19 不再加模型/语料，而是把约 340 篇中文深度全文真正用起来：第一轮真实/确定性 agent 文献分析 → 量化中文查询排序短板 → 中文难评测集 → 候选重权对照 → 数据驱动决策。
+
+核心数据流：
+
+```text
+POST /chat 或 AgentToolbox.answer_with_citations
+-> BrainService.answer()
+-> HybridSearchService (默认 0.7 keyword + 0.3 vector + 0.15 both_match)
+-> (评测脚本) source_type_reweight 后处理重权（可关闭）
+-> top-K 候选
+-> evidence confidence + has_topic_anchor 拒答门
+-> generate_answer
+```
+
+### 阶段 19 候选重权模块
+
+阶段 19 新增 `app/services/retrieval/source_type_reweight.py`（纯函数）：
+
+```text
+Stage19TuningWeights
+  name
+  fulltext_boost           # 命中 open_access_pdf / institutional_access_pdf 的加分
+  metadata_demote          # 命中 metadata_record / local_file 的减分（传正值）
+  topic_anchor_bonus_per_term  # 命中 CORE_DOMAIN_TERMS 时的每词加分（仅对深度全文生效）
+  topic_anchor_cap         # 主题锚点加分上限
+
+默认 4 套：
+  BASELINE_WEIGHTS              # 全 0 偏移，与默认 HybridSearchService 等价
+  FULLTEXT_BOOST_WEIGHTS        # fulltext_boost=0.30
+  METADATA_DEMOTE_WEIGHTS       # metadata_demote=0.30
+  TOPIC_ANCHOR_STRICT_WEIGHTS   # topic_anchor 0.06/词 + cap 0.30 + fulltext_boost 0.10
+```
+
+- 纯函数 `reweight_results(results, weights, query)`，不修改输入，稳定重排键：`(-score, source_type_rank, document_id, chunk_index)`。
+- `CORE_DOMAIN_TERMS` 与 Brain `workflow.py` 含义对齐但在该模块内独立维护，避免与默认拒答门耦合。
+- **不改 `HybridSearchService` 默认参数；不改 API schema；只在 `scripts/evaluate_stage19_retrieval_tuning.py` 内组合使用**。
+
+### 第一轮文献分析探索 + 中文难评测集
+
+- `scripts/explore_chinese_corpus.py`：10 题真实中文研究问题，默认 deterministic，可选 `--real` 走 MIMO+Jina（带轻量重试，真实失败显式写 CSV `error`）；输出 `data/evaluation/stage19_exploration_results.csv`（含 top-8 source_type 分布、深度全文/题录命中名次、refused、回答摘要、耗时、错误）。
+- `data/evaluation/stage19_chinese_hard_queries.csv`：19 题独立中文难评测集（5 跨段证据 + 5 易混淆术语 + 5 参数细节 + 4 需拒答），锚定中文深度全文真实主题，不覆盖旧 `stage18_hard_queries.csv`。
+- `scripts/evaluate_stage19_retrieval_tuning.py`：对照 4 配置；非拒答题用 hybrid `fetch_k=24` 召回 + 重权 + top-K=8 评测；拒答题用 `BrainService.answer` 验证。输出 `stage19_retrieval_tuning_results.csv` + `stage19_retrieval_tuning_summary.csv`，含决策门槛回写。
+
+### 数据结论
+
+- Phase 0 探索：deep_top1=0/8、metadata_top1=5/8（题录系统性压过深度全文）。
+- Phase 2 调优：三候选都把 `deep_fulltext_top1_rate` 从 0.000 拉升到 0.533–0.733；但 precision@1 不升反降（关键词 hit 判定偏向题录）。
+- 决策门槛（Δp@1 ≥ 0.10 且 Δdeep_top1 ≥ 0.20 且 refusal 不退化）下 → **`keep_existing_hybrid`**：三候选作为可配置开关保留在 `source_type_reweight.py`。
+
+### API 与默认链路边界
+
+阶段 19 保证 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`GET /quality-report` 不被破坏。默认 Brain hybrid 链路**不切换**；`source_type_reweight` 仅在阶段 19 评测脚本中组合使用，作为候选/可配置开关。
+
+### 架构结论
+
+阶段 19 用真实数据**首次量化**了中文查询的 metadata vs deep_fulltext 排序短板，并以纯函数对照 + 严格门槛得出诚实的 `keep_existing_hybrid` 决策；同时把三种调优作为可配置开关纳入候选模块，为后续阶段（优化 hit 判定 / 用真实 Jina 重跑 / 答案级 ratio 评测）的默认链路切换留出数据驱动入口。

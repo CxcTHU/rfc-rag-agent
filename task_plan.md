@@ -1,26 +1,25 @@
-# Task Plan: 阶段 18 - 语料扩充与评测/质量体系增强
+# Task Plan: 阶段 19 - 中文全文文献分析与检索/评测调优
 
 ## Goal
 
-在阶段 17「检索架构升级」（含 Phase 9 人工复核）已完成、提交、打 `phase-17-complete` tag 并合并到 `main` 的基础上，完成阶段 18：语料深度扩充与评测/质量体系增强。阶段 18 的重点不是再加模型或 Agent，而是：
+在阶段 18「语料扩充与评测/质量体系增强 + 中文全文语料与拒答边界校准」已完成、提交、打 `phase-18-complete` tag（指向最终功能提交 `c56fc62`）并合并到 `main`（合并提交 `4db90c7`）的基础上，完成阶段 19：
 
-1. 把深度全文从约 11 篇尽力提升（真实下载开放获取全文，诚实报数，不为凑数造假）。
-2. 加固 PDF 解析（标题层级、表格、公式、清洗）。
-3. 构建更有区分度的难评测集（跨段证据、易混淆术语、需拒答边界）。
-4. 在难评测集上做多配置检索对比（keyword / vector / hybrid / BM25+RRF / context expansion），给出是否调整默认链路的数据结论（含阶段 17 `mesoscopic_modeling` needs_tuning）。
-5. 沉淀 quality gate，更新质量汇总/报告，给阶段 17 遗留与真实风险明确闭环状态。
-6. 增强 `/quality-report` 只读筛选、风险详情/队列与导出。
+1. 用真实 MIMO+Jina agent 对约 340 篇深度全文（含约 298 篇用户合法下载的中文文献）做系统性文献分析探索，定位语料厚薄、回答覆盖度与排序短板。
+2. 据此构建独立的中文难评测集（跨段证据 / 易混淆术语 / 参数细节 / 需拒答），不覆盖旧英文 baseline。
+3. 在中文难评测集上对照「深度全文加权 / metadata 降权 / topic-anchor」方案，用数据决定是否调整默认链路。
+4. （可选）把文献分析综述/研究问题清单沉淀为可复跑、带引用溯源的结构化产物。
+5. 全量回归 + 普通文档与 Obsidian 收尾 + 停在用户人工核验前状态。
 
 核心链路：
 
 ```text
-阶段17检索结论（keep_existing_hybrid）
--> 语料深度扩充（开放全文导入 + PDF 解析加固）
--> 难评测集构建（跨段证据、易混淆术语、需拒答边界）
--> 多配置检索对比（keyword / vector / hybrid / BM25+RRF / context expansion）
--> 质量门槛与 quality gate 沉淀
--> /quality-report 筛选、风险队列与导出增强
--> 发布前质量结论和下一阶段依据
+阶段 18 中文全文语料 + quality gate
+-> 真实 MIMO+Jina agent 对中文全文做系统性文献分析
+-> 定位语料厚薄、回答覆盖度、中文查询排序短板
+-> 中文难评测集（跨段证据、易混淆术语、参数细节、需拒答）
+-> 检索排序调优（深度全文加权 / metadata 降权 / topic-anchor 对照）
+-> 用数据决定是否调默认链路
+-> （可选）文献分析产物结构化沉淀
 -> 停在人工核验待提交状态
 ```
 
@@ -29,198 +28,132 @@
 - 不做写入型 Agent 工具。
 - 不做复杂 LangGraph workflow。
 - 不做登录系统、不做部署优化。
+- 不新增爬虫或外部资料来源（已有语料够用）。
 - 不让真实 API 成为 CI 或本地全量测试前提（默认 deterministic / mock）。
 - HyDE 仍只做离线实验，不进入默认链路或自动回归。
-- `/quality-report` 保持只读优先，不扩成复杂后台。
-- 保留 deterministic baseline 与 real_config 边界，不用 deterministic 结果掩盖真实失败。
-- 语料扩充只用开放获取或已授权全文，尊重 robots.txt 与网站条款，不绕付费墙/登录/验证码。
-- 不把 API key、Bearer token、供应商原始敏感响应、受限全文写入 Git、CSV、文档、测试或 Obsidian。
+- 默认链路是否切换必须由中文难评测集数据决定，不拍脑袋。
+- 保留 deterministic baseline 与 real_config 边界，不用 deterministic 结果掩盖真实 API 失败。
+- 不把 API key、Bearer token、供应商原始敏感响应、受限/受版权全文写入 Git、CSV、文档、测试或 Obsidian；中文全文与本地 DB 不入库。
 
 阶段开发完成后不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR。必须等待用户人工核验和明确确认后，才允许进入提交、tag 和 GitHub 推送流程。
 
-## 用户决策（阶段 18 关键）
+## 用户决策（阶段 19 关键）
 
-- 语料深度扩充策略：**尽力真实下载 + 诚实报数**。用 WebSearch/WebFetch 尽可能多地抓取真实开放获取 RFC 及邻近（SCC/坝工）全文，加固解析后导入本地 DB，扩充 manifest/题录/source registry；最终如实报告真实导入篇数（可能 20–40），不为凑 40–60 造假。
+- 阶段 19 主要面向真实中文研究问题；评测/调优口径围绕「中文深度全文检索」展开。
+- Phase 0 第一轮探索：用真实 MIMO+Jina 跑约 8–12 个真实中文研究问题，捕捉真实 API 偶发超时（带重试）、回答覆盖度、来源命中和排序模式，作为 Phase 1/2 的输入。
+- Phase 2 调优方案对照三类轻量改动（深度全文加权 / metadata 降权 / topic-anchor），不引入新 reranker；若证据不充分则保持 `keep_existing_hybrid` 并写明阻断理由。
 
 ## Current Phase
 
-Phase 0-10 全部完成。阶段 18 开发、测试、普通文档与 Obsidian 草稿收尾完毕，停在用户人工核验前（未 add/commit/tag/push）。
+All phases complete（Phase 0–4 已完成）；阶段 19 停在用户人工核验前，未执行 git add/commit/tag/push 或 PR。
 
 ## Phases
 
-### Phase 0: 阶段启动与规划校准
+### Phase 0: 启动校准 + 第一轮中文文献分析探索
 
-- [x] 阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md。
-- [x] 阅读 docs/stage17_retrieval_architecture_upgrade.md、docs/stage17_retrieval_upgrade_report.md、stage17 人工复核 CSV、旧 task_plan/findings/progress。
-- [x] 确认 Git 起点：`phase-17-complete -> 5b5ef02`（阶段 17 最终功能提交，非 merge），是 `main` 祖先；`main` 已含阶段 17 合并 `d633b95`。不移动任何已有 tag。
-- [x] 从 `main` 创建并切换到 `claude/phase-18-corpus-evaluation-quality`。
-- [x] 用脚本/DB 核对当前语料构成：documents=136（metadata_record=115、open_access_pdf=10、local_file=10、institutional_access_pdf=1）；chunks=997；深度全文≈11。embeddings：deterministic(64) + jina(1024) 各 997。
-- [x] 确认 data/app.sqlite、data/fulltext/ 被 gitignore；metadata_corpus（116）、fulltext_manifest.csv 已被 Git 跟踪。
-- [x] 确认本环境可联网下载真实开放获取 PDF。
-- [x] 用 AskUserQuestion 确认语料扩充策略 = 尽力真实下载 + 诚实报数。
+- [x] 阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、docs/stage18_corpus_evaluation_quality.md、docs/stage18_followup_chinese_corpus.md、旧 task_plan/findings/progress。
+- [x] 确认 Git 起点：`phase-18-complete -> c56fc62`（阶段 18 最终功能提交，**非** merge），是 `main` 祖先；`main` 已含阶段 18 合并 `4db90c7`。不移动任何已有 tag。
+- [x] 从含阶段 18 合并的 `main` 创建并切换到 `claude/phase-19-chinese-analysis-retrieval-tuning`。
+- [x] 用脚本/DB 核对当前语料构成：documents=465（institutional_access_pdf=325、metadata_record=115、open_access_pdf=15、local_file=10）；chunks=8918；深度全文≈340 篇（institutional+open_access）。embeddings：deterministic(64) + jina(1024) 各 8918。
+- [x] 确认 `data/app.sqlite`、`data/fulltext/` 被 gitignore；保留 AGENT.MD 未提交改动到新分支。
 - [x] 用 Planning with Files 编写 task_plan.md、findings.md、progress.md。
-- 验证方式：Git 分支/tag 检查、DB 查询、规划文件检查。
-- 文档收尾要求：记录阶段 18 起点、tag/main 状态、语料构成、安全边界和“不提交、不打 tag、不推送”边界。
+- [x] 新增 `scripts/explore_chinese_corpus.py`：对若干真实中文研究问题（堆石混凝土自密实流动 / ITZ 强度 / 温控 / 抗冻 / 微观结构 / 综述 / 对比 / 需拒答）跑 hybrid 检索 + Brain answer，记录 top-K 来源 source_type 分布（深度全文 vs 题录）、命中 rank、回答覆盖度（基于期望关键词命中近似）、refused、耗时和真实 API 错误；默认 deterministic，可选 `--real` 走真实 MIMO+Jina；批量 agent 运行带重试。
+- [x] 产出 `data/evaluation/stage19_exploration_results.csv`（10 题；deep_top1=0/8、metadata_top1=5/8；errors=0；refusal_matched=9/10）。
+- [x] 在 findings.md 中记录探索结论与排序短板根因，作为 Phase 1/2 输入。
+- 验证方式：Git 分支/tag 检查、DB 查询、规划文件检查、探索脚本能复跑（deterministic 必跑、真实可选）。
+- 文档收尾要求：记录阶段 19 起点、tag/main 状态、语料构成、安全边界和「不提交、不打 tag、不推送」边界。
 - Status: complete
 
-### Phase 1: 阶段 18 设计文档
+### Phase 1: 中文难评测集
 
-- [ ] 新增 `docs/stage18_corpus_evaluation_quality.md`（或拆分多份 docs/stage18_*.md）。
-- [ ] 说明目标、输入、语料扩充范围与边界、PDF 解析加固设计、难评测集设计、多配置对比口径、quality gate、报告增强、安全边界和完成标准。
-- [x] 补设计文档断言测试。
-- 验证方式：文档测试和字段检查。
-- 文档收尾要求：在 findings.md 记录设计决策与新词。
-- Status: complete（`docs/stage18_corpus_evaluation_quality.md` + `tests/test_stage18_design.py` 3 passed）
+- [x] 新增 `docs/stage19_chinese_analysis_retrieval_tuning.md`（设计文档）：目标、输入、Phase 0 实证发现、第一轮文献分析方法、中文难评测集设计、排序调优口径与决策门槛、安全边界和完成标准。
+- [x] 新增 `data/evaluation/stage19_chinese_hard_queries.csv`（19 题：5 cross_passage + 5 confusable + 5 parameter_detail + 4 refusal）：包含 query_id、query、difficulty_type、language_type、expected_source_hit、expected_source_type、expected_refused、expected_answer_points、distractor_topics、notes。
+- [x] 题目锚定中文深度全文真实存在的研究主题：填充能力、温控、ITZ、抗冻抗渗、工程案例、RFC vs RCC、RFC vs 埋石混凝土、弹性模量 vs 抗压、绝热温升 vs 浇筑温度、劈裂 vs 直接抗拉、SCC 流动度、粒径级配、抗压强度尺寸效应、渗透系数、绝热温升曲线；refusal 含金融/烹饪/新闻 off-topic + 工程责任判断。
+- [x] 新增 `tests/test_stage19_chinese_hard_set.py`：CSV schema + 字段完整性 + 四类难度全覆盖 + refusal 占比 ≥ 20% + 设计文档关键字断言。
+- 验证方式：设计文档断言测试 + 难评测集结构测试通过。
+- 文档收尾要求：在 findings.md 记录设计决策与中文术语词；在 progress.md 记录测试结果。
+- Status: complete（11 passed）
 
-### Phase 2: PDF 解析加固
+### Phase 2: 检索排序调优
 
-- [x] 复核现有 `app/services/ingestion/parser.py` PDF 解析能力（仅 `## Page N` + 扁平文本）。
-- [x] 新增 `app/services/ingestion/pdf_text.py`：标题层级识别（编号/关键词/全大写）、表格行抽取、断词合并、公式/符号清洗、跨页页眉页脚去噪。
-- [x] 在 `read_pdf_text` 接入 `structure_pdf_pages`，保持 `## Page N` 与向后兼容。
-- [x] 收紧 heading 识别，去除公式假阳性（SCC/SCM、C_III、0 (1 )MKI gs）。
-- [x] 补充 deterministic fixture 测试（heading_path 恢复、表格、断词、噪声、重复页眉）。
-- 验证方式：parser/cleaner/splitter/ingestion + pdf_text 聚焦测试（26+14 passed）；真实 PDF 复核恢复出 Introduction/Methods/Results/Conclusions/References 等章节。
-- 文档收尾要求：记录解析加固取舍与新词。
-- Status: complete
+- [x] 新增 `scripts/evaluate_stage19_retrieval_tuning.py`：在中文难评测集上对比基线 hybrid 与三种调优配置。
+- [x] 调优实现保持轻量、可关闭：`app/services/retrieval/source_type_reweight.py`（纯函数 + `Stage19TuningWeights`，不改 HybridSearchService 默认参数，不改 API schema）。
+- [x] 产出 `data/evaluation/stage19_retrieval_tuning_results.csv`（每 config × query 一行，含 decision/next_action）。
+- [x] 产出 `data/evaluation/stage19_retrieval_tuning_summary.csv`（每 config 一行汇总，含 distinct_wins_vs_baseline）。
+- [x] 默认链路决策：候选三组都满足 Δdeep_top1 ≥ 0.20 且 refusal 不退化，但都未达 Δp@1 ≥ 0.10 门槛 → 结论 `keep_existing_hybrid`，不静默 fallback。
+- [x] 补测试 `tests/test_stage19_retrieval_tuning.py`（11 passed）：纯函数 + dataclass 校验 + 不修改输入 + 与设计文档引用一致。
+- 验证方式：评测脚本可复跑；CSV 结构 + 决策口径正确；POST /search/hybrid 等 API 不变。
+- 文档收尾要求：findings.md 记录三候选数据、根因和遗留风险；progress.md 记录测试结果与决策。
+- Status: complete（overall=`keep_existing_hybrid`）
 
-### Phase 3: 语料深度扩充（开放/授权全文导入）
+### Phase 3（可选）: 文献分析产物结构化沉淀
 
-- [x] 新增 `scripts/expand_open_access_corpus.py`：OpenAlex 发现 -> RFC 相关性过滤 -> 许可允许 OA 过滤 -> 下载 -> 加固解析导入 -> manifest 标注，可复跑、诚实报数。
-- [x] 真实下载并导入：OpenAlex 发现 866，RFC 相关 90，许可允许 OA 带 PDF 16；下载 11，content-hash 去重命中 6，**真实新导入 5 篇深度全文**（docs 137-141）。
-- [x] 诚实结论：RFC 是窄领域，开放获取全文有限，达不到 40–60；深度全文 11 -> 16（open_access_pdf 10 -> 15），chunks 997 -> 1332。
-- [x] manifest 追加 5 行（cc-by/cc-by-nc 标注），source_candidates.csv 保持不污染；发现集写入独立 `data/metadata/stage18_oa_discovery.csv`。
-- [x] 重建 deterministic（64维）与 jina（1024维）向量索引，均覆盖 1332 chunks，deterministic baseline 可复跑。
-- [x] 重置并重新同步 source registry：total=125、open_access 10 -> 15、metadata_only 110 -> 105、trust=high:125。
-- 验证方式：脚本复跑、DB 复核、source registry 评测、helper 单测（4 passed）。
-- 文档收尾要求：在 findings/progress 记录真实导入篇数、来源、权限标注和合规边界。
-- Status: complete
+- [x] 新增 `docs/stage19_literature_review.md`（面向人读的文献分析快照），整合 Phase 0 探索 + Phase 2 调优数据，按主题速览中文深度全文覆盖度，并给出面试表达与数据安全边界。
+- [x] 未新增 `scripts/build_stage19_literature_review.py`：阶段边界裁剪——Phase 0 探索脚本与 Phase 2 调优脚本已经把数据沉淀到 CSV，可被脚本/前端任意复用；再加一个 build 脚本会引入需要 CI 维护的额外代码而无显著新增价值。该决策已写入 findings/progress。
+- 验证方式：Markdown 引用的所有 CSV/脚本/测试在仓库中实际存在；阶段 19 现有测试通过。
+- 文档收尾要求：作为面向人读的发布前文献快照；与 Phase 0/2 数据一致。
+- Status: complete（轻量做法）
 
-### Phase 4: 难评测集构建
+### Phase 4: 回归验证 + 文档/Obsidian 收尾 + 停在人工核验前
 
-- [x] 新增 `data/evaluation/stage18_hard_queries.csv`：20 题（8 跨段 + 7 易混淆 + 5 需拒答），不覆盖旧 baseline。
-- [x] 题目锚定真实语料（filling capacity、LBM-DEM、specimen size、temperature field、ITZ、iron ore tailings、seismic、elastic modulus、peridynamics、CFRD false friend 等）。
-- [x] 补脚本结构与逻辑测试 `tests/test_stage18_hard_set.py`（6 passed）。
-- 验证方式：评测脚本测试、CSV schema 检查。
-- 文档收尾要求：记录难评测集设计口径与区分度目标。
-- Status: complete
-
-### Phase 5: 多配置检索对比
-
-- [x] 新增 `scripts/evaluate_stage18_hard_set.py`：在难评测集上对比 keyword / vector / hybrid / bm25_rrf / bm25_rrf_context。
-- [x] 输出 `stage18_hard_results.csv`（每 config×query 一行）+ `stage18_config_comparison.csv`（per-config 汇总，含 hit@8、rank1、precision@1、mean_rank、distinct_wins）。
-- [x] 需拒答查询用默认 Brain（evidence confidence）判断，验证检索升级不绕过拒答。
-- [x] 数据结论（deterministic）：hit@8 全部 15/15 饱和，但 rank@1 出现区分度——keyword 15、hybrid 14、bm25_rrf 14、vector 11；bm25_rrf 不优于 hybrid -> `keep_existing_hybrid`（用更有区分度的集证实阶段 17 结论，含 mesoscopic/ITZ 相关 cp_itz_uniaxial 样例）。
-- [x] 诚实发现：deterministic 下 5 题需拒答仅 1 题被拒（off-topic 词偶然覆盖），留作 quality gate 风险，并在 Phase 6 用真实 Jina 校验是否为 deterministic 伪影。
-- 验证方式：对比脚本测试、复跑、结果合理性检查。
-- 文档收尾要求：记录各配置在难评测集上的命中/排序差异和默认链路结论。
-- Status: complete
-
-### Phase 6: 质量门槛与 quality gate 沉淀
-
-- [x] 生成 `data/evaluation/stage18_corpus_stats.csv`（深度全文 11->16、chunks 1332）。
-- [x] 新增 `scripts/build_stage18_quality_report.py`：8 维 gate（corpus / hard_set / default_chain / real_config / refusal_boundary / stage17_residual / stage16_residual / overall）。
-- [x] 真实 Jina 校验：vector p@1 det 0.73 -> real 1.00（真实 embedding 改善排序），但 refusal 真实下仍 1/5 -> 确认拒答弱点非 deterministic 伪影。
-- [x] gate 结论：阶段 17 mesoscopic 软退化以 keep_existing_hybrid 数据结论闭环（low）；off-topic 拒答边界=high（明确阻断原因，显式记录，不静默改默认拒答）；阶段 16 ITZ carry-forward（medium）。
-- [x] overall quality gate = `review_required/high`，阻断原因写明。
-- 验证方式：`scripts/build_stage18_quality_report.py` 复跑 + `tests/test_stage18_quality_report.py`（3 passed）。
-- 文档收尾要求：记录 quality gate 口径与当前 gate 状态。
-- Status: complete
-
-### Phase 7: /quality-report 筛选、风险队列与导出增强
-
-- [x] 重写 `app/frontend/quality_report.html` 为阶段 18 报告：客户端只读筛选（section/risk）+ 风险队列（high/medium）+ 导出（CSV/JSON Blob 下载）。
-- [x] 新增只读导出端点 `GET /quality-report/data.json` 与 `GET /quality-report/export.csv`（FileResponse），不做登录、不写库、不触发真实 API。
-- [x] 新增 `.filter-bar`/`risk-high`/`risk-medium` 样式。
-- [x] 更新/新增前端测试：`/quality-report` 含筛选/队列/导出元素、data.json 只读且不泄露敏感字段、export.csv 下载。
-- 验证方式：`tests/test_frontend_app.py`（6 passed）。
-- 文档收尾要求：记录报告增强能力与只读边界。
-- Status: complete
-
-### Phase 8: 回归验证
-
-- [x] 全量测试通过：**377 passed**（阶段 17 收尾为 349；阶段 18 新增约 28 个测试）。
-- [x] 覆盖 documents/search/vector/hybrid/decompose/chat/brain/agent/sources/frontend + 阶段 18 新增（pdf_text/expand_corpus/hard_set/quality_report/design）。
+- [x] 全量测试通过：**408 passed**（阶段 18 收尾为 386，阶段 19 新增 22 个）；无回归。
 - [x] 默认 deterministic，无真实 API 依赖；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 未被破坏。
-- 验证方式：`.venv\Scripts\python.exe -m pytest -q` -> `377 passed in ~30s`。
-- 文档收尾要求：记录测试结果、残余风险和人工核验重点。
+- [x] 更新 README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、AGENT.MD。
+- [x] 补齐 Obsidian：`obsidian-vault/阶段汇报/阶段 19 - 中文全文文献分析与检索调优/`、Phase 汇报索引、Phase 0–4 小汇报（10 项模板）；更新 `阶段汇报索引.md`、`阶段索引.md`、`首页.md`、`obsidian-vault/阶段/阶段 19 - 中文全文文献分析与检索调优.md`。
+- [x] 确认 obsidian-vault/ 仍被 Git 忽略；未执行 git add/commit/tag/push/PR。
+- [x] 最终汇报：当前分支、主要改动、测试结果、未提交状态、人工核验重点、后续提交/tag/推送建议。
+- [x] 密钥/敏感字段扫描：阶段 19 全部产物未泄露 API key / Bearer token / 受版权全文。
+- 验证方式：`.venv\Scripts\python.exe -m pytest -q` → 408 passed；Git 状态检查通过；Obsidian 文件已建立且仍 gitignore；阶段 tag 未移动。
+- 文档收尾要求：所有普通文档与 Obsidian 同步完成，停在用户人工核验前。
 - Status: complete
-
-### Phase 9: 文档与 Obsidian 收尾
-
-- [x] 更新 README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、AGENT.MD 判断。
-- [x] 补齐 Obsidian：阶段 18 阶段页、Phase 汇报索引、Phase 0-10 小汇报（10 小节）、阶段汇报索引、阶段索引、首页、知识点（PDF 解析加固 / 难评测集与多配置对比 / Quality Gate）；并修正阶段 17 页状态为已完成。
-- [x] 确认 obsidian-vault/ 仍被 Git 忽略（git check-ignore 通过）。
-- 验证方式：文档检查、Obsidian 10 小节检查、Git 忽略检查。
-- 文档收尾要求：所有普通文档与 Obsidian 同步完成，但停在人工核验前。
-- Status: complete
-
-### Phase 10: 人工核验待提交状态
-
-- [x] 确认未执行 git add/commit/tag/push 或 PR；secret 扫描仅命中安全边界文案，无真实密钥；app.sqlite 与 data/fulltext/ 未被跟踪。
-- [x] 最终汇报当前分支、主要改动、测试结果、未提交状态、人工核验重点和后续提交/tag 建议。
-- 验证方式：Git 状态检查。
-- 文档收尾要求：停在用户人工核验前。
-- Status: complete
-
-### Phase 11（增补）: CNKI 中文坝工全文本地扩充
-
-用户在阶段 18 待核验期间手动下载约 121 篇中文全文（`G:/Codex/program/papers`，知网 `.caj`）。决策：扩域到坝工、分主题标注（rfc_core/dam_engineering）；CAJ 转 PDF 由 Claude 尝试。
-
-- [x] 实地检查：121 个 `.caj`；34 个是改名 PDF（有中文文字层），87 个是真 CAJ（HN/KDH/CAJ 头）。
-- [x] 诚实结论：本沙箱无 CAJViewer/mutool/PyMuPDF/caj2pdf，**87 个真 CAJ 无法自动转换**，需用户用 CAJViewer 批量导出 PDF；清单写入 `data/fulltext/cnki_caj_pending.txt`（gitignore）。
-- [x] 中文解析适配 `pdf_text.py`：加中文章节词（摘要/关键词/引言/结论/参考文献…）、中文数字标题（一、引言）、收紧编号标题（拒测量值/表格行）与全大写碎片（D A M/DO I）；补测试（pdf_text 12 passed）。
-- [x] 本地全文批量导入：统一导入器 `scripts/import_papers_corpus.py`（原 `import_cnki_papers.py` 已并入并删除）。只导入真 PDF，可选复制到 gitignore 目录、按标题去重 `(1)`、分主题标注、真 CAJ 列待转换清单；source_type=`institutional_access_pdf`（本地、合规、不提交）。
-- [x] 导入 26 篇（8 rfc_core + 18 dam_engineering，34 含 8 重复）；深度全文 16 -> 42（institutional 1 -> 27、open_access 15），docs 141 -> 167、chunks 1332 -> 1814；重建 deterministic 索引覆盖 1814。
-- [x] 全量测试 379 passed；data/fulltext、app.sqlite、pending 清单均 gitignore，无全文/PDF 泄露。
-- [ ] 待用户用 CAJViewer 把 87 个 CAJ 转 PDF 后，做一次统一导入 + 重跑难评测/quality gate + 文档/Obsidian 收尾（建议作为阶段 19 或阶段 18 收尾的统一闭环，避免半套语料重复评测）。
 
 ## Final Verification Targets
 
 | Check | Expected |
 |---|---|
-| Branch | `claude/phase-18-corpus-evaluation-quality` |
-| Previous tags | `phase-17-complete` 及更早 tag 不移动 |
-| Baseline | 从含阶段 17 合并的 `main` 出发 |
+| Branch | `claude/phase-19-chinese-analysis-retrieval-tuning` |
+| Previous tags | `phase-18-complete` 及更早 tag 不移动 |
+| Baseline | 从含阶段 18 合并的 `main`（含 `4db90c7`）出发 |
 | No submit actions | no add/commit/tag/push/PR |
-| Design doc | `docs/stage18_*.md` 覆盖目标/语料/解析/难评测/多配置/quality gate/报告/安全/完成标准 |
-| PDF parsing | heading 层级、表格、公式、清洗加固 + 测试 |
-| Corpus | 深度全文尽力提升，真实导入篇数如实记录；source registry 去重/权限标注；deterministic baseline 可复跑 |
-| Hard eval set | 独立难评测集 + 脚本 + 独立 CSV，不覆盖旧 baseline |
-| Multi-config | keyword/vector/hybrid/BM25+RRF/context expansion 对比 + 默认链路数据结论 |
-| Quality gate | gate 口径沉淀；阶段 17 遗留与真实风险闭环状态明确 |
-| Quality report | 只读筛选/风险队列/导出增强，不做登录 |
+| Design doc | `docs/stage19_chinese_analysis_retrieval_tuning.md` 覆盖目标/输入/方法/难评测/调优/安全/完成标准 |
+| Exploration | `scripts/explore_chinese_corpus.py` + `stage19_exploration_results.csv` 真实失败显式记录 |
+| Hard eval set | `stage19_chinese_hard_queries.csv` 独立 CSV + 测试，不覆盖旧 baseline |
+| Retrieval tuning | source_type_reweight + 多配置对比 + 默认链路数据结论 |
+| Tuning results | `stage19_retrieval_tuning_results.csv` + `stage19_retrieval_tuning_summary.csv` |
 | API contract | search/vector/hybrid/chat/agent + /quality-report 兼容 |
-| Tests | 阶段 18 测试 + 全量测试通过 |
+| Tests | 阶段 19 测试 + 全量测试通过 |
 | Docs | README/docs/progress/architecture/data_sources/AGENT 同步 |
-| Obsidian | 阶段 18 本地知识库更新且仍被 Git 忽略 |
+| Obsidian | 阶段 19 本地知识库更新且仍被 Git 忽略 |
 | Final state | 停在用户人工核验前 |
 
 ## Decisions Made
 
 | Decision | Rationale |
 |---|---|
-| 目标分支 `claude/phase-18-corpus-evaluation-quality` | 与阶段 18 目标和用户要求一致；Claude 用 `claude/` 命名空间 |
-| 从含阶段 17 合并的 `main` 创建分支 | `main` 已含 `d633b95 Merge phase 17`，是正确起点 |
+| 目标分支 `claude/phase-19-chinese-analysis-retrieval-tuning` | 与阶段 19 目标和 AGENT.MD 路线一致；Claude 用 `claude/` 命名空间 |
+| 从含阶段 18 合并的 `main` 创建分支 | `main` 已含 `4db90c7 Merge phase 18`，是正确起点；`phase-18-complete -> c56fc62` 是其祖先 |
 | 不移动已有阶段 tag | tag 必须稳定指向各阶段最终功能提交 |
-| 语料扩充用真实下载 + 诚实报数 | 用户明确选择；数据完整性优先，不为凑数造假 |
-| 全文/DB 不提交，靠可复跑导入管线 | full-text 与 *.sqlite 已 gitignore，受版权与数据安全约束 |
-| 默认链路是否切换取决于难评测集对比 | 阶段 17 评测集 hit 饱和无区分度，需难评测集才能决策 |
+| 真实 agent 探索作为 Phase 0 入口 | 阶段 19 的目标是「真正用起来再调」，必须先用真实链路捕捉真实问题 |
+| 调优用 source_type 轻量重权 + topic-anchor，不引入新 reranker | 与阶段 17/18 边界一致，可解释、可关闭 |
+| 默认链路是否切换取决于中文难评测集对比 | 不拍脑袋，需可量化证据 |
+| Phase 3 设为可选 | 在 Phase 0/2 时间允许时做；不做也写明理由 |
 
 ## Term Explanations
 
 | Term | Meaning in this project |
 |---|---|
-| heading hierarchy（标题层级） | PDF/文档中“一级标题 -> 二级标题”的结构；解析时保留进 `heading_path`，让 chunk 知道自己属于哪一节 |
-| table extraction（表格抽取） | 把 PDF 里以空格/列对齐的表格行识别成结构化文本，避免被切碎 |
-| hard eval set（难评测集） | 比旧 baseline 更难、有区分度的评测题，覆盖跨段证据、易混淆术语、需拒答边界 |
-| quality gate（质量门槛） | 阶段质量闸口，规定何时可进下一阶段、何时必须人工复核或阻断 |
-| risk queue（风险队列） | 把高/中风险样例集中排队展示，方便人工逐条复核 |
-| RRF | Reciprocal Rank Fusion，倒数排名融合；用排名而非原始分数融合 BM25 与 vector |
-| context expansion（上下文扩展） | 命中核心 chunk 后拉取相邻 chunk 帮助回答，引用仍指向核心 chunk |
+| 深度全文（deep fulltext） | `source_type in (open_access_pdf, institutional_access_pdf)` 的文档；含真实正文与章节结构 |
+| 题录（metadata_record） | 仅标题/摘要/元数据的轻量卡片；阶段 19 重点之一是确认这类卡片是否在中文查询下不当压过深度全文 |
+| topic-anchor | 主题锚点；中英文术语词表（堆石混凝土/ITZ/freeze-thaw 等），用于轻量重排 |
+| source_type 重权 | 召回后按文档类型加权或减权；纯后处理，不改检索算法本身 |
+| 中文难评测集 | 跨段证据 / 易混淆术语 / 参数细节 / 需拒答；锚定真实中文全文，让 deep_fulltext_top1_rate 与 metadata_top1_rate 等指标可观察 |
+| deep_fulltext_top1_rate | top-1 命中是深度全文的比率；阶段 19 关键调优指标 |
+| metadata_top1_rate | top-1 命中是题录卡片的比率；高了说明深度全文被压过，是阶段 19 想下降的指标 |
+| literature review snapshot | 文献分析快照；Phase 3 可选产物，作为面向人读的发布前结构化综述 |
 
 ## Notes
 
-- 本文件由 Planning with Files 维护，是阶段 18 的任务顺序与完成标准。
+- 本文件由 Planning with Files 维护，是阶段 19 的任务顺序与完成标准。
 - 每个 Phase 完成后必须先更新 task_plan.md、findings.md、progress.md。
-- 阶段 18 开发过程中暂不写入 Obsidian 小 Phase 汇报；Phase 9 统一补齐。
-- 阶段 18 收尾后必须停在用户人工核验前，不提交、不打 tag、不推送。
+- 阶段 19 开发过程中暂不写入 Obsidian 小 Phase 汇报；Phase 4 统一补齐。
+- 阶段 19 收尾后必须停在用户人工核验前，不提交、不打 tag、不推送。

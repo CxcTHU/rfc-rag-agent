@@ -1,0 +1,5 @@
+config,non_refusal_total,hits,precision_at_1,mean_rank,deep_fulltext_top1_rate,metadata_top1_rate,refusal_total,refusal_accuracy,distinct_wins_vs_baseline,decision,next_action
+hybrid_baseline,15,9,0.4,1.778,0.0,1.0,4,0.75,0,baseline,保持默认链路；与候选配置对照
+hybrid_fulltext_boost,15,12,0.333,2.417,0.533,0.467,4,0.75,5,keep_existing_hybrid,Δp@1=-0.07<0.10
+hybrid_metadata_demote,15,12,0.333,2.417,0.533,0.467,4,0.75,5,keep_existing_hybrid,Δp@1=-0.07<0.10
+hybrid_topic_anchor_strict,15,12,0.2,2.583,0.733,0.267,4,0.75,5,keep_existing_hybrid,Δp@1=-0.20<0.10
