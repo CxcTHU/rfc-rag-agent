@@ -1,0 +1,2 @@
+default_error_rate,agentic_error_rate,agentic_gain_count,decision,reason
+0.000,0.000,1,reliable_auto_route_candidate,deterministic comparison isolated provider SSL issues and found at least one complex task where agentic produced an answer-like result while default intent stayed search-only

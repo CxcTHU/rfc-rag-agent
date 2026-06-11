@@ -242,13 +242,10 @@
                 ></textarea>
               </label>
               <div class="agent-controls">
-                <label>
+                <div class="readonly-field">
                   <span>模式</span>
-                  <select data-agent-mode>
-                    <option value="default">default</option>
-                    <option value="agentic">agentic</option>
-                  </select>
-                </label>
+                  <output class="mode-indicator" data-agent-mode-status>系统自动</output>
+                </div>
                 <label>
                   <span>召回数</span>
                   <input type="number" min="1" max="50" value="5" data-agent-top-k />

@@ -1,0 +1,5 @@
+query_id,category,expected_complexity,expected_refused,expected_agentic_gain,default_error,agentic_error,default_tool,default_answer_like,agentic_answer_like,default_refused,agentic_refused,default_sources,agentic_sources,agentic_iterations,agentic_gain,notes
+stage23_simple_filling,simple_concept,simple,false,false,,,answer_with_citations,true,true,false,false,3,3,0,false,parity or stability check
+stage23_complex_search_compare,complex_compare,complex,false,true,,,hybrid_search_knowledge,false,true,false,false,3,3,0,true,complex task benefits when default intent resolves to search-only
+stage23_complex_multi_evidence,complex_multi_evidence,complex,false,false,,,answer_with_citations,true,true,false,false,3,3,0,false,parity or stability check
+stage23_refusal_off_topic,refusal,simple,true,false,,,answer_with_citations,false,false,true,true,0,2,3,false,off-topic refusal boundary

@@ -416,12 +416,28 @@ function renderAgentWorkflowSteps(workflowSteps) {
     .join("");
 }
 
+function updateAgentModeStatus(mode) {
+  const status = document.querySelector("[data-agent-mode-status]");
+  if (!status) {
+    return;
+  }
+  const labels = {
+    auto: "系统自动",
+    pending: "判断中",
+    default: "default",
+    agentic: "agentic",
+  };
+  const normalized = mode || "auto";
+  status.textContent = labels[normalized] || normalized;
+}
+
 function renderAgentAnswer(result) {
   const answerBox = document.querySelector("[data-agent-answer-box]");
   const status = document.querySelector("[data-agent-status]");
   if (!answerBox) {
     return;
   }
+  updateAgentModeStatus(result.mode || "default");
   if (status) {
     status.textContent = result.refused ? "refused" : "answered";
   }
@@ -488,7 +504,6 @@ async function submitChat() {
 
 async function submitAgent() {
   const question = document.querySelector("[data-agent-question]")?.value.trim();
-  const agentMode = document.querySelector("[data-agent-mode]")?.value || "default";
   const topK = Number(document.querySelector("[data-agent-top-k]")?.value || 5);
   const maxToolCalls = Number(document.querySelector("[data-agent-max-tool-calls]")?.value || 2);
   const sourceId = document.querySelector("[data-agent-source-id]")?.value.trim();
@@ -497,6 +512,7 @@ async function submitAgent() {
     return;
   }
   setApiStatus("Agent 运行中");
+  updateAgentModeStatus("pending");
   const body = {
     question,
     top_k: topK,
@@ -504,9 +520,6 @@ async function submitAgent() {
   };
   if (sourceId) {
     body.source_id = sourceId;
-  }
-  if (agentMode === "agentic") {
-    body.mode = "agentic";
   }
   const result = await fetchJson(apiEndpoints.agent, {
     method: "POST",

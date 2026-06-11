@@ -14,11 +14,21 @@
 
 ## 当前阶段
 
-阶段 22（前端 Agentic 可视化与可观测增强，已获用户确认提交/合并）：当前在 `codex/phase-22-frontend-agentic-observability` 分支完成核心开发、聚焦回归、全量测试、浏览器验证和普通文档同步；用户已明确要求提交阶段 22 整体开发工作、创建 `phase-22-complete` tag，并合并推送到 GitHub。阶段 21 已完成并合并推送到 GitHub：`phase-21-complete -> 085bff4`，`origin/main -> 085bff4`。
+阶段 23（Agentic 评测闭环与自动模式路由，已获用户确认提交/合并）：当前在 `codex/phase-23-agentic-eval-and-auto-routing` 分支完成核心开发、聚焦回归、全量测试、浏览器验证、普通文档同步和验收报告；用户已明确要求提交阶段 23 整体开发工作、创建 `phase-23-complete` tag，并合并推送到 GitHub。阶段 22 已完成并合并到 `main`：`phase-22-complete -> 1a5bf0c Complete phase 22 frontend agentic observability`。
 
-阶段 22 要点：
+阶段 23 要点：
 
-- **前端 agentic opt-in**：Agent 面板新增 default / agentic 模式切换，默认不改变旧 Agent 行为；只有选择 agentic 时 `submitAgent()` 才向 `/agent/query` 传递 `mode="agentic"`。
+- **可靠评测闭环**：新增 `scripts/evaluate_stage23_agentic_auto_routing.py` 和 `data/evaluation/stage23_agentic_auto_routing_*.csv`，用 deterministic provider + in-memory SQLite fixture 隔离阶段 21 的 SSL/真实 provider 错误；default/agentic `error_rate=0.000`，`agentic_gain_count=1`，决策为 `reliable_auto_route_candidate`。
+- **问题复杂度路由**：新增 `app/services/agent/routing.py` 的 `classify_query_complexity()`，规则式输出 `simple` / `complex`、分数、判断依据和命中信号；不引入 LLM 判断。
+- **API 自动分流**：`POST /agent/query` 未传 `mode` 时自动分流，简单题走 default `AgentService`，复杂题走 agentic LangGraph；显式 `mode=default` / `mode=agentic` 仍然保留调试覆盖能力。
+- **前端只读模式指示器**：Agent 面板移除 default / agentic 下拉框，提交时不再发送 `mode`；响应后用 `data-agent-mode-status` 显示本次实际 `mode`。
+- **只读可观测字段保留**：`workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category` 继续只读展示，不扩展成写入型 Agent 工具。
+- **验证结果**：阶段 21/22/23 聚焦回归 **51 passed**；全量测试 **463 passed**；浏览器桌面与 390x844 移动视口检查通过，console error 为 0，无横向溢出。
+- **边界**：不改变默认 `/chat`；不修改 `detect_intent` 内部逻辑；不做登录、部署优化、Streaming/SSE、新爬虫或外部资料源；真实 API 不作为测试前提。
+
+阶段 22 要点（已合并基线）：
+
+- **前端 agentic 可观测**：阶段 22 曾以 opt-in 方式暴露 default / agentic 模式切换；阶段 23 已将前端手动选择改为只读状态指示器。
 - **响应契约增强**：`AgentQueryResponse` 新增 `mode`、`workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category`，default 模式使用兼容默认值。
 - **迭代过程可视化**：前端右侧步骤列表展示 retrieve、grade、rewrite、re_retrieve、generate、citation_check 的节点名、输入摘要、输出摘要、成功/失败和错误摘要。
 - **引用与拒答增强**：结果区展示 iteration count；无效引用用“无效”badge 标记；拒答时展示 responsibility_gate_triggered / evidence_insufficient / off_topic 分类。
