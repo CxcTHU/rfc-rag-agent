@@ -80,6 +80,7 @@ claude/phase-21-langgraph-agentic-rag
 codex/phase-22-frontend-agentic-observability
 codex/phase-23-agentic-eval-and-auto-routing
 codex/phase-25-chitchat-and-sse-streaming
+codex/phase-26-retrieval-performance-reranking
 ```
 
 协作规则：
@@ -163,6 +164,20 @@ codex/phase-25-chitchat-and-sse-streaming
 - 前端继续使用原生 HTML/CSS/JS。因为 Agent 请求需要 POST JSON body，阶段 25 使用 `fetch()` + `ReadableStream` 手动消费 SSE，不使用 `EventSource`，也不引入 React/Vue 或 Node 构建链。
 - token 文本追加必须使用 `textContent` 或等价安全方式，metadata 重绘继续沿用已有 escaping 逻辑，避免把模型输出当 HTML 注入。
 - 浏览器验证要覆盖 desktop 与移动断点，至少检查闲聊短路、流式 token 展示、metadata 回填、横向溢出和 console error。真实本地大库 RAG 慢查询如果同步与流式端点同题都慢，应记录为检索/运行数据性能风险，不要误判为 SSE parser 独有问题。
+
+### 阶段 26 之后的检索性能优化与重排序规则
+
+- 阶段 26 从 `main -> 56f5d4 Merge phase 25 chitchat and SSE streaming` 出发；`phase-25-complete -> 0a89d55 Complete phase 25 chitchat and SSE streaming`，不要移动已有阶段 tag。
+- 向量检索默认通过 `VectorIndexCache` 复用 numpy 归一化矩阵，避免每次查询重新从 `chunk_embeddings` 全表加载并 JSON 反序列化。
+- `VectorIndexService.build_index()` 新增或更新 embedding 后必须 invalidate 对应缓存，保证后续查询能重新加载。
+- 纯 Python `cosine_similarity()` 继续保留为测试对照；numpy 结果需要维持 `< 1e-6` 误差边界。
+- `HybridSearchService` 默认并行执行 keyword/BM25 与 vector search；SQLAlchemy `Session` 不得跨线程共享，每个 worker 使用独立 Session。
+- `ReRankingProvider` 是阶段 26 之后的 rerank 边界：deterministic provider 用于测试和 CI，OpenAI-compatible provider 只作为运行时可选能力。
+- 默认 rerank 可以启用 deterministic provider；真实 rerank API 不得成为本地全量测试或 CI 前提。
+- 不引入 `torch` / `sentence-transformers`；如果后续需要本地 Cross-Encoder 模型，必须单独论证依赖体积、启动成本和测试边界。
+- `scripts/benchmark_retrieval.py` 默认必须使用 deterministic provider；真实 provider 只能显式传参启用，避免普通基准或测试误触发 API。
+- 不得把 API key、Bearer token、Authorization header、供应商原始敏感响应、受限全文写入 Git、CSV、文档、测试或 Obsidian。
+- 阶段 26 已获用户明确核验与提交授权后，才允许提交、创建 `phase-26-complete` tag、合并到 `main` 并推送 GitHub；tag 必须指向阶段 26 最终功能提交，不得移动已有阶段 tag。
 
 ## Obsidian 知识库规则
 

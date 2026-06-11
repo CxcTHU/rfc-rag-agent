@@ -1,0 +1,204 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from threading import RLock
+
+import numpy as np
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.db.models import Chunk, ChunkEmbedding, Document
+from app.db.repositories import deserialize_embedding
+from app.services.retrieval.embedding import EmbeddingProvider
+from app.services.retrieval.vector_index import calculate_text_hash
+
+
+@dataclass(frozen=True)
+class VectorIndexEntry:
+    document_id: int
+    document_title: str
+    source_type: str
+    source_path: str | None
+    file_name: str
+    chunk_id: int
+    chunk_index: int
+    content: str
+    heading_path: str | None
+
+
+@dataclass(frozen=True)
+class VectorIndexMatch:
+    entry: VectorIndexEntry
+    score: float
+
+
+class VectorIndexCache:
+    """In-process numpy matrix cache for chunk embeddings."""
+
+    def __init__(self, db: Session, embedding_provider: EmbeddingProvider) -> None:
+        self.db = db
+        self.embedding_provider = embedding_provider
+        self._lock = RLock()
+        self._loaded = False
+        self._entries: list[VectorIndexEntry] = []
+        self._normalized_matrix: np.ndarray = np.empty(
+            (0, embedding_provider.dimension),
+            dtype=np.float64,
+        )
+
+    def bind_session(self, db: Session) -> None:
+        with self._lock:
+            self.db = db
+
+    def invalidate(self) -> None:
+        with self._lock:
+            self._loaded = False
+            self._entries = []
+            self._normalized_matrix = np.empty(
+                (0, self.embedding_provider.dimension),
+                dtype=np.float64,
+            )
+
+    def search(
+        self,
+        query_embedding: Sequence[float],
+        top_k: int,
+    ) -> list[VectorIndexMatch]:
+        if top_k <= 0:
+            raise ValueError("top_k must be greater than 0")
+        if len(query_embedding) != self.embedding_provider.dimension:
+            raise ValueError("query embedding dimension does not match the vector cache")
+
+        self._ensure_loaded()
+        if not self._entries:
+            return []
+
+        query_vector = normalize_query_vector(query_embedding)
+        if query_vector is None:
+            return []
+
+        with self._lock:
+            scores = self._normalized_matrix @ query_vector
+            if scores.size == 0:
+                return []
+
+            candidate_count = min(top_k, scores.size)
+            candidate_indexes = np.argpartition(scores, -candidate_count)[-candidate_count:]
+            ordered_indexes = candidate_indexes[np.argsort(scores[candidate_indexes])[::-1]]
+            return [
+                VectorIndexMatch(
+                    entry=self._entries[int(index)],
+                    score=float(scores[int(index)]),
+                )
+                for index in ordered_indexes
+                if float(scores[int(index)]) > 0
+            ]
+
+    def _ensure_loaded(self) -> None:
+        with self._lock:
+            if self._loaded:
+                return
+            entries, matrix = self._load_entries_and_matrix()
+            self._entries = entries
+            self._normalized_matrix = normalize_matrix(matrix)
+            self._loaded = True
+
+    def _load_entries_and_matrix(self) -> tuple[list[VectorIndexEntry], np.ndarray]:
+        statement = (
+            select(ChunkEmbedding, Chunk, Document)
+            .join(Chunk, ChunkEmbedding.chunk_id == Chunk.id)
+            .join(Document, Chunk.document_id == Document.id)
+            .where(
+                ChunkEmbedding.provider == self.embedding_provider.provider_name,
+                ChunkEmbedding.model_name == self.embedding_provider.model_name,
+                ChunkEmbedding.dimension == self.embedding_provider.dimension,
+            )
+            .order_by(ChunkEmbedding.id)
+        )
+        entries: list[VectorIndexEntry] = []
+        embeddings: list[list[float]] = []
+        for chunk_embedding, chunk, document in self.db.execute(statement).all():
+            if chunk_embedding.content_hash != calculate_text_hash(chunk.content):
+                continue
+            embedding = deserialize_embedding(chunk_embedding.embedding_json)
+            if len(embedding) != self.embedding_provider.dimension:
+                continue
+            entries.append(
+                VectorIndexEntry(
+                    document_id=document.id,
+                    document_title=document.title,
+                    source_type=document.source_type,
+                    source_path=document.source_path,
+                    file_name=document.file_name,
+                    chunk_id=chunk.id,
+                    chunk_index=chunk.chunk_index,
+                    content=chunk.content,
+                    heading_path=chunk.heading_path,
+                )
+            )
+            embeddings.append(embedding)
+
+        if not embeddings:
+            return entries, np.empty((0, self.embedding_provider.dimension), dtype=np.float64)
+        return entries, np.asarray(embeddings, dtype=np.float64)
+
+
+def normalize_query_vector(vector: Sequence[float]) -> np.ndarray | None:
+    array = np.asarray(vector, dtype=np.float64)
+    norm = np.linalg.norm(array)
+    if norm == 0:
+        return None
+    return array / norm
+
+
+def normalize_matrix(matrix: np.ndarray) -> np.ndarray:
+    if matrix.size == 0:
+        return matrix
+    norms = np.linalg.norm(matrix, axis=1)
+    safe_norms = np.where(norms == 0, 1.0, norms)
+    normalized = matrix / safe_norms[:, np.newaxis]
+    normalized[norms == 0] = 0.0
+    return normalized
+
+
+_GLOBAL_CACHES: dict[tuple[str, str, str, int], VectorIndexCache] = {}
+_GLOBAL_CACHES_LOCK = RLock()
+
+
+def get_vector_index_cache(
+    db: Session,
+    embedding_provider: EmbeddingProvider,
+) -> VectorIndexCache:
+    bind = db.get_bind()
+    key = (
+        str(bind.url),
+        embedding_provider.provider_name,
+        embedding_provider.model_name,
+        embedding_provider.dimension,
+    )
+    with _GLOBAL_CACHES_LOCK:
+        cache = _GLOBAL_CACHES.get(key)
+        if cache is None:
+            cache = VectorIndexCache(db, embedding_provider)
+            _GLOBAL_CACHES[key] = cache
+        else:
+            cache.bind_session(db)
+        return cache
+
+
+def invalidate_vector_index_cache(
+    db: Session,
+    embedding_provider: EmbeddingProvider,
+) -> None:
+    bind = db.get_bind()
+    key = (
+        str(bind.url),
+        embedding_provider.provider_name,
+        embedding_provider.model_name,
+        embedding_provider.dimension,
+    )
+    with _GLOBAL_CACHES_LOCK:
+        cache = _GLOBAL_CACHES.get(key)
+        if cache is not None:
+            cache.invalidate()

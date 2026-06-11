@@ -102,6 +102,11 @@ class VectorIndexService:
             if sleep_seconds:
                 time.sleep(sleep_seconds)
 
+        if indexed_chunks or updated_chunks:
+            from app.services.retrieval.vector_cache import invalidate_vector_index_cache
+
+            invalidate_vector_index_cache(self.db, self.embedding_provider)
+
         return VectorIndexResult(
             total_chunks=len(chunks),
             indexed_chunks=indexed_chunks,

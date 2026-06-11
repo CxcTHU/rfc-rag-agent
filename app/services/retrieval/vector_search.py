@@ -2,14 +2,11 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Chunk, ChunkEmbedding, Document
-from app.db.repositories import deserialize_embedding
 from app.services.retrieval.embedding import EmbeddingProvider
-from app.services.retrieval.keyword_search import capped_count, expand_query_terms, normalize_text
-from app.services.retrieval.vector_index import calculate_text_hash
+from app.services.retrieval.keyword_search import SearchTerm, capped_count, expand_query_terms, normalize_text
+from app.services.retrieval.vector_cache import VectorIndexCache, get_vector_index_cache
 
 
 TOPIC_ANCHOR_BOOST = 0.2
@@ -30,9 +27,15 @@ class VectorSearchResult:
 
 
 class VectorSearchService:
-    def __init__(self, db: Session, embedding_provider: EmbeddingProvider) -> None:
+    def __init__(
+        self,
+        db: Session,
+        embedding_provider: EmbeddingProvider,
+        index_cache: VectorIndexCache | None = None,
+    ) -> None:
         self.db = db
         self.embedding_provider = embedding_provider
+        self.index_cache = index_cache or get_vector_index_cache(db, embedding_provider)
 
     def search(self, query: str, top_k: int = 5) -> list[VectorSearchResult]:
         normalized_query = query.strip()
@@ -47,50 +50,26 @@ class VectorSearchService:
         if is_zero_vector(query_embedding):
             return []
 
-        rows = self._list_indexed_chunks()
+        matches = self.index_cache.search(query_embedding, top_k=max(top_k * 4, top_k))
         results: list[VectorSearchResult] = []
-        for chunk_embedding, chunk, document in rows:
-            if chunk_embedding.content_hash != calculate_text_hash(chunk.content):
-                continue
-
-            stored_embedding = deserialize_embedding(chunk_embedding.embedding_json)
-            if len(stored_embedding) != len(query_embedding):
-                continue
-
-            score = cosine_similarity(query_embedding, stored_embedding)
-            if score <= 0:
-                continue
-
+        for match in matches:
+            entry = match.entry
             results.append(
                 VectorSearchResult(
-                    document_id=document.id,
-                    document_title=document.title,
-                    source_type=document.source_type,
-                    source_path=document.source_path,
-                    file_name=document.file_name,
-                    chunk_id=chunk.id,
-                    chunk_index=chunk.chunk_index,
-                    content=chunk.content,
-                    heading_path=chunk.heading_path,
-                    score=score,
+                    document_id=entry.document_id,
+                    document_title=entry.document_title,
+                    source_type=entry.source_type,
+                    source_path=entry.source_path,
+                    file_name=entry.file_name,
+                    chunk_id=entry.chunk_id,
+                    chunk_index=entry.chunk_index,
+                    content=entry.content,
+                    heading_path=entry.heading_path,
+                    score=match.score,
                 )
             )
 
         return rank_vector_results(normalized_query, results)[:top_k]
-
-    def _list_indexed_chunks(self) -> list[tuple[ChunkEmbedding, Chunk, Document]]:
-        statement = (
-            select(ChunkEmbedding, Chunk, Document)
-            .join(Chunk, ChunkEmbedding.chunk_id == Chunk.id)
-            .join(Document, Chunk.document_id == Document.id)
-            .where(
-                ChunkEmbedding.provider == self.embedding_provider.provider_name,
-                ChunkEmbedding.model_name == self.embedding_provider.model_name,
-                ChunkEmbedding.dimension == self.embedding_provider.dimension,
-            )
-            .order_by(ChunkEmbedding.id)
-        )
-        return list(self.db.execute(statement).all())
 
 
 def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
@@ -112,8 +91,15 @@ def is_zero_vector(vector: Sequence[float]) -> bool:
 
 
 def rank_vector_results(query: str, results: list[VectorSearchResult]) -> list[VectorSearchResult]:
+    terms = expand_query_terms(query)
+    normalized_query = normalize_text(query)
     anchor_scores = {
-        result.chunk_id: topic_anchor_score(query, result)
+        result.chunk_id: topic_anchor_score(
+            query,
+            result,
+            terms=terms,
+            normalized_query=normalized_query,
+        )
         for result in results
     }
     max_anchor_score = max(anchor_scores.values(), default=0.0)
@@ -129,11 +115,17 @@ def rank_vector_results(query: str, results: list[VectorSearchResult]) -> list[V
     )
 
 
-def topic_anchor_score(query: str, result: VectorSearchResult) -> float:
-    terms = expand_query_terms(query)
+def topic_anchor_score(
+    query: str,
+    result: VectorSearchResult,
+    *,
+    terms: list[SearchTerm] | None = None,
+    normalized_query: str | None = None,
+) -> float:
+    terms = terms if terms is not None else expand_query_terms(query)
     if not terms:
         return 0.0
-    normalized_query = normalize_text(query)
+    normalized_query = normalize_text(query) if normalized_query is None else normalized_query
     normalized_title = normalize_text(result.document_title)
     normalized_heading = normalize_text(result.heading_path)
     normalized_content = normalize_text(result.content)

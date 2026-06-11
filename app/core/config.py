@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     embedding_dimension: int = 0
     embedding_timeout_seconds: float = 30.0
 
+    reranking_enabled: bool = True
+    reranking_provider: str = "deterministic"
+    reranking_model_name: str = "keyword-overlap-reranker-v1"
+    reranking_api_key: str = ""
+    reranking_base_url: str = ""
+    reranking_timeout_seconds: float = 30.0
+    reranking_recall_k: int = 25
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -21,7 +21,7 @@
 
 ### Phase 0：启动校准与文件计划
 
-**状态：未开始**
+**状态：已完成**
 
 **解决的问题**：确认阶段 25 的最终状态、tag、main 起点和阶段 26 分支，避免在错误基线上继续开发。
 
@@ -43,12 +43,13 @@
 
 **完成标准**
 - 当前分支为 `codex/phase-26-retrieval-performance-reranking`。
-- `phase-25-complete` 不移动，且已并入 `main`。
-- `task_plan.md`、`findings.md`、`progress.md` 已切换为阶段 26。
+- `phase-25-complete -> 0a89d55 Complete phase 25 chitchat and SSE streaming`，未移动，且已并入 `main`。
+- `main -> 56f5d4 Merge phase 25 chitchat and SSE streaming`，阶段 26 从该合并点创建分支。
+- `task_plan.md`、`findings.md`、`progress.md` 已切换并校准为阶段 26。
 
 ### Phase 1：阶段 26 设计文档
 
-**状态：未开始**
+**状态：已完成**
 
 **解决的问题**：把性能优化和重排序的设计先固化成可审查合同。
 
@@ -71,11 +72,11 @@
 - 人工阅读文档结构是否覆盖阶段 26 验收项。
 
 **完成标准**
-- 设计文档存在且覆盖 profiling、numpy 加速、缓存、并行、重排序、测试、安全与收尾标准。
+- `docs/stage26_retrieval_performance_reranking.md` 已新增，覆盖 profiling、numpy 加速、缓存、并行、重排序、测试、安全与收尾标准。
 
 ### Phase 2：Profiling 与基线基准
 
-**状态：未开始**
+**状态：已完成**
 
 **解决的问题**：量化当前检索管线每层耗时，建立优化前基线。
 
@@ -98,12 +99,13 @@
 - 基准脚本可运行，输出各层耗时。
 
 **完成标准**
-- 基线数据记录在 `findings.md`。
-- 各层耗时数据明确，可用于优化后对比。
+- 新增 `scripts/benchmark_retrieval.py`，默认 deterministic provider，不显式传参时不触发真实 API。
+- 新增 `tests/test_benchmark_retrieval.py` 覆盖脚本核心函数。
+- 基线数据已记录在 `findings.md`，各层耗时可用于优化后对比。
 
 ### Phase 3：numpy 向量化 + 内存索引缓存
 
-**状态：未开始**
+**状态：已完成**
 
 **解决的问题**：当前 `VectorSearchService` 用纯 Python 循环逐条计算余弦相似度，且每次查询都从数据库全量加载 embedding，极慢。
 
@@ -125,12 +127,15 @@
 - 运行全量 vector search 相关测试。
 
 **完成标准**
-- vector search 使用 numpy 矩阵运算，耗时大幅下降。
-- 结果与优化前纯 Python 版本一致（误差 < 1e-6）。
+- `pyproject.toml` 已新增 `numpy>=2.0.0`。
+- 新增 `app/services/retrieval/vector_cache.py`，`VectorIndexCache` 使用 numpy 归一化矩阵缓存 embedding。
+- `VectorSearchService.search()` 已改为通过 cache 执行矩阵相似度，并保留纯 Python `cosine_similarity()` 供测试对比。
+- `VectorIndexService.build_index()` 在新增或更新 embedding 后自动 invalidate cache。
+- vector search 基线从约 1456.82ms 降至约 335.32ms，结果与纯 Python 版本误差 `< 1e-6`。
 
 ### Phase 4：BM25 与向量检索并行执行
 
-**状态：未开始**
+**状态：已完成**
 
 **解决的问题**：当前 `HybridSearchService.search()` 串行执行 keyword search 和 vector search，总耗时是两者之和。
 
@@ -149,11 +154,13 @@
 - 全量 hybrid search 相关测试通过。
 
 **完成标准**
-- hybrid search 总耗时接近 max(keyword, vector) 而非 sum。
+- `HybridSearchService.search()` 默认使用 `ThreadPoolExecutor` 并行执行 keyword 与 vector 两路召回。
+- 每个 worker 使用独立 SQLAlchemy Session，不跨线程共享请求 Session。
+- hybrid search 耗时约 745.90ms，接近 keyword 740.07ms 与 vector 357.60ms 的较大者。
 
 ### Phase 5：Cross-Encoder 重排序层
 
-**状态：未开始**
+**状态：已完成**
 
 **解决的问题**：当前召回结果只靠 BM25 和向量相似度打分，缺少语义精排。
 
@@ -178,13 +185,14 @@
 - 基准脚本显示重排序后端到端质量提升（deterministic 下可验证排序变化）。
 
 **完成标准**
-- `ReRankingProvider` Protocol 可用。
-- hybrid search 默认启用重排序（可通过配置关闭）。
-- 真实 API 不进入 CI 前提。
+- 新增 `app/services/retrieval/reranking.py`，包含 `ReRankingProvider` Protocol、`ReRankResult`、`DeterministicReRankingProvider`、`OpenAICompatibleReRankingProvider` 和 `create_reranking_provider()`。
+- `HybridSearchService` 默认启用 deterministic reranking，可通过 `reranking_enabled=False` 或配置关闭。
+- hybrid search 召回扩大到 top-20~30 后执行 rerank，再返回 top-k。
+- 真实 rerank API 仅作为可配置运行时能力，不进入 CI 前提。
 
 ### Phase 6：端到端基准测试与回归验证
 
-**状态：未开始**
+**状态：已完成**
 
 **解决的问题**：需要确认优化后全链路响应时间下降、既有功能未被破坏。
 
@@ -204,12 +212,13 @@
 - 浏览器验证。
 
 **完成标准**
-- 全量测试通过，且不依赖真实 API。
-- 基准对比表显示明确的耗时改善。
+- 全量测试通过：`511 passed in 50.49s`，且不依赖真实 API。
+- 基准对比表已记录到 `findings.md`。
+- 8001 当前代码服务验证 `/agent/query/stream`、`/search/hybrid`、`/quality-report` 可用，桌面/移动页面加载正常。
 
 ### Phase 7：文档同步、Obsidian 收尾与人工核验待提交状态
 
-**状态：未开始**
+**状态：已完成**
 
 **解决的问题**：把阶段 26 的设计、代码行为同步到项目文档和 Obsidian，并停在可核验状态。
 
@@ -232,3 +241,6 @@
 **完成标准**
 - 当前分支保持阶段 26 分支。
 - 所有阶段 26 改动未提交，等待用户人工核验。
+- `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD` 已同步阶段 26 行为和约束。
+- Obsidian 已新增阶段 26 阶段页、Phase 0-7 小汇报和阶段汇报索引，并更新首页/阶段索引/阶段汇报索引。
+- 已确认未创建 `phase-26-complete` tag，且未执行 `git add`、`git commit`、`git tag`、`git push` 或 PR。

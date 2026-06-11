@@ -24,6 +24,9 @@
 -> 路由层闲聊短路
 -> ChatModelProvider 流式生成
 -> /agent/query/stream SSE 输出
+-> VectorIndexCache numpy 向量矩阵缓存
+-> hybrid search 并行召回
+-> ReRankingProvider Cross-Encoder 重排序
 -> 前端工作台展示、聊天气泡、会话管理、只读模式指示、步骤可视化和打字机式流式输出
 ```
 
@@ -32,16 +35,59 @@
 ```text
 API 层：FastAPI 路由，含同步 JSON 端点和阶段 25 `/agent/query/stream` SSE 端点
 Schema 层：Pydantic 请求和响应模型
-Service 层：导入、切分、检索、问答业务逻辑
+Service 层：导入、切分、检索、问答业务逻辑；阶段 26 后向量检索使用 `VectorIndexCache` + numpy 矩阵运算，hybrid search 默认并行召回并执行可配置 rerank
 Agent 层：受控工具封装、意图路由、工具调用记录和拒答约束；阶段 25 后社交闲聊短路位于 API 路由层，不再由 AgentService 承担
 Agentic 层：LangGraph 状态图编排，迭代式 retrieve-grade-rewrite-generate 循环（阶段 21），向前端暴露只读可观测字段（阶段 22），在阶段 23 通过规则式复杂度路由接入 `/agent/query` 自动分流，并在阶段 24 的 generate 节点利用会话 history 补全追问
 Brain 层：RAG workflow 中控、RetrievalConfig、WorkflowConfig、step 记录和 chat/agent 复用
 Conversation 层：会话历史装配、Conversation/Message 持久化、长对话 summary 压缩和 `/conversations` API；闲聊消息可持久化但跳过 summary
 DB 层：文档、chunk、问答日志元数据、会话和消息
 Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
-Model Provider 层：聊天模型和 embedding 模型适配；阶段 25 后聊天模型 Provider 同时支持 `generate()` 和 `stream_generate()`
+Model Provider 层：聊天模型、embedding 模型和 reranking 模型适配；阶段 25 后聊天模型 Provider 同时支持 `generate()` 和 `stream_generate()`，阶段 26 后 reranking Provider 支持 deterministic 与 OpenAI-compatible 两类实现
 Frontend 层：来源、资料、检索、问答、引用来源展示，以及 Agent 聊天气泡、会话管理、自动模式结果指示、workflow 步骤可视化和 SSE token 追加
 ```
+
+## 阶段 26 检索性能优化与重排序架构
+
+阶段 26 不改变外部 API 路径，而是在检索服务内部优化性能并加入可配置精排层：
+
+```text
+用户问题
+-> embedding_provider.embed_query()
+-> VectorIndexCache.search()
+   -> numpy normalized_matrix @ query_vector
+-> KeywordSearchService.search()
+-> HybridSearchService ThreadPoolExecutor 并行等待两路召回
+-> merge / normalize / both_match_bonus
+-> ReRankingProvider.rerank(query, top-20~30 candidates)
+-> top-k HybridSearchResult
+-> Brain / Chat / Agent / SSE 复用结果
+```
+
+`VectorIndexCache` 位于 `app/services/retrieval/vector_cache.py`。它将 `chunk_embeddings` 表中同一 provider/model/dimension 的向量加载为 numpy `float64` 矩阵，并保存每一行对应的 chunk/document 元数据。缓存内容来自已有数据库索引，是可重建数据，不新增资料来源。
+
+`VectorSearchService` 仍负责 query 校验、query embedding、零向量处理和 topic anchor 排序。区别是它不再每次调用 `_list_indexed_chunks()` 全表加载 ORM 对象，而是向 `VectorIndexCache` 请求矩阵相似度结果。纯 Python `cosine_similarity()` 保留为测试对照，确保 numpy 分数误差 `< 1e-6`。
+
+`HybridSearchService` 默认使用 `ThreadPoolExecutor(max_workers=2)` 并行执行 keyword/BM25 与 vector search。由于 SQLAlchemy `Session` 不是跨线程共享对象，每个 worker 都基于同一个 engine 创建独立 Session，主线程只合并普通 Python 结果对象。
+
+`ReRankingProvider` 位于 `app/services/retrieval/reranking.py`。阶段 26 提供：
+
+```text
+DeterministicReRankingProvider
+  本地规则式 keyword overlap 打分，用于 CI 和离线测试。
+
+OpenAICompatibleReRankingProvider
+  运行时可选 HTTP rerank API，解析 /rerank 响应，不进入全量测试前提。
+```
+
+默认配置启用 deterministic rerank。hybrid search 先召回 `max(top_k * 5, reranking_recall_k)` 个候选，再精排返回 top-k。当前 `HybridSearchResult.score` 仍保留原 hybrid score，rerank 只改变顺序；如果后续要展示 rerank score，需要单独扩展 schema。
+
+阶段 26 基准脚本：
+
+```text
+scripts/benchmark_retrieval.py
+```
+
+默认使用 deterministic embedding provider，避免普通基准运行触发真实 API。它记录 query embedding、keyword、vector、hybrid、rerank-only 和 agent_query 端到端耗时。
 
 ## 阶段 25 闲聊短路与 SSE 流式输出架构
 
