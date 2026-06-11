@@ -85,6 +85,30 @@ URL:
 
 阶段 25 的闲聊回复是预设文本，不是资料来源，也不参与检索证据；带 `conversation_id` 的闲聊可以保存为本地会话消息，但会跳过 summary 压缩，避免社交短句污染后续 RAG 上下文。真实模型流式输出只作为运行时服务能力，自动测试继续使用 deterministic provider，不让真实 API 成为 CI 或本地全量测试前提。
 
+阶段 26 不新增外部资料来源，也不新增爬虫、真实 API 依赖或受限全文文件。阶段 26 新增的是**检索性能优化和重排序运行能力**：
+
+- `docs/stage26_retrieval_performance_reranking.md`：阶段 26 设计文档，说明 profiling、numpy 向量化、缓存、并行召回、rerank provider 和安全边界。
+- `scripts/benchmark_retrieval.py`：检索基准脚本，只读取现有本地数据库与索引，默认 deterministic provider，不触发真实 API。
+- `app/services/retrieval/vector_cache.py`：进程内 `VectorIndexCache`，缓存来自 `chunk_embeddings` 的可重建向量矩阵。
+- `app/services/retrieval/reranking.py`：`ReRankingProvider` 协议和 deterministic / OpenAI-compatible provider。
+
+阶段 26 只读取现有：
+
+```text
+documents
+chunks
+chunk_embeddings
+```
+
+数据安全边界：
+
+- `VectorIndexCache` 只在进程内缓存 embedding 矩阵，不写入 Git 或外部存储。
+- `chunk_embeddings` 是由已有 chunks 派生出的可重建索引数据，不是新的文献资料来源。
+- deterministic rerank 是本地规则式评分，不调用真实 API。
+- OpenAI-compatible rerank provider 只是运行时可选能力；API key、Bearer token、Authorization header 和供应商原始敏感响应不得写入源码、文档、CSV、测试、Git 或 Obsidian。
+- `scripts/benchmark_retrieval.py` 的输出只包含耗时、provider/model 名称和脱敏 query，不保存受限全文或供应商原始响应。
+- 阶段 26 已停在用户人工核验前状态，尚未提交、尚未创建 `phase-26-complete` tag、尚未推送。
+
 阶段 1 第一批试导入资料登记仍保留在下方，作为早期人工来源记录和历史审计依据。
 
 本批资料采用“资料卡”形式导入：保存题录、公开摘要的转述、检索关键词和来源链接，不保存受版权限制的论文全文。

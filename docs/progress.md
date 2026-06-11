@@ -1,5 +1,113 @@
 # 项目进度
 
+## 最新状态：2026-06-12（阶段 26 检索性能优化 + Cross-Encoder 重排序，已通过用户核验，进入提交合并）
+
+用户已明确要求验收阶段 26 开发工作，并提交阶段 26 整体开发、创建 `phase-26-complete` tag、合并到 `main` 并推送 GitHub。本次验收报告已落盘：
+
+```text
+docs/phase_reviews/phase-26.md
+```
+
+验收结论：PASS。阶段 26 范围与目标对齐，检索性能优化、向量缓存、hybrid 并行、Cross-Encoder 重排序边界、API 兼容、SSE 回归和文档同步均通过复核。提交前复验记录：
+
+```text
+阶段 26/SSE 聚焦回归：40 passed in 7.06s
+全量测试：511 passed in 58.33s
+实时 HTTP SSE：POST /agent/query/stream question=谢谢
+first token: 19.61 ms
+event order: token -> metadata -> done
+benchmark:
+vector_search=391.29 ms
+hybrid_search=830.75 ms
+rerank_only=1.89 ms
+agent_query=778.36 ms
+```
+
+用户反馈的“流式输出没有了”经复查未在当前代码服务中复现。验收中发现 8000 曾有旧 uvicorn 进程残留；已清理并从当前阶段 26 工作区重新启动服务。当前 8000 服务 `GET /health` 正常，`/agent/query/stream` 能提前返回首个 `token`。如果后续再次出现类似现象，优先检查是否访问了旧服务进程、代理缓存或浏览器缓存。
+
+提交合并后，以 `phase-26-complete` tag 指向的提交作为阶段 26 最终功能提交。
+
+## 历史状态：2026-06-11（阶段 26 检索性能优化 + Cross-Encoder 重排序，开发与测试完成，等待用户人工核验）
+
+当前阶段：阶段 26，检索性能优化 + Cross-Encoder 重排序。在 `codex/phase-26-retrieval-performance-reranking` 分支完成 profiling 基线、numpy 向量化、`VectorIndexCache` 内存索引缓存、hybrid search 并行召回、`ReRankingProvider` 重排序层、基准脚本、聚焦回归、全量测试、浏览器/API 验证、普通文档同步和 Obsidian 草稿收尾。本阶段当前**尚未提交**：未执行 `git add`、未 commit、未创建 `phase-26-complete` tag、未 push、未创建 PR，等待用户人工核验和明确确认。
+
+Git / tag / main 起点：
+
+- 阶段 25 已完成、创建 `phase-25-complete` tag，并合并到 `main`。
+- `phase-25-complete -> 0a89d55 Complete phase 25 chitchat and SSE streaming`。
+- 阶段 25 合并提交：`56f5d4 Merge phase 25 chitchat and SSE streaming`。
+- 阶段 26 从阶段 25 合并后的 `main` 出发，未移动任何已有阶段 tag。
+- 当前未创建 `phase-26-complete` tag。
+
+阶段 26 完成内容：
+
+- 新增 `docs/stage26_retrieval_performance_reranking.md`，固定 profiling、numpy 向量化、缓存、并行召回、rerank provider、安全边界和完成标准。
+- 新增 `scripts/benchmark_retrieval.py`，默认 deterministic provider，输出 query embedding、keyword、vector、hybrid、rerank 和 agent 端到端耗时；真实 provider 必须显式传参。
+- `pyproject.toml` 新增 `numpy>=2.0.0`。
+- 新增 `app/services/retrieval/vector_cache.py`，`VectorIndexCache` 将已有 embedding 加载为 numpy 归一化矩阵，查询时用矩阵乘法计算全部相似度。
+- `VectorSearchService` 改为复用 `VectorIndexCache`，保留纯 Python `cosine_similarity()` 作为误差对照；测试确认 numpy 分数与纯 Python 版本误差 `< 1e-6`。
+- `VectorIndexService.build_index()` 在新增或更新 embedding 后自动 invalidate cache。
+- `HybridSearchService` 默认用 `ThreadPoolExecutor` 并行执行 keyword/BM25 与 vector search；每个 worker 创建独立 SQLAlchemy Session。
+- 新增 `app/services/retrieval/reranking.py`，包含 `ReRankingProvider` Protocol、`ReRankResult`、`DeterministicReRankingProvider`、`OpenAICompatibleReRankingProvider` 和 `create_reranking_provider()`。
+- `HybridSearchService` 默认启用 deterministic rerank，召回 `max(top_k * 5, reranking_recall_k)` 后精排 top-k；可通过配置关闭或切换真实兼容 rerank API。
+- 新增/更新测试：`tests/test_vector_cache.py`、`tests/test_reranking.py`、`tests/test_benchmark_retrieval.py`、`tests/test_hybrid_search.py` 等。
+
+基准结果：
+
+```text
+英文 query: What affects filling capacity in rock-filled concrete?
+Phase 2 baseline -> Phase 6 final
+vector_search: 1456.82 ms -> 349.45 ms
+hybrid_search: 2199.56 ms -> 720.30 ms
+agent_query: 2174.16 ms -> 735.48 ms
+rerank_only: 1.53 ms
+
+中文 query: 堆石混凝土施工质量控制有哪些要点？
+query_embedding=0.05 ms
+keyword_search=655.07 ms
+vector_search=1.93 ms
+hybrid_search=706.65 ms
+rerank_only=0.88 ms
+agent_query=696.88 ms
+```
+
+验证结果：
+
+```text
+focused:
+82 passed in 20.36s
+
+full:
+.\.venv\Scripts\python.exe -m pytest -q
+511 passed in 50.49s
+
+browser/API:
+8001 current service GET /health -> 200
+POST /agent/query/stream {"question":"thanks","top_k":2} -> token / metadata / done
+POST /search/hybrid -> 200
+GET /quality-report -> 200
+Browser desktop 1280x720 -> RFC RAG 工作台
+Browser mobile 390x844 -> RFC RAG 工作台
+```
+
+遗留风险：
+
+- 阶段 26 当前等待用户人工核验，不能提交、不能创建 `phase-26-complete` tag、不能推送 GitHub。
+- 8000 端口验证时发现已有旧服务占用，`/agent/query/stream` 返回 404；当前阶段代码已在 8001 端口验证通过，并已停止 8001 临时服务。
+- `KeywordSearchService.search()` 已成为当前 deterministic/cache 热状态下的主耗时，后续如继续做性能优化，可考虑缓存 query normalize、减少 `normalize_text()` 重复调用或建立词项倒排索引。
+- 当前 `HybridSearchResult.score` 仍保留原 hybrid score，rerank 只改变顺序；后续如需前端展示 rerank score，应单独扩展 API schema 和文档。
+
+下一步：
+
+- 用户人工核验阶段 26 的向量缓存、hybrid 并行、rerank 默认行为、基准脚本、API 兼容性、全量测试和文档/Obsidian 草稿。
+- 核验通过后，才允许执行 `git add`、commit、创建 `phase-26-complete` tag、推送 GitHub；tag 必须指向阶段 26 最终功能提交，不要移动已有阶段 tag。
+
+面试表达：
+
+```text
+阶段 26 我没有盲目引入向量数据库，而是先用 profiling 找到真实瓶颈：每次 vector search 都从 SQLite 全表读取 embedding、JSON 反序列化，并用 Python 循环逐条算余弦。优化上我引入 numpy 和 VectorIndexCache，把 embedding 预加载成归一化矩阵，查询时用一次矩阵乘法完成所有相似度计算；再把 hybrid search 的 keyword/BM25 与 vector search 改成线程池并行，使总耗时接近较慢通道而不是两者相加。最后新增 ReRankingProvider 协议，hybrid 先召回 top-20 到 top-30，再用 deterministic 或真实兼容 Cross-Encoder rerank 精排 top-5。全链路仍保持 deterministic 测试可复现，真实 API 不进入 CI 前提。
+```
+
 ## 最新状态：2026-06-11（阶段 25 闲聊短路 + SSE 流式输出，开发与测试完成，等待用户人工核验）
 
 当前阶段：阶段 25，闲聊短路 + SSE 流式输出。在 `codex/phase-25-chitchat-and-sse-streaming` 分支完成核心开发、聚焦回归、全量测试、浏览器验证、普通文档同步和 Obsidian 草稿收尾。本阶段当前**尚未提交**：未执行 `git add`、未 commit、未创建 `phase-25-complete` tag、未 push、未创建 PR，等待用户人工核验和明确确认。

@@ -14,6 +14,22 @@
 
 ## 当前阶段
 
+阶段 26（检索性能优化 + Cross-Encoder 重排序，已通过用户人工核验，进入提交合并）：当前在 `codex/phase-26-retrieval-performance-reranking` 分支完成检索 profiling、`numpy` 向量化、`VectorIndexCache` 内存矩阵缓存、hybrid search 并行召回、`ReRankingProvider` 重排序协议、默认 deterministic rerank、基准脚本、全量测试、浏览器/API 验证、阶段验收报告和文档/Obsidian 草稿收尾。用户已明确要求提交阶段 26 整体开发工作、创建 `phase-26-complete` tag、合并到 `main` 并推送 GitHub。
+
+阶段 26 起点：阶段 25 已完成并合并到 `main`，`phase-25-complete -> 0a89d55 Complete phase 25 chitchat and SSE streaming`，合并提交为 `56f5d4 Merge phase 25 chitchat and SSE streaming`；本阶段未移动任何已有阶段 tag。
+
+阶段 26 要点：
+
+- **性能基线**：新增 `scripts/benchmark_retrieval.py`，默认 deterministic provider，不显式传参时不触发真实 API；记录 query embedding、keyword、vector、hybrid、rerank 和 agent 端到端耗时。
+- **向量缓存与 numpy 加速**：新增 `app/services/retrieval/vector_cache.py`，`VectorIndexCache` 将 embedding 加载为 numpy 归一化矩阵；`VectorSearchService` 用矩阵乘法替代逐条纯 Python 余弦计算。
+- **缓存失效**：`VectorIndexService.build_index()` 新增或更新 embedding 后自动 invalidate cache，下次查询重新加载。
+- **hybrid 并行召回**：`HybridSearchService` 默认用 `ThreadPoolExecutor` 并行执行 keyword/BM25 与 vector search；每个 worker 使用独立 SQLAlchemy Session，不跨线程共享请求 Session。
+- **Cross-Encoder 重排序边界**：新增 `app/services/retrieval/reranking.py`，提供 `ReRankingProvider` Protocol、`DeterministicReRankingProvider`、`OpenAICompatibleReRankingProvider` 和工厂函数；hybrid 默认召回 top-20~30 后 rerank top-5。
+- **配置项**：新增 `reranking_enabled`、`reranking_provider`、`reranking_model_name`、`reranking_api_key`、`reranking_base_url`、`reranking_timeout_seconds`、`reranking_recall_k`；默认 deterministic rerank，可配置关闭或切换真实兼容 API。
+- **基准结果**：英文 query 上 deterministic `vector_search` 从约 1456.82ms 降至 349.45ms，`hybrid_search` 从约 2199.56ms 降至 720.30ms，`agent_query` 从约 2174.16ms 降至 735.48ms；`rerank_only` 约 1.53ms。
+- **验证结果**：聚焦回归 **82 passed**；全量测试 **511 passed**；提交前验收复跑阶段 26/SSE 聚焦回归 **40 passed**；当前代码服务 8000 验证 `/agent/query/stream` 首个 `token` 可提前到达，`/health` 正常。
+- **边界**：不做登录系统、不做部署优化、不引入 `torch` / `sentence-transformers`、不引入前端框架或 Node 构建链、不让真实 API 成为 CI 或本地全量测试前提，不写入 API key、Bearer token、供应商原始敏感响应或受限全文。
+
 阶段 25（闲聊短路 + SSE 流式输出，开发与测试已完成，等待用户人工核验）：当前在 `codex/phase-25-chitchat-and-sse-streaming` 分支完成路由层闲聊短路、`ChatModelProvider.stream_generate()`、`POST /agent/query/stream`、前端 `fetch` + `ReadableStream` 打字机效果、全量测试、浏览器验证、普通文档与 Obsidian 草稿收尾。本阶段当前**尚未执行 `git add`、未提交、未创建 `phase-25-complete` tag、未推送、未创建 PR**，必须等待用户人工核验和明确确认。
 
 阶段 25 起点：阶段 24 已完成并合并到 `main`，`phase-24-complete -> 64069ba Complete phase 24 multi-turn conversation`，合并提交为 `c4eda98 Merge phase 24 multi-turn conversation`；本阶段未移动任何已有阶段 tag。

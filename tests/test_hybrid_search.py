@@ -1,3 +1,5 @@
+import time
+
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
@@ -7,8 +9,11 @@ from app.db.repositories import DocumentCreate
 from app.db.repositories import DocumentRepository
 from app.db.session import create_sqlite_engine
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
-from app.services.retrieval.hybrid_search import HybridSearchService
+from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.hybrid_search import normalize_score
+from app.services.retrieval.keyword_search import KeywordSearchResult
+from app.services.retrieval.reranking import ReRankResult
+from app.services.retrieval.vector_search import VectorSearchResult
 from app.services.retrieval.vector_index import VectorIndexService
 
 
@@ -94,6 +99,150 @@ def test_hybrid_search_returns_keyword_results_when_vector_index_is_missing(tmp_
     assert results[0].keyword_score > 0
     assert results[0].vector_score == 0
     assert "Filling Capacity" in results[0].document_title
+
+
+def test_hybrid_parallel_results_match_serial_results(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+
+        parallel_results = HybridSearchService(db, provider).search("filling capacity", top_k=2)
+        serial_results = HybridSearchService(db, provider, parallel=False).search("filling capacity", top_k=2)
+
+    assert parallel_results == serial_results
+
+
+def test_hybrid_search_runs_keyword_and_vector_in_parallel(tmp_path, monkeypatch) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    events: list[tuple[str, str, float]] = []
+
+    class SlowKeywordSearchService:
+        def __init__(self, db) -> None:
+            self.db = db
+
+        def search(self, query: str, top_k: int = 5) -> list[KeywordSearchResult]:
+            events.append(("keyword", "start", time.perf_counter()))
+            time.sleep(0.2)
+            events.append(("keyword", "end", time.perf_counter()))
+            return [
+                KeywordSearchResult(
+                    document_id=1,
+                    document_title="Parallel keyword",
+                    source_type="local_file",
+                    source_path="keyword.md",
+                    file_name="keyword.md",
+                    chunk_id=1,
+                    chunk_index=0,
+                    content="filling capacity",
+                    heading_path="Keyword",
+                    score=1.0,
+                )
+            ]
+
+    class SlowVectorSearchService:
+        def __init__(self, db, embedding_provider) -> None:
+            self.db = db
+            self.embedding_provider = embedding_provider
+
+        def search(self, query: str, top_k: int = 5) -> list[VectorSearchResult]:
+            events.append(("vector", "start", time.perf_counter()))
+            time.sleep(0.2)
+            events.append(("vector", "end", time.perf_counter()))
+            return [
+                VectorSearchResult(
+                    document_id=1,
+                    document_title="Parallel keyword",
+                    source_type="local_file",
+                    source_path="keyword.md",
+                    file_name="keyword.md",
+                    chunk_id=1,
+                    chunk_index=0,
+                    content="filling capacity",
+                    heading_path="Keyword",
+                    score=1.0,
+                )
+            ]
+
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.KeywordSearchService",
+        SlowKeywordSearchService,
+    )
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.VectorSearchService",
+        SlowVectorSearchService,
+    )
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=16)
+        started = time.perf_counter()
+        results = HybridSearchService(db, provider).search("filling capacity", top_k=1)
+        elapsed = time.perf_counter() - started
+
+    keyword_start = next(timestamp for channel, event, timestamp in events if channel == "keyword" and event == "start")
+    keyword_end = next(timestamp for channel, event, timestamp in events if channel == "keyword" and event == "end")
+    vector_start = next(timestamp for channel, event, timestamp in events if channel == "vector" and event == "start")
+
+    assert results[0].chunk_id == 1
+    assert vector_start < keyword_end
+    assert keyword_start < vector_start or vector_start < keyword_end
+    assert elapsed < 0.35
+
+
+def test_hybrid_search_uses_reranking_provider_by_default(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class ReverseReRankingProvider:
+        provider_name = "test"
+        model_name = "reverse"
+
+        def rerank(self, query, candidates, top_k=5):
+            return [
+                ReRankResult(index=index, score=float(index), content=candidates[index])
+                for index in reversed(range(len(candidates)))
+            ][:top_k]
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+
+        results = HybridSearchService(
+            db,
+            provider,
+            reranking_provider=ReverseReRankingProvider(),
+            reranking_enabled=True,
+        ).search("concrete", top_k=1)
+
+    assert len(results) == 1
+    assert results[0].document_title == "Thermal control note"
+
+
+def test_hybrid_search_can_disable_reranking(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class ReverseReRankingProvider:
+        provider_name = "test"
+        model_name = "reverse"
+
+        def rerank(self, query, candidates, top_k=5):
+            raise AssertionError("reranker should not be called when disabled")
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+
+        results = HybridSearchService(
+            db,
+            provider,
+            reranking_provider=ReverseReRankingProvider(),
+            reranking_enabled=False,
+        ).search("filling capacity", top_k=1)
+
+    assert results[0].document_title == "Filling Capacity Evaluation of Self-Compacting Concrete"
 
 
 def test_hybrid_search_rejects_invalid_parameters(tmp_path) -> None:
