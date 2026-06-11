@@ -1,10 +1,11 @@
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+from typing import Any, Iterator, Literal, Protocol
 
 
 ChatRole = Literal["system", "user", "assistant"]
@@ -39,6 +40,9 @@ class ChatModelProvider(Protocol):
     def generate(self, messages: Sequence[ChatMessage]) -> ChatModelResult:
         """Generate one answer from ordered chat messages."""
 
+    def stream_generate(self, messages: Sequence[ChatMessage]) -> Iterator[str]:
+        """Yield answer text fragments from ordered chat messages."""
+
 
 @dataclass(frozen=True)
 class DeterministicChatModelProvider:
@@ -69,6 +73,12 @@ class DeterministicChatModelProvider:
             raw_response=None,
         )
 
+    def stream_generate(self, messages: Sequence[ChatMessage]) -> Iterator[str]:
+        answer = self.generate(messages).answer
+        for chunk in split_streaming_text(answer):
+            yield chunk
+            time.sleep(0.02)
+
 
 @dataclass(frozen=True)
 class OpenAICompatibleChatModelProvider:
@@ -91,26 +101,7 @@ class OpenAICompatibleChatModelProvider:
         if not messages:
             raise ValueError("messages must not be empty")
 
-        payload = {
-            "model": self.model_name,
-            "messages": [
-                {"role": message.role, "content": message.content}
-                for message in messages
-            ],
-            "temperature": self.temperature,
-        }
-        request = urllib.request.Request(
-            self._endpoint_url(),
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "api-key": self.api_key,
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "User-Agent": "rfc-rag-agent/chat-model-provider",
-            },
-            method="POST",
-        )
+        request = self._build_request(messages, stream=False)
 
         try:
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
@@ -129,6 +120,51 @@ class OpenAICompatibleChatModelProvider:
             provider=self.provider_name,
             model_name=self.model_name,
             raw_response=response_data,
+        )
+
+    def stream_generate(self, messages: Sequence[ChatMessage]) -> Iterator[str]:
+        if not messages:
+            raise ValueError("messages must not be empty")
+
+        request = self._build_request(messages, stream=True)
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                yield from parse_openai_compatible_stream(response)
+        except urllib.error.HTTPError as exc:
+            error_body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"Chat model stream request failed with HTTP {exc.code}: {error_body}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Chat model stream request failed: {exc.reason}") from exc
+
+    def _build_request(
+        self,
+        messages: Sequence[ChatMessage],
+        *,
+        stream: bool,
+    ) -> urllib.request.Request:
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": message.role, "content": message.content}
+                for message in messages
+            ],
+            "temperature": self.temperature,
+        }
+        if stream:
+            payload["stream"] = True
+        return urllib.request.Request(
+            self._endpoint_url(),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "api-key": self.api_key,
+                "Accept": "text/event-stream" if stream else "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "rfc-rag-agent/chat-model-provider",
+            },
+            method="POST",
         )
 
     def _endpoint_url(self) -> str:
@@ -184,6 +220,60 @@ def parse_openai_compatible_answer(response_data: dict[str, Any]) -> str:
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("Chat model response message content is empty")
     return content.strip()
+
+
+def parse_openai_compatible_stream(response) -> Iterator[str]:
+    for raw_line in response:
+        line = decode_stream_line(raw_line)
+        if not line or not line.startswith("data:"):
+            continue
+        data = line.removeprefix("data:").strip()
+        if not data:
+            continue
+        if data == "[DONE]":
+            break
+        try:
+            payload = json.loads(data)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Chat model stream response included invalid JSON") from exc
+        content = extract_openai_delta_content(payload)
+        if content:
+            yield content
+
+
+def decode_stream_line(raw_line: bytes | str) -> str:
+    if isinstance(raw_line, bytes):
+        return raw_line.decode("utf-8", errors="replace").strip()
+    return raw_line.strip()
+
+
+def extract_openai_delta_content(payload: dict[str, Any]) -> str | None:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        return None
+    delta = first_choice.get("delta")
+    if not isinstance(delta, dict):
+        return None
+    content = delta.get("content")
+    if not isinstance(content, str) or not content:
+        return None
+    return content
+
+
+def split_streaming_text(text: str) -> list[str]:
+    chunks: list[str] = []
+    current = ""
+    for char in text:
+        current += char
+        if char.isspace() or char in "，。！？；：,.!?;:" or len(current) >= 6:
+            chunks.append(current)
+            current = ""
+    if current:
+        chunks.append(current)
+    return chunks
 
 
 def create_chat_model_provider(

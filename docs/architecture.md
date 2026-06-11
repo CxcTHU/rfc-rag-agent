@@ -21,24 +21,94 @@
 -> Agentic 可观测响应契约
 -> Agent 自动模式路由
 -> 会话历史装配与摘要压缩
--> 前端工作台展示、聊天气泡、会话管理、只读模式指示和步骤可视化
+-> 路由层闲聊短路
+-> ChatModelProvider 流式生成
+-> /agent/query/stream SSE 输出
+-> 前端工作台展示、聊天气泡、会话管理、只读模式指示、步骤可视化和打字机式流式输出
 ```
 
 ## 初始分层
 
 ```text
-API 层：FastAPI 路由
+API 层：FastAPI 路由，含同步 JSON 端点和阶段 25 `/agent/query/stream` SSE 端点
 Schema 层：Pydantic 请求和响应模型
 Service 层：导入、切分、检索、问答业务逻辑
-Agent 层：受控工具封装、意图路由、工具调用记录和拒答约束
+Agent 层：受控工具封装、意图路由、工具调用记录和拒答约束；阶段 25 后社交闲聊短路位于 API 路由层，不再由 AgentService 承担
 Agentic 层：LangGraph 状态图编排，迭代式 retrieve-grade-rewrite-generate 循环（阶段 21），向前端暴露只读可观测字段（阶段 22），在阶段 23 通过规则式复杂度路由接入 `/agent/query` 自动分流，并在阶段 24 的 generate 节点利用会话 history 补全追问
 Brain 层：RAG workflow 中控、RetrievalConfig、WorkflowConfig、step 记录和 chat/agent 复用
-Conversation 层：会话历史装配、Conversation/Message 持久化、长对话 summary 压缩和 `/conversations` API
+Conversation 层：会话历史装配、Conversation/Message 持久化、长对话 summary 压缩和 `/conversations` API；闲聊消息可持久化但跳过 summary
 DB 层：文档、chunk、问答日志元数据、会话和消息
 Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
-Model Provider 层：聊天模型和 embedding 模型适配
-Frontend 层：来源、资料、检索、问答、引用来源展示，以及 Agent 聊天气泡、会话管理、自动模式结果指示和 workflow 步骤可视化
+Model Provider 层：聊天模型和 embedding 模型适配；阶段 25 后聊天模型 Provider 同时支持 `generate()` 和 `stream_generate()`
+Frontend 层：来源、资料、检索、问答、引用来源展示，以及 Agent 聊天气泡、会话管理、自动模式结果指示、workflow 步骤可视化和 SSE token 追加
 ```
+
+## 阶段 25 闲聊短路与 SSE 流式输出架构
+
+阶段 25 不改变默认 `/chat`，也不改变同步 `/agent/query` 的 JSON 契约。新增边界集中在 `/agent/query` 路由入口、`ChatModelProvider` 协议、并行流式端点 `/agent/query/stream` 和前端 Agent 面板：
+
+```text
+前端 Agent 面板
+-> submitAgent()
+-> POST /agent/query/stream { question, source_id?, conversation_id? }
+-> 后端校验 conversation_id 并加载 history
+-> detect_chitchat(question)
+   -> 命中：token/metadata/done，保存消息但跳过 summary
+   -> 未命中：classify_query_complexity()
+-> default AgentService 或 agentic graph
+-> QueueStreamingChatModelProvider 将 stream_generate() token 放入队列
+-> event: token ... event: metadata ... event: done
+-> 前端逐 token 追加助手气泡
+-> metadata 回填 citations/mode/workflow/refusal
+```
+
+闲聊短路规则：
+
+- `app/services/agent/chitchat.py` 只负责识别社交意图和返回预设回复，不读取资料库，不调用 LLM。
+- `/agent/query` 与 `/agent/query/stream` 都在 `classify_query_complexity()` 之前调用 `detect_chitchat()`，保证 default 和 agentic 路径都不会收到闲聊问题。
+- 当前覆盖五类意图：`greeting`、`thanks`、`goodbye`、`acknowledgment`、`help`。
+- 闲聊命中并带 `conversation_id` 时，仍保存 user/assistant 消息，方便前端刷新恢复；但 `summarize=False`，避免大量“你好/谢谢/好的”污染长对话 summary。
+- `AgentService.detect_intent()` 不再包含 greeting 分支，继续只处理 RAG/资料查询相关意图。
+
+流式 Provider 协议：
+
+```text
+ChatModelProvider.generate(messages) -> ChatModelResult
+ChatModelProvider.stream_generate(messages) -> Iterator[str]
+```
+
+- `DeterministicChatModelProvider.stream_generate()` 先得到确定性完整答案，再按稳定文本片段 yield，用于本地和 CI 测试。
+- `OpenAICompatibleChatModelProvider.stream_generate()` 发送 `stream=true`，读取 OpenAI-compatible SSE 行，只把 `choices[].delta.content` 暴露为业务 token。
+- Provider 层不把 API key、Authorization header、供应商原始敏感响应或 raw_response 写入 SSE metadata。
+
+SSE 端点事件格式：
+
+```text
+event: token
+data: {"text":"..."}
+
+event: metadata
+data: {完整 AgentQueryResponse JSON}
+
+event: done
+data: {}
+
+event: error
+data: {"message":"..."}
+```
+
+- default 和 agentic 路径的 retrieve、grade、rewrite、citation_check 仍同步执行；阶段 25 只让 generate 阶段流式输出。
+- `QueueStreamingChatModelProvider` 用于兼容现有 `AgentService` / agentic 图：业务代码仍调用 `generate()`，wrapper 内部优先消费底层 `stream_generate()`，每得到一个 token 就放入线程安全队列；SSE generator 从队列取出后立即 yield `event: token`。
+- 非闲聊路径在后台生产者线程中执行现有 Agent/RAG 链路，主 generator 负责持续读取 token 队列，因此不会等完整 `AgentQueryResponse` 构造完才开始输出。
+- 流完成后才持久化完整 assistant 消息并触发 summary；中途错误不保存半成品助手消息。
+- metadata 事件复用 `AgentQueryResponse.model_dump(mode="json")`，前端可以沿用同步端点的 citations、sources、workflow_steps、invalid_citations、refusal_category、mode 和 iteration_count 展示逻辑。
+
+前端消费方式：
+
+- 因为 Agent 请求需要 POST JSON body，前端使用 `fetch()` + `response.body.getReader()` + `TextDecoder` 手动解析 SSE，不使用只适合 GET 的 `EventSource`。
+- `token` 事件通过 `textContent` 追加到当前助手气泡的 `.answer-text`，第一个 token 到达时替换“正在思考...”。
+- `metadata` 事件到达后，复用 `agentAnswerHtml()` 重绘同一个助手气泡底部的引用、来源、模式、workflow 和拒答信息。
+- 如果流式请求在收到任何 token 前失败，前端 fallback 到同步 `/agent/query`；如果已经开始输出 token 后失败，则显示错误气泡，避免同一轮出现两条助手回答。
 
 ## 阶段 24 多轮对话 UI 与会话持久化架构
 

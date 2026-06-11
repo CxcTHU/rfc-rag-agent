@@ -16,7 +16,6 @@ from app.services.retrieval.embedding import EmbeddingProvider
 
 
 AgentIntent = Literal[
-    "greeting",
     "answer",
     "search",
     "list_sources",
@@ -69,18 +68,6 @@ class AgentService:
             raise ValueError("max_tool_calls must be greater than 0")
 
         intent = detect_intent(normalized_question, source_id=source_id)
-        if intent == "greeting":
-            return AgentQueryResult(
-                question=normalized_question,
-                answer=(
-                    "你好，我是堆石混凝土资料库 Agent。你可以问我堆石混凝土的概念、"
-                    "施工工艺、水化热、充填性能、工程案例，或让我检索相关资料。"
-                ),
-                tool_calls=[],
-                refused=False,
-                reasoning_summary="识别为寒暄问候，直接返回使用引导，不调用检索或模型。",
-            )
-
         if intent == "get_source_detail":
             resolved_source_id = source_id or extract_source_id(normalized_question)
             if not resolved_source_id:
@@ -134,8 +121,6 @@ class AgentService:
 
 def detect_intent(question: str, source_id: str | None = None) -> AgentIntent:
     normalized = question.casefold()
-    if is_greeting(normalized):
-        return "greeting"
     if source_id or extract_source_id(question):
         return "get_source_detail"
     if any(token in normalized for token in ["来源详情", "source detail", "source详情"]):
@@ -145,22 +130,6 @@ def detect_intent(question: str, source_id: str | None = None) -> AgentIntent:
     if any(token in normalized for token in ["检索", "搜索", "查找", "search", "find", "相关资料"]):
         return "search"
     return "answer"
-
-
-def is_greeting(normalized_question: str) -> bool:
-    compact = re.sub(r"[\s!！。,.，？?~～]+", "", normalized_question)
-    greetings = {
-        "你好",
-        "您好",
-        "嗨",
-        "hi",
-        "hello",
-        "hey",
-        "早上好",
-        "下午好",
-        "晚上好",
-    }
-    return compact in greetings
 
 
 def extract_source_id(question: str) -> str | None:

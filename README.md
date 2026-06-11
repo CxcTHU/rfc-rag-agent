@@ -14,11 +14,23 @@
 
 ## 当前阶段
 
-发布状态更新（2026-06-11）：阶段 24 已通过用户人工核验，用户已明确要求提交阶段 24 整体开发工作、创建阶段 tag、合并并推送到 GitHub。阶段 24 的最终功能提交将创建 `phase-24-complete` tag，随后合并到 `main`。
+阶段 25（闲聊短路 + SSE 流式输出，开发与测试已完成，等待用户人工核验）：当前在 `codex/phase-25-chitchat-and-sse-streaming` 分支完成路由层闲聊短路、`ChatModelProvider.stream_generate()`、`POST /agent/query/stream`、前端 `fetch` + `ReadableStream` 打字机效果、全量测试、浏览器验证、普通文档与 Obsidian 草稿收尾。本阶段当前**尚未执行 `git add`、未提交、未创建 `phase-25-complete` tag、未推送、未创建 PR**，必须等待用户人工核验和明确确认。
 
-阶段 24（多轮对话 UI 与会话持久化，开发与测试已完成，等待用户人工核验）：当前在 `codex/phase-24-multi-turn-conversation` 分支完成 Conversation/Message 模型、会话 API、`/agent/query conversation_id` 集成、长对话摘要压缩、前端聊天气泡和会话管理、全量测试、浏览器验证、普通文档与 Obsidian 草稿收尾。阶段 24 仍未执行 `git add`、未提交、未创建 `phase-24-complete` tag、未推送，必须等待用户人工核验和明确确认。阶段 23 已完成并合并到 `main`：`phase-23-complete -> dd7d953 Complete phase 23 agentic eval and auto routing`，合并提交 `8fc1cfa Merge phase 23 agentic eval and auto routing`。
+阶段 25 起点：阶段 24 已完成并合并到 `main`，`phase-24-complete -> 64069ba Complete phase 24 multi-turn conversation`，合并提交为 `c4eda98 Merge phase 24 multi-turn conversation`；本阶段未移动任何已有阶段 tag。
 
-阶段 24 要点：
+阶段 25 要点：
+
+- **闲聊短路前置**：新增 `app/services/agent/chitchat.py`，在 `/agent/query` 和 `/agent/query/stream` 路由层、`classify_query_complexity()` 之前统一识别 `greeting`、`thanks`、`goodbye`、`acknowledgment`、`help` 五类社交意图，命中后直接返回友好回复，不调用 LLM 和检索。
+- **AgentService 边界收窄**：从 `AgentService.detect_intent()` 移除已提升的 greeting 分支，default AgentService 继续只负责 answer/search/list_sources/get_source_detail 等 RAG/资料查询意图。
+- **模型流式协议**：`ChatModelProvider` 新增 `stream_generate(messages) -> Iterator[str]`；OpenAI-compatible provider 使用 `stream=true` 解析 SSE `delta.content`，deterministic provider 按段 yield，保证本地测试不依赖真实 API。
+- **SSE Agent 端点**：新增 `POST /agent/query/stream`，返回 `text/event-stream`，事件格式稳定为 `token` / `metadata` / `done` / `error`；default 和 agentic 路径同步完成 retrieve/grade/rewrite，generate 输出阶段通过队列实时发送 token。
+- **前端打字机效果**：Agent 面板改用 `fetch()` + `response.body.getReader()` + `TextDecoder` 消费 SSE，逐 token 追加到同一个助手气泡；`metadata` 事件回填 citations、mode、workflow、refusal 等信息。
+- **兼容性**：同步 JSON `POST /agent/query` 契约完全保留；`POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`GET /quality-report` 未被破坏。
+- **验证结果**：全量测试 **497 passed**；新增时序测试确认首个 token 会在模型完整结束前发出；浏览器桌面 `1280x720` 验证闲聊短路、轻量 source detail SSE 和助手气泡逐段增长，移动 `390x844` 验证闲聊短路，console error 为 0，无横向溢出。
+- **遗留观察**：真实本地大库上普通 RAG 问题 `What affects filling capacity in rock-filled concrete?` 在同步 `/agent/query` 与流式 `/agent/query/stream` 均超过 20 秒，判断为真实大库检索/运行数据性能风险，不是阶段 25 SSE parser 独有问题；deterministic 自动测试已覆盖 RAG/SSE 路径。
+- **边界**：不做 WebSocket 双向通道、不做用户认证/登录、不引入前端框架或 Node 构建链、不做写入型 Agent 工具、不做跨会话长期记忆、不让真实 API 成为 CI 或本地全量测试前提。
+
+阶段 24 要点（已合并基线）：
 
 - **会话持久化模型**：新增 `Conversation` 与 `Message`，支持会话级消息分组、更新时间排序、第一条用户消息生成默认标题、删除会话级联删除消息。
 - **会话 API**：新增 `POST /conversations`、`GET /conversations`、`GET /conversations/{conversation_id}/messages`、`DELETE /conversations/{conversation_id}`，响应把消息 `metadata_json` 转换为前端可直接使用的 `metadata`。
@@ -26,7 +38,7 @@
 - **agentic history 支持**：`run_agentic_rag()` 新增 `history` 参数，`AgenticState` 记录历史，generate 节点利用历史补全追问，但 retrieve/grade/rewrite 仍由当前问题驱动。
 - **上下文摘要压缩**：非 summary 消息超过 16 条时自动摘要旧消息，保留最近 6 条原文消息，摘要保存为 `role="summary"` 的消息，deterministic provider 可测试。
 - **前端聊天 UI 与会话管理**：Agent 面板从单次覆盖结果改为聊天气泡列表，支持会话列表、新建、切换、删除和刷新恢复；保留 mode、workflow_steps、citations、refusal_category 展示。
-- **验证结果**：全量测试 **479 passed**；浏览器桌面 `1280x720` 与移动 `390x844` 检查通过，console error 为 0，无横向溢出。
+- **验证结果**：最终提交前全量测试 **483 passed**；浏览器桌面 `1280x720` 与移动 `390x844` 检查通过，console error 为 0，无横向溢出。
 - **边界**：不做 WebSocket/SSE、不做用户认证/登录、不做跨会话长期记忆、不引入 LangGraph Checkpointer、不引入前端框架或 Node 构建链、不新增爬虫或外部资料来源；真实 API 不作为测试前提。
 
 阶段 23 要点：
@@ -302,6 +314,7 @@
 - `scripts/evaluate_stage23_agentic_auto_routing.py` 阶段 23 agentic vs default 自动路由评测脚本
 - `data/evaluation/stage23_agentic_auto_routing_*.csv` 阶段 23 deterministic 评测结果、汇总和接入决策
 - `docs/stage24_multi_turn_conversation.md` 阶段 24 多轮对话 UI 与会话持久化设计文档
+- `docs/stage25_chitchat_and_sse_streaming.md` 阶段 25 闲聊短路与 SSE 流式输出设计文档
 - `Conversation` / `Message` 会话持久化模型和 `ConversationRepository`
 - `POST /conversations`、`GET /conversations`、`GET /conversations/{conversation_id}/messages`、`DELETE /conversations/{conversation_id}` 会话 API
 - `POST /agent/query` 可选 `conversation_id`，支持服务端加载历史、持久化消息和长对话摘要压缩

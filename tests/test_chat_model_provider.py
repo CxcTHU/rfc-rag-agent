@@ -11,6 +11,8 @@ from app.services.generation.chat_model import (
     extract_source_ids,
     latest_user_message,
     parse_openai_compatible_answer,
+    parse_openai_compatible_stream,
+    split_streaming_text,
 )
 
 
@@ -52,6 +54,27 @@ def test_deterministic_chat_provider_requires_user_message() -> None:
 
     with pytest.raises(ValueError, match="at least one user message"):
         provider.generate([ChatMessage(role="system", content="system prompt")])
+
+
+def test_deterministic_chat_provider_stream_matches_generate() -> None:
+    provider = DeterministicChatModelProvider()
+    messages = [
+        ChatMessage(role="system", content="Use only provided context [1]."),
+        ChatMessage(role="user", content="What is RFC?"),
+    ]
+
+    streamed = "".join(provider.stream_generate(messages))
+
+    assert streamed == provider.generate(messages).answer
+
+
+def test_split_streaming_text_splits_chinese_without_losing_text() -> None:
+    text = "当前资料库中没有找到足够可靠的依据。"
+
+    chunks = split_streaming_text(text)
+
+    assert len(chunks) > 1
+    assert "".join(chunks) == text
 
 
 def test_latest_user_message_returns_last_user_message() -> None:
@@ -156,6 +179,62 @@ def test_openai_compatible_provider_posts_chat_request_headers(monkeypatch) -> N
     assert captured["headers"]["Accept"] == "application/json"
     assert captured["headers"]["User-agent"] == "rfc-rag-agent/chat-model-provider"
     assert captured["payload"]["model"] == "mimo-v2.5-pro"
+    assert "stream" not in captured["payload"]
+
+
+def test_openai_compatible_provider_streams_delta_content(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeStreamResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def __iter__(self):
+            lines = [
+                b"data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n",
+                b"data: {\"choices\":[{\"delta\":{\"content\":\"Answer \"}}]}\n\n",
+                b"data: {\"choices\":[{\"delta\":{\"content\":\"with [1].\"}}]}\n\n",
+                b"data: [DONE]\n\n",
+            ]
+            return iter(lines)
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["headers"] = dict(request.header_items())
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return FakeStreamResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="mimo-v2.5-pro",
+        api_key="test-key",
+        base_url="https://api.xiaomimimo.com/v1",
+        timeout_seconds=9,
+    )
+
+    chunks = list(
+        provider.stream_generate(
+            [
+                ChatMessage(role="system", content="Use citations."),
+                ChatMessage(role="user", content="What is RFC?"),
+            ]
+        )
+    )
+
+    assert chunks == ["Answer ", "with [1]."]
+    assert captured["url"] == "https://api.xiaomimimo.com/v1/chat/completions"
+    assert captured["timeout"] == 9
+    assert captured["headers"]["Accept"] == "text/event-stream"
+    assert captured["payload"]["stream"] is True
+
+
+def test_parse_openai_compatible_stream_rejects_invalid_json() -> None:
+    with pytest.raises(RuntimeError, match="invalid JSON"):
+        list(parse_openai_compatible_stream([b"data: {not-json}\n\n"]))
 
 
 def test_parse_openai_compatible_answer() -> None:

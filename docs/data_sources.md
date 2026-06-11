@@ -74,6 +74,17 @@ URL:
 
 阶段 24 的 summary 消息只用于当前 conversation 的短期上下文压缩，不是跨会话长期记忆，也不改变 `sources`、`documents`、`chunks`、`chunk_embeddings` 或 source registry 的资料来源边界。真实模型如果在实际长会话中被用于摘要，只能作为运行时模型服务，不是资料来源；自动测试继续使用 deterministic provider，不让真实 API 成为 CI 或本地全量测试前提。
 
+阶段 25 不新增外部资料来源，也不新增爬虫、真实 API 依赖、CSV 评测数据或受限全文文件。阶段 25 新增的是**运行链路与展示协议**，用于让 Agent 面板支持闲聊短路和 SSE 流式输出：
+
+- `docs/stage25_chitchat_and_sse_streaming.md`：阶段 25 设计文档，说明路由层闲聊短路、provider 流式协议、SSE 事件格式、前端消费方式和安全边界。
+- `app/services/agent/chitchat.py`：本地规则和预设回复，只识别 greeting、thanks、goodbye、acknowledgment、help 五类社交意图，不读取外部资料源。
+- `POST /agent/query/stream`：运行时流式响应端点，输出 `token`、`metadata`、`done`、`error` 事件，不改变 `sources`、`documents`、`chunks`、`chunk_embeddings` 或 source registry。
+- 前端 `fetch()` + `ReadableStream` 消费 SSE：只改变回答展示时机，不创建新的资料来源。
+
+阶段 25 的 SSE `token` 事件只包含面向用户展示的回答文本片段；`metadata` 事件复用 `AgentQueryResponse` 的结构化字段，例如 `citations`、`sources`、`workflow_steps`、`invalid_citations`、`refusal_category`、`mode` 和 `iteration_count`。它不得保存或暴露 API key、Bearer token、Authorization header、供应商原始敏感响应、raw_response 或受限全文。
+
+阶段 25 的闲聊回复是预设文本，不是资料来源，也不参与检索证据；带 `conversation_id` 的闲聊可以保存为本地会话消息，但会跳过 summary 压缩，避免社交短句污染后续 RAG 上下文。真实模型流式输出只作为运行时服务能力，自动测试继续使用 deterministic provider，不让真实 API 成为 CI 或本地全量测试前提。
+
 阶段 1 第一批试导入资料登记仍保留在下方，作为早期人工来源记录和历史审计依据。
 
 本批资料采用“资料卡”形式导入：保存题录、公开摘要的转述、检索关键词和来源链接，不保存受版权限制的论文全文。
