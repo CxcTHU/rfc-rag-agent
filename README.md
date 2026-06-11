@@ -14,16 +14,17 @@
 
 ## 当前阶段
 
-阶段 20（中文检索默认链路落地与评测判定增强，待人工核验前收尾）：当前在 `codex/phase-20-default-chain-and-eval-upgrade` 分支完成核心开发、回归验证和普通文档收尾；按要求**尚未执行 `git add`、尚未提交、尚未打 `phase-20-complete` tag、尚未推送、未创建 PR**。阶段 19 已完成并合并到 `main`：`phase-19-complete -> ffb4756`（非 merge 功能提交），合并提交为 `12184d7`。
+阶段 21（LangGraph Agentic RAG，待人工核验前收尾）：当前在 `claude/phase-21-langgraph-agentic-rag` 分支完成核心开发、回归验证和普通文档收尾；按要求**尚未执行 `git add`、尚未提交、尚未打 `phase-21-complete` tag、尚未推送、未创建 PR**。阶段 20 已完成并合并到 `main`：`phase-20-complete -> 706047d`（非 merge 功能提交），合并提交为 `8333d71`。
 
-阶段 20 要点：
+阶段 21 要点：
 
-- **评测判定升级**（`scripts/evaluate_stage20_eval_upgrade.py`）：复用 `data/evaluation/stage19_chinese_hard_queries.csv`，用答案级 `coverage_ratio` 与 `expected_answer_points` 替代偏向题录卡片的关键词 hit 主判定；结果表包含 `query_id/config/judge_mode/hit/coverage_ratio/deep_fulltext_top1/refusal_matched/decision/next_action`。
-- **真实 Jina query 端校验**：只调用真实 Jina 生成 query embedding，复用已有 8918 条 chunk embeddings，不重做 chunk embedding；真实失败必须显式写 `skipped/error`，不得用 deterministic 结果伪造成真实成功。
-- **默认链路接入决策**（`scripts/build_stage20_default_chain_decision.py`）：deterministic 与真实 Jina 均显示候选 `source_type_reweight` 的 `Δp@1=+0.000<0.10`，虽然 `Δdeep_top1` 达标，仍按门槛保持 **`keep_existing_hybrid`**，不修改默认 `HybridSearchService` / Brain hybrid 链路。
-- **`responsibility_gate` 责任边界拒答门**：新增于 Brain 生成前，拦截“判定/评定/是否合格/是否符合规范/能否用于工程”等责任判断题，即使证据充足也提示系统不替代规范审查、工程设计、第三方检测或专家签字；on-topic 学习题不误拒。
-- **质量门槛与报告**（`scripts/build_stage20_quality_report.py`、`data/evaluation/stage20_quality_summary.csv`、`docs/stage20_quality_report.md`、`GET /quality-report`）：最终 quality gate 为 **pass/low**。
-- 回归验证：聚焦回归 61 passed + 67 passed；全量测试 **424 passed**；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 均未被破坏。
+- **LangGraph 状态图**（`app/services/agentic/`）：用 LangGraph StateGraph 构建 agentic RAG 编排图，节点包裹现有 HybridSearchService / BrainService 核心能力。
+- **状态图节点**：retrieve → grade → rewrite/decompose + re-retrieve（硬迭代上界 MAX_ITERATIONS=3）→ generate（保留 citations/拒答/responsibility_gate）→ citation_check。
+- **AgenticState / AgenticResult**：TypedDict 状态 schema 和冻结 dataclass 输出，记录 question、results、iteration_count、evidence_sufficient、answer、citations、refused 等。
+- **可配置 mode 接入**：`/agent/query` 新增 `mode=”agentic”` 参数，不替换默认 `/chat` 或 Brain hybrid 链路。
+- **确定性可测性**：全部节点支持 DeterministicChatModelProvider，19 个 agentic 图测试 + 6 个 eval 测试全部通过。
+- **Agentic vs baseline 评测**（`scripts/evaluate_stage21_agentic_rag.py`）：首次运行受 SSL 错误影响，决策为 `inconclusive_high_error_rate`；agentic 图保留为候选 mode，不接入默认链路。
+- 回归验证：全量测试 **449 passed**；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 均未被破坏。
 
 阶段 19 要点（已合并基线）：
 
@@ -257,7 +258,11 @@
 - Brain `responsibility_gate` 责任边界拒答门，位于 `app/services/brain/workflow.py` 与 `app/services/brain/service.py`
 - `scripts/build_stage20_quality_report.py`、`data/evaluation/stage20_quality_summary.csv`、`docs/stage20_quality_report.md` 阶段 20 quality gate 汇总与报告
 - `GET /quality-report` 当前展示阶段 20 只读质量门槛报告，不触发真实 API、不写库
-- 424 个自动化测试
+- `docs/stage21_langgraph_agentic_rag.md` 阶段 21 设计文档（LangGraph 状态图、节点定义、迭代上界、确定性可测性、安全边界、接入门槛）
+- `app/services/agentic/` 阶段 21 LangGraph agentic RAG 模块（state.py、nodes.py、graph.py）
+- `scripts/evaluate_stage21_agentic_rag.py` 阶段 21 agentic vs baseline 对照评测脚本
+- `data/evaluation/stage21_agentic_comparison_results.csv`、`stage21_agentic_comparison_summary.csv`、`stage21_agentic_decision.csv` 阶段 21 评测结果
+- 449 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -326,7 +331,7 @@ python -m pytest
 当前全量测试结果：
 
 ```text
-408 passed
+449 passed
 ```
 
 当前测试覆盖：
@@ -1141,6 +1146,7 @@ rfc-rag-agent/
       source.py
     services/
       agent/
+      agentic/
       generation/
       ingestion/
       retrieval/

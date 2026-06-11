@@ -1234,9 +1234,9 @@ source = 回答依据，必须能追溯到标题和 URL
 
 阶段 19 经验继续沿用：不让真实 API 成为 CI/全量测试前提（deterministic 仍负责离线回归）；受版权/授权全文与本地 DB 不入库；默认链路是否切换由中文难评测集数据决定；`phase-19-complete` 已指向阶段 19 最终功能提交 `ffb4756`。
 
-### 阶段 20 — 中文检索默认链路落地与评测判定增强（当前待人工核验前）
+### 阶段 20 — 中文检索默认链路落地与评测判定增强（已完成并合并）
 
-阶段 20 当前在 `codex/phase-20-default-chain-and-eval-upgrade` 分支推进；从含阶段 19 合并的 `main` 出发。阶段 20 完成核心开发、回归和普通文档后，仍必须停在用户人工核验前：**不执行 `git add`、不 commit、不创建 `phase-20-complete` tag、不 push、不创建 PR**，直到用户明确确认。
+阶段 20 已完成人工核验、提交、创建 `phase-20-complete` tag（指向 `706047d`，**非** merge）并合并到 `main`（合并提交 `8333d71`）。
 
 阶段 20 关键结论与经验：
 
@@ -1246,6 +1246,23 @@ source = 回答依据，必须能追溯到标题和 URL
 - 责任边界：新增 Brain 生成前 `responsibility_gate`，拦截“判定/评定/是否合格/是否符合规范/能否用于工程”等责任判断题；系统不替代规范审查、工程设计、第三方检测或专家签字。
 - 质量门槛：`scripts/build_stage20_quality_report.py` 汇总阶段 20 quality gate；全量回归通过后为 `pass/low`。
 - 面试表达：阶段 20 的重点不是盲目把重权策略焊进默认链路，而是先把评测口径修正确，再用真实 query 端校验和门槛做数据驱动决策；真正进入默认运行链路的是安全责任门，而不是排序偏好。
+
+阶段 20 经验继续沿用：答案级 coverage_ratio 替代旧的关键词精度口径；responsibility_gate 已进入默认生成链路；不让真实 API 成为 CI/全量测试前提。
+
+### 阶段 21 — LangGraph Agentic RAG（当前待人工核验前）
+
+阶段 21 当前在 `claude/phase-21-langgraph-agentic-rag` 分支推进；从含阶段 20 合并的 `main` 出发。阶段 21 完成核心开发、回归和普通文档后，仍必须停在用户人工核验前：**不执行 `git add`、不 commit、不创建 `phase-21-complete` tag、不 push、不创建 PR**，直到用户明确确认。
+
+阶段 21 关键结论与经验：
+
+- LangGraph 状态图编排：`app/services/agentic/`（state.py, nodes.py, graph.py）实现 retrieve → grade → rewrite/decompose → re-retrieve → generate → citation_check 六节点有向图，TypedDict AgenticState 驱动。
+- 硬迭代上界 `MAX_ITERATIONS = 3`：防止 retrieve-grade-rewrite 循环无限执行；超上界后 generate 节点重新评估证据，不足则拒答而非硬凑。
+- 节点包裹现有服务：retrieve 包裹 HybridSearchService，generate 复用 BrainService 的 responsibility_gate + build_rag_prompt + extract_citations，不重写检索内核。
+- 可配置 mode 接入：`AgentQueryRequest.mode = "agentic"` 走 LangGraph 图，默认 mode 走既有 BrainService 链路，API 契约不变。
+- 确定性可测：`DeterministicChatModelProvider` 让全部 19 个 agentic 测试不依赖真实 LLM API。
+- 评测决策（诚实）：agentic vs baseline 对照评测因 SSL 错误（`[SSL: UNEXPECTED_EOF_WHILE_READING]`）导致 14/19 查询出错，评测脚本已修复（排除出错行、报告 error_rate、高错误率返回 `inconclusive_high_error_rate`），不伪造达标结论。
+- 全量测试 **449 passed**（>= 424 基线 + 25 新增）；POST /search、/search/vector、/search/hybrid、/chat、/agent/query、GET /quality-report 均未被破坏。
+- 面试表达：阶段 21 重点是用 LangGraph 实现带自纠正循环的 agentic RAG，但诚实面对评测结果——SSL 错误导致对照不可靠，系统选择 `inconclusive` 而非伪装达标；工程上硬迭代上界 + 证据再评估双保险防止幻觉和死循环。
 
 阶段 4 最终提交和 tag：
 

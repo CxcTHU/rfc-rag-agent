@@ -39,6 +39,12 @@ URL:
 - 全文保存权限分布：`institutional_access=2`、`metadata_only=110`、`open_access=10`、`unknown=3`。
 - 可信度分布：`high=125`。
 
+阶段 21 新增评测数据产物（不含受限全文或 API 凭据）：
+
+- `data/evaluation/stage21_agentic_comparison_results.csv`：agentic vs baseline 逐查询对照结果。
+- `data/evaluation/stage21_agentic_comparison_summary.csv`：配置级汇总指标。
+- `data/evaluation/stage21_agentic_decision.csv`：接入门槛决策。
+
 阶段 1 第一批试导入资料登记仍保留在下方，作为早期人工来源记录和历史审计依据。
 
 本批资料采用“资料卡”形式导入：保存题录、公开摘要的转述、检索关键词和来源链接，不保存受版权限制的论文全文。

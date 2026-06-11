@@ -1,0 +1,2 @@
+baseline_p1,agentic_p1,delta_p1,baseline_deep_top1,agentic_deep_top1,delta_deep_top1,baseline_refusal_acc,agentic_refusal_acc,baseline_error_rate,agentic_error_rate,decision,reason
+0.000,0.000,+0.000,0.133,0.167,+0.034,1.000,1.000,0.000,0.684,inconclusive_high_error_rate,error_rate baseline=0.000 agentic=0.684; delta_p1=+0.000<0.10; delta_deep_top1=+0.034<0.20

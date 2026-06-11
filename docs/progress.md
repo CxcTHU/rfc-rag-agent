@@ -1,8 +1,24 @@
 # 项目进度
 
-## 最新状态：2026-06-10（阶段 20 中文检索默认链路落地与评测判定增强，待人工核验前收尾）
+## 最新状态：2026-06-11（阶段 21 LangGraph Agentic RAG，待人工核验前收尾）
 
-当前阶段：阶段 20，中文检索默认链路落地与评测判定增强。在 `codex/phase-20-default-chain-and-eval-upgrade` 分支完成核心开发、回归验证和普通文档收尾；当前**尚未执行** `git add`、`git commit`、`git tag`、`git push`，也未创建 PR，等待用户人工核验和明确确认后才允许进入提交、tag 和 GitHub 推送流程。
+当前阶段：阶段 21，LangGraph Agentic RAG。在 `claude/phase-21-langgraph-agentic-rag` 分支完成核心开发、回归验证和普通文档收尾；当前**尚未执行** `git add`、`git commit`、`git tag`、`git push`，也未创建 PR，等待用户人工核验和明确确认后才允许进入提交、tag 和 GitHub 推送流程。
+
+阶段 21 完成内容：
+
+- `docs/stage21_langgraph_agentic_rag.md` 设计文档。
+- `pyproject.toml` 加 `langgraph>=0.2.0` 依赖。
+- `app/services/agentic/` LangGraph agentic RAG 模块：状态图 retrieve → grade → rewrite → re-retrieve → generate → citation_check，硬迭代上界 MAX_ITERATIONS=3。
+- `/agent/query` 新增 `mode="agentic"` 可选参数，不替换默认链路。
+- `scripts/evaluate_stage21_agentic_rag.py` agentic vs baseline 对照评测。
+- 首次评测受 SSL 错误影响，决策为 `inconclusive_high_error_rate`。
+- 全量测试 **449 passed**。
+
+Git 起点：阶段 20 已完成并合并到 `main`（`phase-20-complete -> 706047d`，合并提交 `8333d71`）。
+
+## 历史状态：2026-06-10（阶段 20 中文检索默认链路落地与评测判定增强，已完成并合并）
+
+阶段 20 已完成并合并到 `main`。`phase-20-complete -> 706047d`，合并提交 `8333d71`。
 
 Git / tag / main 起点：
 

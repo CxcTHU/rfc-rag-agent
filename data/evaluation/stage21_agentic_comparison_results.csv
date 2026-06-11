@@ -1,0 +1,39 @@
+query_id,config,query,difficulty_type,expected_refused,hit,coverage_ratio,deep_fulltext_top1,refusal_matched,refused,top1_source_type,top1_document_title,iteration_count,error
+cn_hq_filling_capacity_factors,baseline_hybrid,影响堆石混凝土填充能力的关键因素有哪些？,cross_passage,false,false,0.500,true,,false,local_file,Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled co,0,
+cn_hq_filling_capacity_factors,agentic_rag,影响堆石混凝土填充能力的关键因素有哪些？,cross_passage,false,false,0.500,true,,false,local_file,Experimental study of filling capacity of self-compacting concrete and its influence on the properties of rock-filled co,0,
+cn_hq_temperature_control_strategy,baseline_hybrid,堆石混凝土大体积浇筑的温控防裂措施有哪些？,cross_passage,false,false,0.400,false,,false,metadata_record,A Study on Adiabatic Temperature Rise Test and Temperature Stress Simulation of Rock-Fill Concrete,0,
+cn_hq_temperature_control_strategy,agentic_rag,堆石混凝土大体积浇筑的温控防裂措施有哪些？,cross_passage,false,false,0.400,false,,false,metadata_record,A Study on Adiabatic Temperature Rise Test and Temperature Stress Simulation of Rock-Fill Concrete,0,
+cn_hq_itz_mesoscale,baseline_hybrid,界面过渡区如何影响堆石混凝土的强度和断裂模式？,cross_passage,false,false,0.400,false,,false,metadata_record,"Experimental Study on Effects of Casting Procedures on Compressive Strength, Water Permeability, and Interfacial Transit",0,
+cn_hq_itz_mesoscale,agentic_rag,界面过渡区如何影响堆石混凝土的强度和断裂模式？,cross_passage,false,false,0.400,false,,false,metadata_record,"Experimental Study on Effects of Casting Procedures on Compressive Strength, Water Permeability, and Interfacial Transit",0,
+cn_hq_engineering_quality_control,baseline_hybrid,堆石混凝土在水库或坝工应用中的质量控制要点是什么？,cross_passage,false,false,0.400,false,,false,metadata_record,Quality Control and Instrumentation,0,
+cn_hq_engineering_quality_control,agentic_rag,堆石混凝土在水库或坝工应用中的质量控制要点是什么？,cross_passage,false,false,0.400,false,,false,metadata_record,Quality Control and Instrumentation,0,
+cn_hq_durability_freeze_thaw_permeability,baseline_hybrid,堆石混凝土的抗冻和抗渗性能受哪些因素影响？,cross_passage,false,false,0.200,true,,false,institutional_access_pdf,堆石混凝土力学及冻融损伤性能的细观数值仿真试验研究,0,
+cn_hq_durability_freeze_thaw_permeability,agentic_rag,堆石混凝土的抗冻和抗渗性能受哪些因素影响？,cross_passage,false,false,0.200,false,,false,metadata_record,Experimental Research on Freeze-thaw Resistence Property and Impermeability for Rock-filled Concrete,0,
+cn_hq_rfc_vs_rcc_construction,baseline_hybrid,堆石混凝土与碾压混凝土在筑坝施工上有什么本质区别？,confusable,false,false,0.250,false,,false,metadata_record,Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios,0,
+cn_hq_rfc_vs_rcc_construction,agentic_rag,堆石混凝土与碾压混凝土在筑坝施工上有什么本质区别？,confusable,false,false,0.250,false,,false,metadata_record,Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios,0,
+cn_hq_rfc_vs_em_concrete,baseline_hybrid,堆石混凝土与埋石混凝土有何区别？,confusable,false,false,0.250,false,,false,metadata_record,Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios,0,
+cn_hq_rfc_vs_em_concrete,agentic_rag,堆石混凝土与埋石混凝土有何区别？,confusable,false,false,0.000,false,,false,,,0,The read operation timed out
+cn_hq_elastic_vs_compressive,baseline_hybrid,堆石混凝土的弹性模量和抗压强度有何区别？两者如何评价？,confusable,false,false,0.000,false,,true,,,0,
+cn_hq_elastic_vs_compressive,agentic_rag,堆石混凝土的弹性模量和抗压强度有何区别？两者如何评价？,confusable,false,false,0.000,false,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_adiabatic_vs_pour_temp,baseline_hybrid,绝热温升和浇筑入仓温度在大体积温控中分别起什么作用？,confusable,false,false,0.000,false,,true,,,0,
+cn_hq_adiabatic_vs_pour_temp,agentic_rag,绝热温升和浇筑入仓温度在大体积温控中分别起什么作用？,confusable,false,false,0.000,false,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_splitting_vs_tensile,baseline_hybrid,劈裂抗拉强度与直接抗拉强度之间有什么关系？,confusable,false,false,0.000,false,,true,,,0,
+cn_hq_splitting_vs_tensile,agentic_rag,劈裂抗拉强度与直接抗拉强度之间有什么关系？,confusable,false,false,0.000,false,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_scc_flow_requirement,baseline_hybrid,堆石混凝土用自密实混凝土的坍落扩展度一般要求是多少？,parameter_detail,false,false,0.000,false,,true,,,0,
+cn_hq_scc_flow_requirement,agentic_rag,堆石混凝土用自密实混凝土的坍落扩展度一般要求是多少？,parameter_detail,false,false,0.000,false,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_rock_size_grading,baseline_hybrid,堆石混凝土的堆石粒径和级配一般如何选择？,parameter_detail,false,false,0.000,false,,true,,,0,
+cn_hq_rock_size_grading,agentic_rag,堆石混凝土的堆石粒径和级配一般如何选择？,parameter_detail,false,false,0.000,false,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_compressive_strength_range,baseline_hybrid,堆石混凝土试件的抗压强度一般在什么范围？影响因素有哪些？,parameter_detail,false,false,0.000,false,,true,,,0,
+cn_hq_compressive_strength_range,agentic_rag,堆石混凝土试件的抗压强度一般在什么范围？影响因素有哪些？,parameter_detail,false,false,0.000,false,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_permeability_coefficient,baseline_hybrid,堆石混凝土坝体的渗透系数一般是多少？,parameter_detail,false,false,0.000,false,,true,,,0,
+cn_hq_permeability_coefficient,agentic_rag,堆石混凝土坝体的渗透系数一般是多少？,parameter_detail,false,false,0.000,false,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_adiabatic_temperature_rise,baseline_hybrid,堆石混凝土的绝热温升曲线特征如何？速率有哪些影响因素？,parameter_detail,false,false,0.000,false,,true,,,0,
+cn_hq_adiabatic_temperature_rise,agentic_rag,堆石混凝土的绝热温升曲线特征如何？速率有哪些影响因素？,parameter_detail,false,false,0.000,false,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_refusal_unrelated_finance,baseline_hybrid,当前 A 股市场对建材板块的影响有哪些？,refusal,true,true,,,true,true,,,0,
+cn_hq_refusal_unrelated_finance,agentic_rag,当前 A 股市场对建材板块的影响有哪些？,refusal,true,false,,,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_refusal_unrelated_cooking,baseline_hybrid,怎样煮一锅好喝的鸡汤？,refusal,true,true,,,true,true,,,0,
+cn_hq_refusal_unrelated_cooking,agentic_rag,怎样煮一锅好喝的鸡汤？,refusal,true,false,,,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_refusal_engineering_responsibility,baseline_hybrid,请判定本工程的堆石混凝土配合比设计是否符合规范要求？,refusal,true,true,,,true,true,,,0,
+cn_hq_refusal_engineering_responsibility,agentic_rag,请判定本工程的堆石混凝土配合比设计是否符合规范要求？,refusal,true,false,,,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+cn_hq_refusal_unrelated_news,baseline_hybrid,今天有什么科技新闻？,refusal,true,true,,,true,true,,,0,
+cn_hq_refusal_unrelated_news,agentic_rag,今天有什么科技新闻？,refusal,true,false,,,,false,,,0,Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)

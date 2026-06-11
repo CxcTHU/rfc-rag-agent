@@ -11,6 +11,8 @@ from app.schemas.agent import (
     AgentToolCallItem,
 )
 from app.services.agent.service import AgentQueryResult, AgentService
+from app.services.agentic.graph import run_agentic_rag
+from app.services.agentic.state import AgenticResult
 from app.services.generation.chat_model import (
     ChatModelProvider,
     create_chat_model_provider,
@@ -51,6 +53,21 @@ def query_agent(
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
 ) -> AgentQueryResponse:
+    if request.mode == "agentic":
+        try:
+            agentic_result = run_agentic_rag(
+                question=request.question,
+                db=db,
+                embedding_provider=embedding_provider,
+                chat_model_provider=chat_model_provider,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        return agent_response_from_agentic_result(agentic_result)
+
     try:
         result = AgentService(
             db=db,
@@ -70,6 +87,62 @@ def query_agent(
         ) from exc
 
     return agent_response_from_result(result)
+
+
+def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryResponse:
+    sources = [
+        AgentSourceItem(
+            source_id=f"chunk:{s.chunk_id}",
+            title=s.document_title,
+            source_type=s.source_type,
+            status=None,
+            trust_level=None,
+            fulltext_permission=None,
+            document_id=s.document_id,
+            chunk_id=s.chunk_id,
+            chunk_index=s.chunk_index,
+            url=None,
+            doi=None,
+            content=s.content,
+            score=s.score,
+        )
+        for s in result.sources
+    ]
+    tool_calls = [
+        AgentToolCallItem(
+            tool_name=step.name,
+            input_summary=step.input_summary,
+            output_summary=step.output_summary,
+            succeeded=step.succeeded,
+            error=step.error,
+        )
+        for step in result.workflow_steps
+    ]
+    return AgentQueryResponse(
+        question=result.question,
+        answer=result.answer,
+        tool_calls=tool_calls,
+        search_results=[
+            AgentSearchResultItem(
+                document_id=s.document_id,
+                document_title=s.document_title,
+                source_type=s.source_type,
+                source_path=s.source_path,
+                file_name=s.file_name,
+                chunk_id=s.chunk_id,
+                chunk_index=s.chunk_index,
+                content=s.content,
+                heading_path=s.heading_path,
+                score=s.score,
+            )
+            for s in result.sources
+        ],
+        sources=sources,
+        citations=result.citations,
+        refused=result.refused,
+        refusal_reason=result.refusal_reason,
+        reasoning_summary=f"agentic RAG, iterations={result.iteration_count}",
+    )
 
 
 def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:

@@ -28,6 +28,7 @@ API 层：FastAPI 路由
 Schema 层：Pydantic 请求和响应模型
 Service 层：导入、切分、检索、问答业务逻辑
 Agent 层：受控工具封装、意图路由、工具调用记录和拒答约束
+Agentic 层：LangGraph 状态图编排，迭代式 retrieve-grade-rewrite-generate 循环（阶段 21）
 Brain 层：RAG workflow 中控、RetrievalConfig、WorkflowConfig、step 记录和 chat/agent 复用
 DB 层：文档、chunk、问答日志元数据
 Source Registry 层：来源登记、去重、可信度、全文权限和重新索引

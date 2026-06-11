@@ -7,6 +7,7 @@ class AgentQueryRequest(BaseModel):
     max_tool_calls: int = Field(default=2, ge=1, le=5)
     source_id: str | None = None
     history: list[str] = Field(default_factory=list, max_length=50)
+    mode: str | None = None
 
     @field_validator("question")
     @classmethod
