@@ -1,4 +1,11 @@
+import json
+from collections.abc import Iterator, Sequence
+from queue import Queue
+from threading import Thread
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -12,6 +19,7 @@ from app.schemas.agent import (
     AgentToolCallItem,
     AgentWorkflowStepItem,
 )
+from app.services.agent.chitchat import ChitchatResult, detect_chitchat
 from app.services.agent.service import AgentQueryResult, AgentService
 from app.services.agent.routing import classify_query_complexity
 from app.services.agentic.graph import run_agentic_rag
@@ -21,8 +29,11 @@ from app.services.conversation.history import (
     summarize_conversation_if_needed,
 )
 from app.services.generation.chat_model import (
+    ChatMessage,
     ChatModelProvider,
+    ChatModelResult,
     create_chat_model_provider,
+    split_streaming_text,
 )
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
 
@@ -72,6 +83,19 @@ def query_agent(
         conversation_history = history_from_messages(
             conversation_repository.list_messages(request.conversation_id)
         )
+
+    chitchat = detect_chitchat(request.question)
+    if chitchat is not None:
+        response = agent_response_from_chitchat(request.question, chitchat)
+        persist_agent_conversation_messages(
+            repository=conversation_repository,
+            conversation_id=request.conversation_id,
+            question=request.question,
+            response=response,
+            chat_model_provider=chat_model_provider,
+            summarize=False,
+        )
+        return response
 
     effective_mode = request.mode
     if effective_mode is None:
@@ -140,6 +164,244 @@ def query_agent(
         chat_model_provider=chat_model_provider,
     )
     return response
+
+
+@router.post("/query/stream")
+def stream_query_agent(
+    request: AgentQueryRequest,
+    db: Session = Depends(get_db),
+    chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
+    embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
+) -> StreamingResponse:
+    conversation_repository = ConversationRepository(db)
+    conversation_history: list[str] = []
+    if request.conversation_id is not None:
+        conversation = conversation_repository.get_conversation(request.conversation_id)
+        if conversation is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="conversation not found",
+            )
+        conversation_history = history_from_messages(
+            conversation_repository.list_messages(request.conversation_id)
+        )
+
+    return StreamingResponse(
+        stream_agent_query_events(
+            request=request,
+            db=db,
+            conversation_repository=conversation_repository,
+            conversation_history=conversation_history,
+            chat_model_provider=chat_model_provider,
+            embedding_provider=embedding_provider,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def stream_agent_query_events(
+    *,
+    request: AgentQueryRequest,
+    db: Session,
+    conversation_repository: ConversationRepository,
+    conversation_history: list[str],
+    chat_model_provider: ChatModelProvider,
+    embedding_provider: EmbeddingProvider,
+) -> Iterator[str]:
+    try:
+        chitchat = detect_chitchat(request.question)
+        summarize = True
+        if chitchat is not None:
+            response = agent_response_from_chitchat(request.question, chitchat)
+            summarize = False
+        else:
+            response, streamed_token_count = yield from stream_non_chitchat_agent_response(
+                request=request,
+                db=db,
+                conversation_history=conversation_history,
+                chat_model_provider=chat_model_provider,
+                embedding_provider=embedding_provider,
+            )
+            if streamed_token_count == 0:
+                for token in split_streaming_text(response.answer):
+                    yield sse_event("token", {"text": token})
+
+        if chitchat is not None:
+            for token in split_streaming_text(response.answer):
+                yield sse_event("token", {"text": token})
+
+        persist_agent_conversation_messages(
+            repository=conversation_repository,
+            conversation_id=request.conversation_id,
+            question=request.question,
+            response=response,
+            chat_model_provider=chat_model_provider,
+            summarize=summarize,
+        )
+        yield sse_event("metadata", response.model_dump(mode="json"))
+        yield sse_event("done", {})
+    except ValueError as exc:
+        yield sse_event("error", {"detail": str(exc)})
+    except RuntimeError:
+        yield sse_event(
+            "error",
+            {"detail": "chat model provider is unavailable or timed out"},
+        )
+    except Exception:
+        yield sse_event("error", {"detail": "agent stream failed"})
+
+
+def stream_non_chitchat_agent_response(
+    *,
+    request: AgentQueryRequest,
+    db: Session,
+    conversation_history: list[str],
+    chat_model_provider: ChatModelProvider,
+    embedding_provider: EmbeddingProvider,
+) -> Iterator[str | tuple[AgentQueryResponse, int]]:
+    queue: Queue[tuple[str, Any]] = Queue()
+
+    def produce_response() -> None:
+        try:
+            streaming_chat_model_provider = QueueStreamingChatModelProvider(
+                base_provider=chat_model_provider,
+                queue=queue,
+            )
+            response = build_agent_query_response(
+                request=request,
+                db=db,
+                conversation_history=conversation_history,
+                chat_model_provider=streaming_chat_model_provider,
+                embedding_provider=embedding_provider,
+            )
+        except Exception as exc:  # noqa: BLE001 - forwarded to SSE error mapping.
+            queue.put(("error", exc))
+            return
+        queue.put(("response", response))
+
+    producer = Thread(target=produce_response, daemon=True)
+    producer.start()
+
+    streamed_token_count = 0
+    while True:
+        event_type, payload = queue.get()
+        if event_type == "token":
+            streamed_token_count += 1
+            yield sse_event("token", {"text": payload})
+            continue
+        if event_type == "response":
+            producer.join()
+            return payload, streamed_token_count
+        if event_type == "error":
+            producer.join()
+            raise payload
+
+        producer.join()
+        raise RuntimeError("unknown stream event")
+
+
+def build_agent_query_response(
+    *,
+    request: AgentQueryRequest,
+    db: Session,
+    conversation_history: list[str],
+    chat_model_provider: ChatModelProvider,
+    embedding_provider: EmbeddingProvider,
+) -> AgentQueryResponse:
+    effective_mode = request.mode
+    if effective_mode is None:
+        routing = classify_query_complexity(request.question)
+        effective_mode = "agentic" if routing.complexity == "complex" else "default"
+
+    if effective_mode == "agentic":
+        agentic_result = run_agentic_rag(
+            question=request.question,
+            db=db,
+            embedding_provider=embedding_provider,
+            chat_model_provider=chat_model_provider,
+            history=conversation_history or request.history,
+        )
+        return agent_response_from_agentic_result(agentic_result)
+
+    result = AgentService(
+        db=db,
+        chat_model_provider=chat_model_provider,
+        embedding_provider=embedding_provider,
+    ).query(
+        question=request.question,
+        top_k=request.top_k,
+        max_tool_calls=request.max_tool_calls,
+        source_id=request.source_id,
+        history=conversation_history or request.history,
+    )
+    return agent_response_from_result(result)
+
+
+def sse_event(event: str, payload: dict[str, object]) -> str:
+    data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return f"event: {event}\ndata: {data}\n\n"
+
+
+class QueueStreamingChatModelProvider:
+    def __init__(
+        self,
+        *,
+        base_provider: ChatModelProvider,
+        queue: Queue[tuple[str, Any]],
+    ) -> None:
+        self.base_provider = base_provider
+        self.queue = queue
+        self.provider_name = base_provider.provider_name
+        self.model_name = base_provider.model_name
+
+    def generate(self, messages: Sequence[ChatMessage]) -> ChatModelResult:
+        try:
+            token_stream = self.base_provider.stream_generate(messages)
+        except AttributeError:
+            result = self.base_provider.generate(messages)
+            for token in split_streaming_text(result.answer):
+                self.queue.put(("token", token))
+            return result
+
+        answer_parts: list[str] = []
+        for token in token_stream:
+            self.queue.put(("token", token))
+            answer_parts.append(token)
+        return ChatModelResult(
+            answer="".join(answer_parts),
+            provider=self.provider_name,
+            model_name=self.model_name,
+            raw_response=None,
+        )
+
+    def stream_generate(self, messages: Sequence[ChatMessage]) -> Iterator[str]:
+        yield from self.base_provider.stream_generate(messages)
+
+
+def agent_response_from_chitchat(
+    question: str,
+    chitchat: ChitchatResult,
+) -> AgentQueryResponse:
+    return AgentQueryResponse(
+        question=question.strip(),
+        answer=chitchat.answer,
+        tool_calls=[],
+        search_results=[],
+        sources=[],
+        citations=[],
+        refused=False,
+        refusal_reason=None,
+        reasoning_summary=chitchat.reasoning_summary,
+        mode="default",
+        workflow_steps=[],
+        iteration_count=0,
+        invalid_citations=[],
+        refusal_category=None,
+    )
 
 
 def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryResponse:
@@ -304,6 +566,7 @@ def persist_agent_conversation_messages(
     question: str,
     response: AgentQueryResponse,
     chat_model_provider: ChatModelProvider,
+    summarize: bool = True,
 ) -> None:
     if conversation_id is None:
         return
@@ -324,6 +587,8 @@ def persist_agent_conversation_messages(
             metadata=assistant_metadata_from_response(response),
         )
     )
+    if not summarize:
+        return
     try:
         summarize_conversation_if_needed(
             repository=repository,

@@ -9,6 +9,7 @@ const apiEndpoints = {
   hybridSearch: "/search/hybrid",
   chat: "/chat",
   agent: "/agent/query",
+  agentStream: "/agent/query/stream",
   conversations: "/conversations",
   conversation: (conversationId) => `/conversations/${encodeURIComponent(conversationId)}`,
   conversationMessages: (conversationId) => `/conversations/${encodeURIComponent(conversationId)}/messages`,
@@ -542,6 +543,91 @@ function appendAgentThinkingMessage() {
   return answerBox.lastElementChild;
 }
 
+function appendTokenToAgentMessage(messageElement, token) {
+  if (!messageElement) {
+    return;
+  }
+  const answerText = messageElement.querySelector(".answer-text");
+  if (!answerText) {
+    return;
+  }
+  if (messageElement.classList.contains("chat-message--thinking")) {
+    messageElement.classList.remove("chat-message--thinking");
+    answerText.classList.remove("thinking-text");
+    answerText.textContent = "";
+  }
+  answerText.textContent += token;
+  scrollAgentChatToBottom();
+}
+
+function finalizeAgentStreamingMessage(messageElement, result) {
+  if (!messageElement) {
+    appendAgentAssistantMessage(result);
+    return;
+  }
+  const bubble = messageElement.querySelector(".chat-message-bubble");
+  if (!bubble) {
+    appendAgentAssistantMessage(result);
+    return;
+  }
+  messageElement.classList.remove("chat-message--thinking");
+
+  const answerText = bubble.querySelector(".answer-text");
+  if (!answerText || !answerText.textContent.trim()) {
+    bubble.innerHTML = `
+      <div class="chat-message-role">Agent</div>
+      ${agentAnswerHtml(result)}
+    `;
+    scrollAgentChatToBottom();
+    return;
+  }
+
+  answerText.textContent = result.answer;
+
+  if (result.refused) {
+    const refusalCategory = result.refusal_category
+      ? `<p class="refusal-category">分类：${escapeHtml(formatRefusalCategory(result.refusal_category))} / ${escapeHtml(result.refusal_category)}</p>`
+      : "";
+    answerText.insertAdjacentHTML(
+      "beforebegin",
+      `<div class="refusal"><strong>拒答</strong>${refusalCategory}<p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`,
+    );
+  }
+
+  const invalidCitationSet = new Set((result.invalid_citations || []).map((c) => String(c)));
+  const citationBadges = (result.citations || [])
+    .map((c) => {
+      const isInvalid = invalidCitationSet.has(String(c));
+      return `<span class="pill ${isInvalid ? "danger" : ""}">[${escapeHtml(c)}]${isInvalid ? " 无效" : ""}</span>`;
+    })
+    .join("");
+  const orphanInvalidBadges = (result.invalid_citations || [])
+    .filter((c) => !(result.citations || []).map((i) => String(i)).includes(String(c)))
+    .map((c) => `<span class="pill danger">[${escapeHtml(c)}] 无效</span>`)
+    .join("");
+  const sourceBadges = (result.sources || [])
+    .slice(0, 5)
+    .map((s) => `<span class="pill neutral">${escapeHtml(s.source_id)}</span>`)
+    .join("");
+  const modeBadge = `<span class="pill neutral">mode: ${escapeHtml(result.mode || "default")}</span>`;
+  const iterationBadge = `<span class="pill neutral">iterations: ${escapeHtml(result.iteration_count ?? 0)}</span>`;
+
+  answerText.insertAdjacentHTML(
+    "afterend",
+    `
+    <div class="answer-meta">
+      ${citationBadges || '<span class="pill neutral">无引用</span>'}
+      ${orphanInvalidBadges}
+      ${sourceBadges || '<span class="pill neutral">无来源</span>'}
+      ${modeBadge}
+      ${iterationBadge}
+    </div>
+    <p class="meta-line">${escapeHtml(result.reasoning_summary || "")}</p>
+    `,
+  );
+  scrollAgentChatToBottom();
+}
+
 function appendAgentErrorMessage(message) {
   const answerBox = document.querySelector("[data-agent-answer-box]");
   if (!answerBox) {
@@ -820,20 +906,47 @@ async function submitAgent() {
     if (sourceId) {
       body.source_id = sourceId;
     }
-    const result = await fetchJson(apiEndpoints.agent, {
-      method: "POST",
-      body: JSON.stringify(body),
-      timeoutMs: 45000,
-    });
-    pendingThinkingMessage?.remove();
-    pendingThinkingMessage = null;
-    renderAgentAnswer(result);
-    if ((result.workflow_steps || []).length) {
-      renderAgentWorkflowSteps(result.workflow_steps || []);
-    } else {
-      renderAgentToolCalls(result.tool_calls || []);
+    let streamStarted = false;
+    let result = null;
+    try {
+      result = await streamAgentQuery(body, {
+        onToken: async (token) => {
+          streamStarted = true;
+          appendTokenToAgentMessage(pendingThinkingMessage, token);
+          await waitForAgentTokenPaint();
+        },
+        onMetadata: (metadata) => {
+          result = metadata;
+          finalizeAgentStreamingMessage(pendingThinkingMessage, metadata);
+          pendingThinkingMessage = null;
+          updateAgentModeStatus(metadata.mode || "default");
+          if ((metadata.workflow_steps || []).length) {
+            renderAgentWorkflowSteps(metadata.workflow_steps || []);
+          } else {
+            renderAgentToolCalls(metadata.tool_calls || []);
+          }
+        },
+      });
+    } catch (streamError) {
+      if (streamStarted) {
+        throw streamError;
+      }
+      result = await fetchJson(apiEndpoints.agent, {
+        method: "POST",
+        body: JSON.stringify(body),
+        timeoutMs: 45000,
+      });
+      pendingThinkingMessage?.remove();
+      pendingThinkingMessage = null;
+      renderAgentAnswer(result);
+      if ((result.workflow_steps || []).length) {
+        renderAgentWorkflowSteps(result.workflow_steps || []);
+      } else {
+        renderAgentToolCalls(result.tool_calls || []);
+      }
     }
-    setApiStatus(result.refused ? "Agent 已拒答" : "Agent 已完成");
+    setApiStatus(result?.refused ? "Agent 已拒答" : "Agent 已完成");
+    setAgentPanelStatus(result?.refused ? "refused" : "answered");
     await refreshConversationList();
   } catch (error) {
     pendingThinkingMessage?.remove();
@@ -844,6 +957,102 @@ async function submitAgent() {
   } finally {
     setAgentBusy(false);
   }
+}
+
+async function streamAgentQuery(body, handlers = {}) {
+  const response = await fetch(apiEndpoints.agentStream, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const detail = payload.detail || `HTTP ${response.status}`;
+    throw new Error(Array.isArray(detail) ? detail.map((item) => item.msg).join("; ") : detail);
+  }
+  if (!response.body || !response.body.getReader) {
+    throw new Error("当前浏览器不支持流式读取，已切换为同步请求");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let metadata = null;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const parsed = await consumeSseBuffer(buffer, handlers);
+    buffer = parsed.remaining;
+    if (parsed.metadata) {
+      metadata = parsed.metadata;
+    }
+  }
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    const parsed = await consumeSseBuffer(`${buffer}\n\n`, handlers);
+    if (parsed.metadata) {
+      metadata = parsed.metadata;
+    }
+  }
+  if (!metadata) {
+    throw new Error("流式响应缺少 metadata 事件");
+  }
+  return metadata;
+}
+
+async function consumeSseBuffer(buffer, handlers = {}) {
+  let remaining = buffer;
+  let metadata = null;
+  while (true) {
+    const boundary = remaining.indexOf("\n\n");
+    if (boundary === -1) {
+      break;
+    }
+    const rawEvent = remaining.slice(0, boundary);
+    remaining = remaining.slice(boundary + 2);
+    const event = parseSseEvent(rawEvent);
+    if (!event.name) {
+      continue;
+    }
+    if (event.name === "token") {
+      await handlers.onToken?.(event.data.text || "");
+    } else if (event.name === "metadata") {
+      metadata = event.data;
+      await handlers.onMetadata?.(event.data);
+    } else if (event.name === "error") {
+      throw new Error(event.data.detail || "流式响应失败");
+    }
+  }
+  return { remaining, metadata };
+}
+
+function waitForAgentTokenPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+function parseSseEvent(rawEvent) {
+  let name = "";
+  const dataLines = [];
+  for (const line of rawEvent.split(/\r?\n/)) {
+    if (line.startsWith("event:")) {
+      name = line.slice("event:".length).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trim());
+    }
+  }
+  const rawData = dataLines.join("\n") || "{}";
+  return {
+    name,
+    data: JSON.parse(rawData),
+  };
 }
 
 function renderAll() {

@@ -1,5 +1,77 @@
 # 项目进度
 
+## 最新状态：2026-06-11（阶段 25 闲聊短路 + SSE 流式输出，开发与测试完成，等待用户人工核验）
+
+当前阶段：阶段 25，闲聊短路 + SSE 流式输出。在 `codex/phase-25-chitchat-and-sse-streaming` 分支完成核心开发、聚焦回归、全量测试、浏览器验证、普通文档同步和 Obsidian 草稿收尾。本阶段当前**尚未提交**：未执行 `git add`、未 commit、未创建 `phase-25-complete` tag、未 push、未创建 PR，等待用户人工核验和明确确认。
+
+Git / tag / main 起点：
+
+- 阶段 24 已完成、创建 `phase-24-complete` tag，并合并到 `main`。
+- `phase-24-complete -> 64069ba Complete phase 24 multi-turn conversation`。
+- 阶段 24 合并提交：`c4eda98 Merge phase 24 multi-turn conversation`。
+- 阶段 25 从阶段 24 合并后的 `main` 出发，未移动任何已有阶段 tag。
+- 当前未创建 `phase-25-complete` tag。
+
+阶段 25 完成内容：
+
+- 新增 `docs/stage25_chitchat_and_sse_streaming.md`，固定路由层闲聊短路、provider 流式协议、SSE 事件格式、前端消费方式、会话持久化时机和安全边界。
+- 新增 `app/services/agent/chitchat.py`，覆盖 greeting、thanks、goodbye、acknowledgment、help 五类社交意图。
+- `/agent/query` 在加载会话后、`classify_query_complexity()` 前执行 `detect_chitchat()`；命中后直接返回预设友好回复，不调用 LLM、不检索、不进入 default/agentic RAG。
+- `persist_agent_conversation_messages()` 新增 `summarize` 参数；闲聊持久化时保存 user/assistant 消息但跳过摘要压缩。
+- 从 `AgentService.detect_intent()` 移除已提升的 greeting 分支，避免 default service 与路由层重复承担社交意图。
+- `ChatModelProvider` Protocol 新增 `stream_generate(messages) -> Iterator[str]`；deterministic provider 稳定分段 yield，OpenAI-compatible provider 使用 `stream=true` 并解析 SSE `delta.content`。
+- 新增 `POST /agent/query/stream`，返回 `StreamingResponse(media_type="text/event-stream")`，事件格式为 `token`、`metadata`、`done`、`error`。
+- SSE 端点支持闲聊、default、agentic 三条路径；非闲聊路径通过 `QueueStreamingChatModelProvider` 和后台生产者线程复用现有 AgentService/agentic 图，模型每产出一个 token 就进入队列并立即由 SSE generator 输出。
+- 前端 `submitAgent()` 优先调用 `/agent/query/stream`，使用 `fetch()`、`response.body.getReader()` 和 `TextDecoder` 手动消费 SSE，逐 token 追加到助手气泡，流结束后用 metadata 回填 citations、mode、workflow、refusal 等展示。
+- 保留同步 `POST /agent/query` JSON 契约；`POST /search`、`/search/vector`、`/search/hybrid`、`/chat`、`GET /quality-report` 未被破坏。
+
+验证结果：
+
+```text
+focused:
+.\.venv\Scripts\python.exe -m pytest tests\test_agent_chitchat.py tests\test_agent_api.py tests\test_agent_service.py -q
+29 passed in 7.72s
+
+.\.venv\Scripts\python.exe -m pytest tests\test_chat_model_provider.py -q
+18 passed in 0.06s
+
+.\.venv\Scripts\python.exe -m pytest tests\test_agent_stream_api.py tests\test_chat_model_provider.py tests\test_agent_api.py -q
+43 passed in 7.88s
+
+.\.venv\Scripts\python.exe -m pytest tests\test_frontend_app.py -q
+6 passed in 0.75s
+
+stage25 combined:
+.\.venv\Scripts\python.exe -m pytest tests\test_agent_chitchat.py tests\test_chat_model_provider.py tests\test_agent_stream_api.py tests\test_agent_api.py tests\test_frontend_app.py -q
+53 passed in 16.09s
+
+full:
+.\.venv\Scripts\python.exe -m pytest -q
+497 passed in 66.18s
+
+browser:
+desktop 1280x720: thanks 闲聊短路成功，source_id=rfc_source_001 轻量 SSE 成功，metadata 回填 mode/tool/refusal，console errors=0，无横向溢出
+desktop self-test: thanks 页面轮询记录到助手气泡逐段增长（例如“不客气。你可以继续追” -> “...让我检索相” -> 完整句），最终 data-agent-status=answered，console errors=0
+mobile 390x844: thanks 闲聊短路成功，console errors=0，无横向溢出
+```
+
+遗留风险：
+
+- 阶段 25 当前等待用户人工核验，不能提交、不能创建 `phase-25-complete` tag、不能推送 GitHub。
+- 当前真实本地大库上普通 RAG 问题 `What affects filling capacity in rock-filled concrete?` 在同步 `/agent/query` 与流式 `/agent/query/stream` 都超过 20 秒；因同步端点同题也慢，暂归为真实大库检索/运行数据性能风险，不归因于阶段 25 SSE parser。后续若要优化真实浏览器体验，建议单独排查 hybrid/vector 检索耗时、SQLite 大表读取和当前 `data/app.sqlite` 索引状态。
+- SSE 是单向服务器推送，不是 WebSocket 双向通道；后续若要做用户取消、工具交互或双向协同，需要单独设计协议、权限和测试。
+
+下一步：
+
+- 用户人工核验阶段 25 的闲聊短路、同步 `/agent/query` 兼容性、`/agent/query/stream` SSE、前端打字机效果、metadata 回填、会话持久化和文档/Obsidian 草稿。
+- 核验通过后，才允许执行 `git add`、commit、创建 `phase-25-complete` tag、推送 GitHub；tag 必须指向阶段 25 最终功能提交，不要移动已有阶段 tag。
+
+面试表达：
+
+```text
+阶段 25 我把 Agent 的两类体验问题做成了可测的工程边界。第一，社交闲聊不应该进入 RAG，所以我在 /agent/query 路由层、复杂度路由之前统一识别问候、感谢、告别、确认和求助，命中后直接返回预设回复，不调用检索和模型。第二，长回答不应该等完整 JSON 才显示，所以我给 ChatModelProvider 增加 stream_generate 协议，新增 /agent/query/stream SSE 端点；非闲聊路径用后台生产者线程执行现有 RAG 链路，QueueStreamingChatModelProvider 每收到模型 token 就放入队列，SSE generator 立即发 token 事件，最后用 metadata 回填引用、模式、workflow 和拒答信息。同步 /agent/query 完全保留，测试用 deterministic provider 覆盖流式路径，真实 API 不进入 CI 前提。
+```
+
 ## 最新状态：2026-06-11（阶段 24 已通过用户核验，进入提交合并）
 
 用户已完成阶段 24 人工核验，并明确要求提交阶段 24 整体开发工作、创建 `phase-24-complete` tag、推送阶段分支、合并到 `main` 并上传 GitHub。提交前复核结果：阶段 24 从阶段 23 合并后的 `main`（`8fc1cfa Merge phase 23 agentic eval and auto routing`）出发，未移动任何已有阶段 tag；`phase-24-complete` 在提交前不存在。最终提交前全量测试结果为：
@@ -11,9 +83,9 @@
 
 本次发布范围包括 Conversation/Message 持久化模型、`/conversations` CRUD API、`/agent/query conversation_id` 历史加载与消息持久化、agentic generate history 支持、长对话 summary 压缩、Agent 聊天气泡与会话管理、首页隐藏普通用户不需要的“问答”和“检索”调试面板，以及阶段 24 普通文档和 Obsidian 草稿收尾。后端 `/chat`、`/search`、`/search/vector`、`/search/hybrid` 和 `/quality-report` 保持兼容。
 
-## 最新状态：2026-06-11（阶段 24 多轮对话 UI 与会话持久化，开发与测试完成，等待用户人工核验）
+## 历史状态：2026-06-11（阶段 24 多轮对话 UI 与会话持久化，开发与测试完成，等待用户人工核验）
 
-当前阶段：阶段 24，Multi-turn Conversation UI 与会话持久化。在 `codex/phase-24-multi-turn-conversation` 分支完成核心开发、聚焦回归、全量测试、浏览器验证、普通文档同步和 Obsidian 草稿收尾。本阶段当前**尚未提交**：未执行 `git add`、未 commit、未创建 `phase-24-complete` tag、未 push、未创建 PR，等待用户人工核验和明确确认。
+当时阶段：阶段 24，Multi-turn Conversation UI 与会话持久化。在 `codex/phase-24-multi-turn-conversation` 分支完成核心开发、聚焦回归、全量测试、浏览器验证、普通文档同步和 Obsidian 草稿收尾。该记录是阶段 24 提交前的历史状态；后续阶段 24 已通过用户核验、创建 `phase-24-complete` tag 并合并到 `main`，见本文件上方阶段 24 提交合并记录。
 
 Git / tag / main 起点：
 
@@ -64,15 +136,14 @@ mobile 390x844: conversation bar and chat list visible, no horizontal overflow, 
 
 遗留风险：
 
-- 阶段 24 当前等待用户人工核验，不能提交、不能创建 `phase-24-complete` tag、不能推送 GitHub。
+- 本条为阶段 24 提交前历史风险；阶段 24 后续已完成用户核验、提交、打 tag 并合并。
 - 当前会话列表没有用户隔离或登录体系，这是阶段 24 明确边界；后续若引入认证，需要给 `Conversation` 增加 owner 维度和列表过滤。
 - 摘要压缩使用同一 `ChatModelProvider` 接口；deterministic 测试稳定，真实 provider 只在实际长会话运行时调用，不应成为 CI 前提。
 - 本阶段不做跨会话长期记忆，summary 只服务当前 conversation 的短期上下文压缩。
 
 下一步：
 
-- 用户人工核验阶段 24 的模型/API/Agent 历史装配/摘要压缩/前端会话管理/文档和 Obsidian 草稿。
-- 核验通过后，才允许执行 `git add`、commit、创建 `phase-24-complete` tag、推送 GitHub；tag 必须指向阶段 24 最终功能提交，不要移动已有阶段 tag。
+- 本条为历史下一步；阶段 24 后续已完成提交合并。当前下一步以本文件顶部阶段 25 状态为准。
 
 面试表达：
 

@@ -39,6 +39,7 @@ def test_frontend_static_assets_are_served() -> None:
     client = TestClient(create_app())
 
     response = client.get("/static/app.js")
+    script = response.text.replace("\r\n", "\n")
 
     assert response.status_code == 200
     assert "apiEndpoints" in response.text
@@ -75,7 +76,24 @@ def test_frontend_static_assets_are_served() -> None:
     assert "pendingUserMessage.remove()" not in response.text
     assert "body.conversation_id = state.currentConversationId" in response.text
     assert "scrollAgentChatToBottom" in response.text
-    assert 'insertAdjacentHTML(\n    "beforeend"' in response.text
+    assert 'insertAdjacentHTML(\n    "beforeend"' in script
+    assert "/agent/query/stream" in response.text
+    assert "streamAgentQuery" in response.text
+    assert "response.body" in response.text
+    assert "getReader()" in response.text
+    assert "TextDecoder" in response.text
+    assert "parseSseEvent" in response.text
+    assert "consumeSseBuffer" in response.text
+    assert "async function consumeSseBuffer" in response.text
+    assert "await consumeSseBuffer" in response.text
+    assert "waitForAgentTokenPaint" in response.text
+    assert "await waitForAgentTokenPaint()" in response.text
+    assert "await handlers.onToken" in response.text
+    assert "finalizeAgentStreamingMessage" in response.text
+    assert "appendTokenToAgentMessage" in response.text
+    assert 'setAgentPanelStatus(result?.refused ? "refused" : "answered")' in response.text
+    assert '"Accept": "text/event-stream"' in response.text
+    assert "apiEndpoints.agentStream" in response.text
     assert "workflow_steps" in response.text
     assert "iteration_count" in response.text
     assert "invalid_citations" in response.text

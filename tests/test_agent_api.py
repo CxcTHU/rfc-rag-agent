@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.agent import get_agent_chat_model_provider, get_agent_embedding_provider
+import app.api.agent as agent_api_module
 from app.api.chat import get_chat_model_provider
 from app.api.chat import get_embedding_provider as get_chat_embedding_provider
 from app.db.models import Base
@@ -189,22 +190,57 @@ def test_agent_api_answers_with_tool_calls_and_citations(tmp_path) -> None:
     assert "引用式问答" in payload["reasoning_summary"]
 
 
-def test_agent_api_handles_greeting_without_refusal_or_tools(tmp_path) -> None:
+def test_agent_api_handles_chitchat_without_refusal_or_tools(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
-        response = client.post(
-            "/agent/query",
-            json={"question": "你好", "top_k": 2},
-        )
+        responses = [
+            client.post("/agent/query", json={"question": question, "top_k": 2})
+            for question in ["你好", "谢谢", "再见", "好的", "你能做什么"]
+        ]
+
+    for response in responses:
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["refused"] is False
+        assert payload["tool_calls"] == []
+        assert payload["sources"] == []
+        assert payload["citations"] == []
+        assert payload["mode"] == "default"
+        assert "闲聊短路" in payload["reasoning_summary"]
+
+
+def test_agent_api_short_circuits_chitchat_before_complexity_routing(tmp_path, monkeypatch) -> None:
+    def fail_routing(question: str):
+        raise AssertionError("routing should not be called for chitchat")
+
+    monkeypatch.setattr(agent_api_module, "classify_query_complexity", fail_routing)
+
+    with make_test_client(tmp_path) as client:
+        response = client.post("/agent/query", json={"question": "hello"})
 
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["question"] == "你好"
-    assert payload["refused"] is False
-    assert payload["tool_calls"] == []
-    assert payload["sources"] == []
-    assert payload["citations"] == []
-    assert "资料库 Agent" in payload["answer"]
-    assert "寒暄问候" in payload["reasoning_summary"]
+    assert response.json()["tool_calls"] == []
+
+
+def test_agent_api_persists_chitchat_without_summary(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        conversation = client.post("/conversations", json={"title": "闲聊"}).json()
+        seed_agent_conversation_messages(conversation["id"], count=16)
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "谢谢",
+                "conversation_id": conversation["id"],
+            },
+        )
+        messages_response = client.get(f"/conversations/{conversation['id']}/messages")
+
+    assert response.status_code == 200
+    messages = messages_response.json()["messages"]
+    assert messages[-2]["role"] == "user"
+    assert messages[-2]["content"] == "谢谢"
+    assert messages[-1]["role"] == "assistant"
+    assert messages[-1]["metadata"]["mode"] == "default"
+    assert [message["role"] for message in messages].count("summary") == 0
 
 
 def test_agent_api_accepts_optional_history_for_contextual_answer(tmp_path) -> None:

@@ -79,6 +79,7 @@ codex/phase-20-default-chain-and-eval-upgrade
 claude/phase-21-langgraph-agentic-rag
 codex/phase-22-frontend-agentic-observability
 codex/phase-23-agentic-eval-and-auto-routing
+codex/phase-25-chitchat-and-sse-streaming
 ```
 
 协作规则：
@@ -148,6 +149,20 @@ codex/phase-23-agentic-eval-and-auto-routing
 - `Message.metadata_json` 只保存展示恢复所需的结构化元数据，例如 citations、workflow_steps、invalid_citations、refusal_category、mode、iteration_count；不得保存 API key、Bearer token、Authorization header、供应商原始敏感响应或受限全文。
 - 会话 API 当前无登录和用户隔离，这是阶段 24 明确边界。后续如果做认证，必须给 Conversation 增加 owner/user 维度，并补列表过滤、删除权限和安全测试。
 - 浏览器验证要覆盖 desktop 与移动断点，至少检查会话列表、聊天气泡、刷新恢复、横向溢出和 console error；真实 API 不能成为本地全量测试前提。
+
+### 阶段 25 之后的闲聊短路与 SSE 流式输出规则
+
+- 闲聊短路属于 API 路由层职责。`/agent/query` 和 `/agent/query/stream` 都必须在 `classify_query_complexity()` 之前调用 `detect_chitchat()`，命中后不得进入 default AgentService、agentic 图、检索或 LLM。
+- 当前闲聊意图固定覆盖 `greeting`、`thanks`、`goodbye`、`acknowledgment`、`help` 五类。新增社交意图时，优先扩展 `app/services/agent/chitchat.py` 和对应测试，不要把社交分支重新塞回 `AgentService.detect_intent()`。
+- 带 `conversation_id` 的闲聊可以保存 user/assistant 消息，方便刷新恢复；但必须跳过 summary 压缩，避免短社交句污染长对话上下文。
+- `AgentService.detect_intent()` 继续只负责 answer/search/list_sources/get_source_detail 等 RAG 或资料查询意图；不要恢复 greeting 分支。
+- `ChatModelProvider` 实现必须同时支持 `generate()` 和 `stream_generate()`。deterministic provider 是流式自动测试基线，真实 API 不得成为 CI 或本地全量测试前提。
+- 同步 `POST /agent/query` 的 JSON 契约必须保持兼容；流式能力只通过并行端点 `POST /agent/query/stream` 提供。
+- SSE 事件格式固定为 `token`、`metadata`、`done`、`error`。`metadata` 应复用 `AgentQueryResponse` 可展示字段，不得暴露 API key、Bearer token、Authorization header、供应商原始敏感响应、raw_response 或受限全文。
+- agentic 路径当前只让 generate 阶段流式输出；retrieve、grade、rewrite、re-retrieve 和 citation_check 仍同步执行。若后续要把 workflow 步骤也实时推送，必须先写设计文档和回归计划。
+- 前端继续使用原生 HTML/CSS/JS。因为 Agent 请求需要 POST JSON body，阶段 25 使用 `fetch()` + `ReadableStream` 手动消费 SSE，不使用 `EventSource`，也不引入 React/Vue 或 Node 构建链。
+- token 文本追加必须使用 `textContent` 或等价安全方式，metadata 重绘继续沿用已有 escaping 逻辑，避免把模型输出当 HTML 注入。
+- 浏览器验证要覆盖 desktop 与移动断点，至少检查闲聊短路、流式 token 展示、metadata 回填、横向溢出和 console error。真实本地大库 RAG 慢查询如果同步与流式端点同题都慢，应记录为检索/运行数据性能风险，不要误判为 SSE parser 独有问题。
 
 ## Obsidian 知识库规则
 
@@ -1240,25 +1255,26 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 24「多轮对话 UI 与会话持久化」当前已完成开发、测试、普通文档和 Obsidian 草稿收尾，停在用户人工核验前状态。当前分支为 `codex/phase-24-multi-turn-conversation`；阶段 23 已合并到 `main`，`phase-23-complete -> dd7d953`，合并提交为 `8fc1cfa`。
+阶段 25「闲聊短路 + SSE 流式输出」当前已完成开发、测试、普通文档和 Obsidian 草稿收尾，停在用户人工核验前状态。当前分支为 `codex/phase-25-chitchat-and-sse-streaming`；阶段 24 已合并到 `main`，`phase-24-complete -> 64069ba`，合并提交为 `c4eda98`。
 
-下一步最适合先完成人工核验。人工核验通过并且用户明确确认后，才允许执行 `git add`、`git commit`、创建 `phase-24-complete` tag、推送 GitHub或创建 PR；tag 必须指向阶段 24 最终功能提交，不要移动任何已有阶段 tag。
+下一步最适合先完成人工核验。人工核验通过并且用户明确确认后，才允许执行 `git add`、`git commit`、创建 `phase-25-complete` tag、推送 GitHub或创建 PR；tag 必须指向阶段 25 最终功能提交，不要移动任何已有阶段 tag。
 
-阶段 24 核验重点：
+阶段 25 核验重点：
 
 ```text
-检查 Conversation / Message 模型和级联删除是否符合会话持久化预期
-检查 /conversations 四个端点的正常与异常路径
-检查 /agent/query 不传 conversation_id 时是否保持阶段 23 兼容行为
-检查传 conversation_id 时是否正确加载历史、保存 user/assistant 消息并触发摘要压缩
-检查 agentic generate 节点是否只利用 history 做追问补全，不改变 retrieve/grade/rewrite 主链路
-检查前端聊天气泡、会话列表、新建、切换、删除和刷新恢复
-检查动态 HTML 是否继续使用 escapeHtml()
-检查全量测试 479 passed 和浏览器 desktop/mobile 验证记录
-确认尚未提交、尚未创建 phase-24-complete tag、尚未推送
+检查 /agent/query 闲聊短路是否在复杂度路由前执行，且不调用 LLM 和检索
+检查 greeting/thanks/goodbye/acknowledgment/help 五类意图的预设回复
+检查 AgentService.detect_intent 是否不再承担 greeting 分支
+检查 ChatModelProvider.generate 与 stream_generate 的兼容边界
+检查 /agent/query/stream 是否按 token/metadata/done/error 输出 SSE
+检查同步 /agent/query JSON 契约是否完全保留
+检查前端是否逐 token 追加到同一个助手气泡，并在 metadata 事件后回填 citations/mode/workflow/refusal
+检查闲聊和流式回答带 conversation_id 时的持久化行为
+检查全量测试 495 passed 和浏览器 desktop/mobile 验证记录
+确认尚未提交、尚未创建 phase-25-complete tag、尚未推送
 ```
 
-阶段 0 到阶段 23 已完成并已有阶段 tag（含 `phase-21-complete`、`phase-22-complete`、`phase-23-complete`）。阶段 23 tag 指向最终功能提交 `dd7d953`、合并提交 `8fc1cfa`。
+阶段 0 到阶段 24 已完成并已有阶段 tag（含 `phase-21-complete`、`phase-22-complete`、`phase-23-complete`、`phase-24-complete`）。阶段 24 tag 指向最终功能提交 `64069ba`、合并提交 `c4eda98`。
 
 阶段 18（语料扩充与评测/质量体系增强 + 中文全文语料与拒答边界校准）已完成人工核验、提交、创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`，**非** merge）并合并到 `main`（合并提交 `4db90c7`），已 push 到 GitHub。阶段 18 关键结论与经验：
 
