@@ -58,6 +58,15 @@ function compactText(value, fallback = "-") {
   return text || fallback;
 }
 
+function formatRefusalCategory(category) {
+  const labels = {
+    responsibility_gate_triggered: "责任边界",
+    evidence_insufficient: "证据不足",
+    off_topic: "离题",
+  };
+  return labels[category] || compactText(category, "未分类");
+}
+
 function sourceMatchesKeyword(source, keyword) {
   if (!keyword) {
     return true;
@@ -371,6 +380,42 @@ function renderAgentToolCalls(toolCalls) {
     .join("");
 }
 
+function renderAgentWorkflowSteps(workflowSteps) {
+  const list = document.querySelector("[data-agent-tools-list]");
+  const count = document.querySelector("[data-agent-tools-count]");
+  if (!list) {
+    return;
+  }
+  if (count) {
+    count.textContent = String(workflowSteps.length);
+  }
+  if (!workflowSteps.length) {
+    list.innerHTML = '<div class="empty-state">暂无迭代步骤</div>';
+    return;
+  }
+  list.innerHTML = workflowSteps
+    .map((step, index) => {
+      const succeeded = step.succeeded !== false;
+      return `
+        <article class="tool-call-item workflow-step-item">
+          <div class="workflow-step-heading">
+            <span class="workflow-step-index">${index + 1}</span>
+            <h3>${escapeHtml(step.name)}</h3>
+            <span class="pill ${succeeded ? "neutral" : "warning"}">${escapeHtml(succeeded ? "success" : "failed")}</span>
+          </div>
+          <div class="result-snippet"><strong>输入</strong><br />${escapeHtml(step.input_summary)}</div>
+          <div class="result-snippet"><strong>输出</strong><br />${escapeHtml(step.output_summary)}</div>
+          ${
+            step.error
+              ? `<p class="meta-line">${escapeHtml(step.error)}</p>`
+              : ""
+          }
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderAgentAnswer(result) {
   const answerBox = document.querySelector("[data-agent-answer-box]");
   const status = document.querySelector("[data-agent-status]");
@@ -380,22 +425,38 @@ function renderAgentAnswer(result) {
   if (status) {
     status.textContent = result.refused ? "refused" : "answered";
   }
+  const invalidCitationSet = new Set((result.invalid_citations || []).map((citation) => String(citation)));
   const citationBadges = (result.citations || [])
-    .map((citation) => `<span class="pill">[${escapeHtml(citation)}]</span>`)
+    .map((citation) => {
+      const isInvalid = invalidCitationSet.has(String(citation));
+      return `<span class="pill ${isInvalid ? "danger" : ""}">[${escapeHtml(citation)}]${isInvalid ? " 无效" : ""}</span>`;
+    })
+    .join("");
+  const orphanInvalidBadges = (result.invalid_citations || [])
+    .filter((citation) => !(result.citations || []).map((item) => String(item)).includes(String(citation)))
+    .map((citation) => `<span class="pill danger">[${escapeHtml(citation)}] 无效</span>`)
     .join("");
   const sourceBadges = (result.sources || [])
     .slice(0, 5)
     .map((source) => `<span class="pill neutral">${escapeHtml(source.source_id)}</span>`)
     .join("");
+  const modeBadge = `<span class="pill neutral">mode: ${escapeHtml(result.mode || "default")}</span>`;
+  const iterationBadge = `<span class="pill neutral">iterations: ${escapeHtml(result.iteration_count ?? 0)}</span>`;
+  const refusalCategory = result.refusal_category
+    ? `<p class="refusal-category">分类：${escapeHtml(formatRefusalCategory(result.refusal_category))} / ${escapeHtml(result.refusal_category)}</p>`
+    : "";
   const refused = result.refused
-    ? `<div class="refusal"><strong>拒答</strong><p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`
+    ? `<div class="refusal"><strong>拒答</strong>${refusalCategory}<p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`
     : "";
   answerBox.innerHTML = `
     ${refused}
     <div class="answer-text">${escapeHtml(result.answer)}</div>
     <div class="answer-meta">
       ${citationBadges || '<span class="pill neutral">无引用</span>'}
+      ${orphanInvalidBadges}
       ${sourceBadges || '<span class="pill neutral">无来源</span>'}
+      ${modeBadge}
+      ${iterationBadge}
     </div>
     <p class="meta-line">${escapeHtml(result.reasoning_summary || "")}</p>
   `;
@@ -427,6 +488,7 @@ async function submitChat() {
 
 async function submitAgent() {
   const question = document.querySelector("[data-agent-question]")?.value.trim();
+  const agentMode = document.querySelector("[data-agent-mode]")?.value || "default";
   const topK = Number(document.querySelector("[data-agent-top-k]")?.value || 5);
   const maxToolCalls = Number(document.querySelector("[data-agent-max-tool-calls]")?.value || 2);
   const sourceId = document.querySelector("[data-agent-source-id]")?.value.trim();
@@ -443,12 +505,19 @@ async function submitAgent() {
   if (sourceId) {
     body.source_id = sourceId;
   }
+  if (agentMode === "agentic") {
+    body.mode = "agentic";
+  }
   const result = await fetchJson(apiEndpoints.agent, {
     method: "POST",
     body: JSON.stringify(body),
   });
   renderAgentAnswer(result);
-  renderAgentToolCalls(result.tool_calls || []);
+  if ((result.workflow_steps || []).length) {
+    renderAgentWorkflowSteps(result.workflow_steps || []);
+  } else {
+    renderAgentToolCalls(result.tool_calls || []);
+  }
   setApiStatus(result.refused ? "Agent 已拒答" : "Agent 已完成");
 }
 

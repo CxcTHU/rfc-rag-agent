@@ -1,8 +1,63 @@
 # 项目进度
 
-## 最新状态：2026-06-11（阶段 21 LangGraph Agentic RAG，待人工核验前收尾）
+## 最新状态：2026-06-11（阶段 22 前端 Agentic 可视化与可观测增强，已获用户确认提交/合并）
 
-当前阶段：阶段 21，LangGraph Agentic RAG。在 `claude/phase-21-langgraph-agentic-rag` 分支完成核心开发、回归验证和普通文档收尾；当前**尚未执行** `git add`、`git commit`、`git tag`、`git push`，也未创建 PR，等待用户人工核验和明确确认后才允许进入提交、tag 和 GitHub 推送流程。
+当前阶段：阶段 22，前端 Agentic 可视化与可观测增强。在 `codex/phase-22-frontend-agentic-observability` 分支完成核心开发、聚焦回归、全量测试、浏览器验证和普通文档同步；用户已明确要求提交阶段 22 整体开发工作、创建 `phase-22-complete` tag，并合并推送到 GitHub。本记录随阶段 22 最终提交落盘。
+
+Git / tag / main 起点：
+
+- 阶段 21 已完成、创建 `phase-21-complete` tag，并按用户要求合并推送到 GitHub。
+- `phase-21-complete -> 085bff4 Complete phase 21 LangGraph agentic RAG`。
+- `origin/main -> 085bff4`，与 `phase-21-complete` 指向一致。
+- 阶段 22 从 `phase-21-complete`/`085bff4` 出发，未移动任何已有阶段 tag。
+
+阶段 22 完成内容：
+
+- 新增 `docs/stage22_frontend_agentic_observability.md` 设计文档，固定前端 agentic opt-in、响应契约、workflow 展示、引用/拒答增强、测试方案和安全边界。
+- `/agent/query` 响应契约新增 `mode`、`workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category`；default 模式返回兼容默认值。
+- `AgenticResult` 带出 `responsibility_gate_triggered`；后端稳定计算 `responsibility_gate_triggered`、`evidence_insufficient`、`off_topic` 拒答分类。
+- agentic workflow step 名称对齐 `retrieve`、`grade`、`rewrite`、`re_retrieve`、`generate`、`citation_check`。
+- 前端 Agent 面板新增 default / agentic 模式切换，`submitAgent()` 仅在 agentic 模式传递 `mode="agentic"`。
+- 前端结果区展示 `iteration_count`、模式、无效引用标记和拒答分类；右侧步骤列表展示 workflow 节点名、输入摘要、输出摘要、成功/失败和错误摘要。
+- 保持 default 模式旧行为不变；不新增写入型 Agent 工具、不做登录、不做部署优化、不新增爬虫、不引入 Node 构建链或前端框架。
+
+验证结果：
+
+```text
+focused:
+.\.venv\Scripts\python.exe -m pytest tests\test_frontend_app.py tests\test_agent_api.py tests\test_agentic_graph.py tests\test_stage21_agentic_eval.py -q
+39 passed in 4.42s
+
+full:
+.\.venv\Scripts\python.exe -m pytest -q
+451 passed in 44.61s
+
+browser:
+desktop: Agent mode control present, default=default, agentic option present, no horizontal overflow, console errors=0
+mobile 390x844: Agent controls collapse to one column, mode/button visible, no horizontal overflow, console errors=0
+```
+
+遗留风险：
+
+- 阶段 22 已获用户明确确认进入提交、tag、合并和 GitHub 推送流程。
+- 浏览器插件截图捕获命令超时，但 DOM、布局、交互和 console error 检查通过；不影响页面验证结论。
+- Agentic RAG 仍是显式 opt-in，不替换默认 `/chat` 或 default Agent 链路；阶段 21 的真实评测仍为 `inconclusive_high_error_rate`，因此不把 agentic 设为默认。
+
+下一阶段任务：
+
+- 阶段 22 提交后创建 `phase-22-complete` tag；tag 应指向阶段 22 最终功能提交，不要移动已有阶段 tag。
+- 将阶段 22 分支合并到 `main` 并推送到 GitHub。
+- 后续可考虑在不引入真实 API 测试前提的条件下继续增强前端观测体验，例如更细的步骤耗时、复制诊断摘要或离线评测报告联动。
+
+面试表达：
+
+```text
+阶段 22 我没有改默认 RAG 链路，而是把阶段 21 的 LangGraph Agentic RAG 作为 opt-in 能力接到前端。后端先把 agentic 的内部状态整理成稳定响应契约，包括 workflow_steps、iteration_count、invalid_citations 和 refusal_category；default 模式返回兼容默认值，所以旧调用不会坏。前端新增 default/agentic 模式切换，只有用户显式选 agentic 才传 mode=\"agentic\"，并把 retrieve、grade、rewrite、re_retrieve、generate、citation_check 展示成步骤列表。最后用 451 个全量测试和桌面/移动浏览器检查证明 search、chat、agent、quality-report 等入口没有被破坏。
+```
+
+## 历史状态：2026-06-11（阶段 21 LangGraph Agentic RAG，已完成并合并）
+
+阶段 21 已在 `claude/phase-21-langgraph-agentic-rag` 分支完成，提交为 `085bff4 Complete phase 21 LangGraph agentic RAG`，创建 `phase-21-complete` tag，并按用户要求合并推送到 GitHub，`origin/main -> 085bff4`。
 
 阶段 21 完成内容：
 

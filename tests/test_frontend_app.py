@@ -16,6 +16,8 @@ def test_frontend_index_is_served() -> None:
     assert 'data-source-filter' in response.text
     assert 'data-chat-form' in response.text
     assert 'data-agent-form' in response.text
+    assert 'data-agent-mode' in response.text
+    assert '<option value="agentic">agentic</option>' in response.text
     assert 'data-agent-tools-list' in response.text
     assert 'data-citations-list' in response.text
     assert 'data-search-form' in response.text
@@ -40,6 +42,14 @@ def test_frontend_static_assets_are_served() -> None:
     assert "renderSources" in response.text
     assert "renderCitations" in response.text
     assert "renderAgentToolCalls" in response.text
+    assert "renderAgentWorkflowSteps" in response.text
+    assert "workflow_steps" in response.text
+    assert "iteration_count" in response.text
+    assert "invalid_citations" in response.text
+    assert "refusal_category" in response.text
+    assert "formatRefusalCategory" in response.text
+    assert "responsibility_gate_triggered" in response.text
+    assert 'body.mode = "agentic"' in response.text
     assert "reindexSource" in response.text
 
 

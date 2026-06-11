@@ -9,6 +9,7 @@ from app.schemas.agent import (
     AgentSearchResultItem,
     AgentSourceItem,
     AgentToolCallItem,
+    AgentWorkflowStepItem,
 )
 from app.services.agent.service import AgentQueryResult, AgentService
 from app.services.agentic.graph import run_agentic_rag
@@ -118,6 +119,16 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
         )
         for step in result.workflow_steps
     ]
+    workflow_steps = [
+        AgentWorkflowStepItem(
+            name=step.name,
+            input_summary=step.input_summary,
+            output_summary=step.output_summary,
+            succeeded=step.succeeded,
+            error=step.error,
+        )
+        for step in result.workflow_steps
+    ]
     return AgentQueryResponse(
         question=result.question,
         answer=result.answer,
@@ -142,6 +153,11 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
         refused=result.refused,
         refusal_reason=result.refusal_reason,
         reasoning_summary=f"agentic RAG, iterations={result.iteration_count}",
+        mode="agentic",
+        workflow_steps=workflow_steps,
+        iteration_count=result.iteration_count,
+        invalid_citations=result.invalid_citations,
+        refusal_category=refusal_category_from_agentic_result(result),
     )
 
 
@@ -196,4 +212,34 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
         refused=result.refused,
         refusal_reason=result.refusal_reason,
         reasoning_summary=result.reasoning_summary,
+        mode="default",
+        refusal_category=refusal_category_from_refusal(
+            refused=result.refused,
+            refusal_reason=result.refusal_reason,
+        ),
     )
+
+
+def refusal_category_from_agentic_result(result: AgenticResult) -> str | None:
+    return refusal_category_from_refusal(
+        refused=result.refused,
+        refusal_reason=result.refusal_reason,
+        responsibility_gate_triggered=result.responsibility_gate_triggered,
+    )
+
+
+def refusal_category_from_refusal(
+    *,
+    refused: bool,
+    refusal_reason: str | None,
+    responsibility_gate_triggered: bool = False,
+) -> str | None:
+    if not refused:
+        return None
+
+    normalized_reason = (refusal_reason or "").casefold()
+    if responsibility_gate_triggered or "responsibility_gate" in normalized_reason:
+        return "responsibility_gate_triggered"
+    if "off-topic" in normalized_reason or "no domain anchor" in normalized_reason:
+        return "off_topic"
+    return "evidence_insufficient"

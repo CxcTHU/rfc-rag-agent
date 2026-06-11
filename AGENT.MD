@@ -75,6 +75,9 @@ codex/phase-16-real-quality-risk-closure
 codex/phase-17-retrieval-architecture-upgrade
 claude/phase-18-corpus-evaluation-quality
 claude/phase-19-chinese-analysis-retrieval-tuning
+codex/phase-20-default-chain-and-eval-upgrade
+claude/phase-21-langgraph-agentic-rag
+codex/phase-22-frontend-agentic-observability
 ```
 
 协作规则：
@@ -120,6 +123,13 @@ claude/phase-19-chinese-analysis-retrieval-tuning
 - 分支用工具名做命名空间区分负责人：Codex 用 `codex/...`，Claude 用 `claude/...`。一个阶段只交给一个 Agent，不让两个 Agent 同时改同一阶段分支。
 - 提交边界对两个 Agent 同样适用：**未经用户人工核验并明确确认，不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR**。
 - `.claude/`、`.codex/` 是本地工具配置，已加入 `.gitignore`，不提交。
+
+### 阶段 22 之后的前端 Agentic 规则
+
+- `mode="agentic"` 是显式 opt-in 能力，不是默认 `/chat` 或 default Agent 链路；除非有新的评测门槛通过，不要把 agentic 自动切成默认模式。
+- 前端继续使用原生 HTML/CSS/JS；阶段 22 已明确不引入 Node 构建链或前端框架，后续若要引入必须先单独论证收益与维护成本。
+- `workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category` 属于只读可观测字段，用来解释 agentic RAG 的运行过程，不得被扩展成写入型 Agent 工具或外部副作用入口。
+- 浏览器验证要覆盖 desktop 与移动断点，至少检查 Agent 模式控件、步骤列表、横向溢出和 console error；真实 API 不能成为本地全量测试前提。
 
 ## Obsidian 知识库规则
 

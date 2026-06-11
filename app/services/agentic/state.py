@@ -38,6 +38,7 @@ class AgenticResult:
     sources: list[SearchResultLike]
     refused: bool
     refusal_reason: str | None
+    responsibility_gate_triggered: bool
     iteration_count: int
     invalid_citations: list[int]
     workflow_steps: list[BrainWorkflowStepRecord]

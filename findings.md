@@ -1,173 +1,308 @@
-# Findings & Decisions（阶段 21）
+# Findings & Decisions（阶段 22）
 
 ## Requirements
 
-- 阶段 21：LangGraph Agentic RAG。
-- 目标分支：`claude/phase-21-langgraph-agentic-rag`。
-- 阶段 21 必须从已合并阶段 20 的 `main` 出发。
-- 用 LangGraph 重构 agentic 编排，只用节点包裹现有检索/Brain 服务，不重写检索内核。
-- 新能力以可配置 mode 接入，不改既有默认链路与 API 契约。
-- 迭代必须有硬上界防死循环。
-- 不做写入型 Agent 工具、不做登录系统、不做部署优化、不新增爬虫。
+- 阶段 22：前端 Agentic 可视化与可观测增强。
+- 目标分支：`codex/phase-22-frontend-agentic-observability`。
+- 必须先确认阶段 21 已完成，且 `phase-21-complete` 指向 `085bff4`。
+- 必须核对阶段 21 是否已合并到 `main`。
+- 若 `main` 未包含阶段 21，必须从正确基线处理：本阶段选择从 `phase-21-complete` tag 出发，不移动 `main`。
+- 阶段开发完成前不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR；2026-06-11 用户已明确确认提交阶段 22 并上传 merge 至 GitHub。
+- 不引入 Node 构建链或前端框架，继续使用原生 HTML/CSS/JS。
+- 不做写入型 Agent 工具、登录系统、部署优化、新爬虫。
 - 不让真实 API 成为 CI 或本地全量测试前提。
-- 不得把 API key、Bearer token、供应商原始敏感响应、受限全文写入 Git、CSV、文档、测试或 Obsidian。
-- 阶段开发完成后不要执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR。
+- 不写入 API key、Bearer token、供应商原始敏感响应或受限全文。
 
-## Git / Tag / Main 起点（已核实）
+## Git / Tag / Main Findings
 
 | Item | Evidence | Result |
 |---|---|---|
-| 当前启动分支 | `git status -sb` | `main...origin/main`，工作区干净 |
-| 最近提交 | `git log --oneline -5` | `edfe9ff docs: reference goal...` → `39c06e3` → `8333d71 Merge phase 20...` → `706047d Complete phase 20...` → `12184d7 Merge phase 19...` |
-| 阶段 20 tag | `git rev-parse --short phase-20-complete` | `706047d` |
-| 阶段 20 tag 提交 | `git show -s --format` | `706047d Complete phase 20 default chain and eval upgrade`，非 merge |
-| main 合并提交 | `8333d71 Merge phase 20 default chain and eval upgrade` | pass |
-| 祖先关系 | `git merge-base --is-ancestor phase-20-complete main` | pass |
-| 阶段 21 分支 | `git switch -c claude/phase-21-langgraph-agentic-rag main` | 已创建 |
+| Current starting branch | `git status -sb` | `claude/phase-21-langgraph-agentic-rag...origin/claude/phase-21-langgraph-agentic-rag` |
+| Phase 21 tag | `git rev-parse --short phase-21-complete` | `085bff4` |
+| Phase 21 commit | `git show -s --format='%h %s' phase-21-complete` | `085bff4 Complete phase 21 LangGraph agentic RAG` |
+| Main ancestry (initial) | `git merge-base --is-ancestor phase-21-complete main` | initially not ancestor before user requested phase 21 merge |
+| Main latest after phase 21 merge | `git ls-remote origin refs/heads/main refs/tags/phase-21-complete` | both point to `085bff44898385924f766046fd3c0e5df2e322ca` |
+| Phase 22 branch | `git switch -c codex/phase-22-frontend-agentic-observability phase-21-complete` | created from phase 21 tag |
 
-结论：阶段 20 已完成并合并；`phase-20-complete` 正确指向 `706047d`；阶段 21 从正确基线启动。
+Decision: after the user explicitly requested phase 21 submission/merge, `main` was fast-forwarded to `085bff4` and pushed. The phase 22 branch still starts from the same verified phase 21 baseline, so development includes all phase 21 code without moving tags.
 
-## Stage 20 Findings To Carry Forward
+## Frontend Current State
 
-### p@1=0.133 瓶颈
+### `app/frontend/index.html`
 
-- 中文难评测集 15 题（非拒答），答案级 coverage_ratio 判定下只有 2 题 top-1 命中。
-- 候选 source_type_reweight 配置能把 deep_top1 从 0.267 拉到 0.667-0.733，但 p@1 不动。
-- 结论：单次 hybrid + 后处理重权的天花板已现。需要换攻法：迭代式 agentic RAG。
+- The page is a native static workbench served by FastAPI.
+- It has sections for sources, documents, search, chunks, chat, citations, Agent, and Agent tool calls.
+- Agent panel currently includes:
+  - `data-agent-question`
+  - `data-agent-top-k`
+  - `data-agent-max-tool-calls`
+  - `data-agent-source-id`
+  - `data-agent-submit`
+  - `data-agent-answer-box`
+  - `data-agent-tools-list`
+- There is no default / agentic mode switch yet.
+- Existing Agent side panel is titled `工具调用`, which can be reused for default `tool_calls` and agentic `workflow_steps`.
 
-### keep_existing_hybrid 默认链路
+### `app/frontend/static/app.js`
 
-- 默认链路未切换，仍是 `HybridSearchService`（keyword 0.7 + vector 0.3 + both_match_bonus 0.15）。
-- `/chat` 和 Agent `answer_with_citations` 都通过 `BrainService` 复用这条链路。
-- 阶段 21 不改这条默认链路；agentic 是可选新 mode。
+- `apiEndpoints.agent` already points to `/agent/query`.
+- `submitAgent()` currently builds:
 
-### responsibility_gate
+```js
+{
+  question,
+  top_k: topK,
+  max_tool_calls: maxToolCalls
+}
+```
 
-- 在 `BrainService._generate_answer_step()` 中，位于证据评估之前、模型生成之前。
-- 命中 `RESPONSIBILITY_GATE_PATTERNS` 则返回 `RESPONSIBILITY_REFUSAL_ANSWER`。
-- 阶段 21 必须在 agentic generate 节点中复用。
+- It conditionally adds `source_id`, but never adds `mode`.
+- `renderAgentAnswer(result)` shows answer, citations, top 5 source badges and `reasoning_summary`.
+- `renderAgentToolCalls(toolCalls)` shows `tool_name`, success/failure, input summary, output summary and error.
+- `renderCitations()` is currently used for chat citations only; Agent result sources are summarized as badges in `renderAgentAnswer()`.
+- All dynamic HTML is escaped through `escapeHtml()`, so new UI should keep that pattern.
 
-## 现有服务理解
+Decision: keep existing `renderAgentToolCalls()` compatibility but introduce dedicated observability rendering where needed, using the same escaped HTML pattern.
 
-### HybridSearchService
+### `app/frontend/static/styles.css`
 
-- 路径：`app/services/retrieval/hybrid_search.py`
-- 输入：query + top_k
-- 流程：keyword fetch(3x) + vector fetch(3x) → merge → normalize → score = kw*0.7 + vec*0.3 + bonus → sort + top_k
-- 输出：`list[HybridSearchResult]`（含 document_id, chunk_id, content, heading_path, score, keyword_score, vector_score）
-- 阶段 21 用法：retrieve 节点直接调用 `HybridSearchService.search()`。
+- Layout uses simple grids, panels and list items.
+- Existing reusable classes: `.data-panel`, `.panel-heading`, `.answer-box`, `.answer-meta`, `.pill`, `.pill.neutral`, `.tool-call-list`, `.tool-call-item`, `.result-snippet`, `.refusal`.
+- Responsive behavior collapses major grids below 760px.
+- No frontend framework or build pipeline is present.
 
-### BrainService
+Decision: add small, scoped CSS classes for mode switch, workflow steps, invalid citations and refusal category. Avoid nested cards and keep the operational workbench style.
 
-- 路径：`app/services/brain/service.py`
-- 核心方法：`answer(question, config, history) -> BrainAnswerResult`
-- 流程：filter_history → rewrite_query → retrieve → optional_rerank → generate_answer
-- retrieve 步骤：根据 config.retrieval_mode 选择 vector/keyword/hybrid/auto；hybrid 路径还会检查 decompose_query。
-- generate_answer 步骤：responsibility_gate → 空结果拒答 → evidence_confidence → build_rag_prompt → chat_model.generate → extract_citations
-- 阶段 21 用法：agentic 图不调用 BrainService.answer()，而是拆开复用其内部组件。
+### `app/frontend/quality_report.html`
 
-### workflow.py 关键组件
+- Static read-only quality report page currently titled stage 20.
+- It reads inline JSON and supports section/risk filters plus CSV/JSON export.
+- It is not part of the Agent panel path.
 
-- `EvidenceConfidence`：证据置信度评估结果（sufficient, score, matched_terms, missing_terms）
-- `evaluate_evidence_confidence(query, results)`：用 query terms 在 evidence text 中的覆盖率判断
-- `has_topic_anchor(query)`：主题门，查询是否含 CORE_DOMAIN_TERMS
-- `evaluate_responsibility_gate(query)`：责任边界门
-- `extract_citations(answer, allowed_source_ids)`：从生成答案中提取 [n] 引用
-- `build_retrieval_outcome(raw_results, mode, min_score)`：过 min_score 过滤
+Decision: stage 22 should not rework the quality report feature beyond normal documentation/status updates unless tests require compatibility checks.
 
-### DecomposeRetrievalService
+## Agentic API Current State
 
-- 路径：`app/services/retrieval/decompose.py`
-- `decompose_query(question)` → `DecomposedQuery`：规则式分解，匹配 TOPIC_RULES + 连接词
-- `DecomposeRetrievalService.retrieve()` → `DecomposeRetrievalOutcome`：分解后每条子查询独立检索，merge 去重排序
-- 阶段 21 用法：rewrite 节点可选调用 decompose_query，若分解成功则对子查询分别 re-retrieve。
+### `app/schemas/agent.py`
 
-### DeterministicChatModelProvider
+- `AgentQueryRequest` already has optional `mode: str | None = None`.
+- `AgentQueryResponse` currently exposes:
+  - `question`
+  - `answer`
+  - `tool_calls`
+  - `search_results`
+  - `sources`
+  - `citations`
+  - `refused`
+  - `refusal_reason`
+  - `reasoning_summary`
+- It does not expose `workflow_steps`, `iteration_count`, `invalid_citations`, `mode`, or `refusal_category` as dedicated fields.
 
-- 路径：`app/services/generation/chat_model.py`
-- 用于测试和离线开发，基于规则生成答案
-- 提取 user message 中 source [n] 标记，构造 `Deterministic answer based on source [n]: {question}`
-- 阶段 21 图必须用此 provider 跑通全部测试。
+Decision: extend response schema with optional/default observability fields so old default clients continue to work.
 
-### AgentService（现有）
+### `app/api/agent.py`
 
-- 路径：`app/services/agent/service.py`
-- 功能：意图路由（answer/search/list_sources/get_source_detail）→ 调用 AgentToolbox 对应工具
-- 关系：answer 意图通过 `answer_with_citations` → `CitationAnswerService` → `BrainService`
-- 阶段 21 关系：agentic 图是独立的新能力，不修改 AgentService 的意图路由逻辑。
+- `query_agent()` checks `request.mode == "agentic"` and calls `run_agentic_rag()`.
+- `agent_response_from_agentic_result()` maps `result.workflow_steps` into `tool_calls`.
+- It sets `reasoning_summary=f"agentic RAG, iterations={result.iteration_count}"`.
+- It maps agentic sources to synthetic `source_id=f"chunk:{s.chunk_id}"`.
+- It currently drops dedicated `iteration_count` and `invalid_citations` fields because response schema lacks them.
 
-### 中文难评测集
+Decision: preserve the existing `tool_calls` compatibility mapping, but also expose `workflow_steps`, `iteration_count`, `invalid_citations` and `mode="agentic"` directly.
 
-- 路径：`data/evaluation/stage19_chinese_hard_queries.csv`
-- 规模：20 题（16 非拒答 + 4 拒答）
-- 实际非拒答题用于 p@1 判定：15 题（query_id 中有 19 条，但 csv 显示 20 行含 header，16 非拒答 + 4 refusal）
-- 类型：cross_passage(5), confusable(5), parameter_detail(5), refusal(4)
-- 每条含 expected_answer_points 用于 coverage_ratio 计算
+### `app/services/agentic/state.py`
 
-### API 契约
+- `MAX_ITERATIONS = 3`.
+- `AgenticState` includes:
+  - `question`
+  - `results`
+  - `retrieval_queries`
+  - `evidence_sufficient`
+  - `confidence_score`
+  - `iteration_count`
+  - `rewritten_query`
+  - `answer`
+  - `citations`
+  - `refused`
+  - `refusal_reason`
+  - `responsibility_gate_triggered`
+  - `invalid_citations`
+  - `workflow_steps`
+- `AgenticResult` includes:
+  - `question`
+  - `answer`
+  - `citations`
+  - `sources`
+  - `refused`
+  - `refusal_reason`
+  - `iteration_count`
+  - `invalid_citations`
+  - `workflow_steps`
 
-必须保持不变的 endpoints：
-- `POST /search` → keyword search
-- `POST /search/vector` → vector search
-- `POST /search/hybrid` → hybrid search
-- `POST /chat` → citation-based chat (BrainService)
-- `POST /agent/query` → agent with intent routing
-- `GET /quality-report` → quality report HTML
+Finding: `responsibility_gate_triggered` is in state but not currently included in `AgenticResult`. Refusal category may need to infer from `refusal_reason` or extend the result if the implementation already has state available at return time.
 
-## Technical Decisions
+## Test Current State
 
-| Decision | Rationale |
+### Existing relevant tests
+
+- `tests/test_frontend_app.py`
+  - Confirms `/` serves the frontend.
+  - Confirms `/static/app.js` includes endpoints and render functions.
+  - Confirms `/quality-report` and exports remain read-only.
+- `tests/test_agent_api.py`
+  - Covers default `/agent/query` answers/search/source detail.
+  - Covers optional `history`.
+  - Covers existing search/chat/sources compatibility.
+  - Does not yet cover `mode="agentic"`.
+- `tests/test_agentic_graph.py`
+  - Covers graph compile, node behavior, max iteration cap, refusal, citation check and end-to-end deterministic runs.
+- `tests/test_stage21_agentic_eval.py`
+  - Covers stage 21 design doc, langgraph dependency, module structure and schema `mode`.
+
+Decision: add phase 22 coverage primarily to `test_frontend_app.py` and `test_agent_api.py`, with minimal risk to core graph tests.
+
+## Refusal Category Decision
+
+Initial mapping for frontend display:
+
+| Category | Source |
 |---|---|
-| 新建 `app/services/agentic/` 模块 | 独立于现有 `agent/`（意图路由）和 `brain/`（单次流水线），避免污染 |
-| 用 TypedDict 而非 dataclass 做 AgenticState | LangGraph 原生支持 TypedDict reducer pattern |
-| 节点包裹而非重写 | 复用已验证的 HybridSearchService、evaluate_evidence_confidence、evaluate_responsibility_gate 等 |
-| MAX_ITERATIONS=3 | 平衡改写重检索机会与防死循环；3 次足够覆盖 decompose + reformulate 场景 |
-| generate 节点内置 responsibility_gate | 保持与 BrainService 一致的安全行为 |
-| citation_check 标记不阻断 | 引用自检是质量信号，不应阻止生成结果返回 |
-| agentic 作为可选 mode | 不替换默认 hybrid 链路，需评测达标才考虑接入 |
-| 阶段 21 接入门槛继承阶段 20 | Δp@1≥0.10 AND Δdeep_top1≥0.20 AND refusal not degraded |
+| `responsibility_gate_triggered` | Dedicated flag if exposed; otherwise `refusal_reason` / answer text matching responsibility boundary answer |
+| `evidence_insufficient` | `refused=true` with no responsibility/off-topic signal, or default insufficient evidence answer |
+| `off_topic` | `refused=true` when the query lacks domain anchor or answer/reason indicates off-topic |
+
+Implementation preference: compute category in backend response conversion so frontend stays simple and deterministic.
+
+## UI Decisions
+
+- Use a select or segmented radio-like native control for Agent mode.
+- Default selected mode must be `default`.
+- Show mode and iteration count in `renderAgentAnswer()`.
+- Keep Agent source badges; add invalid citation pills when `invalid_citations` is non-empty.
+- Reuse the existing right-side Agent tools panel for workflow steps, with clearer status text when agentic mode returns `workflow_steps`.
+- Do not create marketing hero content or new landing page; this is an operational workbench.
 
 ## Data Safety Decisions
 
-- `data/app.sqlite`、`data/raw/`、`data/fulltext/`、`obsidian-vault/` 都属于本地/忽略边界。
-- 阶段 21 评测结果表只保存脱敏查询、配置、指标、决策，不保存受限全文。
-- 真实 API key / Bearer token 只允许存在本地 `.env` 或运行时内存中。
-- LangGraph 图中不传递或存储 API credentials 到 state。
+- Stage 22 only changes frontend display and response metadata; it does not introduce new data sources.
+- New tests must use deterministic providers and local in-memory SQLite.
+- New docs/Obsidian must mention field names and behavior, not credentials or provider raw responses.
 
 ## Phase Findings
 
 ### Phase 0: 启动校准
 
-- 已完成入口阅读、Git/tag/main 核验和阶段 21 分支创建。
-- 已确认阶段 20 完整闭环：`phase-20-complete -> 706047d`，`main` 已含 `8333d71` merge。
-- 已把根目录 Planning with Files 文件从阶段 20 切换为阶段 21。
+- 阶段 21 tag 已确认：`phase-21-complete -> 085bff4`。
+- `main` 起初未包含阶段 21；用户随后要求提交阶段 21 整体开发并 merge 至 GitHub，当前 `origin/main` 已指向 `085bff4`。
+- Planning with Files catch-up 脚本路径存在于 `.codex`，但当前 PATH 没有 `python` 命令，已记录为非阻断项；项目测试后续可使用项目虚拟环境或工作区 Python。
+- 前端现状、API schema、agentic result 字段与质量报告边界已完成初步阅读。
 
-### Phase 1-8: 设计、实现、测试
+### Phase 1: 设计文档
 
-- 设计文档 `docs/stage21_langgraph_agentic_rag.md` 完成，覆盖状态 schema、节点图、迭代上界、确定性可测性、安全边界、接入门槛。
-- `langgraph>=0.2.0` 加入 pyproject.toml。
-- `app/services/agentic/` 模块完成：state.py（AgenticState + AgenticResult）, nodes.py（6 个节点 + grade_router）, graph.py（StateGraph + run_agentic_rag）。
-- 19 个 agentic graph 测试全部通过（结构、节点单元、端到端、硬上界、拒答、引用自检）。
-- `app/schemas/agent.py` 新增 `mode` 字段；`app/api/agent.py` 新增 agentic 路由和响应转换。
-- 6 个 eval 测试通过（设计文档、pyproject、模块结构、eval 脚本、schema mode）。
+- 新增 `docs/stage22_frontend_agentic_observability.md`。
+- 固定阶段 22 范围：只读可观测、前端 agentic opt-in、响应契约扩展、workflow 步骤展示、无效引用标记、拒答分类展示。
+- 设计文档明确 default 模式不变，不引入前端框架、不新增真实 API 测试前提。
+- 新词已解释：响应契约、可观测增强、opt-in、workflow_steps、invalid_citations、拒答分类。
 
-### Phase 9: Agentic vs Baseline 评测
+### Phase 2: Agentic 响应契约校准
 
-首次评测运行（2026-06-11）受 SSL 错误严重影响：
+- `AgentQueryRequest.mode` 已增加校验，只允许 `default`、`agentic` 或空值；空值保持阶段 21 之前的默认行为。
+- `AgentQueryResponse` 已新增 `mode`、`workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category`，default 模式分别返回 `default`、空数组、`0`、空数组和 `None`。
+- `AgentWorkflowStepItem` 用 `name`、`input_summary`、`output_summary`、`succeeded`、`error` 表达前端时间线步骤，避免前端复用 `tool_calls` 时丢失语义。
+- `agent_response_from_agentic_result()` 同时填充 `workflow_steps` 和旧的 `tool_calls`，因此旧前端仍可看到工具/步骤列表，新前端可读 dedicated observability 字段。
+- `AgenticResult` 已带出 `responsibility_gate_triggered`，后端转换层据此把拒答归类为 `responsibility_gate_triggered`、`off_topic` 或 `evidence_insufficient`。
+- agentic 节点记录名已对齐图节点：`retrieve`、`grade`、`rewrite`、`re_retrieve`、`generate`、`citation_check`；`citation_check` 在无引用或无结果时也会记录一次，便于前端展示完整尾部检查。
+- 新增 API 测试覆盖 default 新字段默认值、agentic workflow 字段、iteration count、invalid citations、responsibility gate 拒答分类。
+- 聚焦验证：`.\\.venv\\Scripts\\python.exe -m pytest tests\\test_agent_api.py tests\\test_agentic_graph.py -q`，结果 `27 passed in 4.32s`。
 
-- **SSL 错误**: 从第 8 个 agentic 查询起，嵌入模型 API 连接开始出现 `[SSL: UNEXPECTED_EOF_WHILE_READING]`，导致 10/15 非拒答 agentic 查询和 4/4 拒答 agentic 查询全部失败。
-- **错误处理缺陷（已修复）**: 原评测脚本在异常时默认 `refused=False`，导致：
-  - errored refusal 查询被记为"未拒答"→ refusal_acc=0.000（伪）
-  - errored non-refusal 查询的 coverage 被记为 0（混入正常 0）
-- **修复**: 更新 `summarize_config()` 排除 errored 行参与指标计算，新增 `error_rate` 字段，`make_decision()` 在 error_rate>25% 时判定为 `inconclusive_high_error_rate`。
+### Phase 3: Agentic 模式前端接入
 
-有效数据子集分析（5/15 non-refusal agentic + 5/15 non-refusal baseline 无错误）：
-- baseline 和 agentic 在前 5 个 cross_passage 查询上表现一致（coverage_ratio 0.2-0.5，均未达 0.60 hit 阈值）
-- 两者 p@1 均为 0.000，deep_top1 各有 1-2 个 hit
+- `app/frontend/index.html` 的 Agent 控制区新增 `data-agent-mode` 原生下拉框，默认值为 `default`，可选 `agentic`。
+- `submitAgent()` 读取 `data-agent-mode`；只有 `agentMode === "agentic"` 时才向请求体写入 `body.mode = "agentic"`，default 模式请求体保持旧行为。
+- `styles.css` 已把 `.agent-controls label` 纳入现有表单标签样式，并把 Agent 控制区扩为 5 列，覆盖模式、召回数、工具步数、source_id 和运行按钮。
+- `tests/test_frontend_app.py` 新增静态断言，覆盖 `data-agent-mode`、agentic option 和 JS 中的 `body.mode = "agentic"`。
+- 聚焦验证：`.\\.venv\\Scripts\\python.exe -m pytest tests\\test_frontend_app.py -q`，结果 `6 passed in 0.74s`。
 
-baseline 特殊情况：
-- baseline 使用 BrainService.answer()，其内部 evidence_confidence 评估会拒答证据不足的查询
-- 导致 baseline 对 8/15 非拒答查询实际执行了拒答（refused=true, 无 error）
-- 这与 Phase 20 使用原始 HybridSearchService 结果不同，但对 Phase 21 内部一致对照是公平的
+### Phase 4: 迭代过程可视化
 
-诚实决策：`inconclusive_high_error_rate` — 网络错误率过高，无法做可靠的接入/保留判定。agentic 图保留为候选 mode，不接入默认链路。代码和单元测试验证了 agentic 图逻辑正确（含拒答、责任门、迭代上界）。
+- `renderAgentWorkflowSteps()` 已新增，读取 `workflow_steps` 并在 Agent 右侧列表展示序号、节点名、成功/失败状态、输入摘要、输出摘要和错误摘要。
+- `submitAgent()` 现在优先渲染 `result.workflow_steps`；当该字段为空时继续调用旧的 `renderAgentToolCalls()`，保证 default 模式仍显示工具调用。
+- `renderAgentAnswer()` 新增 `mode` 与 `iterations` badge，`iteration_count` 在结果区可见。
+- `styles.css` 新增 `.workflow-step-item`、`.workflow-step-heading`、`.workflow-step-index` 和 `.pill.warning`，用于步骤列表布局与失败状态提示。
+- 前后端契约已共同覆盖节点顺序：后端返回 `retrieve`、`grade`、`rewrite`、`re_retrieve`、`generate`、`citation_check`，前端逐项展示 `name`。
+- 聚焦验证：`.\\.venv\\Scripts\\python.exe -m pytest tests\\test_frontend_app.py -q`，结果 `6 passed in 1.01s`。
+
+### Phase 5: 引用与拒答增强展示
+
+- `renderAgentAnswer()` 现在读取 `invalid_citations`，对命中的 citation badge 增加 `danger` 样式并显示“无效”；若无效引用不在 `citations` 中，也会单独显示无效引用 badge。
+- 新增 `formatRefusalCategory()`，将 `responsibility_gate_triggered`、`evidence_insufficient`、`off_topic` 映射为中文展示标签，同时保留原始枚举值，便于调试。
+- 拒答块继续显示旧的 `refusal_reason`，并在其上方增加 `refusal_category` 分类行，不改变 default 模式原有拒答文本。
+- `styles.css` 新增 `.pill.danger` 与 `.refusal-category`，用于无效引用和拒答分类展示。
+- `tests/test_frontend_app.py` 覆盖 `invalid_citations`、`refusal_category`、`formatRefusalCategory` 与 `responsibility_gate_triggered` 静态断言；`tests/test_agent_api.py` 已覆盖责任边界拒答分类。
+- 聚焦验证：`.\\.venv\\Scripts\\python.exe -m pytest tests\\test_frontend_app.py tests\\test_agent_api.py -q`，结果 `14 passed in 2.20s`。
+
+### Phase 6: 聚焦测试
+
+- 本阶段直接相关测试文件为 `tests/test_frontend_app.py`、`tests/test_agent_api.py`、`tests/test_agentic_graph.py`、`tests/test_stage21_agentic_eval.py`。
+- 聚焦回归覆盖：前端模式控件和静态资源、agentic/default API 响应契约、LangGraph 图节点与迭代上限、阶段 21 schema/design 兼容。
+- 聚焦验证：`.\\.venv\\Scripts\\python.exe -m pytest tests\\test_frontend_app.py tests\\test_agent_api.py tests\\test_agentic_graph.py tests\\test_stage21_agentic_eval.py -q`，结果 `39 passed in 4.42s`。
+
+### Phase 7: 回归验证与浏览器验证
+
+- 全量测试命令：`.\\.venv\\Scripts\\python.exe -m pytest -q`，结果 `451 passed in 44.61s`；覆盖阶段 22 新增测试后总量已超过阶段 21 的 449。
+- 本地服务启动：`uvicorn app.main:app --host 127.0.0.1 --port 8000`；页面 `http://127.0.0.1:8000/` 可访问，最终核验时端口 8000 仍处于监听状态。
+- 浏览器桌面检查：页面标题为 `RFC RAG 工作台`；`data-agent-mode` 存在且默认值为 `default`；`agentic` option 存在；Agent 问题框、运行按钮和工具/步骤面板存在；无水平溢出；console error 为空。
+- 浏览器交互检查：原生下拉框可切换到 `agentic`，选中值与显示文本均为 `agentic`。
+- 浏览器移动视口检查：390x844 下 `.agent-controls` 为单列，模式控件和运行按钮可见，无水平溢出，console error 为空。
+- 非阻断浏览器工具问题：插件不支持 `networkidle` 等待状态，改用 `domcontentloaded`；截图捕获命令超时，但 DOM、布局、交互和控制台检查已通过。
+
+### Phase 8: 普通文档同步
+
+- `README.md` 已将当前阶段更新为阶段 22，并记录阶段 21 已合并到 `origin/main -> 085bff4`、阶段 22 要点、451 个测试和人工核验前提交边界。
+- `docs/progress.md` 已新增阶段 22 最新状态、Git/tag/main 起点、完成内容、验证结果、遗留风险、下一阶段任务和面试表达；阶段 21 改为已完成并合并的历史状态。
+- `docs/architecture.md` 已加入阶段 22 Agentic 前端可观测架构，说明 default/agentic 分流、只读响应契约和兼容策略。
+- `docs/data_sources.md` 已说明阶段 22 不新增外部资料来源、不新增爬虫、不写入真实 API 或受限全文，只新增本地前端展示和观测字段。
+- `AGENT.MD` 已补充阶段 20-22 分支路线和阶段 22 之后的前端 Agentic 规则：agentic 继续 opt-in、原生前端、可观测字段只读、浏览器验证覆盖 desktop/mobile。
+- `docs/stage22_frontend_agentic_observability.md` 已根据实现状态修正节点展示说明，并补充聚焦测试、全量测试和浏览器验证结果。
+
+### Phase 9: Obsidian 收尾
+
+- 新增 `obsidian-vault/阶段/阶段 22 - 前端 Agentic 可视化与可观测增强.md`。
+- 新增 `obsidian-vault/阶段汇报/阶段 22 - 前端 Agentic 可视化与可观测增强/阶段 22 Phase 汇报索引.md`。
+- 新增 Phase 0-11 共 12 篇小 Phase 汇报，每篇包含固定 10 项：目标、任务、改动、关键模块、问题与解决、新词、验证、遗留、下一步、面试表达。
+- 更新 `obsidian-vault/阶段汇报索引.md`、`obsidian-vault/阶段索引.md`、`obsidian-vault/首页.md`，阶段 21 改为已合并，阶段 22 改为待人工核验；提交授权后阶段 22 将进入已合并状态。
+- Phase 10/11 汇报已先建草稿，待对应 Phase 完成后复核为最终状态；这是为了满足阶段 22 最终 Phase 汇报结构完整，同时不伪造尚未执行的最终检查。
+- Obsidian 为本地 only、gitignored 知识库，不进入 Git 提交范围。
+
+### Phase 10: 阶段验收报告
+
+- 新增 `docs/phase_reviews/phase-22.md`，结论为 PASS；用户已确认进入提交/合并流程。
+- 验收报告覆盖范围核对、关键实现、聚焦测试、全量测试、浏览器验证、API 兼容、安全合规、普通文档、Obsidian、提交边界和人工核验建议。
+- 同步新增 `obsidian-vault/验收报告/阶段 22 验收报告.md`，并更新 `obsidian-vault/验收报告/验收报告索引.md`。
+- Phase 10 的 Obsidian 小汇报已从草稿改为完成状态。
+
+### Phase 11: 人工核验待提交状态
+
+- 最终分支：`codex/phase-22-frontend-agentic-observability`。
+- `git diff --cached --stat` 曾为空，确认人工核验前没有 staged 变更。
+- `git tag -l phase-22-complete` 曾无输出，确认提交前未创建阶段 22 tag。
+- 最近提交曾为 `085bff4 Complete phase 21 LangGraph agentic RAG`，确认阶段 22 在用户授权前未提交。
+- `git status -sb` 显示阶段 22 工作区改动与新增 `docs/phase_reviews/phase-22.md`、`docs/stage22_frontend_agentic_observability.md`；Obsidian 文件未出现在 Git 状态，符合本地 only 规则。
+- 用户已确认后，允许执行 `git add`、`git commit`、`git tag`、`git push` 与 main 合并流程；不创建 PR。
+
+## Term Explanations
+
+| Term | Meaning |
+|---|---|
+| 响应契约 | 后端 API 返回给前端的字段约定；前端只能可靠使用契约中明确存在的字段。 |
+| 可观测增强 | 不改变核心回答逻辑，只把系统内部步骤、迭代次数、引用检查等状态展示出来，便于排查和解释。 |
+| opt-in | 默认不启用；用户在界面显式选择 agentic 模式后才走新链路。 |
+| 兼容默认值 | 新增响应字段时给 default 模式填空数组、空值或 `default`，避免旧调用因为缺字段或类型变化失败。 |
+| dedicated observability 字段 | 专门给前端和排查使用的只读观测字段；它们不替代答案字段，只解释 agentic 链路如何运行。 |
+| `refusal_category` | 拒答分类枚举；把 `refused=true` 的原因整理为责任边界、证据不足或离题，便于前端稳定展示。 |
+| 模式切换控件 | 前端让用户显式选择 default 或 agentic 的下拉框；它是 opt-in 的 UI 入口。 |
+| 时间线/步骤列表 | 按执行顺序展示 agentic RAG 每个节点的可观测记录，帮助用户看到系统是否改写、重检索或拒答。 |
+| 责任边界 | 系统不能替代工程规范审查、验收、签字或合规结论；这类问题必须拒答并建议人工审查。 |
+| 只读响应契约 | API 只返回解释性字段，不触发写库、外部提交或真实世界副作用。 |
+| Obsidian 草稿 | 本机知识库里的复盘笔记，用于人工核验和面试准备，不随 GitHub 分发。 |
+| 验收报告 | 阶段收尾证据文件，逐项说明范围、测试、安全、文档和提交边界是否满足要求。 |

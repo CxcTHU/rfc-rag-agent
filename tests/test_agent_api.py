@@ -127,6 +127,11 @@ def test_agent_api_answers_with_tool_calls_and_citations(tmp_path) -> None:
     assert payload["tool_calls"][0]["tool_name"] == "answer_with_citations"
     assert payload["citations"] == [1]
     assert payload["sources"]
+    assert payload["mode"] == "default"
+    assert payload["workflow_steps"] == []
+    assert payload["iteration_count"] == 0
+    assert payload["invalid_citations"] == []
+    assert payload["refusal_category"] is None
     assert "引用式问答" in payload["reasoning_summary"]
 
 
@@ -147,6 +152,50 @@ def test_agent_api_accepts_optional_history_for_contextual_answer(tmp_path) -> N
     assert payload["refused"] is False
     assert payload["tool_calls"][0]["tool_name"] == "answer_with_citations"
     assert payload["sources"][0]["title"] == "Agent API filling source"
+
+
+def test_agent_api_agentic_mode_exposes_observability_fields(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 2,
+                "mode": "agentic",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "agentic"
+    assert isinstance(payload["workflow_steps"], list)
+    assert payload["workflow_steps"]
+    step_names = [step["name"] for step in payload["workflow_steps"]]
+    assert step_names[0] == "retrieve"
+    assert "grade" in step_names
+    assert "generate" in step_names
+    assert step_names[-1] == "citation_check"
+    assert payload["tool_calls"][0]["tool_name"] == payload["workflow_steps"][0]["name"]
+    assert isinstance(payload["iteration_count"], int)
+    assert payload["invalid_citations"] == []
+    assert payload["refusal_category"] is None
+
+
+def test_agent_api_agentic_refusal_category_marks_responsibility_gate(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "请判定本工程的堆石混凝土配合比设计是否符合规范要求？",
+                "mode": "agentic",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "agentic"
+    assert payload["refused"] is True
+    assert payload["refusal_category"] == "responsibility_gate_triggered"
 
 
 def test_agent_api_search_query_returns_hybrid_results(tmp_path) -> None:

@@ -28,6 +28,12 @@ def retrieve_node(state: AgenticState) -> dict:
         "results": results,
         "retrieval_queries": [question],
         "iteration_count": 0,
+        "workflow_steps": _append_step(
+            state,
+            "retrieve",
+            f"query={question[:80]}",
+            f"results={len(results)}",
+        ),
     }
 
 
@@ -41,7 +47,7 @@ def grade_node(state: AgenticState) -> dict:
             "confidence_score": 0.0,
             "workflow_steps": _append_step(
                 state,
-                "retrieve",
+                "grade",
                 f"query={query[:80]}",
                 "results=0 evidence_sufficient=False",
             ),
@@ -54,7 +60,7 @@ def grade_node(state: AgenticState) -> dict:
             "confidence_score": 0.0,
             "workflow_steps": _append_step(
                 state,
-                "retrieve",
+                "grade",
                 f"query={query[:80]}",
                 "off-topic: no domain anchor",
             ),
@@ -66,7 +72,7 @@ def grade_node(state: AgenticState) -> dict:
         "confidence_score": confidence.score,
         "workflow_steps": _append_step(
             state,
-            "retrieve",
+            "grade",
             f"query={query[:80]} results={len(results)}",
             f"evidence_sufficient={confidence.sufficient} score={confidence.score:.2f}",
         ),
@@ -93,7 +99,7 @@ def rewrite_node(state: AgenticState) -> dict:
         "iteration_count": iteration + 1,
         "workflow_steps": _append_step(
             state,
-            "rewrite_query",
+            "rewrite",
             f"iteration={iteration + 1} original={question[:60]}",
             f"rewritten={rewritten[:80]}",
         ),
@@ -118,7 +124,7 @@ def re_retrieve_node(state: AgenticState) -> dict:
         "retrieval_queries": prev_queries + [rewritten_query],
         "workflow_steps": _append_step(
             state,
-            "retrieve",
+            "re_retrieve",
             f"re-retrieve query={rewritten_query[:60]}",
             f"new={len(new_results)} merged={len(merged)}",
         ),
@@ -140,7 +146,7 @@ def generate_node(state: AgenticState) -> dict:
             "responsibility_gate_triggered": True,
             "workflow_steps": _append_step(
                 state,
-                "generate_answer",
+                "generate",
                 "responsibility_gate=True",
                 "refused=True responsibility_gate",
             ),
@@ -155,7 +161,7 @@ def generate_node(state: AgenticState) -> dict:
             "responsibility_gate_triggered": False,
             "workflow_steps": _append_step(
                 state,
-                "generate_answer",
+                "generate",
                 "sources=0",
                 "refused=True no_sources",
             ),
@@ -172,7 +178,7 @@ def generate_node(state: AgenticState) -> dict:
                 "responsibility_gate_triggered": False,
                 "workflow_steps": _append_step(
                     state,
-                    "generate_answer",
+                    "generate",
                     f"sources={len(results)} evidence_sufficient=False",
                     f"refused=True low_evidence score={confidence.score:.2f}",
                 ),
@@ -189,7 +195,7 @@ def generate_node(state: AgenticState) -> dict:
             "responsibility_gate_triggered": False,
             "workflow_steps": _append_step(
                 state,
-                "generate_answer",
+                "generate",
                 f"sources={len(results)}",
                 f"refused=True error={exc}",
             ),
@@ -207,7 +213,7 @@ def generate_node(state: AgenticState) -> dict:
         "responsibility_gate_triggered": False,
         "workflow_steps": _append_step(
             state,
-            "generate_answer",
+            "generate",
             f"sources={len(rag_prompt.sources)}",
             f"refused=False citations={len(citations)}",
         ),
@@ -219,7 +225,15 @@ def citation_check_node(state: AgenticState) -> dict:
     results = state.get("results", [])
 
     if not citations or not results:
-        return {"invalid_citations": []}
+        return {
+            "invalid_citations": [],
+            "workflow_steps": _append_step(
+                state,
+                "citation_check",
+                f"citations={len(citations)} results={len(results)}",
+                "invalid=0",
+            ),
+        }
 
     valid_source_ids = set()
     for i, _result in enumerate(results):
@@ -230,7 +244,7 @@ def citation_check_node(state: AgenticState) -> dict:
         "invalid_citations": invalid,
         "workflow_steps": _append_step(
             state,
-            "generate_answer",
+            "citation_check",
             f"citations={len(citations)}",
             f"invalid={len(invalid)}",
         ),

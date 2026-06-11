@@ -18,7 +18,8 @@
 -> 大模型回答
 -> 返回答案和引用来源
 -> Agent 工具编排
--> 前端工作台展示和操作
+-> Agentic 可观测响应契约
+-> 前端工作台展示、模式切换和步骤可视化
 ```
 
 ## 初始分层
@@ -28,13 +29,54 @@ API 层：FastAPI 路由
 Schema 层：Pydantic 请求和响应模型
 Service 层：导入、切分、检索、问答业务逻辑
 Agent 层：受控工具封装、意图路由、工具调用记录和拒答约束
-Agentic 层：LangGraph 状态图编排，迭代式 retrieve-grade-rewrite-generate 循环（阶段 21）
+Agentic 层：LangGraph 状态图编排，迭代式 retrieve-grade-rewrite-generate 循环（阶段 21），并向前端暴露只读可观测字段（阶段 22）
 Brain 层：RAG workflow 中控、RetrievalConfig、WorkflowConfig、step 记录和 chat/agent 复用
 DB 层：文档、chunk、问答日志元数据
 Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
 Model Provider 层：聊天模型和 embedding 模型适配
-Frontend 层：来源、资料、检索、问答和引用来源展示
+Frontend 层：来源、资料、检索、问答、引用来源展示，以及 Agent default/agentic 模式切换和 workflow 步骤可视化
 ```
+
+## 阶段 22 Agentic 前端可观测架构
+
+阶段 22 没有改变默认 `/chat` 或 default Agent 链路，而是在 `/agent/query` 上保留显式 opt-in：
+
+```text
+前端 Agent 面板
+-> default / agentic 模式选择
+-> submitAgent()
+-> POST /agent/query
+   default: 旧 AgentService 工具调用链路
+   agentic: 阶段 21 LangGraph Agentic RAG
+-> AgentQueryResponse
+-> 前端结果区与步骤列表
+```
+
+新增响应字段属于“只读观测契约”，用于解释系统如何运行，不作为写库或外部副作用入口：
+
+```text
+mode
+  本次回答使用 default 还是 agentic。
+
+workflow_steps
+  agentic 图节点记录，前端按顺序展示 retrieve、grade、rewrite、re_retrieve、generate、citation_check。
+
+iteration_count
+  agentic 检索-评估-改写循环执行次数。
+
+invalid_citations
+  citation_check 发现的无效引用编号，前端用风险 badge 标记。
+
+refusal_category
+  拒答分类：responsibility_gate_triggered / evidence_insufficient / off_topic。
+```
+
+兼容策略：
+
+- default 模式继续返回旧的 `answer`、`tool_calls`、`sources`、`citations`、`refused`、`refusal_reason`、`reasoning_summary` 字段。
+- 新增字段在 default 模式使用兼容默认值：`mode="default"`、`workflow_steps=[]`、`iteration_count=0`、`invalid_citations=[]`、`refusal_category=None`。
+- agentic 模式同时填充 `workflow_steps` 和旧 `tool_calls` 映射，让旧前端/旧客户端仍可读取工具调用列表。
+- 前端使用原生 HTML/CSS/JS，不引入 Node 构建链或前端框架。
 
 ## 第一阶段原则
 

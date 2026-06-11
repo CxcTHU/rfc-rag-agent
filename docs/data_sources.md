@@ -45,6 +45,13 @@ URL:
 - `data/evaluation/stage21_agentic_comparison_summary.csv`：配置级汇总指标。
 - `data/evaluation/stage21_agentic_decision.csv`：接入门槛决策。
 
+阶段 22 不新增外部资料来源，也不新增爬虫、真实 API 依赖或受限全文文件。阶段 22 的改动集中在前端展示和 `/agent/query` 只读响应契约：
+
+- 新增 `docs/stage22_frontend_agentic_observability.md` 设计文档。
+- `/agent/query` 响应新增 `workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category` 等观测字段；这些字段来自本次请求的 agentic 运行状态，不写入新的数据源表。
+- 前端展示 default / agentic 模式、迭代步骤、无效引用和拒答分类；不改变 `sources`、`documents`、`chunks`、`chunk_embeddings` 或 source registry 的数据边界。
+- 新增/更新测试均使用 deterministic provider 与临时 SQLite，不要求真实 API，不写入 API key、Bearer token、供应商原始敏感响应或受限全文。
+
 阶段 1 第一批试导入资料登记仍保留在下方，作为早期人工来源记录和历史审计依据。
 
 本批资料采用“资料卡”形式导入：保存题录、公开摘要的转述、检索关键词和来源链接，不保存受版权限制的论文全文。

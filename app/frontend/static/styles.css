@@ -336,6 +336,16 @@ td {
   color: var(--muted);
 }
 
+.pill.warning {
+  background: rgba(217, 119, 6, 0.12);
+  color: #9a5a00;
+}
+
+.pill.danger {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b42318;
+}
+
 .inline-action {
   min-height: 30px;
   border: 1px solid var(--line);
@@ -365,7 +375,8 @@ td {
 }
 
 .question-field,
-.chat-controls label {
+.chat-controls label,
+.agent-controls label {
   display: grid;
   gap: 6px;
   color: var(--muted);
@@ -382,7 +393,7 @@ td {
 
 .agent-controls {
   display: grid;
-  grid-template-columns: minmax(90px, 0.45fr) minmax(110px, 0.5fr) minmax(140px, 0.8fr) auto;
+  grid-template-columns: minmax(92px, 0.45fr) minmax(90px, 0.45fr) minmax(110px, 0.5fr) minmax(140px, 0.8fr) auto;
   gap: 10px;
   align-items: end;
 }
@@ -417,6 +428,13 @@ td {
   padding-left: 12px;
 }
 
+.refusal-category {
+  margin: 6px 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .citation-list {
   display: grid;
   gap: 12px;
@@ -443,6 +461,35 @@ td {
   border-radius: 6px;
   padding: 12px;
   background: #ffffff;
+}
+
+.workflow-step-item {
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-step-heading {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.workflow-step-heading h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.workflow-step-index {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .citation-item h3,

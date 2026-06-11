@@ -14,9 +14,18 @@
 
 ## 当前阶段
 
-阶段 21（LangGraph Agentic RAG，待人工核验前收尾）：当前在 `claude/phase-21-langgraph-agentic-rag` 分支完成核心开发、回归验证和普通文档收尾；按要求**尚未执行 `git add`、尚未提交、尚未打 `phase-21-complete` tag、尚未推送、未创建 PR**。阶段 20 已完成并合并到 `main`：`phase-20-complete -> 706047d`（非 merge 功能提交），合并提交为 `8333d71`。
+阶段 22（前端 Agentic 可视化与可观测增强，已获用户确认提交/合并）：当前在 `codex/phase-22-frontend-agentic-observability` 分支完成核心开发、聚焦回归、全量测试、浏览器验证和普通文档同步；用户已明确要求提交阶段 22 整体开发工作、创建 `phase-22-complete` tag，并合并推送到 GitHub。阶段 21 已完成并合并推送到 GitHub：`phase-21-complete -> 085bff4`，`origin/main -> 085bff4`。
 
-阶段 21 要点：
+阶段 22 要点：
+
+- **前端 agentic opt-in**：Agent 面板新增 default / agentic 模式切换，默认不改变旧 Agent 行为；只有选择 agentic 时 `submitAgent()` 才向 `/agent/query` 传递 `mode="agentic"`。
+- **响应契约增强**：`AgentQueryResponse` 新增 `mode`、`workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category`，default 模式使用兼容默认值。
+- **迭代过程可视化**：前端右侧步骤列表展示 retrieve、grade、rewrite、re_retrieve、generate、citation_check 的节点名、输入摘要、输出摘要、成功/失败和错误摘要。
+- **引用与拒答增强**：结果区展示 iteration count；无效引用用“无效”badge 标记；拒答时展示 responsibility_gate_triggered / evidence_insufficient / off_topic 分类。
+- **验证结果**：聚焦测试 39 passed；全量测试 **451 passed**；浏览器桌面与 390x844 移动视口检查通过，console error 为空。
+- **边界**：不新增写入型 Agent 工具、不做登录系统、不做部署优化、不新增爬虫、不让真实 API 成为测试前提、不引入 Node 构建链或前端框架。
+
+阶段 21 要点（已合并基线）：
 
 - **LangGraph 状态图**（`app/services/agentic/`）：用 LangGraph StateGraph 构建 agentic RAG 编排图，节点包裹现有 HybridSearchService / BrainService 核心能力。
 - **状态图节点**：retrieve → grade → rewrite/decompose + re-retrieve（硬迭代上界 MAX_ITERATIONS=3）→ generate（保留 citations/拒答/responsibility_gate）→ citation_check。
@@ -262,7 +271,10 @@
 - `app/services/agentic/` 阶段 21 LangGraph agentic RAG 模块（state.py、nodes.py、graph.py）
 - `scripts/evaluate_stage21_agentic_rag.py` 阶段 21 agentic vs baseline 对照评测脚本
 - `data/evaluation/stage21_agentic_comparison_results.csv`、`stage21_agentic_comparison_summary.csv`、`stage21_agentic_decision.csv` 阶段 21 评测结果
-- 449 个自动化测试
+- `docs/stage22_frontend_agentic_observability.md` 阶段 22 设计文档（前端模式切换、workflow 可视化、引用/拒答增强、安全边界）
+- `/agent/query` 阶段 22 响应契约字段：`mode`、`workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category`
+- 前端 Agent 面板 default / agentic 模式切换、workflow 步骤列表、iteration count、无效引用和拒答分类展示
+- 451 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明

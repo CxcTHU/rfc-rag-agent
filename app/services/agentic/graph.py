@@ -77,6 +77,7 @@ def run_agentic_rag(
         sources=final_state.get("results", []),
         refused=final_state.get("refused", False),
         refusal_reason=final_state.get("refusal_reason"),
+        responsibility_gate_triggered=final_state.get("responsibility_gate_triggered", False),
         iteration_count=final_state.get("iteration_count", 0),
         invalid_citations=final_state.get("invalid_citations", []),
         workflow_steps=final_state.get("workflow_steps", []),

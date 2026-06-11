@@ -33,6 +33,16 @@ class AgentQueryRequest(BaseModel):
         normalized_items = [item.strip() for item in value if item.strip()]
         return normalized_items
 
+    @field_validator("mode")
+    @classmethod
+    def mode_must_be_supported(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in {"default", "agentic"}:
+            raise ValueError("mode must be 'default' or 'agentic'")
+        return normalized
+
 
 class AgentToolCallItem(BaseModel):
     tool_name: str
@@ -71,6 +81,14 @@ class AgentSourceItem(BaseModel):
     score: float | None
 
 
+class AgentWorkflowStepItem(BaseModel):
+    name: str
+    input_summary: str
+    output_summary: str
+    succeeded: bool
+    error: str | None
+
+
 class AgentQueryResponse(BaseModel):
     question: str
     answer: str
@@ -81,3 +99,8 @@ class AgentQueryResponse(BaseModel):
     refused: bool
     refusal_reason: str | None
     reasoning_summary: str
+    mode: str = "default"
+    workflow_steps: list[AgentWorkflowStepItem] = Field(default_factory=list)
+    iteration_count: int = 0
+    invalid_citations: list[int] = Field(default_factory=list)
+    refusal_category: str | None = None
