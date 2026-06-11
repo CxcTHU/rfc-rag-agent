@@ -376,7 +376,8 @@ td {
 
 .question-field,
 .chat-controls label,
-.agent-controls label {
+.agent-controls label,
+.readonly-field {
   display: grid;
   gap: 6px;
   color: var(--muted);
@@ -396,6 +397,19 @@ td {
   grid-template-columns: minmax(92px, 0.45fr) minmax(90px, 0.45fr) minmax(110px, 0.5fr) minmax(140px, 0.8fr) auto;
   gap: 10px;
   align-items: end;
+}
+
+.mode-indicator {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f3f5f7;
+  color: var(--text);
+  padding: 8px 10px;
+  font: inherit;
+  font-weight: 800;
 }
 
 .answer-box {

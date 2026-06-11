@@ -1,8 +1,82 @@
 # 项目进度
 
-## 最新状态：2026-06-11（阶段 22 前端 Agentic 可视化与可观测增强，已获用户确认提交/合并）
+## 最新状态：2026-06-11（阶段 23 Agentic 评测闭环与自动模式路由，已获用户确认提交/合并）
 
-当前阶段：阶段 22，前端 Agentic 可视化与可观测增强。在 `codex/phase-22-frontend-agentic-observability` 分支完成核心开发、聚焦回归、全量测试、浏览器验证和普通文档同步；用户已明确要求提交阶段 22 整体开发工作、创建 `phase-22-complete` tag，并合并推送到 GitHub。本记录随阶段 22 最终提交落盘。
+当前阶段：阶段 23，Agentic 评测闭环与自动模式路由。在 `codex/phase-23-agentic-eval-and-auto-routing` 分支完成核心开发、聚焦回归、全量测试、浏览器验证、普通文档同步和验收报告；用户已明确要求提交阶段 23 整体开发工作、创建 `phase-23-complete` tag，并合并推送到 GitHub。本记录随阶段 23 最终提交落盘。
+
+Git / tag / main 起点：
+
+- 阶段 22 已完成、创建 `phase-22-complete` tag，并合并推送到 GitHub。
+- `phase-22-complete -> 1a5bf0c Complete phase 22 frontend agentic observability`。
+- `main`、`origin/main` 与 `phase-22-complete` 指向一致。
+- 阶段 23 从阶段 22 合并后的 `main` 出发，未移动任何已有阶段 tag。
+
+阶段 23 完成内容：
+
+- 新增 `docs/stage23_agentic_eval_and_auto_routing.md` 设计文档，固定评测修复、对照结论、路由规则、API 自动分流、前端只读指示器、安全边界和完成标准。
+- 新增 `scripts/evaluate_stage23_agentic_auto_routing.py`，使用 deterministic provider 与 in-memory SQLite fixture 隔离阶段 21 SSL/真实 provider 错误。
+- 新增 `data/evaluation/stage23_agentic_auto_routing_results.csv`、`stage23_agentic_auto_routing_summary.csv`、`stage23_agentic_auto_routing_decision.csv`。
+- 新增 `app/services/agent/routing.py`，实现 `classify_query_complexity()`，规则式区分 `simple` / `complex`，输出 score、reasons、signals。
+- `/agent/query` 在未传 `mode` 时自动分流：simple 走 default `AgentService`，complex 走 agentic LangGraph；显式 `mode=default` / `mode=agentic` 仍尊重用户选择。
+- default `detect_intent` 内部逻辑保持不变；自动路由只决定是否进入 default AgentService。
+- 前端 Agent 面板移除 mode 下拉框，新增只读 `data-agent-mode-status`；`submitAgent()` 不再发送 `mode`，响应后显示本次实际 `mode`。
+- 保留 `workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category` 只读可观测字段。
+
+评测结论：
+
+```text
+stage23 deterministic agentic vs default comparison
+default: errors=0 error_rate=0.000 answer_like=2
+agentic: errors=0 error_rate=0.000 answer_like=3 gains=1
+decision: reliable_auto_route_candidate
+```
+
+诚实结论：阶段 23 deterministic fixture 已经隔离阶段 21 的 SSL/真实 provider 错误，满足 `error_rate < 0.10`。当前可复现的 agentic 增益集中在复杂“Search and compare”任务：default `detect_intent` 会解析为 search-only，而 agentic 能生成 answer-like 响应。其他简单概念题和多证据解释题在当前小样本下主要表现为稳定 parity，不能声称 agentic 全面优于 default。
+
+验证结果：
+
+```text
+focused:
+.\.venv\Scripts\python.exe -m pytest tests\test_stage23_agentic_eval.py tests\test_agent_routing.py tests\test_agent_api.py tests\test_frontend_app.py tests\test_agentic_graph.py tests\test_stage21_agentic_eval.py -q
+51 passed in 4.32s
+
+full:
+.\.venv\Scripts\python.exe -m pytest -q
+463 passed in 31.21s
+
+final rerun:
+.\.venv\Scripts\python.exe -m pytest -q
+463 passed in 27.31s
+
+pre-submit rerun:
+.\.venv\Scripts\python.exe -m pytest -q
+463 passed in 33.84s
+
+browser:
+desktop: no select[data-agent-mode], data-agent-mode-status=系统自动, no horizontal overflow, console errors=0
+mobile 390x844: no select[data-agent-mode], data-agent-mode-status=系统自动, no horizontal overflow
+```
+
+遗留风险：
+
+- 阶段 23 已获用户确认进入提交、tag、合并和 GitHub 推送流程。
+- deterministic fixture 证明自动路由链路稳定，但样本量小；后续若要扩大 agentic 默认覆盖范围，应继续积累真实/离线对照证据。
+- 浏览器验证未提交 Agent 问题，避免触发真实 provider；API 自动分流已由 deterministic 测试覆盖。
+
+下一步：
+
+- 本次提交后创建 `phase-23-complete` tag；tag 应指向阶段 23 最终功能提交，不要移动已有阶段 tag。
+- 将阶段 23 分支合并到 `main` 并推送到 GitHub。
+
+面试表达：
+
+```text
+阶段 23 我先把阶段 21 的 agentic 评测不稳定问题闭环掉：不用真实 provider 做默认门槛，而是用 deterministic provider 和 in-memory SQLite fixture 复现 default AgentService 与 agentic LangGraph 的差异，得到 error_rate=0 的可靠对照。然后我没有把 agentic 粗暴设成全局默认，而是新增 classify_query_complexity，用规则式信号判断 simple/complex；/agent/query 只有在 mode 为空时自动分流，显式 mode 仍保留调试能力。前端也从“让用户选内部链路”改成“只读显示系统本次实际走了哪条链路”。最后用 463 个全量测试和桌面/移动浏览器检查证明 search、chat、agent、quality-report 等入口没有被破坏。
+```
+
+## 历史状态：2026-06-11（阶段 22 前端 Agentic 可视化与可观测增强，已完成并合并）
+
+阶段 22，前端 Agentic 可视化与可观测增强。在 `codex/phase-22-frontend-agentic-observability` 分支完成核心开发、聚焦回归、全量测试、浏览器验证和普通文档同步；用户已明确要求提交阶段 22 整体开发工作、创建 `phase-22-complete` tag，并合并推送到 GitHub。本记录随阶段 22 最终提交落盘。
 
 Git / tag / main 起点：
 

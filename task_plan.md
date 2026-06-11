@@ -1,190 +1,287 @@
-# Task Plan: 阶段 22 - 前端 Agentic 可视化与可观测增强
+# 阶段 23 任务计划：Agentic 评测闭环与自动模式路由
 
-## Goal
+## 目标
 
-在阶段 21 `phase-21-complete -> 085bff4` 已完成 LangGraph Agentic RAG 的基础上，完成阶段 22「前端 Agentic 可视化与可观测增强」：让原生 HTML/CSS/JS 前端工作台可以 opt-in 调用 `/agent/query` 的 `mode="agentic"`，并可读展示 `workflow_steps`、`iteration_count`、`invalid_citations` 与拒答原因分类。阶段结束时同步普通文档、Obsidian 本地草稿和 `docs/phase_reviews/phase-22.md` 验收报告；用户已明确确认提交、tag、合并和 GitHub 推送。
+在阶段 22「前端 Agentic 可视化与可观测增强」已完成并合并到 `main` 的基础上，完成阶段 23「Agentic 评测闭环与自动模式路由」：修复或隔离阶段 21 agentic 评测中的 SSL 高错误率问题，形成可靠的 agentic vs default 对照结论，新增规则式问题复杂度路由，在 `/agent/query` 默认入口自动分流 default/agentic，前端改为只读模式指示器，并同步普通文档与 Obsidian 本地知识库。阶段完成后停在用户人工核验前，不提交、不打 tag、不推送。
 
-核心链路：
+## 硬约束
 
-```text
-阶段 21 LangGraph agentic RAG（/agent/query mode="agentic"）
--> 前端 Agent 面板新增 default / agentic 模式切换
--> submitAgent() 传递 mode 参数
--> 响应暴露 workflow_steps / iteration_count / invalid_citations
--> 迭代时间线展示 retrieve -> grade -> rewrite -> re_retrieve -> generate -> citation_check
--> 引用列表标记 invalid_citations
--> 拒答分类展示 responsibility_gate_triggered / evidence_insufficient / off_topic
--> 回归验证 + 浏览器验证
--> 文档同步 + Obsidian + 阶段验收报告
--> 用户确认后提交、tag、merge、push
-```
-
-## Baseline And Branch
-
-- 当前工作分支：`codex/phase-22-frontend-agentic-observability`
-- 正确基线：`phase-21-complete` tag，指向 `085bff4 Complete phase 21 LangGraph agentic RAG`
-- `main` 状态：阶段 21 已按用户要求推送合并到 GitHub，`origin/main -> 085bff4`
-- 处理决策：阶段 22 分支从 `phase-21-complete`/`085bff4` 出发；不移动任何已有阶段 tag
-- 提交边界：阶段开发完成前不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR
-
-## Boundaries
-
-- 不做写入型 Agent 工具。
-- 不做登录系统。
-- 不做部署优化。
-- 不新增爬虫或外部资料来源。
-- 不引入 Node 构建链或前端框架，继续使用原生 HTML/CSS/JS。
+- 阶段 23 开发完成前后均不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR。
+- 不移动任何已有阶段 tag，尤其是 `phase-22-complete`。
+- 保留用户或其他 session 的已有改动，不重置 Git，不覆盖无关文件。
+- 不做登录系统、部署优化、Streaming/SSE、新爬虫或外部资料源。
 - 不让真实 API 成为 CI 或本地全量测试前提。
-- HyDE 仍只做离线实验建议，不进入默认链路。
 - 不把 API key、Bearer token、供应商原始敏感响应、受限全文写入 Git、CSV、文档、测试或 Obsidian。
-- default 模式行为必须保持不变，agentic 只做显式 opt-in。
+- `detect_intent` 内部规则保持不变；自动路由只决定 `/agent/query` 走 default `AgentService` 还是 agentic LangGraph。
+- 保证 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`GET /quality-report` 不被破坏。
 
-## Current Phase
+## Phase 顺序
 
-Phase 11: complete. 用户已确认提交阶段 22，进入 commit/tag/merge/push 流程。
+### Phase 0：启动校准与文件计划
 
-## Phases
+**状态：已完成**
 
-### Phase 0: 启动校准
+**解决的问题**：确认阶段 22 的最终状态、tag、main 起点和阶段 23 分支，避免在错误基线上继续开发。
 
-- [x] 读取 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-- [x] 读取 `docs/stage21_langgraph_agentic_rag.md`、`docs/phase_reviews/phase-21.md`。
-- [x] 读取根目录 `task_plan.md`、`findings.md`、`progress.md`。
-- [x] 运行 `git status -sb`、`git log --oneline -5`。
-- [x] 确认 `phase-21-complete -> 085bff4`，不移动 tag。
-- [x] 核对 `main` 是否包含阶段 21。
-- [x] 从 `phase-21-complete` 创建 `codex/phase-22-frontend-agentic-observability`。
-- [x] 校准 `task_plan.md`、`findings.md`、`progress.md`。
-- 验证方式：Git 命令输出、分支名、planning 文件落盘。
-- Status: complete
+**RAG 链路位置**：阶段起点校准，不改运行链路。
 
-### Phase 1: 阶段 22 设计文档
+**为什么现在做**：阶段 23 依赖阶段 22 的前端 agentic 可观测能力和阶段 21 的 LangGraph agentic 链路，必须先确认二者已进入 `main`。
 
-- [x] 新增 `docs/stage22_frontend_agentic_observability.md`。
-- [x] 说明目标、输入、响应契约、前端交互、时间线字段、拒答分类、引用无效标记、测试方案、安全边界和完成标准。
-- [x] 明确 `default` 模式不变，`agentic` 模式 opt-in。
-- 验证方式：文档存在，并被测试或人工 grep 覆盖关键字段。
-- Status: complete
+**任务**
+- 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
+- 阅读阶段 21、22 设计文档与 phase review，以及根目录 `task_plan.md`、`findings.md`、`progress.md`。
+- 核对 `phase-22-complete` tag、`main`、`origin/main` 是否指向同一阶段 22 最终提交。
+- 从阶段 22 合并后的 `main` 创建或切换到 `codex/phase-23-agentic-eval-and-auto-routing`。
+- 将根目录三份 Planning with Files 文件校准为阶段 23。
 
-### Phase 2: Agentic 响应契约校准
+**验证方式**
+- `git status -sb`
+- `git log --oneline -5`
+- `git show -s --format=... phase-22-complete`
+- `git show -s --format=... main`
+- `git merge-base --is-ancestor phase-22-complete main`
 
-- [x] 扩展 `AgentQueryResponse`，为前端暴露 `mode`、`iteration_count`、`invalid_citations`、`workflow_steps`、`refusal_category` 等只读观测字段。
-- [x] default 模式返回兼容默认值，不改变既有必填字段语义。
-- [x] agentic 模式从 `AgenticResult` 映射 dedicated observability 字段，同时保留原 `tool_calls` 显示兼容。
-- [x] 明确拒答分类：`responsibility_gate_triggered`、`evidence_insufficient`、`off_topic`。
-- 验证方式：新增/更新 API schema 与 `/agent/query` 测试。
-- Status: complete
+**完成标准**
+- 当前分支为 `codex/phase-23-agentic-eval-and-auto-routing`。
+- `phase-22-complete` 不移动，且已并入 `main`。
+- `task_plan.md`、`findings.md`、`progress.md` 已切换为阶段 23。
 
-### Phase 3: Agentic 模式前端接入
+### Phase 1：阶段 23 设计文档
 
-- [x] 在 `app/frontend/index.html` 的 Agent 面板加入 default / agentic 模式切换控件。
-- [x] `submitAgent()` 读取模式，并在 agentic 模式传递 `mode: "agentic"`。
-- [x] default 模式不传或传默认 mode，保持现有 API 行为。
-- 验证方式：前端静态测试断言控件存在，JS 中包含 mode 传参逻辑。
-- Status: complete
+**状态：已完成**
 
-### Phase 4: 迭代过程可视化
+**解决的问题**：把评测修复、自动路由、前端只读状态和安全边界先固化成可审查设计。
 
-- [x] 在 Agent 结果区域展示 `iteration_count`。
-- [x] 在工具/步骤侧栏用时间线或步骤列表展示 `workflow_steps`。
-- [x] 每步显示节点名、输入摘要、输出摘要、成功/失败与错误摘要。
-- [x] 节点顺序覆盖 retrieve、grade、rewrite、re_retrieve、generate、citation_check。
-- 验证方式：前端渲染函数测试或静态断言，API 测试确认字段返回。
-- Status: complete
+**RAG 链路位置**：横跨评测脚本、`/agent/query` API、default AgentService、agentic LangGraph、前端 Agent 面板。
 
-### Phase 5: 引用与拒答增强展示
+**为什么现在做**：先明确完成标准和边界，后续代码实现、测试和文档可以对齐同一个设计。
 
-- [x] `invalid_citations` 非空时，在引用 badge 或来源列表中标记无效引用。
-- [x] 拒答时展示拒答分类：`responsibility_gate_triggered`、`evidence_insufficient`、`off_topic`。
-- [x] 保留现有 `refused` 和 `refusal_reason` 文案，不破坏旧模式。
-- 验证方式：新增前端相关断言、API agentic refusal 场景测试。
-- Status: complete
+**任务**
+- 新增 `docs/stage23_agentic_eval_and_auto_routing.md`。
+- 说明阶段 21 `inconclusive_high_error_rate` 的原因和阶段 23 的隔离/修复策略。
+- 说明可靠 agentic vs default 对照评测方案、指标和诚实结论原则。
+- 说明 `classify_query_complexity` 规则式设计和判断依据输出。
+- 说明 `/agent/query` 自动分流逻辑、显式 `mode` 覆盖语义、前端只读模式指示器、安全边界和完成标准。
 
-### Phase 6: 聚焦测试
+**验证方式**
+- 人工阅读文档结构是否覆盖阶段 23 验收项。
+- 后续代码和测试以此文档为实现合同。
 
-- [x] 补充前端静态测试，覆盖模式控件、mode 传参、workflow UI、invalid citation UI、refusal category UI。
-- [x] 补充 API 测试，覆盖 agentic 响应字段与 default 兼容。
-- [x] 运行聚焦测试：`tests/test_frontend_app.py`、`tests/test_agent_api.py`、`tests/test_agentic_graph.py`、`tests/test_stage21_agentic_eval.py`。
-- 验证方式：聚焦测试通过。
-- Status: complete
+**完成标准**
+- 设计文档存在且覆盖评测、路由、API、前端、测试、安全与收尾标准。
 
-### Phase 7: 回归验证与浏览器验证
+### Phase 2：Agentic 评测修复与可靠对照设计
 
-- [x] 确认 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`GET /quality-report` 未破坏。
-- [x] 运行全量测试，目标 `>= 449 existing + new`。
-- [x] 启动本地服务并进行前端浏览器验证，检查 desktop/mobile 视口与控制台错误。
-- 验证方式：全量 `pytest -q` 通过，浏览器截图/检查通过。
-- Status: complete
+**状态：已完成**
 
-### Phase 8: 普通文档同步
+**解决的问题**：阶段 21 agentic 评测因 SSL/超时导致错误率过高，无法支持 agentic 是否应进入默认路径的判断。
 
-- [x] 更新 `README.md`。
-- [x] 更新 `docs/progress.md`。
-- [x] 更新 `docs/architecture.md`。
-- [x] 更新 `docs/data_sources.md`。
-- [x] 判断并更新 `AGENT.MD`，记录阶段 22 经验与后续规则。
-- 验证方式：文档反映阶段 22 状态、边界、测试和人工核验前状态。
-- Status: complete
+**RAG 链路位置**：离线评测层，围绕 default hybrid/AgentService 与 agentic LangGraph 的可比性建立可靠证据。
 
-### Phase 9: Obsidian 收尾
+**为什么现在做**：没有可靠对照就不应把 agentic 自动接入真实入口。
 
-- [x] 建立/更新 `obsidian-vault/阶段汇报/阶段 22 - 前端 Agentic 可视化与可观测增强/`。
-- [x] 按 `obsidian-vault/模板/Phase 汇报模板.md` 补齐 Phase 0 到最终 Phase 小汇报。
-- [x] 每篇小汇报包含：本 Phase 目标、完成的主要任务、新增/修改内容、关键代码或模块、问题与解决方式、新词解释、验证结果、遗留问题、下一 Phase、面试表达。
-- [x] 更新阶段 22 Phase 汇报索引、`obsidian-vault/阶段汇报索引.md`、`obsidian-vault/阶段索引.md`、`obsidian-vault/首页.md`、`obsidian-vault/阶段/阶段 22 - 前端 Agentic 可视化与可观测增强.md`。
-- 验证方式：本地 Obsidian 文件存在，且不进入 Git 提交范围。
-- Status: complete
+**任务**
+- 阅读并必要时重构 `scripts/evaluate_stage21_agentic_rag.py` 或新增阶段 23 评测脚本。
+- 在真实 API 不可用时，使用 deterministic provider / fixture 隔离供应商 SSL 问题。
+- 构造能覆盖简单概念题与复杂多步/改写/跨段合并题的对照集。
+- 输出阶段 23 评测结果、汇总和决策文件，目标 error_rate < 0.10。
+- 诚实记录 agentic 与 default 的差异；若差异不大，明确写为当前数据量/问题集下差异不大。
 
-### Phase 10: 阶段验收报告
+**验证方式**
+- 运行阶段 23 评测脚本。
+- 检查输出 CSV/汇总文件无敏感原文、无 key/token。
+- 检查 error_rate 是否低于 0.10；若不是，记录原因并修复或隔离。
+- 已运行：`.\.venv\Scripts\python.exe scripts\evaluate_stage23_agentic_auto_routing.py`，结果 default/agentic `error_rate=0.000`。
+- 已运行：`.\.venv\Scripts\python.exe -m pytest tests\test_stage23_agentic_eval.py -q`，结果 `3 passed`。
 
-- [x] 新增 `docs/phase_reviews/phase-22.md`。
-- [x] 写入验收结论、范围核对、测试证据、API 兼容、安全合规、文档同步、提交边界和遗留观察。
-- 验证方式：验收报告存在，内容覆盖阶段 22 完成标准。
-- Status: complete
+**完成标准**
+- 阶段 21 SSL 高错误率被修复或隔离。
+- 产生可复现的阶段 23 agentic vs default 对照结果。
 
-### Phase 11: 人工核验待提交状态
+### Phase 3：问题复杂度路由规则
 
-- [x] 运行 `git status -sb`。
-- [x] 确认未执行 `git add`、未 commit、未 tag、未 push、未 PR。
-- [x] 最终汇报当前分支、主要改动、测试结果、未提交状态、人工核验重点和后续提交/tag建议。
-- 验证方式：无 staged 变更；最终停在用户人工核验前。
-- Status: complete
+**状态：已完成**
 
-## Completion Criteria
+**解决的问题**：自动判断简单问题继续走 default，复杂问题尝试 agentic，避免让用户手动选择模式。
 
-| Item | Expected |
-|---|---|
-| Design doc | `docs/stage22_frontend_agentic_observability.md` |
-| Branch | `codex/phase-22-frontend-agentic-observability` |
-| Baseline | `phase-21-complete -> 085bff4` |
-| Main check | `origin/main` contains `phase-21-complete -> 085bff4`; branch starts from phase 21 baseline |
-| Frontend mode switch | Agent panel has default / agentic switch |
-| API request | `submitAgent()` sends `mode="agentic"` only when selected |
-| Workflow display | `workflow_steps` shown as steps/timeline with node, input summary, output summary |
-| Iteration display | `iteration_count` visible in Agent result |
-| Invalid citations | `invalid_citations` marked in citations/source UI |
-| Refusal category | responsibility / evidence insufficient / off-topic visible when refused |
-| Default mode | Existing Agent behavior unchanged |
-| API compatibility | search/vector/hybrid/chat/agent/query/quality-report preserved |
-| Tests | Full suite passes, at least 449 existing + new tests |
-| Docs | README, docs/progress, docs/architecture, docs/data_sources, AGENT.MD synced |
-| Obsidian | Local stage 22 reports and indexes updated |
-| Review report | `docs/phase_reviews/phase-22.md` |
-| Final state | no add, no commit, no phase-22 tag, no push, no PR |
+**RAG 链路位置**：`/agent/query` 入口前置路由层，在 default AgentService 和 agentic LangGraph 之前。
 
-## Term Explanations
+**为什么现在做**：评测结论明确后，需要把“哪些问题值得 agentic”落成可测试的规则。
 
-| Term | Meaning in this project |
-|---|---|
-| Agentic RAG | 带自我修正循环的 RAG：先检索，再评估证据，不足时改写问题重检索，最后生成并检查引用。 |
-| `mode="agentic"` | `/agent/query` 的可选模式参数；只有显式传入时才走阶段 21 LangGraph 图。 |
-| `workflow_steps` | Agentic RAG 每个节点的可观测记录，包含节点名、输入摘要、输出摘要、成功状态和错误摘要。 |
-| `iteration_count` | agentic 检索-评估-改写循环执行了几轮，用来解释系统是否多次重试。 |
-| `invalid_citations` | 答案里出现但未能对应到本次来源列表的引用编号，用来提醒用户该引用不可靠。 |
-| 拒答分类 | 把 `refused=true` 的原因分成工程责任边界、证据不足、离题等类型，便于用户理解系统为什么拒答。 |
+**任务**
+- 新增或扩展 agent 路由模块，实现 `classify_query_complexity`。
+- 至少输出 `simple` / `complex` 和判断依据。
+- 规则式优先，不引入 LLM 判断。
+- 覆盖问题长度、子句数、对比/流程/多方面/综合/跨段证据合并等关键词。
+- 为规则添加单元测试。
 
-## Notes
+**验证方式**
+- 运行新增路由单元测试。
+- 检查简单概念题判为 `simple`，多步/对比/流程/多方面问题判为 `complex`，并返回可解释理由。
+- 已运行：`.\.venv\Scripts\python.exe -m pytest tests\test_agent_routing.py -q`，结果 `6 passed`。
 
-- 本文件由 Planning with Files 维护；每个 Phase 完成后必须先更新 `task_plan.md`、`findings.md`、`progress.md`。
-- 开发过程中暂不写 Obsidian 小 Phase 汇报；待开发、测试和普通文档完成后统一补齐。
-- 阶段 22 完成后必须停在人工核验前，不提交、不打 tag、不推送。
+**完成标准**
+- 路由函数稳定、可解释、无外部依赖。
+
+### Phase 4：`/agent/query` 自动分流集成
+
+**状态：已完成**
+
+**解决的问题**：API 在不传 `mode` 时自动选择 default 或 agentic，同时保留显式 `mode` 调试能力。
+
+**RAG 链路位置**：FastAPI `/agent/query` 到 default `AgentService.query()` / agentic `run_agentic_rag()` 的分支点。
+
+**为什么现在做**：路由函数已可测试后，才能安全接入用户入口。
+
+**任务**
+- 修改 `app/api/agent.py`，当 `mode` 为空时调用 `classify_query_complexity`。
+- `simple` 自动走 default；`complex` 自动走 agentic。
+- 显式 `mode=default` 或 `mode=agentic` 时尊重用户选择。
+- 不改变 `detect_intent` 内部逻辑。
+- 补测试覆盖自动分流、显式覆盖、响应 `mode` 字段。
+
+**验证方式**
+- 运行 API 层相关测试。
+- 以 mock/stub 保证无需真实 LLM/API。
+- 已运行：`.\.venv\Scripts\python.exe -m pytest tests\test_agent_routing.py tests\test_agent_api.py -q`，结果 `17 passed`。
+
+**完成标准**
+- `/agent/query` 默认自动分流，显式模式仍可用于调试。
+- default 模式行为不变。
+
+### Phase 5：前端只读模式指示器
+
+**状态：已完成**
+
+**解决的问题**：阶段 22 的 mode 下拉框仍把模式选择暴露给用户；阶段 23 要改成系统自动路由后的只读结果展示。
+
+**RAG 链路位置**：前端 Agent 面板，请求前不发送 mode，请求后读取响应 `mode` 展示实际链路。
+
+**为什么现在做**：API 已能自动分流后，前端才能去掉手动选择。
+
+**任务**
+- 将 `app/frontend/index.html` 的 mode 下拉框改为只读状态指示器。
+- 修改 `app/frontend/static/app.js`，提交时不再发送 `mode`，响应后显示 `result.mode`。
+- 保留 `workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category` 只读可观测字段。
+- 补充前端测试。
+
+**验证方式**
+- 运行前端相关测试。
+- 必要时用本地浏览器验证控件不再可手动选择，响应后可见实际 `mode`。
+- 已运行：`.\.venv\Scripts\python.exe -m pytest tests\test_frontend_app.py tests\test_agent_api.py tests\test_agent_routing.py -q`，结果 `23 passed`。
+
+**完成标准**
+- 用户不再手动选模式，系统返回的 actual mode 清晰可见。
+
+### Phase 6：回归验证与质量门
+
+**状态：已完成**
+
+**解决的问题**：阶段 23 涉及 API、评测脚本、前端和文档，需要确认既有检索、问答、质量报告接口未受破坏。
+
+**RAG 链路位置**：全链路回归。
+
+**为什么现在做**：功能开发完成后必须先测试，再进入文档收尾。
+
+**任务**
+- 运行阶段 23 新增测试。
+- 运行后端/API/前端相关回归测试。
+- 运行全量测试，目标 >= 451。
+- 若失败，定位并修复，补充必要测试。
+
+**验证方式**
+- `pytest` 或项目既有测试命令。
+- 记录测试数量、耗时、失败修复摘要。
+- 已运行阶段 21/22/23 聚焦回归：`51 passed`。
+- 已运行全量测试：`463 passed`。
+- 已用本地浏览器检查桌面和 390x844 移动视口：mode 下拉框不存在，只读状态指示器存在，console errors=0，无横向溢出。
+
+**完成标准**
+- 全量测试通过，且不依赖真实 API。
+
+### Phase 7：普通文档同步
+
+**状态：已完成**
+
+**解决的问题**：把阶段 23 的设计、代码行为、评测结论和验收状态同步到项目普通文档。
+
+**RAG 链路位置**：项目知识层和维护者入口。
+
+**为什么现在做**：测试通过后文档才能准确描述最终行为。
+
+**任务**
+- 更新 `README.md`。
+- 更新 `docs/progress.md`。
+- 更新 `docs/architecture.md`。
+- 更新 `docs/data_sources.md`。
+- 必要时更新 `AGENT.MD` 中阶段判断或开发指引。
+- 将阶段 23 相关新词、关键类名、接口名和面试表达整理进文档。
+
+**验证方式**
+- 人工检查文档无过期“用户手动选 mode”表述。
+- 检查文档不含 secrets、供应商敏感响应或受限全文。
+- 已更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD`。
+- 已运行窄范围检索，确认前端源码不再包含旧 `data-agent-mode` 选择器；命中的下拉框表述均为阶段 23 变更说明、测试断言或计划记录。
+
+**完成标准**
+- 普通文档与最终代码行为一致。
+
+### Phase 8：Obsidian 本地知识库收尾
+
+**状态：已完成**
+
+**解决的问题**：按本项目阶段汇报规范，在全部开发、测试和普通文档完成后统一补齐 Obsidian 草稿。
+
+**RAG 链路位置**：本地知识库与复盘材料，不影响运行链路。
+
+**为什么现在做**：用户要求开发过程中暂不写小 Phase 汇报，阶段末统一收尾。
+
+**任务**
+- 阅读 `obsidian-vault/模板/Phase 汇报模板.md`。
+- 建立或更新 `obsidian-vault/阶段汇报/阶段 23 - Agentic 评测闭环与自动模式路由/`。
+- 新增阶段 23 Phase 汇报索引。
+- 补齐 Phase 0 到最终 Phase 小汇报。
+- 更新 `obsidian-vault/阶段汇报索引.md`。
+- 更新 `obsidian-vault/阶段/阶段 23 - Agentic 评测闭环与自动模式路由.md`。
+- 每篇小汇报包含：本 Phase 目标、完成的主要任务、新增/修改内容、关键代码或模块、问题与解决方式、新词解释、验证结果、遗留问题、下一 Phase、面试表达。
+
+**验证方式**
+- 检查 Obsidian 文件路径和双链。
+- 检查每篇小汇报字段齐全。
+- 已创建阶段 23 目录、阶段页、Phase 汇报索引和 Phase 0 到 Phase 9 小汇报草稿。
+- 已更新 `obsidian-vault/阶段汇报索引.md`、`obsidian-vault/阶段索引.md`、`obsidian-vault/首页.md`。
+- 已校正阶段 22 Obsidian 页的状态为已完成并合并，避免与当前 `phase-22-complete` / `main` 状态冲突。
+- 已检查阶段 23 每篇小 Phase 汇报均包含阶段链接、汇报索引链接和 `## 10. 面试表达`。
+
+**完成标准**
+- Obsidian 草稿完整但未提交，等待用户人工核验。
+
+### Phase 9：最终待人工核验状态
+
+**状态：已完成**
+
+**解决的问题**：把阶段 23 停在“可核验、未提交”的边界，避免越过用户确认。
+
+**RAG 链路位置**：阶段交付边界。
+
+**为什么现在做**：用户明确要求不要提交、tag、push 或创建 PR。
+
+**任务**
+- 最后一次运行 `git status -sb`。
+- 确认未创建 `phase-23-complete` tag。
+- 汇总主要改动、测试结果、未提交状态和人工核验重点。
+- 给出用户确认后建议的提交/tag/push流程，但不执行。
+
+**验证方式**
+- `git status -sb`
+- `git tag --list phase-23-complete`
+- 测试记录在 `progress.md`。
+- 已复跑 `.\.venv\Scripts\python.exe scripts\evaluate_stage23_agentic_auto_routing.py`，结果 default/agentic `error_rate=0.000`，decision `reliable_auto_route_candidate`。
+- 已复跑 `.\.venv\Scripts\python.exe -m pytest -q`，结果 `463 passed in 27.31s`。
+- 已确认当前分支为 `codex/phase-23-agentic-eval-and-auto-routing`。
+- 已确认 `phase-23-complete` tag 不存在。
+- 已确认阶段 23 未 `git add`、未提交、未推送。
+
+**完成标准**
+- 当前分支保持阶段 23 分支。
+- 所有阶段 23 改动未提交，等待用户人工核验。

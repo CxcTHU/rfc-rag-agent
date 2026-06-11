@@ -19,7 +19,8 @@
 -> 返回答案和引用来源
 -> Agent 工具编排
 -> Agentic 可观测响应契约
--> 前端工作台展示、模式切换和步骤可视化
+-> Agent 自动模式路由
+-> 前端工作台展示、只读模式指示和步骤可视化
 ```
 
 ## 初始分层
@@ -29,21 +30,58 @@ API 层：FastAPI 路由
 Schema 层：Pydantic 请求和响应模型
 Service 层：导入、切分、检索、问答业务逻辑
 Agent 层：受控工具封装、意图路由、工具调用记录和拒答约束
-Agentic 层：LangGraph 状态图编排，迭代式 retrieve-grade-rewrite-generate 循环（阶段 21），并向前端暴露只读可观测字段（阶段 22）
+Agentic 层：LangGraph 状态图编排，迭代式 retrieve-grade-rewrite-generate 循环（阶段 21），向前端暴露只读可观测字段（阶段 22），并在阶段 23 通过规则式复杂度路由接入 `/agent/query` 自动分流
 Brain 层：RAG workflow 中控、RetrievalConfig、WorkflowConfig、step 记录和 chat/agent 复用
 DB 层：文档、chunk、问答日志元数据
 Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
 Model Provider 层：聊天模型和 embedding 模型适配
-Frontend 层：来源、资料、检索、问答、引用来源展示，以及 Agent default/agentic 模式切换和 workflow 步骤可视化
+Frontend 层：来源、资料、检索、问答、引用来源展示，以及 Agent 自动模式结果指示和 workflow 步骤可视化
 ```
+
+## 阶段 23 Agentic 自动模式路由架构
+
+阶段 23 没有改变默认 `/chat`，也没有修改 default `AgentService` 内部的 `detect_intent`。新增边界只在 `/agent/query` 入口：
+
+```text
+POST /agent/query
+-> request.mode 显式存在？
+   yes: 尊重 mode=default / mode=agentic
+   no: classify_query_complexity(question)
+       simple  -> default AgentService.query()
+       complex -> run_agentic_rag()
+-> AgentQueryResponse.mode 标记本次实际链路
+-> 前端 data-agent-mode-status 只读展示 default / agentic
+```
+
+新增模块：
+
+```text
+app/services/agent/routing.py
+  classify_query_complexity(question)
+  -> QueryComplexityResult(complexity, score, reasons, signals)
+```
+
+规则只读取问题文本，不调用 LLM。主要信号包括问题长度、子句数、对比/流程/多方面关键词、跨证据/改写倾向，以及 `search + compare/explain/analyze` 组合。直接 source/list/source detail 请求保持 `simple`，继续交给 default `AgentService` 内部 `detect_intent` 处理。
+
+评测闭环：
+
+```text
+scripts/evaluate_stage23_agentic_auto_routing.py
+-> deterministic provider + in-memory SQLite fixture
+-> default AgentService vs agentic LangGraph
+-> data/evaluation/stage23_agentic_auto_routing_*.csv
+```
+
+阶段 23 对照结果为 default/agentic `error_rate=0.000`，`agentic_gain_count=1`，决策 `reliable_auto_route_candidate`。结论只支持“复杂问题可自动尝试 agentic”，不支持声称 agentic 全面优于 default。
 
 ## 阶段 22 Agentic 前端可观测架构
 
-阶段 22 没有改变默认 `/chat` 或 default Agent 链路，而是在 `/agent/query` 上保留显式 opt-in：
+阶段 22 没有改变默认 `/chat` 或 default Agent 链路，而是在 `/agent/query` 上保留显式 opt-in。阶段 23 已将前端手动选择升级为自动路由后的只读模式指示器：
 
 ```text
 前端 Agent 面板
--> default / agentic 模式选择
+-> 阶段 22：default / agentic 模式选择
+-> 阶段 23：data-agent-mode-status 只读显示系统实际选择
 -> submitAgent()
 -> POST /agent/query
    default: 旧 AgentService 工具调用链路

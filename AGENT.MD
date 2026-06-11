@@ -78,6 +78,7 @@ claude/phase-19-chinese-analysis-retrieval-tuning
 codex/phase-20-default-chain-and-eval-upgrade
 claude/phase-21-langgraph-agentic-rag
 codex/phase-22-frontend-agentic-observability
+codex/phase-23-agentic-eval-and-auto-routing
 ```
 
 协作规则：
@@ -124,12 +125,17 @@ codex/phase-22-frontend-agentic-observability
 - 提交边界对两个 Agent 同样适用：**未经用户人工核验并明确确认，不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR**。
 - `.claude/`、`.codex/` 是本地工具配置，已加入 `.gitignore`，不提交。
 
-### 阶段 22 之后的前端 Agentic 规则
+### 阶段 23 之后的前端 Agentic 与自动路由规则
 
-- `mode="agentic"` 是显式 opt-in 能力，不是默认 `/chat` 或 default Agent 链路；除非有新的评测门槛通过，不要把 agentic 自动切成默认模式。
-- 前端继续使用原生 HTML/CSS/JS；阶段 22 已明确不引入 Node 构建链或前端框架，后续若要引入必须先单独论证收益与维护成本。
+- 默认 `/chat` 仍不走 agentic；阶段 23 的自动路由只作用于 `/agent/query`。
+- `/agent/query` 的 `mode` 为空时，先调用 `classify_query_complexity()`：`simple` 走 default `AgentService`，`complex` 走 agentic LangGraph。
+- 显式 `mode="default"` 或 `mode="agentic"` 必须继续尊重，用作调试和人工核验能力。
+- 不得修改 `detect_intent` 内部规则来实现阶段 23 自动路由；`detect_intent` 仍只在 default `AgentService` 内部判断 answer/search/list_sources/get_source_detail。
+- 前端 Agent 面板不再让用户手动选择 default / agentic；使用只读状态指示器展示响应里的实际 `mode`。
+- 前端继续使用原生 HTML/CSS/JS；阶段 22/23 已明确不引入 Node 构建链或前端框架，后续若要引入必须先单独论证收益与维护成本。
 - `workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category` 属于只读可观测字段，用来解释 agentic RAG 的运行过程，不得被扩展成写入型 Agent 工具或外部副作用入口。
-- 浏览器验证要覆盖 desktop 与移动断点，至少检查 Agent 模式控件、步骤列表、横向溢出和 console error；真实 API 不能成为本地全量测试前提。
+- 浏览器验证要覆盖 desktop 与移动断点，至少检查 Agent 只读模式指示器、步骤列表、横向溢出和 console error；真实 API 不能成为本地全量测试前提。
+- 阶段 23 的 deterministic 评测只支持“复杂问题可自动尝试 agentic”的有限结论；不得把它表述为 agentic 全面优于 default。
 
 ## Obsidian 知识库规则
 

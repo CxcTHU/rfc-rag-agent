@@ -12,6 +12,7 @@ from app.schemas.agent import (
     AgentWorkflowStepItem,
 )
 from app.services.agent.service import AgentQueryResult, AgentService
+from app.services.agent.routing import classify_query_complexity
 from app.services.agentic.graph import run_agentic_rag
 from app.services.agentic.state import AgenticResult
 from app.services.generation.chat_model import (
@@ -54,7 +55,12 @@ def query_agent(
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
 ) -> AgentQueryResponse:
-    if request.mode == "agentic":
+    effective_mode = request.mode
+    if effective_mode is None:
+        routing = classify_query_complexity(request.question)
+        effective_mode = "agentic" if routing.complexity == "complex" else "default"
+
+    if effective_mode == "agentic":
         try:
             agentic_result = run_agentic_rag(
                 question=request.question,

@@ -181,6 +181,64 @@ def test_agent_api_agentic_mode_exposes_observability_fields(tmp_path) -> None:
     assert payload["refusal_category"] is None
 
 
+def test_agent_api_auto_routes_complex_query_to_agentic(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": (
+                    "Search and compare filling capacity and thermal control "
+                    "mechanisms in rock-filled concrete."
+                ),
+                "top_k": 2,
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "agentic"
+    assert payload["workflow_steps"]
+    assert payload["tool_calls"][0]["tool_name"] == payload["workflow_steps"][0]["name"]
+
+
+def test_agent_api_explicit_default_overrides_auto_complex_route(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": (
+                    "Search and compare filling capacity and thermal control "
+                    "mechanisms in rock-filled concrete."
+                ),
+                "top_k": 2,
+                "mode": "default",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "default"
+    assert payload["workflow_steps"] == []
+    assert payload["tool_calls"][0]["tool_name"] == "hybrid_search_knowledge"
+
+
+def test_agent_api_explicit_agentic_overrides_auto_simple_route(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 2,
+                "mode": "agentic",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "agentic"
+    assert payload["workflow_steps"]
+
+
 def test_agent_api_agentic_refusal_category_marks_responsibility_gate(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(

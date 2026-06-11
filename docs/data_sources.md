@@ -52,6 +52,16 @@ URL:
 - 前端展示 default / agentic 模式、迭代步骤、无效引用和拒答分类；不改变 `sources`、`documents`、`chunks`、`chunk_embeddings` 或 source registry 的数据边界。
 - 新增/更新测试均使用 deterministic provider 与临时 SQLite，不要求真实 API，不写入 API key、Bearer token、供应商原始敏感响应或受限全文。
 
+阶段 23 不新增外部资料来源，也不新增爬虫、真实 API 依赖或受限全文文件。阶段 23 的新增数据产物只用于 agentic vs default 对照评测和自动路由验收：
+
+- `docs/stage23_agentic_eval_and_auto_routing.md`：阶段 23 设计文档，说明评测修复、路由规则、API 自动分流、前端只读指示器和安全边界。
+- `scripts/evaluate_stage23_agentic_auto_routing.py`：deterministic 评测脚本，使用 in-memory SQLite 合成 fixture，不读取或调用真实 provider。
+- `data/evaluation/stage23_agentic_auto_routing_results.csv`：逐问题对照结果，只保存问题 ID、类别、复杂度期望、错误标记、是否 answer-like、来源数量、迭代次数和 agentic gain 标记。
+- `data/evaluation/stage23_agentic_auto_routing_summary.csv`：default/agentic 汇总指标，只保存总数、错误数、error_rate、answer_like_count、拒答匹配数和 agentic_gain_count。
+- `data/evaluation/stage23_agentic_auto_routing_decision.csv`：阶段 23 决策摘要，记录 default/agentic error_rate、agentic_gain_count、decision 和 reason。
+
+这些 CSV 不包含 API key、Bearer token、Authorization header、供应商原始敏感响应或受限全文；合成 fixture 只使用可提交的短文本片段，用于隔离阶段 21 SSL/真实 provider 错误。阶段 23 前端只读 `data-agent-mode-status` 和 API 响应 `mode` 也不改变 `sources`、`documents`、`chunks`、`chunk_embeddings` 或 source registry 的数据边界。
+
 阶段 1 第一批试导入资料登记仍保留在下方，作为早期人工来源记录和历史审计依据。
 
 本批资料采用“资料卡”形式导入：保存题录、公开摘要的转述、检索关键词和来源链接，不保存受版权限制的论文全文。
