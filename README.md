@@ -14,7 +14,20 @@
 
 ## 当前阶段
 
-阶段 23（Agentic 评测闭环与自动模式路由，已获用户确认提交/合并）：当前在 `codex/phase-23-agentic-eval-and-auto-routing` 分支完成核心开发、聚焦回归、全量测试、浏览器验证、普通文档同步和验收报告；用户已明确要求提交阶段 23 整体开发工作、创建 `phase-23-complete` tag，并合并推送到 GitHub。阶段 22 已完成并合并到 `main`：`phase-22-complete -> 1a5bf0c Complete phase 22 frontend agentic observability`。
+发布状态更新（2026-06-11）：阶段 24 已通过用户人工核验，用户已明确要求提交阶段 24 整体开发工作、创建阶段 tag、合并并推送到 GitHub。阶段 24 的最终功能提交将创建 `phase-24-complete` tag，随后合并到 `main`。
+
+阶段 24（多轮对话 UI 与会话持久化，开发与测试已完成，等待用户人工核验）：当前在 `codex/phase-24-multi-turn-conversation` 分支完成 Conversation/Message 模型、会话 API、`/agent/query conversation_id` 集成、长对话摘要压缩、前端聊天气泡和会话管理、全量测试、浏览器验证、普通文档与 Obsidian 草稿收尾。阶段 24 仍未执行 `git add`、未提交、未创建 `phase-24-complete` tag、未推送，必须等待用户人工核验和明确确认。阶段 23 已完成并合并到 `main`：`phase-23-complete -> dd7d953 Complete phase 23 agentic eval and auto routing`，合并提交 `8fc1cfa Merge phase 23 agentic eval and auto routing`。
+
+阶段 24 要点：
+
+- **会话持久化模型**：新增 `Conversation` 与 `Message`，支持会话级消息分组、更新时间排序、第一条用户消息生成默认标题、删除会话级联删除消息。
+- **会话 API**：新增 `POST /conversations`、`GET /conversations`、`GET /conversations/{conversation_id}/messages`、`DELETE /conversations/{conversation_id}`，响应把消息 `metadata_json` 转换为前端可直接使用的 `metadata`。
+- **Agent 多轮入口**：`POST /agent/query` 新增可选 `conversation_id`；传入时加载服务端历史并持久化 user/assistant 消息，不传时保持阶段 23 行为。
+- **agentic history 支持**：`run_agentic_rag()` 新增 `history` 参数，`AgenticState` 记录历史，generate 节点利用历史补全追问，但 retrieve/grade/rewrite 仍由当前问题驱动。
+- **上下文摘要压缩**：非 summary 消息超过 16 条时自动摘要旧消息，保留最近 6 条原文消息，摘要保存为 `role="summary"` 的消息，deterministic provider 可测试。
+- **前端聊天 UI 与会话管理**：Agent 面板从单次覆盖结果改为聊天气泡列表，支持会话列表、新建、切换、删除和刷新恢复；保留 mode、workflow_steps、citations、refusal_category 展示。
+- **验证结果**：全量测试 **479 passed**；浏览器桌面 `1280x720` 与移动 `390x844` 检查通过，console error 为 0，无横向溢出。
+- **边界**：不做 WebSocket/SSE、不做用户认证/登录、不做跨会话长期记忆、不引入 LangGraph Checkpointer、不引入前端框架或 Node 构建链、不新增爬虫或外部资料来源；真实 API 不作为测试前提。
 
 阶段 23 要点：
 
@@ -284,7 +297,17 @@
 - `docs/stage22_frontend_agentic_observability.md` 阶段 22 设计文档（前端模式切换、workflow 可视化、引用/拒答增强、安全边界）
 - `/agent/query` 阶段 22 响应契约字段：`mode`、`workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category`
 - 前端 Agent 面板 default / agentic 模式切换、workflow 步骤列表、iteration count、无效引用和拒答分类展示
-- 451 个自动化测试
+- `docs/stage23_agentic_eval_and_auto_routing.md` 阶段 23 设计文档（deterministic agentic 对照评测、规则式复杂度路由、自动模式路由、前端只读模式指示器）
+- `app/services/agent/routing.py` 阶段 23 规则式 `classify_query_complexity()`
+- `scripts/evaluate_stage23_agentic_auto_routing.py` 阶段 23 agentic vs default 自动路由评测脚本
+- `data/evaluation/stage23_agentic_auto_routing_*.csv` 阶段 23 deterministic 评测结果、汇总和接入决策
+- `docs/stage24_multi_turn_conversation.md` 阶段 24 多轮对话 UI 与会话持久化设计文档
+- `Conversation` / `Message` 会话持久化模型和 `ConversationRepository`
+- `POST /conversations`、`GET /conversations`、`GET /conversations/{conversation_id}/messages`、`DELETE /conversations/{conversation_id}` 会话 API
+- `POST /agent/query` 可选 `conversation_id`，支持服务端加载历史、持久化消息和长对话摘要压缩
+- `app/services/conversation/history.py` 会话历史装配与 summary 压缩服务
+- 前端 Agent 面板聊天气泡列表、会话列表、新建/切换/删除、刷新恢复
+- 479 个自动化测试
 - 本地开发依赖配置
 
 ## 新线程说明
@@ -1102,7 +1125,9 @@ app/frontend/
 - 查看指定 document 的 chunks。
 - 使用关键词检索、向量检索或混合检索查看召回片段。
 - 调用 `/chat` 提问，展示回答、引用编号、模型信息和引用来源侧栏。
-- 调用 `/agent/query` 提交 Agent 任务，展示回答、引用编号、工具调用记录和来源。
+- 调用 `/agent/query` 提交 Agent 任务，自动接入当前 `conversation_id`，以聊天气泡追加展示 user/assistant/summary 消息。
+- 在 Agent 面板管理会话：会话列表、新建、切换、删除，刷新页面后从 `/conversations` 恢复历史。
+- 在每条 Agent 回复中继续展示 `mode`、`workflow_steps`、`citations`、`invalid_citations` 和 `refusal_category` 等只读可观测字段。
 - 触发 source sync。
 - 触发单条 source reindex，并在失败时展示可理解错误。
 
@@ -1147,6 +1172,7 @@ rfc-rag-agent/
     main.py
     api/
       chat.py
+      conversations.py
       documents.py
       agent.py
       frontend.py
@@ -1161,6 +1187,7 @@ rfc-rag-agent/
       session.py
     schemas/
       chat.py
+      conversation.py
       document.py
       agent.py
       health.py
@@ -1169,6 +1196,7 @@ rfc-rag-agent/
     services/
       agent/
       agentic/
+      conversation/
       generation/
       ingestion/
       retrieval/

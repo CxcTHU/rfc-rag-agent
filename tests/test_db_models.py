@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
-from app.db.models import Base, Chunk, ChunkEmbedding, Document
+from app.db.models import Base, Chunk, ChunkEmbedding, Conversation, Document, Message
 from app.db.session import create_sqlite_engine
 
 
@@ -109,3 +109,38 @@ def test_chunk_embedding_can_be_persisted(tmp_path) -> None:
     assert saved_embedding.model_name == "hash-token-v1"
     assert saved_embedding.dimension == 3
     assert saved_embedding.content_hash == "chunk-content-hash"
+
+
+def test_conversation_and_messages_can_be_persisted(tmp_path) -> None:
+    database_path = tmp_path / "test_conversation.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    with TestingSessionLocal() as db:
+        conversation = Conversation(
+            title="填充性能追问",
+            messages=[
+                Message(role="user", content="什么影响填充性能？"),
+                Message(
+                    role="assistant",
+                    content="填充性能受自密实混凝土流动性和堆石孔隙影响。",
+                    mode="default",
+                    metadata_json='{"citations":["[1]"]}',
+                ),
+                Message(role="summary", content="用户正在了解填充性能影响因素。"),
+            ],
+        )
+        db.add(conversation)
+        db.commit()
+        conversation_id = conversation.id
+
+    with TestingSessionLocal() as db:
+        saved_conversation = db.get(Conversation, conversation_id)
+        saved_messages = db.query(Message).filter_by(conversation_id=conversation_id).all()
+
+    assert saved_conversation is not None
+    assert saved_conversation.title == "填充性能追问"
+    assert [message.role for message in saved_messages] == ["user", "assistant", "summary"]
+    assert saved_messages[1].mode == "default"
+    assert saved_messages[1].metadata_json == '{"citations":["[1]"]}'

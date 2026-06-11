@@ -14,6 +14,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -374,6 +378,28 @@ td {
   border-bottom: 1px solid var(--line);
 }
 
+.conversation-bar {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfcfd;
+}
+
+.conversation-bar label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.danger-button {
+  color: #b42318;
+}
+
 .question-field,
 .chat-controls label,
 .agent-controls label,
@@ -417,9 +443,77 @@ td {
   padding: 16px;
 }
 
+.chat-messages {
+  min-height: 320px;
+  max-height: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 16px;
+  scroll-behavior: smooth;
+}
+
+.chat-message {
+  display: flex;
+  width: 100%;
+}
+
+.chat-message--user {
+  justify-content: flex-end;
+}
+
+.chat-message--assistant {
+  justify-content: flex-start;
+}
+
+.chat-message--summary {
+  justify-content: center;
+}
+
+.chat-message-bubble {
+  max-width: min(760px, 88%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.chat-message--user .chat-message-bubble {
+  border-color: rgba(23, 107, 99, 0.35);
+  background: var(--accent-soft);
+}
+
+.chat-message--summary .chat-message-bubble {
+  max-width: min(720px, 92%);
+  background: #f3f5f7;
+}
+
+.chat-message--thinking .chat-message-bubble {
+  border-color: rgba(23, 107, 99, 0.22);
+  background: #f8fbfb;
+}
+
+.chat-message--error .chat-message-bubble {
+  border-color: rgba(180, 35, 24, 0.28);
+  background: #fff7f6;
+}
+
+.chat-message-role {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .answer-text {
   white-space: pre-wrap;
   line-height: 1.7;
+}
+
+.thinking-text {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .answer-meta {
@@ -556,9 +650,10 @@ td {
   .toolbar-band,
   .content-grid,
   .operations-grid,
-  .answer-grid,
-  .agent-grid,
-  .chat-controls,
+    .answer-grid,
+    .agent-grid,
+    .conversation-bar,
+    .chat-controls,
   .agent-controls {
     grid-template-columns: 1fr;
   }

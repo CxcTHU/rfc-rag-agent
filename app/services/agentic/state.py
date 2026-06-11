@@ -12,6 +12,7 @@ MAX_ITERATIONS = 3
 
 class AgenticState(TypedDict, total=False):
     question: str
+    history: list[str]
     results: list[SearchResultLike]
     retrieval_queries: list[str]
     evidence_sufficient: bool

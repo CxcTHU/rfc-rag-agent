@@ -62,6 +62,18 @@ URL:
 
 这些 CSV 不包含 API key、Bearer token、Authorization header、供应商原始敏感响应或受限全文；合成 fixture 只使用可提交的短文本片段，用于隔离阶段 21 SSL/真实 provider 错误。阶段 23 前端只读 `data-agent-mode-status` 和 API 响应 `mode` 也不改变 `sources`、`documents`、`chunks`、`chunk_embeddings` 或 source registry 的数据边界。
 
+阶段 24 不新增外部资料来源，也不新增爬虫、真实 API 依赖或受限全文文件。阶段 24 新增的是**本地会话运行数据**，用于让 Agent 面板支持多轮对话和刷新恢复：
+
+- `docs/stage24_multi_turn_conversation.md`：阶段 24 设计文档，说明会话模型、API、摘要策略、前端 UI 和安全边界。
+- `conversations` 表：保存会话标题、创建时间和更新时间。
+- `messages` 表：保存 `user` / `assistant` / `summary` 消息正文、所属会话、回答 `mode` 和结构化 `metadata_json`。
+- `app/services/conversation/history.py`：把消息装配为 LLM history，并在长对话超过阈值时生成 summary 消息。
+- `/conversations` API：只管理本地会话和消息，不读取外部资料源，不触发爬虫。
+
+阶段 24 的 `Message.metadata_json` 只保存前端恢复展示所需的结构化元数据，例如 `citations`、`workflow_steps`、`invalid_citations`、`refusal_category`、`mode` 和 `iteration_count`。它不得保存 API key、Bearer token、Authorization header、供应商原始敏感响应或受限全文。
+
+阶段 24 的 summary 消息只用于当前 conversation 的短期上下文压缩，不是跨会话长期记忆，也不改变 `sources`、`documents`、`chunks`、`chunk_embeddings` 或 source registry 的资料来源边界。真实模型如果在实际长会话中被用于摘要，只能作为运行时模型服务，不是资料来源；自动测试继续使用 deterministic provider，不让真实 API 成为 CI 或本地全量测试前提。
+
 阶段 1 第一批试导入资料登记仍保留在下方，作为早期人工来源记录和历史审计依据。
 
 本批资料采用“资料卡”形式导入：保存题录、公开摘要的转述、检索关键词和来源链接，不保存受版权限制的论文全文。

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from langgraph.graph import END, StateGraph
 
 from app.services.agentic.nodes import (
@@ -58,11 +60,13 @@ def run_agentic_rag(
     db: Session,
     embedding_provider: EmbeddingProvider,
     chat_model_provider: ChatModelProvider,
+    history: Sequence[str] | None = None,
 ) -> AgenticResult:
     compiled = get_compiled_graph()
 
     initial_state: AgenticState = {
         "question": question.strip(),
+        "history": [item.strip() for item in (history or ()) if item.strip()],
         "_db": db,
         "_embedding_provider": embedding_provider,
         "_chat_model_provider": chat_model_provider,

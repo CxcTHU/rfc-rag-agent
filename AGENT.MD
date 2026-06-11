@@ -137,6 +137,18 @@ codex/phase-23-agentic-eval-and-auto-routing
 - 浏览器验证要覆盖 desktop 与移动断点，至少检查 Agent 只读模式指示器、步骤列表、横向溢出和 console error；真实 API 不能成为本地全量测试前提。
 - 阶段 23 的 deterministic 评测只支持“复杂问题可自动尝试 agentic”的有限结论；不得把它表述为 agentic 全面优于 default。
 
+### 阶段 24 之后的多轮会话与持久化规则
+
+- 阶段 24 将多轮对话限定在 `/agent/query` + `conversation_id`；默认 `/chat` 仍保持单次引用式问答接口，不自动写入 Conversation/Message。
+- `conversation_id` 是兼容开关：不传时保持阶段 23 行为；传入时必须校验会话存在、加载服务端 history、成功响应后保存 user/assistant 消息。
+- 会话历史属于短期 conversation 上下文，不是跨会话长期记忆。不得把 summary 或 Message 表扩展成全局用户记忆，除非后续阶段单独设计权限、删除、隐私和评测边界。
+- 长对话压缩使用 `role="summary"` 的 Message 表示；summary 只用于控制 prompt 长度，不能替代来源引用，也不能绕过 RAG 的 evidence confidence / responsibility_gate / citation 约束。
+- agentic 路径只在 generate 节点利用 history 补全追问；retrieve、grade、rewrite 仍以当前问题为主，避免把会话短期上下文误当作资料库事实。
+- 前端继续使用原生 HTML/CSS/JS。阶段 24 已明确不引入 React/Vue、Node 构建链、WebSocket/SSE 或 LangGraph Checkpointer；后续若要引入必须先写设计文档和回归计划。
+- `Message.metadata_json` 只保存展示恢复所需的结构化元数据，例如 citations、workflow_steps、invalid_citations、refusal_category、mode、iteration_count；不得保存 API key、Bearer token、Authorization header、供应商原始敏感响应或受限全文。
+- 会话 API 当前无登录和用户隔离，这是阶段 24 明确边界。后续如果做认证，必须给 Conversation 增加 owner/user 维度，并补列表过滤、删除权限和安全测试。
+- 浏览器验证要覆盖 desktop 与移动断点，至少检查会话列表、聊天气泡、刷新恢复、横向溢出和 console error；真实 API 不能成为本地全量测试前提。
+
 ## Obsidian 知识库规则
 
 本项目必须维护一个 Obsidian 知识库，用来沉淀每个阶段的工程知识、面试知识和项目决策。
@@ -1228,7 +1240,25 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 0 到阶段 19 已完成并已有阶段 tag（含 `phase-16-complete`、`phase-17-complete`、`phase-18-complete`、`phase-19-complete`）。阶段 17 tag 指向最终功能提交 `5b5ef02`、合并提交 `d633b95`。
+阶段 24「多轮对话 UI 与会话持久化」当前已完成开发、测试、普通文档和 Obsidian 草稿收尾，停在用户人工核验前状态。当前分支为 `codex/phase-24-multi-turn-conversation`；阶段 23 已合并到 `main`，`phase-23-complete -> dd7d953`，合并提交为 `8fc1cfa`。
+
+下一步最适合先完成人工核验。人工核验通过并且用户明确确认后，才允许执行 `git add`、`git commit`、创建 `phase-24-complete` tag、推送 GitHub或创建 PR；tag 必须指向阶段 24 最终功能提交，不要移动任何已有阶段 tag。
+
+阶段 24 核验重点：
+
+```text
+检查 Conversation / Message 模型和级联删除是否符合会话持久化预期
+检查 /conversations 四个端点的正常与异常路径
+检查 /agent/query 不传 conversation_id 时是否保持阶段 23 兼容行为
+检查传 conversation_id 时是否正确加载历史、保存 user/assistant 消息并触发摘要压缩
+检查 agentic generate 节点是否只利用 history 做追问补全，不改变 retrieve/grade/rewrite 主链路
+检查前端聊天气泡、会话列表、新建、切换、删除和刷新恢复
+检查动态 HTML 是否继续使用 escapeHtml()
+检查全量测试 479 passed 和浏览器 desktop/mobile 验证记录
+确认尚未提交、尚未创建 phase-24-complete tag、尚未推送
+```
+
+阶段 0 到阶段 23 已完成并已有阶段 tag（含 `phase-21-complete`、`phase-22-complete`、`phase-23-complete`）。阶段 23 tag 指向最终功能提交 `dd7d953`、合并提交 `8fc1cfa`。
 
 阶段 18（语料扩充与评测/质量体系增强 + 中文全文语料与拒答边界校准）已完成人工核验、提交、创建 `phase-18-complete` tag（指向最终功能提交 `c56fc62`，**非** merge）并合并到 `main`（合并提交 `4db90c7`），已 push 到 GitHub。阶段 18 关键结论与经验：
 
@@ -1265,9 +1295,9 @@ source = 回答依据，必须能追溯到标题和 URL
 
 阶段 20 经验继续沿用：答案级 coverage_ratio 替代旧的关键词精度口径；responsibility_gate 已进入默认生成链路；不让真实 API 成为 CI/全量测试前提。
 
-### 阶段 21 — LangGraph Agentic RAG（当前待人工核验前）
+### 阶段 21 — LangGraph Agentic RAG（历史记录，已完成并合并）
 
-阶段 21 当前在 `claude/phase-21-langgraph-agentic-rag` 分支推进；从含阶段 20 合并的 `main` 出发。阶段 21 完成核心开发、回归和普通文档后，仍必须停在用户人工核验前：**不执行 `git add`、不 commit、不创建 `phase-21-complete` tag、不 push、不创建 PR**，直到用户明确确认。
+阶段 21 已完成、提交、创建 `phase-21-complete` tag，并合并到 `main`。以下保留阶段 21 的关键结论与经验，供后续阶段理解 agentic RAG 架构。
 
 阶段 21 关键结论与经验：
 

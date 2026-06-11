@@ -102,6 +102,18 @@ def test_agent_service_routes_answer_questions_to_citation_tool(tmp_path) -> Non
     assert result.sources
 
 
+def test_agent_service_handles_greeting_without_refusal_or_tools(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        result = make_service(db).query("你好")
+
+    assert result.tool_calls == []
+    assert not result.refused
+    assert "资料库 Agent" in result.answer
+    assert "寒暄问候" in result.reasoning_summary
+
+
 def test_agent_service_passes_history_to_citation_tool(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -173,6 +185,8 @@ def test_agent_service_rejects_invalid_parameters(tmp_path) -> None:
 
 
 def test_detect_intent_and_extract_source_id_are_stable() -> None:
+    assert detect_intent("你好") == "greeting"
+    assert detect_intent("Hello!") == "greeting"
     assert detect_intent("search filling capacity") == "search"
     assert detect_intent("请列出资料来源") == "list_sources"
     assert detect_intent("source_id=rfc_source_001") == "get_source_detail"

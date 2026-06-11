@@ -5,9 +5,13 @@ from app.db.repositories import (
     ChunkCreate,
     ChunkEmbeddingCreate,
     ChunkEmbeddingRepository,
+    ConversationCreate,
+    ConversationRepository,
     DocumentCreate,
     DocumentRepository,
+    MessageCreate,
     deserialize_embedding,
+    deserialize_metadata,
 )
 from app.db.session import create_sqlite_engine
 
@@ -168,3 +172,70 @@ def test_chunk_embedding_repository_updates_existing_embedding(tmp_path) -> None
     assert deserialize_embedding(updated_embedding.embedding_json) == [0.0, 1.0]
     assert updated_embedding.content_hash == "chunk-hash-v2"
     assert embedding_count == 1
+
+
+def test_conversation_repository_creates_lists_and_appends_messages(tmp_path) -> None:
+    database_path = tmp_path / "conversation_repository.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    with TestingSessionLocal() as db:
+        repository = ConversationRepository(db)
+        conversation = repository.create_conversation(ConversationCreate(title="新对话"))
+        user_message = repository.add_message(
+            message_data=MessageCreate(
+                conversation_id=conversation.id,
+                role="user",
+                content="请解释堆石混凝土的填充性能。",
+            )
+        )
+        assistant_message = repository.add_message(
+            message_data=MessageCreate(
+                conversation_id=conversation.id,
+                role="assistant",
+                content="填充性能主要与流动性、骨料孔隙和施工控制有关。",
+                mode="agentic",
+                metadata={"citations": ["[1]"], "iteration_count": 1},
+            )
+        )
+
+        saved_conversation = repository.get_conversation(conversation.id)
+        conversations = repository.list_conversations()
+        messages = repository.list_messages(conversation.id)
+
+    assert saved_conversation is not None
+    assert saved_conversation.title == "请解释堆石混凝土的填充性能。"
+    assert [item.id for item in conversations] == [conversation.id]
+    assert [message.id for message in messages] == [user_message.id, assistant_message.id]
+    assert messages[1].mode == "agentic"
+    assert deserialize_metadata(messages[1].metadata_json) == {
+        "citations": ["[1]"],
+        "iteration_count": 1,
+    }
+
+
+def test_conversation_repository_deletes_messages_with_conversation(tmp_path) -> None:
+    database_path = tmp_path / "conversation_delete.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    with TestingSessionLocal() as db:
+        repository = ConversationRepository(db)
+        conversation = repository.create_conversation()
+        repository.add_message(
+            MessageCreate(
+                conversation_id=conversation.id,
+                role="user",
+                content="第一轮问题",
+            )
+        )
+
+        deleted = repository.delete_conversation(conversation.id)
+        missing_deleted = repository.delete_conversation(conversation.id)
+        remaining_messages = repository.count_messages(conversation.id)
+
+    assert deleted is True
+    assert missing_deleted is False
+    assert remaining_messages == 0

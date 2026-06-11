@@ -8,6 +8,7 @@ class AgentQueryRequest(BaseModel):
     source_id: str | None = None
     history: list[str] = Field(default_factory=list, max_length=50)
     mode: str | None = None
+    conversation_id: int | None = Field(default=None, ge=1)
 
     @field_validator("question")
     @classmethod

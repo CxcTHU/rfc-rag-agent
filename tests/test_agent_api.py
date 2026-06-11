@@ -10,14 +10,20 @@ from app.api.chat import get_embedding_provider as get_chat_embedding_provider
 from app.db.models import Base
 from app.db.repositories import (
     ChunkCreate,
+    ConversationRepository,
     DocumentCreate,
     DocumentRepository,
+    MessageCreate,
     SourceCreate,
     SourceRepository,
 )
 from app.db.session import create_sqlite_engine, get_db
 from app.main import app
-from app.services.generation.chat_model import DeterministicChatModelProvider
+from app.services.generation.chat_model import (
+    ChatMessage,
+    ChatModelResult,
+    DeterministicChatModelProvider,
+)
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 
 
@@ -113,6 +119,54 @@ def source_record() -> SourceCreate:
     )
 
 
+class FailingChatModelProvider:
+    provider_name = "failing"
+    model_name = "failing-model"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        raise RuntimeError("provider timeout with sensitive raw body")
+
+
+class AnswerThenFailSummaryProvider:
+    provider_name = "partial"
+    model_name = "partial-model"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        self.calls += 1
+        if self.calls == 1:
+            return ChatModelResult(
+                answer="Filling capacity depends on SCC flowability [1].",
+                provider=self.provider_name,
+                model_name=self.model_name,
+            )
+        raise RuntimeError("summary timeout with sensitive raw body")
+
+
+def seed_agent_conversation_messages(conversation_id: int, count: int) -> None:
+    override_get_db = app.dependency_overrides[get_db]
+    db_generator = override_get_db()
+    db = next(db_generator)
+    try:
+        repository = ConversationRepository(db)
+        for index in range(count):
+            repository.add_message(
+                MessageCreate(
+                    conversation_id=conversation_id,
+                    role="user" if index % 2 == 0 else "assistant",
+                    content=f"历史消息 {index}",
+                    mode="default" if index % 2 else None,
+                )
+            )
+    finally:
+        try:
+            next(db_generator)
+        except StopIteration:
+            pass
+
+
 def test_agent_api_answers_with_tool_calls_and_citations(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
@@ -135,6 +189,24 @@ def test_agent_api_answers_with_tool_calls_and_citations(tmp_path) -> None:
     assert "引用式问答" in payload["reasoning_summary"]
 
 
+def test_agent_api_handles_greeting_without_refusal_or_tools(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={"question": "你好", "top_k": 2},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["question"] == "你好"
+    assert payload["refused"] is False
+    assert payload["tool_calls"] == []
+    assert payload["sources"] == []
+    assert payload["citations"] == []
+    assert "资料库 Agent" in payload["answer"]
+    assert "寒暄问候" in payload["reasoning_summary"]
+
+
 def test_agent_api_accepts_optional_history_for_contextual_answer(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
@@ -152,6 +224,106 @@ def test_agent_api_accepts_optional_history_for_contextual_answer(tmp_path) -> N
     assert payload["refused"] is False
     assert payload["tool_calls"][0]["tool_name"] == "answer_with_citations"
     assert payload["sources"][0]["title"] == "Agent API filling source"
+
+
+def test_agent_api_persists_messages_when_conversation_id_is_provided(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        conversation = client.post("/conversations", json={"title": "新对话"}).json()
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity?",
+                "top_k": 2,
+                "conversation_id": conversation["id"],
+            },
+        )
+        messages_response = client.get(f"/conversations/{conversation['id']}/messages")
+
+    assert response.status_code == 200
+    assert messages_response.status_code == 200
+    messages = messages_response.json()["messages"]
+    assert [message["role"] for message in messages] == ["user", "assistant"]
+    assert messages[0]["content"] == "What affects filling capacity?"
+    assert messages[1]["mode"] == "default"
+    assert messages[1]["content"] == response.json()["answer"]
+    assert messages[1]["metadata"]["citations"] == [1]
+    assert messages[1]["metadata"]["mode"] == "default"
+    assert messages_response.json()["conversation"]["title"] == "What affects filling capacity?"
+
+
+def test_agent_api_summarizes_long_conversation_after_query(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        conversation = client.post("/conversations", json={"title": "长对话"}).json()
+        seed_agent_conversation_messages(conversation["id"], count=16)
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity?",
+                "top_k": 2,
+                "conversation_id": conversation["id"],
+            },
+        )
+        messages_response = client.get(f"/conversations/{conversation['id']}/messages")
+
+    assert response.status_code == 200
+    messages = messages_response.json()["messages"]
+    roles = [message["role"] for message in messages]
+    assert roles.count("summary") == 1
+    summary = next(message for message in messages if message["role"] == "summary")
+    assert summary["metadata"]["kept_recent_non_summary_messages"] == 6
+    assert len(summary["metadata"]["summary_of_message_ids"]) == 12
+
+
+def test_agent_api_returns_404_for_missing_conversation_id(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity?",
+                "conversation_id": 999,
+            },
+        )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "conversation not found"
+
+
+def test_agent_api_returns_503_when_chat_provider_times_out(tmp_path) -> None:
+    failing_provider = FailingChatModelProvider()
+    with make_test_client(tmp_path) as client:
+        app.dependency_overrides[get_agent_chat_model_provider] = lambda: failing_provider
+        response = client.post(
+            "/agent/query",
+            json={"question": "What affects filling capacity?", "top_k": 2},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "chat model provider is unavailable or timed out"
+    assert "sensitive" not in response.text
+
+
+def test_agent_api_keeps_answer_when_summary_provider_times_out(tmp_path) -> None:
+    partial_provider = AnswerThenFailSummaryProvider()
+    with make_test_client(tmp_path) as client:
+        app.dependency_overrides[get_agent_chat_model_provider] = lambda: partial_provider
+        conversation = client.post("/conversations", json={"title": "长对话"}).json()
+        seed_agent_conversation_messages(conversation["id"], count=16)
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity?",
+                "top_k": 2,
+                "conversation_id": conversation["id"],
+            },
+        )
+        messages_response = client.get(f"/conversations/{conversation['id']}/messages")
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "Filling capacity depends on SCC flowability [1]."
+    messages = messages_response.json()["messages"]
+    assert [message["role"] for message in messages].count("summary") == 0
+    assert messages[-2]["role"] == "user"
+    assert messages[-1]["role"] == "assistant"
 
 
 def test_agent_api_agentic_mode_exposes_observability_fields(tmp_path) -> None:

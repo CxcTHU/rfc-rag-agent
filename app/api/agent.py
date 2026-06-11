@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.db.repositories import ConversationRepository, MessageCreate
 from app.db.session import get_db
 from app.schemas.agent import (
     AgentQueryRequest,
@@ -15,6 +16,10 @@ from app.services.agent.service import AgentQueryResult, AgentService
 from app.services.agent.routing import classify_query_complexity
 from app.services.agentic.graph import run_agentic_rag
 from app.services.agentic.state import AgenticResult
+from app.services.conversation.history import (
+    history_from_messages,
+    summarize_conversation_if_needed,
+)
 from app.services.generation.chat_model import (
     ChatModelProvider,
     create_chat_model_provider,
@@ -55,11 +60,25 @@ def query_agent(
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
 ) -> AgentQueryResponse:
+    conversation_repository = ConversationRepository(db)
+    conversation_history: list[str] = []
+    if request.conversation_id is not None:
+        conversation = conversation_repository.get_conversation(request.conversation_id)
+        if conversation is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="conversation not found",
+            )
+        conversation_history = history_from_messages(
+            conversation_repository.list_messages(request.conversation_id)
+        )
+
     effective_mode = request.mode
     if effective_mode is None:
         routing = classify_query_complexity(request.question)
         effective_mode = "agentic" if routing.complexity == "complex" else "default"
 
+    response: AgentQueryResponse
     if effective_mode == "agentic":
         try:
             agentic_result = run_agentic_rag(
@@ -67,13 +86,27 @@ def query_agent(
                 db=db,
                 embedding_provider=embedding_provider,
                 chat_model_provider=chat_model_provider,
+                history=conversation_history or request.history,
             )
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(exc),
             ) from exc
-        return agent_response_from_agentic_result(agentic_result)
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="chat model provider is unavailable or timed out",
+            ) from exc
+        response = agent_response_from_agentic_result(agentic_result)
+        persist_agent_conversation_messages(
+            repository=conversation_repository,
+            conversation_id=request.conversation_id,
+            question=request.question,
+            response=response,
+            chat_model_provider=chat_model_provider,
+        )
+        return response
 
     try:
         result = AgentService(
@@ -85,15 +118,28 @@ def query_agent(
             top_k=request.top_k,
             max_tool_calls=request.max_tool_calls,
             source_id=request.source_id,
-            history=request.history,
+            history=conversation_history or request.history,
         )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="chat model provider is unavailable or timed out",
+        ) from exc
 
-    return agent_response_from_result(result)
+    response = agent_response_from_result(result)
+    persist_agent_conversation_messages(
+        repository=conversation_repository,
+        conversation_id=request.conversation_id,
+        question=request.question,
+        response=response,
+        chat_model_provider=chat_model_provider,
+    )
+    return response
 
 
 def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryResponse:
@@ -249,3 +295,63 @@ def refusal_category_from_refusal(
     if "off-topic" in normalized_reason or "no domain anchor" in normalized_reason:
         return "off_topic"
     return "evidence_insufficient"
+
+
+def persist_agent_conversation_messages(
+    *,
+    repository: ConversationRepository,
+    conversation_id: int | None,
+    question: str,
+    response: AgentQueryResponse,
+    chat_model_provider: ChatModelProvider,
+) -> None:
+    if conversation_id is None:
+        return
+
+    repository.add_message(
+        MessageCreate(
+            conversation_id=conversation_id,
+            role="user",
+            content=question,
+        )
+    )
+    repository.add_message(
+        MessageCreate(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=response.answer,
+            mode=response.mode,
+            metadata=assistant_metadata_from_response(response),
+        )
+    )
+    try:
+        summarize_conversation_if_needed(
+            repository=repository,
+            conversation_id=conversation_id,
+            chat_model_provider=chat_model_provider,
+        )
+    except RuntimeError:
+        # Summary compression is a best-effort optimization. Do not fail an
+        # otherwise successful user answer when the model provider times out.
+        return
+
+
+def assistant_metadata_from_response(response: AgentQueryResponse) -> dict[str, object]:
+    payload = response.model_dump(mode="json")
+    return {
+        key: payload[key]
+        for key in [
+            "tool_calls",
+            "search_results",
+            "sources",
+            "citations",
+            "refused",
+            "refusal_reason",
+            "reasoning_summary",
+            "mode",
+            "workflow_steps",
+            "iteration_count",
+            "invalid_citations",
+            "refusal_category",
+        ]
+    }
