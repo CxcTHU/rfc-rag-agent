@@ -1,267 +1,197 @@
-# 阶段 23 发现与关键决策
+# 阶段 24 发现与关键决策
 
 ## 启动校准发现
 
-- 当前阶段目标：阶段 23「Agentic 评测闭环与自动模式路由」。
-- 目标分支：`codex/phase-23-agentic-eval-and-auto-routing`。
-- 阶段 22 最终提交：`1a5bf0c Complete phase 22 frontend agentic observability`。
-- `phase-22-complete`、`main`、`origin/main` 已确认指向同一提交 `1a5bf0cde5f8b8e76ff1dafa6225fc7fa9f82cfd`。
-- `phase-22-complete` 是 `main` 的祖先，且无需移动任何已有阶段 tag。
-- 阶段 21 完成 tag：`phase-21-complete` 指向 `085bff4 Complete phase 21 LangGraph agentic RAG`。
+- 当前阶段目标：阶段 24「多轮对话 UI 与会话持久化」。
+- 目标分支：`codex/phase-24-multi-turn-conversation`。
+- 阶段 23 最终功能提交：`dd7d953 Complete phase 23 agentic eval and auto routing`。
+- 阶段 23 合并提交：`8fc1cfa Merge phase 23 agentic eval and auto routing`。
+- `phase-23-complete` tag 指向 `dd7d953`，已确认未移动。
+- `main` 与 `origin/main` 均指向 `8fc1cfa`，且 `phase-23-complete` 是两者祖先；阶段 24 可以从正确基线启动。
+- 阶段 23 验收结论：PASS（2026-06-11 Claude 独立验收，463 passed，evaluation decision=reliable_auto_route_candidate）。
 
-## 阶段 21 agentic 评测问题
+## 当前 history 字段现状
 
-- 阶段 21 的 agentic 评测决策为 `inconclusive_high_error_rate`。
-- 已记录关键指标：`agentic_error_rate=0.684`，default/baseline 错误率为 `0.000`。
-- 阶段 21 验收背景中记录 agentic 侧出现 SSL/超时类调用失败，其中用户要求阶段 23 特别关注 SSL 错误 `14/19`。
-- 现有 `data/evaluation/stage21_agentic_comparison_summary.csv` 显示：
-  - `baseline_hybrid`：`non_refusal_total=15`、`p@1=0.000`、`avg_coverage=0.160`、`deep_top1=0.133`、`refusal_acc=1.000`、`error_rate=0.000`。
-  - `agentic_rag`：`non_refusal_total=6`、`non_refusal_errors=9`、`p@1=0.000`、`avg_coverage=0.358`、`deep_top1=0.167`、`refusal_acc=1.000`、`error_rate=0.684`。
-- 结论：阶段 21 结果不能证明 agentic 应成为默认路径。阶段 23 必须先隔离供应商 SSL/网络不稳定因素，形成 error_rate < 0.10 的可靠对照，再决定自动路由策略。
+位置：`app/schemas/agent.py`
 
-## Agentic vs Default 已有差异理解
+- `AgentQueryRequest.history` 是 `list[str]`，由前端传入，最大 50 条。
+- 经过 `history_items_must_not_be_blank` 验证器清洗空白条目。
+- 流向：`/agent/query` → `AgentService.query(history=...)` → `answer_with_citations(history=...)` → `CitationAnswerService.answer(history=...)`。
+- **局限**：
+  - 前端目前没有维护 history——`submitAgent()` 不传 history 字段。
+  - 服务端不持久化历史，刷新页面全部丢失。
+  - agentic 路径（`run_agentic_rag()`）不接受 history 参数。
+  - 没有会话分组，所有问答都是独立的。
 
-- default/baseline 在阶段 21 评测中稳定完成，但召回/命中指标较弱。
-- agentic 在成功样本上 `avg_coverage` 和 `deep_top1` 略高，但样本被高错误率严重污染，不能直接作为上线依据。
-- 阶段 22 因此只把 agentic 做成可视化 opt-in 能力和只读可观测字段，没有把 agentic 设为默认。
-- 阶段 23 的判断原则：如果可靠评测仍显示差异不大，应诚实写为“当前数据量/问题集下差异不大”，不能伪造达标。
+## 当前数据库模型
 
-## 当前 `detect_intent` 路由
+位置：`app/db/models.py`
 
-位置：`app/services/agent/service.py`
+- 已有表：`documents`、`sources`、`chunks`、`chunk_embeddings`、`qa_logs`。
+- `QuestionAnswerLog` 是扁平问答日志，没有 conversation_id 或 session 分组。
+- 没有 `Conversation` 或 `Message` 表。
+- SQLAlchemy 使用 `DeclarativeBase`，`Base.metadata.create_all` 自动建表。
 
-- `detect_intent(question, source_id=None)` 先检查显式 `source_id` 或问题中的 `source_id`，命中则返回 `get_source_detail`。
-- 包含 `来源详情`、`source detail`、`source详情` 时返回 `get_source_detail`。
-- 包含 `来源列表`、`资料来源`、`list sources`、`sources list` 时返回 `list_sources`。
-- 包含 `检索`、`搜索`、`查找`、`search`、`find`、`相关资料` 时返回 `search`。
-- 其他问题默认返回 `answer`。
-- 阶段 23 决策：不修改 `detect_intent` 内部逻辑；自动路由只决定 `/agent/query` 先走 default `AgentService` 还是 agentic LangGraph。
-
-## 当前 `AgentService` 链路
-
-位置：`app/services/agent/service.py`
-
-- `AgentService.query()` 会先规范化问题、校验 `top_k` 和 `max_tool_calls`。
-- 随后调用 `detect_intent()`。
-- `get_source_detail`：解析 `source_id`，缺失时返回拒答“请提供要查询的 source_id。”，命中时调用 `self.toolbox.get_source_detail()`。
-- `list_sources`：调用 `self.toolbox.list_sources(limit=top_k)`。
-- `search`：调用 `self.toolbox.hybrid_search_knowledge(normalized_question, top_k=top_k)`。
-- `answer`：调用 `self.toolbox.answer_with_citations(... retrieval_mode="hybrid" ...)`。
-- default 模式响应由 `app/api/agent.py` 的 `agent_response_from_result()` 转为 API schema，并返回 `mode="default"`。
-
-## 当前 Agentic LangGraph 链路
-
-位置：`app/services/agentic/`
-
-- 阶段 21 引入 LangGraph agentic RAG，API 中通过 `run_agentic_rag()` 调用。
-- 阶段 22 已把 agentic 结果中的 `workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category` 映射到前端只读可观测字段。
-- API 映射位置：`app/api/agent.py` 的 `agent_response_from_agentic_result()`。
-- 阶段 23 决策：agentic 链路作为复杂问题自动路由目标，但不能让真实 API 或供应商网络稳定性成为测试前提。
-
-## 当前 `/agent/query` API 行为
-
-位置：`app/api/agent.py`
-
-- 当前逻辑：`request.mode == "agentic"` 时调用 `run_agentic_rag()`；其他情况走 default `AgentService.query()`。
-- 阶段 23 目标：
-  - `mode` 未传时，先调用 `classify_query_complexity()`。
-  - `simple` 自动走 default。
-  - `complex` 自动走 agentic。
-  - 显式 `mode=default` 或 `mode=agentic` 时仍尊重用户选择，作为调试能力。
-
-## 当前前端 mode 控件
+## 当前前端 Agent 面板
 
 位置：`app/frontend/index.html`、`app/frontend/static/app.js`
 
-- 阶段 22 前端 Agent 面板中存在 `select[data-agent-mode]`，用户可手动选择 default / agentic。
-- `submitAgent()` 当前会读取该下拉框；只有选择 `agentic` 时才向请求体写入 `mode="agentic"`。
-- `renderAgentAnswer()` 已能展示响应里的 `mode` badge，`renderAgentWorkflowSteps()` 已能展示 agentic workflow steps。
-- 阶段 23 决策：移除手动选择语义，改为只读状态指示器；提交时不发送 `mode`，响应后展示 API 返回的实际 `mode`。
+- 单次问答模式：用户提交 → 覆盖 `data-agent-answer-box` → 覆盖 `data-agent-tools-list`。
+- 无聊天历史列表、无气泡布局、无会话切换。
+- `renderAgentAnswer(result)` 每次替换整个 answer box 的 innerHTML。
+- `renderAgentWorkflowSteps()` 和 `renderAgentToolCalls()` 每次替换整个 tools list。
+- 阶段 22/23 的可观测字段（mode badge、iteration badge、citation 无效标记、refusal_category）都在 `renderAgentAnswer()` 中渲染，需要在聊天气泡中保留。
+
+## 当前 agentic 路径与 history
+
+位置：`app/services/agentic/graph.py`、`app/services/agentic/state.py`
+
+- `run_agentic_rag(question, db, embedding_provider, chat_model_provider)` 不接受 history 参数。
+- `AgenticState` 中没有 history 字段。
+- 阶段 24 需要决定：是否让 agentic 路径也利用对话历史？
+- **决策**：agentic 路径的 generate 节点在调用 LLM 时可以把历史拼入 system/user prompt，但不改变图的结构（retrieve/grade/rewrite 仍基于当前问题）。实现方式：`run_agentic_rag()` 新增可选 `history` 参数，传入 generate_node 用于生成上下文。
+
+## LangChain Checkpoint vs 自建方案决策
+
+- **LangGraph Checkpointer** 的核心能力是持久化图的中间状态，支持断点续跑和时间旅行回放。
+- 本项目当前 agentic 图（6 个节点、MAX_ITERATIONS=3）几秒内跑完，断点续跑价值不大。
+- **ConversationSummaryBufferMemory** 的策略（保留最近 N 轮 + 旧轮摘要）是正确方向，但自建实现不到 50 行，不需要引入 LangChain memory 依赖。
+- **决策**：自建轻量会话持久化 + 摘要压缩，不引入 LangGraph Checkpointer 或 LangChain Memory 类。
+
+## 会话模型设计决策
+
+### Conversation 表
+- `id`: Integer PK
+- `title`: String(200)，默认用第一条用户消息的前 40 字符
+- `created_at`: DateTime UTC
+- `updated_at`: DateTime UTC（每次追加消息时更新）
+
+### Message 表
+- `id`: Integer PK
+- `conversation_id`: FK → conversations.id, CASCADE 删除
+- `role`: String(20)，枚举值 `user` / `assistant` / `summary`
+- `content`: Text，消息正文
+- `mode`: String(20) nullable，`default` / `agentic` / null（user 消息和 summary 为 null）
+- `metadata_json`: Text nullable，JSON 格式存储 assistant 消息的结构化信息（workflow_steps、citations、invalid_citations、refusal_category、iteration_count、refused、refusal_reason）
+- `created_at`: DateTime UTC
+
+### 为什么用 metadata_json 而不是单独列
+- workflow_steps 是变长结构化数据，不适合关系列。
+- 前端需要完整还原每条助手消息的展示状态（mode、citations、workflow steps），JSON 存储最灵活。
+- 读取时 JSON parse，写入时 JSON dump。
+- 不在 metadata_json 中存储 API key、token 或供应商原始响应。
+
+## 上下文摘要压缩策略
+
+- **阈值**：当会话的非摘要消息数超过 16 条（约 8 轮对话）时触发摘要。
+- **摘要范围**：从第 1 条消息到倒数第 6 条消息（保留最近 3 轮不被摘要）。
+- **摘要方式**：用 LLM 将被摘要消息压缩为一段中文文本（200-400 字），存为 `role="summary"` 的 Message。
+- **历史装配**：最新的 summary 消息 + summary 之后的所有消息 → 组装为 history 传入 LLM。
+- **渐进摘要**：如果后续对话又超过阈值，在上次摘要基础上再摘要（摘要包含上次摘要内容 + 新的旧消息）。
+- **确定性测试**：摘要函数接受 `chat_model_provider` 参数，测试时使用 DeterministicChatModelProvider。
+
+## 前端聊天 UI 设计决策
+
+- Agent 面板的 `answer-box` 区域改为 `chat-messages` 滚动容器。
+- 每条消息是一个 `<article class="chat-message chat-message--user/assistant">` 元素。
+- 用户气泡：显示问题文本，右对齐。
+- 助手气泡：显示回答文本 + mode badge + iteration badge + citations + refusal 信息，左对齐。
+- 工具调用/workflow 步骤面板保持独立侧边区域，点击某条助手消息时更新。
+- 输入区域保持底部固定。
+- 新消息追加到底部，自动滚动。
+- 阶段 24 的会话管理放在 Agent 面板顶部或左侧：会话列表 + 新建按钮。
+
+## 向后兼容策略
+
+- `AgentQueryRequest.conversation_id` 是可选的，默认 None。
+- 不传 conversation_id 时：行为与阶段 23 完全一致，不持久化，不加载历史。
+- 前端默认创建会话并传 conversation_id，但 API 层不强制。
+- `POST /chat` 端点不在阶段 24 改动范围内——多轮对话只影响 Agent 面板。
 
 ## 数据安全边界
 
-- 阶段 23 不新增爬虫或外部资料来源。
-- 评测输出只保存必要指标、问题 ID、类别、判断结果和摘要，不保存 API key、Bearer token、供应商原始敏感响应或受限全文。
-- deterministic provider / fixture 只用于隔离网络和供应商不稳定性，不让真实 API 成为 CI 或本地全量测试前提。
-- 前端新增/保留字段均为只读观测，不引入写工具或用户敏感操作。
+- `Message.metadata_json` 不存储 API key、Bearer token、供应商原始敏感响应或受限全文。
+- 会话删除时级联删除所有消息。
+- 摘要内容不暴露供应商内部格式或敏感信息。
+- 前端所有动态 HTML 继续使用 `escapeHtml()`。
 
-## 阶段 23 关键决策
+## Phase 1 设计文档发现
 
-- 先做可靠评测，再接入自动路由。
-- 规则式复杂度分类优先，不引入 LLM 判断。
-- 自动路由只在 `mode` 为空时生效，显式 `mode` 保留调试能力。
-- 前端用户体验从“选择模式”改为“查看系统本次实际走了哪条链路”。
-- 阶段收尾停在未提交状态，等待用户人工核验。
+- `docs/stage24_multi_turn_conversation.md` 已作为阶段 24 的普通设计文档落地，后续代码实现以它作为验收锚点。
+- 阶段 24 只把多轮会话接入 `/agent/query`，不改 `POST /chat`，避免把变更面扩大到已有引用式问答 API。
+- `request.history` 继续保留为兼容字段，但当前前端默认使用服务端 `conversation_id` 历史；当两者同时存在时，服务端会话历史优先，减少客户端伪造或重复历史带来的混乱。
+- agentic history 只进入 generate 节点，不改变 retrieve/grade/rewrite 的主问题驱动结构，避免把阶段 24 误扩展成跨会话长期记忆。
 
-## Phase 1 设计决策
+## Phase 2 模型层发现
 
-- 新增设计文档：`docs/stage23_agentic_eval_and_auto_routing.md`。
-- 评测策略采用“两层评测”：默认 deterministic provider / fixture 隔离 SSL、真实 API、网络和配额问题；真实 provider 只作为人工可选复核。
-- 阶段 23 对照集至少覆盖 `simple_concept`、`complex_rewrite`、`complex_compare`、`complex_multi_evidence`。
-- 阶段 23 输出建议落在 `data/evaluation/stage23_agentic_auto_routing_*.csv`，只保存指标和摘要，不保存 secrets 或受限全文。
-- 路由函数命名确定为 `classify_query_complexity`，输出 `simple` / `complex` 及判断依据。
-- `/agent/query` 的 `mode` 为空时才自动路由；显式 `mode` 继续作为调试覆盖。
-- 前端改造方向确定为只读状态指示器：请求前显示系统自动，响应后显示本次实际 `mode`。
-- 设计文档当前先定义合同，最终评测结论会在 Phase 2/6 后回填同步。
+- 现有项目没有 Alembic 迁移链路，测试和本地启动依赖 `Base.metadata.create_all` 自动建表；阶段 24 继续沿用这个模式新增 `conversations` 和 `messages`。
+- `Conversation.messages` 使用 ORM 级 `cascade="all, delete-orphan"`，repository 删除会话时会删除同会话消息；这比只依赖 SQLite 外键开关更贴合当前测试环境。
+- `Message.metadata_json` 使用 `ensure_ascii=False`，可以保存中文拒答原因或摘要元数据，同时保持 JSON 结构紧凑。
+- `ConversationRepository.add_message()` 在第一条 user 消息追加时自动把默认标题更新为用户问题前 40 字符，满足阶段 24 默认标题策略。
 
-## Phase 2 评测闭环发现
+## Phase 3 API 层发现
 
-- 阶段 21 的真实 provider 路线保留为历史证据，阶段 23 不直接覆盖 `scripts/evaluate_stage21_agentic_rag.py`。
-- 新增 `scripts/evaluate_stage23_agentic_auto_routing.py`，默认使用 deterministic chat/embedding provider 和 in-memory SQLite fixture。
-- 阶段 23 fixture 覆盖：
-  - `simple_concept`：简单填充能力概念题，default 与 agentic 均应稳定回答。
-  - `complex_compare`：带 `Search and compare` 的复杂对比题，default `detect_intent` 会解析为 search-only，agentic 会进入 LangGraph 生成 answer-like 响应，这是当前可复现的 agentic 行为收益。
-  - `complex_multi_evidence`：跨填充、温控、施工质量的多证据题，当前 default 与 agentic 主要表现为稳定 parity。
-  - `refusal`：off-topic 拒答边界，default 与 agentic 都应拒答。
-- 新增测试 `tests/test_stage23_agentic_eval.py`，验证评测集覆盖、输出文件、`error_rate < 0.10`、至少一个 agentic gain，以及不包含 `api_key` / `bearer` / `authorization`。
-- 关键结论：阶段 23 评测先证明 SSL/真实 provider 错误已被 deterministic fixture 隔离；agentic 增益在当前 fixture 下主要体现在复杂“检索并比较”任务避免 default search-only 响应，其余复杂多证据题暂记录为差异不大或 parity。
-- 已运行 `scripts/evaluate_stage23_agentic_auto_routing.py`：
-  - default：`errors=0`、`error_rate=0.000`、`answer_like_count=2`。
-  - agentic：`errors=0`、`error_rate=0.000`、`answer_like_count=3`、`agentic_gain_count=1`。
-  - decision：`reliable_auto_route_candidate`。
-- 已运行 `tests/test_stage23_agentic_eval.py -q`：`3 passed`。
+- `/conversations` 使用空路径注册 `POST ""` / `GET ""`，最终暴露为 `POST /conversations` 和 `GET /conversations`，符合 FastAPI 当前路由风格。
+- API 响应不把数据库内部字段 `metadata_json` 直接暴露给前端，而是转换为 `metadata` 对象，前端可以直接渲染 citations/workflow/refusal 等结构。
+- `GET /conversations` 的 `limit` 在路由内夹紧到 1-100，避免前端误传过大分页参数导致一次性读取过多会话。
+- 目前会话 API 没有认证/用户隔离，这是阶段 24 明确边界；后续如果加登录系统，需要给 `Conversation` 增加 owner/user 维度并更新列表过滤。
 
-## Phase 3 路由规则发现
+## Phase 4 `/agent/query` 会话集成发现
 
-- 新增模块：`app/services/agent/routing.py`。
-- 新增函数：`classify_query_complexity(question)`。
-- 新增结果类型：`QueryComplexityResult`，字段包含：
-  - `complexity`：`simple` 或 `complex`。
-  - `score`：规则累计分数，只用于解释和测试，不直接暴露为用户承诺。
-  - `reasons`：判断依据。
-  - `signals`：命中的规则信号。
-- 复杂度规则只看问题文本，不调用 LLM。
-- 强复杂信号包括：comparison、process/mechanism、multi_aspect、cross_evidence_or_rewrite、search_analysis_combo。
-- 边界修正：短的 “What affects ...?” 概念题即使命中长度和因果词，也保持 `simple`；必须有足够分数或强复杂信号才判 `complex`。
-- 直接 source/list/source detail 请求保持 `simple`，交给 default `AgentService` 内部 `detect_intent` 处理。
-- 已运行 `tests/test_agent_routing.py -q`：`6 passed`。
+- default AgentService 已经支持 `history`，阶段 24 只需要在 API 层把会话消息装配成 `list[str]` 传入，避免重复改 Brain 链路。
+- agentic 链路原先不支持 history；阶段 24 采用最小改动：`run_agentic_rag(..., history=None)` -> `AgenticState.history` -> generate 节点用 `rewrite_contextual_question()` 补全上下文追问。
+- 传入 `conversation_id` 时，API 成功响应后才追加 user/assistant 消息；如果会话不存在或请求校验失败，不留下半条消息。
+- 助手消息 metadata 当前保存响应里的可观测字段，包括 tool_calls、search_results、sources、citations、workflow_steps、refusal_category 等，供前端刷新恢复。
+- 历史装配已经预留 summary 规则：如果存在 summary，使用最新 summary 及其后的消息；Phase 5 会补自动摘要生成。
 
-## Phase 4 API 自动分流发现
+## Phase 5 摘要压缩发现
 
-- 修改位置：`app/api/agent.py`。
-- `/agent/query` 现在先计算 `effective_mode`：
-  - 显式 `request.mode` 存在时直接使用。
-  - `request.mode is None` 时调用 `classify_query_complexity(request.question)`。
-  - `complex` 自动走 `run_agentic_rag()`。
-  - `simple` 自动走 default `AgentService.query()`。
-- `detect_intent` 内部逻辑未修改；只有进入 default `AgentService` 后才继续判断 answer/search/list_sources/get_source_detail。
-- 新增 API 测试覆盖：
-  - 复杂题未传 `mode` 自动返回 `mode="agentic"`。
-  - 复杂题显式 `mode="default"` 返回 `mode="default"` 且走 `hybrid_search_knowledge`。
-  - 简单题显式 `mode="agentic"` 返回 `mode="agentic"`。
-- 已运行 `tests/test_agent_routing.py tests/test_agent_api.py -q`：`17 passed`。
+- 摘要触发不能只看全会话非 summary 总数，否则创建第一条 summary 后下一轮会继续重复摘要旧消息；当前实现只统计“最新 summary 之后”的非 summary 消息数。
+- 当前策略是超过 16 条非 summary 消息后摘要较旧消息，并保留最近 6 条；这对应大约保留最近 3 轮对话。
+- summary 消息追加在会话末尾，下一轮 `history_from_messages()` 会选中最新 summary 及其后的消息；旧消息保留在 DB，但不再进入默认 history。
+- 摘要 provider 使用同一个 `ChatModelProvider` 接口；deterministic provider 可以跑通测试，真实 provider 只在实际运行时被调用，不进入 CI 前提。
 
-## Phase 5 前端只读模式指示器发现
+## Phase 6 前端聊天 UI 发现
 
-- 修改 `app/frontend/index.html`：
-  - 移除 `select[data-agent-mode]`。
-  - 新增只读 `output[data-agent-mode-status]`，初始显示“系统自动”。
-- 修改 `app/frontend/static/app.js`：
-  - 删除读取 `document.querySelector("[data-agent-mode]")` 的逻辑。
-  - 删除向请求体写入 `body.mode = "agentic"` 的逻辑。
-  - 新增 `updateAgentModeStatus(mode)`。
-  - 提交前显示“判断中”，响应后由 `renderAgentAnswer()` 使用 `result.mode` 更新为 `default` 或 `agentic`。
-- 修改 `app/frontend/static/styles.css`：
-  - 新增 `.readonly-field` 和 `.mode-indicator` 样式，保持 Agent 控制区布局稳定。
-- 修改 `tests/test_frontend_app.py`：
-  - 断言前端不再有 mode 下拉框和 agentic option。
-  - 断言 JS 不再写 `body.mode = "agentic"`。
-  - 断言只读状态指示器和更新函数存在。
-- 已运行 `tests/test_frontend_app.py tests/test_agent_api.py tests/test_agent_routing.py -q`：`23 passed`。
+- 为了减少破坏面，前端保留 `data-agent-answer-box` 作为 JS 和测试锚点，但语义从单个 answer 容器变为 `chat-messages` 列表。
+- `renderAgentAnswer()` 现在追加助手气泡，而不是替换 `innerHTML`；用户气泡由 `appendAgentUserMessage()` 在请求发出前立即追加。
+- 阶段 23 验收提到的“请求失败后 mode 指示器停在判断中”已在 Agent submit catch 中修复为 `updateAgentModeStatus("auto")`。
+- Phase 6 暂不传 `conversation_id`，因为 Phase 7 会统一接入会话创建、切换和刷新恢复，避免先写一半前端状态管理。
 
-## Phase 6 回归验证发现
+## Phase 7 前端会话管理发现
 
-- 阶段 21/22/23 聚焦回归：
-  - 命令：`.\.venv\Scripts\python.exe -m pytest tests\test_stage23_agentic_eval.py tests\test_agent_routing.py tests\test_agent_api.py tests\test_frontend_app.py tests\test_agentic_graph.py tests\test_stage21_agentic_eval.py -q`
-  - 结果：`51 passed in 4.32s`。
-- 全量测试：
-  - 命令：`.\.venv\Scripts\python.exe -m pytest -q`
-  - 结果：`463 passed in 31.21s`。
-- 浏览器验证：
-  - 临时服务：`http://127.0.0.1:8001`，验证后已停止。
-  - 桌面视口：无 `select[data-agent-mode]`；`output[data-agent-mode-status]` 文本为“系统自动”；console errors=0；无横向溢出。
-  - 移动视口 `390x844`：无 `select[data-agent-mode]`；只读状态仍可见；无横向溢出。
-- 浏览器验证未提交 Agent 问题，避免触发真实 provider；自动路由行为已由 deterministic API 测试覆盖。
+- 前端初始化顺序现在是 health -> workspace data -> agent conversations；这样资料工作台和会话工作台都能在同一次页面加载完成。
+- 页面无会话时自动创建 `新对话`，因此用户第一次打开 Agent 面板即可直接提交问题。
+- 发送 Agent 请求前如果 `state.currentConversationId` 为空，会先创建会话，再把 `conversation_id` 写入 `/agent/query` 请求体。
+- 切换会话时前端用服务端返回的 message metadata 重建助手气泡；summary 消息以居中摘要气泡显示。
+- Phase 7 仍未引入登录系统，会话列表是本地应用实例级别；这是阶段 24 明确边界。
 
-## Phase 7 普通文档同步发现
+## Phase 8 回归验证发现
 
-- 已更新 `README.md`：
-  - 当前阶段改为阶段 23「Agentic 评测闭环与自动模式路由」。
-  - 记录当前分支、未提交/未打 tag/未推送状态、阶段 22 合并基线、评测结果、自动路由、前端只读指示器、测试结果和边界。
-  - 阶段 22 要点改为历史基线，并说明阶段 23 已将手动模式选择升级为只读状态指示。
-- 已更新 `docs/progress.md`：
-  - 新增阶段 23 最新状态块。
-  - 记录 Git/tag/main 起点、完成内容、评测结论、验证结果、遗留风险、下一步和面试表达。
-  - 阶段 22 状态移动为历史状态，避免把阶段 22 误写为当前阶段。
-- 已更新 `docs/architecture.md`：
-  - 架构主链路加入 Agent 自动模式路由。
-  - 新增阶段 23 自动路由架构段落，说明 `/agent/query` 的 `effective_mode` 分支、`classify_query_complexity`、default `AgentService`、agentic LangGraph 和前端 `data-agent-mode-status`。
-  - 记录阶段 23 评测脚本与 CSV 产物的架构位置。
-- 已更新 `docs/data_sources.md`：
-  - 明确阶段 23 不新增外部资料来源、不新增爬虫、不让真实 API 成为测试前提。
-  - 登记阶段 23 设计文档、评测脚本和三份 CSV 的用途与安全边界。
-- 已更新 `AGENT.MD`：
-  - 增加阶段 23 分支名。
-  - 将阶段 22 前端 Agentic 规则升级为阶段 23 之后的前端 Agentic 与自动路由规则。
-  - 固化 `/agent/query` 自动路由只在 `mode` 为空时生效、显式 mode 必须尊重、`detect_intent` 不为自动路由改内部规则、前端只读模式指示器和 deterministic 评测结论边界。
-- 窄范围校验：
-  - 前端源码中旧 `document.querySelector("[data-agent-mode]")` 和 `body.mode = "agentic"` 已不存在。
-  - `rg` 命中的 `select[data-agent-mode]` / `mode 下拉框` 均为历史说明、测试断言或计划记录，不是运行时旧控件。
-- 遇到并处理的操作错误：
-  - 第一次读取 Planning with Files skill 使用了错误路径 `C:\Users\admin\.agents\...`，已改用 `C:\Users\admin\.codex\skills\planning-with-files\SKILL.md`。
-  - 第一次 `rg` 在 PowerShell 中使用双引号正则导致管道符被错误拆分，已改用单引号正则重跑。
-  - 浏览器验证留下 `.playwright-mcp/page-*.yml` 临时文件，已确认是验证快照，后续在最终清理中移除，不作为阶段 23 产物。
+- 全量测试结果为 479 passed，高于阶段 23 的 463 passed 基线，说明阶段 24 新增会话、摘要和前端测试后没有破坏既有质量门。
+- 浏览器桌面视口验证显示：会话管理栏、聊天消息区、新建/删除会话按钮均存在；旧的用户可编辑 mode 下拉不再出现，阶段 23 自动路由只读指示器语义保留。
+- 浏览器提交使用“查看来源详情 + 缺失 source_id”路径触发 `/agent/query`，该路径不需要真实模型调用；页面追加用户气泡和 Agent 气泡，并展示 `refusal_category`，可证明聊天 UI 的基本追加渲染和元数据展示可用。
+- 浏览器移动视口 `390x844` 下，`.conversation-bar` 和聊天列表宽度都收敛在页面宽度内，没有横向溢出。
+- 阶段 24 的质量门继续保持“真实 API 不是 CI 或本地全量测试前提”；浏览器验收也优先使用确定性/非模型路径。
 
-## Phase 8 Obsidian 收尾发现
+## Phase 9 文档与 Obsidian 收尾发现
 
-- 已阅读 `obsidian-vault/模板/Phase 汇报模板.md`，确认每篇小 Phase 汇报必须包含固定 10 项。
-- 已参考阶段 22 的 Obsidian 目录、阶段页和 Phase 汇报索引格式。
-- 新增阶段 23 Obsidian 目录：
-  - `obsidian-vault/阶段汇报/阶段 23 - Agentic 评测闭环与自动模式路由/`
-- 新增阶段 23 汇报文件：
-  - `阶段 23 Phase 汇报索引.md`
-  - `阶段 23 Phase 0 - 启动校准.md`
-  - `阶段 23 Phase 1 - 阶段 23 设计文档.md`
-  - `阶段 23 Phase 2 - Agentic 评测修复与可靠对照.md`
-  - `阶段 23 Phase 3 - 问题复杂度路由规则.md`
-  - `阶段 23 Phase 4 - API 自动分流集成.md`
-  - `阶段 23 Phase 5 - 前端只读模式指示器.md`
-  - `阶段 23 Phase 6 - 回归验证与质量门.md`
-  - `阶段 23 Phase 7 - 普通文档同步.md`
-  - `阶段 23 Phase 8 - Obsidian 收尾.md`
-  - `阶段 23 Phase 9 - 人工核验待提交状态.md`
-- 新增阶段总览页：`obsidian-vault/阶段/阶段 23 - Agentic 评测闭环与自动模式路由.md`。
-- 已更新全局入口：
-  - `obsidian-vault/阶段汇报索引.md`
-  - `obsidian-vault/阶段索引.md`
-  - `obsidian-vault/首页.md`
-- 已校正阶段 22 Obsidian 页和阶段 22 Phase 汇报索引的状态，反映 `phase-22-complete` 已完成并合并到 `main`。
-- 已校验阶段 23 目录包含 10 篇小 Phase 草稿和 1 个索引。
-- 已校验每篇阶段 23 小 Phase 汇报均包含 `## 10. 面试表达`、阶段双链和汇报索引双链。
-- 操作问题：
-  - 第一次读取模板路径未加引号，PowerShell 将 `Phase 汇报模板.md` 拆成多个参数；已改用带引号路径成功读取。
+- `README.md` 顶部已从阶段 23 更新为阶段 24 待人工核验状态，并记录全量测试 479 passed、未提交/未打 tag/未推送边界。
+- `docs/progress.md` 作为权威进度记录，已新增阶段 24 最新状态；阶段 23 改为历史状态。
+- `docs/architecture.md` 已新增 Conversation 层和阶段 24 多轮会话架构，明确 `/chat` 不受影响，`/agent/query conversation_id` 是多轮开关。
+- `docs/data_sources.md` 已说明阶段 24 不新增外部资料来源，新增的是本地会话运行数据；`Message.metadata_json` 不允许保存密钥、供应商原始响应或受限全文。
+- `AGENT.MD` 已补阶段 24 之后的多轮会话规则，并把当前推荐第一步改为人工核验阶段 24。
+- Obsidian 已新增阶段页、阶段 24 Phase 汇报索引、Phase 0-9 小汇报和 4 篇关键知识点笔记；小 Phase 汇报依据 `progress.md`、`task_plan.md`、`findings.md` 和测试结果回填。
+- 阶段 24 仍停在人工核验前状态；后续 agent 不得提交、打 tag 或 push，除非用户明确确认。
 
-## Phase 9 最终待人工核验发现
+## 人工测试反馈修复发现
 
-- 已清理浏览器验证遗留的 `.playwright-mcp/page-*.yml` 临时快照目录；该目录不是阶段 23 产物。
-- 阶段 23 deterministic 评测复跑结果：
-  - default：`errors=0`、`error_rate=0.000`、`answer_like=2`。
-  - agentic：`errors=0`、`error_rate=0.000`、`answer_like=3`、`agentic_gain_count=1`。
-  - decision：`reliable_auto_route_candidate`。
-- 全量测试复跑结果：`463 passed in 27.31s`。
-- `git status -sb` 显示当前分支为 `codex/phase-23-agentic-eval-and-auto-routing`，存在阶段 23 修改和新增文件，未 staged。
-- `git tag --list phase-23-complete` 无输出，说明尚未创建阶段 23 完成 tag。
-- `HEAD`、`phase-22-complete`、`main`、`origin/main` 仍指向 `1a5bf0c Complete phase 22 frontend agentic observability`，阶段 23 改动保持为未提交工作树状态。
-- 最终状态文本校验：已检索“进行中”和 Phase 9“待最终复核”状态，无有效残留，说明 Planning with Files 和 Phase 9 Obsidian 汇报不再停留在进行中状态。
-- `obsidian-vault/` 被 `.gitignore` 忽略；阶段 23 Obsidian 草稿已本地更新，但不会出现在普通 `git status` 的待提交列表中。
-- 操作问题：一次最终 `rg` 校验使用了包含换行和管道符的双引号正则，在 PowerShell 中被错误拆分；已改用简单单引号模式重跑。
-- 后续建议：用户人工核验通过后，再执行 `git add`、`git commit`、创建 `phase-23-complete` tag，并按项目规则推送；提交前不要移动 `phase-22-complete` 或其他已有阶段 tag。
-
-## 提交/合并确认
-
-- 2026-06-11，用户明确要求：阅读 `AGENT.MD`，按项目要求提交阶段 23 的整体开发工作，并上传/merge 至 GitHub。
-- 因此阶段 23 提交边界已解除，可以执行 `git add`、`git commit`、创建 `phase-23-complete` tag、推送分支和合并到 `main`。
-- 仍需遵守阶段 tag 规则：`phase-23-complete` 必须指向阶段 23 最终功能提交；不得移动 `phase-22-complete` 或其他已有阶段 tag。
-- 提交前复跑阶段 23 deterministic 评测：default/agentic `error_rate=0.000`，decision `reliable_auto_route_candidate`。
-- 提交前复跑全量测试：`463 passed in 33.84s`。
-- 提交前轻量敏感 token 模式扫描无命中。
+- “水化热的影响因素”在本地真实 `mimo-v2.5-pro` 配置下约 27.6 秒返回；用户感知的“一直不回”主要来自真实 provider 等待时间长，加上前端没有 busy 锁和明确超时提示。
+- 前端应把“运行中”和“超时失败”作为一等状态，否则用户容易重复点击并堆积临时 user 气泡。
+- 阶段 24 的 summary 压缩是优化路径，不应影响主回答返回；provider 超时时应跳过本轮 summary，而不是把成功回答变成失败。
+- 后端返回 provider 失败时不能透传供应商原始响应或敏感 body；当前统一返回 `503 chat model provider is unavailable or timed out`。
+- 用户等待模型生成时，反馈最好放在聊天流里，而不只是按钮或顶部状态栏。阶段 24 追加 `正在思考...` 临时 Agent 气泡后，用户能在对话上下文里确认系统仍在生成。
+- 输入 `堆石` 实测可以正常返回答案；用户看到 `error` 且无输出的核心问题是前端失败态没有把错误原因放进聊天流，并且本地可能同时运行旧 8000/8001 uvicorn 进程导致访问到旧静态资源。
+- `你好` 这类寒暄不应进入 RAG 检索和拒答判断；它属于产品引导意图。AgentService 增加 greeting 分支后，可避免把正常社交开场误判成资料不足。
+- 前端产品入口应收敛到 Agent 对话框。`/chat` 仍保留为后端单轮 RAG baseline 和回归测试接口，但普通用户首页不再展示独立“问答”面板，避免用户困惑“问答”和“Agent”两个入口的差异。
+- 首页的“检索 + 片段”面板同样更像工程调试入口：它直接暴露 keyword/vector/hybrid 召回和 chunk 查看，不生成最终回答。普通用户主界面隐藏该面板，避免把底层召回能力和 Agent 产品入口并列；`/search`、`/search/vector`、`/search/hybrid` 后端 API 仍保留为 Agent 底层能力、回归测试和检索质量调试入口。

@@ -1,11 +1,20 @@
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Chunk, ChunkEmbedding, Document, QuestionAnswerLog, Source
+from app.db.models import (
+    Chunk,
+    ChunkEmbedding,
+    Conversation,
+    Document,
+    Message,
+    QuestionAnswerLog,
+    Source,
+    utc_now,
+)
 
 
 @dataclass(frozen=True)
@@ -51,6 +60,20 @@ class QuestionAnswerLogCreate:
     retrieval_mode: str
     refused: bool
     refusal_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ConversationCreate:
+    title: str = "新对话"
+
+
+@dataclass(frozen=True)
+class MessageCreate:
+    conversation_id: int
+    role: str
+    content: str
+    mode: str | None = None
+    metadata: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -306,6 +329,84 @@ class SourceRepository:
         return self.db.scalar(statement) or 0
 
 
+class ConversationRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def create_conversation(
+        self,
+        conversation_data: ConversationCreate | None = None,
+        commit: bool = True,
+    ) -> Conversation:
+        data = conversation_data or ConversationCreate()
+        title = normalize_conversation_title(data.title)
+        conversation = Conversation(title=title)
+        self.db.add(conversation)
+        if commit:
+            self.db.commit()
+            self.db.refresh(conversation)
+        return conversation
+
+    def get_conversation(self, conversation_id: int) -> Conversation | None:
+        statement = select(Conversation).where(Conversation.id == conversation_id)
+        return self.db.scalar(statement)
+
+    def list_conversations(self, limit: int = 50) -> list[Conversation]:
+        statement = (
+            select(Conversation)
+            .order_by(Conversation.updated_at.desc(), Conversation.id.desc())
+            .limit(limit)
+        )
+        return list(self.db.scalars(statement).all())
+
+    def list_messages(self, conversation_id: int) -> list[Message]:
+        statement = (
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at, Message.id)
+        )
+        return list(self.db.scalars(statement).all())
+
+    def add_message(
+        self,
+        message_data: MessageCreate,
+        commit: bool = True,
+    ) -> Message:
+        conversation = self.get_conversation(message_data.conversation_id)
+        if conversation is None:
+            raise ValueError(f"conversation {message_data.conversation_id} does not exist")
+        message = Message(
+            conversation_id=message_data.conversation_id,
+            role=message_data.role,
+            content=message_data.content,
+            mode=message_data.mode,
+            metadata_json=serialize_metadata(message_data.metadata),
+        )
+        conversation.updated_at = utc_now()
+        if message_data.role == "user" and is_default_conversation_title(conversation.title):
+            conversation.title = title_from_message(message_data.content)
+        self.db.add(message)
+        if commit:
+            self.db.commit()
+            self.db.refresh(message)
+        return message
+
+    def delete_conversation(self, conversation_id: int, commit: bool = True) -> bool:
+        conversation = self.get_conversation(conversation_id)
+        if conversation is None:
+            return False
+        self.db.delete(conversation)
+        if commit:
+            self.db.commit()
+        return True
+
+    def count_messages(self, conversation_id: int, role: str | None = None) -> int:
+        statement = select(func.count(Message.id)).where(Message.conversation_id == conversation_id)
+        if role is not None:
+            statement = statement.where(Message.role == role)
+        return self.db.scalar(statement) or 0
+
+
 class QuestionAnswerLogRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -365,3 +466,36 @@ def deserialize_int_list(values_json: str) -> list[int]:
     if not isinstance(values, list):
         raise ValueError("values_json must contain a JSON list")
     return [int(value) for value in values]
+
+
+def normalize_conversation_title(title: str) -> str:
+    normalized = title.strip()
+    if not normalized:
+        return "新对话"
+    return normalized[:200]
+
+
+def is_default_conversation_title(title: str) -> bool:
+    return title.strip() in {"", "新对话", "Untitled conversation"}
+
+
+def title_from_message(content: str, max_length: int = 40) -> str:
+    normalized = " ".join(content.split())
+    if not normalized:
+        return "新对话"
+    return normalized[:max_length]
+
+
+def serialize_metadata(metadata: Mapping[str, object] | None) -> str | None:
+    if metadata is None:
+        return None
+    return json.dumps(metadata, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def deserialize_metadata(metadata_json: str | None) -> dict[str, object]:
+    if not metadata_json:
+        return {}
+    values = json.loads(metadata_json)
+    if not isinstance(values, dict):
+        raise ValueError("metadata_json must contain a JSON object")
+    return dict(values)

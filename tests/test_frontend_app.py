@@ -14,12 +14,20 @@ def test_frontend_index_is_served() -> None:
     assert 'data-sources-body' in response.text
     assert 'data-documents-body' in response.text
     assert 'data-source-filter' in response.text
+    assert '<div class="operations-grid" hidden style="display: none">' in response.text
+    assert '<div class="answer-grid" hidden style="display: none">' in response.text
     assert 'data-chat-form' in response.text
     assert 'data-agent-form' in response.text
     assert 'data-agent-mode-status' in response.text
     assert '<select data-agent-mode' not in response.text
     assert '<option value="agentic">agentic</option>' not in response.text
     assert 'data-agent-tools-list' in response.text
+    assert 'data-agent-chat-list' in response.text
+    assert 'data-conversation-list' in response.text
+    assert 'data-new-conversation' in response.text
+    assert 'data-delete-conversation' in response.text
+    assert 'data-refresh-conversations' in response.text
+    assert 'class="chat-messages"' in response.text
     assert 'data-citations-list' in response.text
     assert 'data-search-form' in response.text
     assert '<option value="hybrid">hybrid</option>' in response.text
@@ -38,12 +46,36 @@ def test_frontend_static_assets_are_served() -> None:
     assert "/documents" in response.text
     assert "/chat" in response.text
     assert "/agent/query" in response.text
+    assert "/conversations" in response.text
     assert "/search/vector" in response.text
     assert "/search/hybrid" in response.text
     assert "renderSources" in response.text
     assert "renderCitations" in response.text
     assert "renderAgentToolCalls" in response.text
     assert "renderAgentWorkflowSteps" in response.text
+    assert "appendAgentUserMessage" in response.text
+    assert "appendAgentAssistantMessage" in response.text
+    assert "appendAgentSummaryMessage" in response.text
+    assert "appendAgentThinkingMessage" in response.text
+    assert "appendAgentErrorMessage" in response.text
+    assert "正在思考" in response.text
+    assert "pendingThinkingMessage?.remove()" in response.text
+    assert "生成失败" in response.text
+    assert "setConversationListPlaceholder" in response.text
+    assert "加载失败" in response.text
+    assert "loadAgentConversations" in response.text
+    assert "loadConversationMessages" in response.text
+    assert "createAgentConversation" in response.text
+    assert "deleteCurrentConversation" in response.text
+    assert "agentRequestInFlight" in response.text
+    assert "setAgentBusy" in response.text
+    assert "setAgentPanelStatus" in response.text
+    assert "timeoutMs: 45000" in response.text
+    assert "请求超时" in response.text
+    assert "pendingUserMessage.remove()" not in response.text
+    assert "body.conversation_id = state.currentConversationId" in response.text
+    assert "scrollAgentChatToBottom" in response.text
+    assert 'insertAdjacentHTML(\n    "beforeend"' in response.text
     assert "workflow_steps" in response.text
     assert "iteration_count" in response.text
     assert "invalid_citations" in response.text
@@ -54,7 +86,16 @@ def test_frontend_static_assets_are_served() -> None:
     assert "[data-agent-mode-status]" in response.text
     assert "[data-agent-mode]" not in response.text
     assert 'body.mode = "agentic"' not in response.text
+    assert 'updateAgentModeStatus("auto")' in response.text
     assert "reindexSource" in response.text
+
+    styles = client.get("/static/styles.css")
+    assert styles.status_code == 200
+    assert "[hidden]" in styles.text
+    assert "display: none !important" in styles.text
+    assert "chat-message--thinking" in styles.text
+    assert "chat-message--error" in styles.text
+    assert "thinking-text" in styles.text
 
 
 def test_quality_report_is_served_read_only() -> None:

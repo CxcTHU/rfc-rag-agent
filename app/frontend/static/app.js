@@ -9,6 +9,9 @@ const apiEndpoints = {
   hybridSearch: "/search/hybrid",
   chat: "/chat",
   agent: "/agent/query",
+  conversations: "/conversations",
+  conversation: (conversationId) => `/conversations/${encodeURIComponent(conversationId)}`,
+  conversationMessages: (conversationId) => `/conversations/${encodeURIComponent(conversationId)}/messages`,
 };
 
 const state = {
@@ -19,28 +22,65 @@ const state = {
     status: "",
     permission: "",
   },
+  conversations: [],
+  currentConversationId: null,
+  agentRequestInFlight: false,
 };
 
 async function fetchJson(url, options = {}) {
+  const { timeoutMs, ...fetchOptions } = options;
+  const controller = timeoutMs ? new AbortController() : null;
+  const timeoutId = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
   const response = await fetch(url, {
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...(fetchOptions.headers || {}),
     },
-    ...options,
+    ...fetchOptions,
+    signal: controller?.signal || fetchOptions.signal,
+  }).catch((error) => {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+    if (error.name === "AbortError") {
+      throw new Error("请求超时：后端或模型服务暂时没有返回，请稍后重试或检查模型配置");
+    }
+    throw error;
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = payload.detail || `HTTP ${response.status}`;
-    throw new Error(Array.isArray(detail) ? detail.map((item) => item.msg).join("; ") : detail);
+  try {
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = payload.detail || `HTTP ${response.status}`;
+      throw new Error(Array.isArray(detail) ? detail.map((item) => item.msg).join("; ") : detail);
+    }
+    return payload;
+  } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
   }
-  return payload;
 }
 
 function setApiStatus(message) {
   const status = document.querySelector("[data-api-status]");
   if (status) {
     status.textContent = message;
+  }
+}
+
+function setAgentPanelStatus(message) {
+  const status = document.querySelector("[data-agent-status]");
+  if (status) {
+    status.textContent = message;
+  }
+}
+
+function setAgentBusy(isBusy) {
+  state.agentRequestInFlight = isBusy;
+  const submitButton = document.querySelector("[data-agent-submit]");
+  if (submitButton) {
+    submitButton.disabled = isBusy;
+    submitButton.textContent = isBusy ? "运行中" : "运行";
   }
 }
 
@@ -416,6 +456,135 @@ function renderAgentWorkflowSteps(workflowSteps) {
     .join("");
 }
 
+function clearAgentEmptyState() {
+  const answerBox = document.querySelector("[data-agent-answer-box]");
+  const emptyState = answerBox?.querySelector(".empty-state");
+  if (emptyState) {
+    emptyState.remove();
+  }
+}
+
+function scrollAgentChatToBottom() {
+  const answerBox = document.querySelector("[data-agent-answer-box]");
+  if (answerBox) {
+    answerBox.scrollTop = answerBox.scrollHeight;
+  }
+}
+
+function clearAgentChat() {
+  const answerBox = document.querySelector("[data-agent-answer-box]");
+  if (!answerBox) {
+    return;
+  }
+  answerBox.innerHTML = '<div class="empty-state">暂无 Agent 结果</div>';
+  renderAgentToolCalls([]);
+}
+
+function appendAgentUserMessage(question) {
+  const answerBox = document.querySelector("[data-agent-answer-box]");
+  if (!answerBox) {
+    return null;
+  }
+  clearAgentEmptyState();
+  answerBox.insertAdjacentHTML(
+    "beforeend",
+    `
+      <article class="chat-message chat-message--user">
+        <div class="chat-message-bubble">
+          <div class="chat-message-role">用户</div>
+          <div class="answer-text">${escapeHtml(question)}</div>
+        </div>
+      </article>
+    `,
+  );
+  scrollAgentChatToBottom();
+  return answerBox.lastElementChild;
+}
+
+function appendAgentSummaryMessage(content) {
+  const answerBox = document.querySelector("[data-agent-answer-box]");
+  if (!answerBox) {
+    return;
+  }
+  clearAgentEmptyState();
+  answerBox.insertAdjacentHTML(
+    "beforeend",
+    `
+      <article class="chat-message chat-message--summary">
+        <div class="chat-message-bubble">
+          <div class="chat-message-role">摘要</div>
+          <div class="answer-text">${escapeHtml(content)}</div>
+        </div>
+      </article>
+    `,
+  );
+  scrollAgentChatToBottom();
+}
+
+function appendAgentThinkingMessage() {
+  const answerBox = document.querySelector("[data-agent-answer-box]");
+  if (!answerBox) {
+    return null;
+  }
+  clearAgentEmptyState();
+  answerBox.insertAdjacentHTML(
+    "beforeend",
+    `
+      <article class="chat-message chat-message--assistant chat-message--thinking" aria-live="polite">
+        <div class="chat-message-bubble">
+          <div class="chat-message-role">Agent</div>
+          <div class="answer-text thinking-text">正在思考<span aria-hidden="true">...</span></div>
+        </div>
+      </article>
+    `,
+  );
+  scrollAgentChatToBottom();
+  return answerBox.lastElementChild;
+}
+
+function appendAgentErrorMessage(message) {
+  const answerBox = document.querySelector("[data-agent-answer-box]");
+  if (!answerBox) {
+    return;
+  }
+  clearAgentEmptyState();
+  answerBox.insertAdjacentHTML(
+    "beforeend",
+    `
+      <article class="chat-message chat-message--assistant chat-message--error" aria-live="assertive">
+        <div class="chat-message-bubble">
+          <div class="chat-message-role">Agent</div>
+          <div class="refusal">
+            <strong>生成失败</strong>
+            <p>${escapeHtml(message || "请求失败，请稍后重试")}</p>
+          </div>
+        </div>
+      </article>
+    `,
+  );
+  scrollAgentChatToBottom();
+}
+
+function appendAgentAssistantMessage(result) {
+  const answerBox = document.querySelector("[data-agent-answer-box]");
+  if (!answerBox) {
+    return;
+  }
+  clearAgentEmptyState();
+  answerBox.insertAdjacentHTML(
+    "beforeend",
+    `
+      <article class="chat-message chat-message--assistant">
+        <div class="chat-message-bubble">
+          <div class="chat-message-role">Agent</div>
+          ${agentAnswerHtml(result)}
+        </div>
+      </article>
+    `,
+  );
+  scrollAgentChatToBottom();
+}
+
 function updateAgentModeStatus(mode) {
   const status = document.querySelector("[data-agent-mode-status]");
   if (!status) {
@@ -431,16 +600,7 @@ function updateAgentModeStatus(mode) {
   status.textContent = labels[normalized] || normalized;
 }
 
-function renderAgentAnswer(result) {
-  const answerBox = document.querySelector("[data-agent-answer-box]");
-  const status = document.querySelector("[data-agent-status]");
-  if (!answerBox) {
-    return;
-  }
-  updateAgentModeStatus(result.mode || "default");
-  if (status) {
-    status.textContent = result.refused ? "refused" : "answered";
-  }
+function agentAnswerHtml(result) {
   const invalidCitationSet = new Set((result.invalid_citations || []).map((citation) => String(citation)));
   const citationBadges = (result.citations || [])
     .map((citation) => {
@@ -464,7 +624,7 @@ function renderAgentAnswer(result) {
   const refused = result.refused
     ? `<div class="refusal"><strong>拒答</strong>${refusalCategory}<p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`
     : "";
-  answerBox.innerHTML = `
+  return `
     ${refused}
     <div class="answer-text">${escapeHtml(result.answer)}</div>
     <div class="answer-meta">
@@ -476,6 +636,129 @@ function renderAgentAnswer(result) {
     </div>
     <p class="meta-line">${escapeHtml(result.reasoning_summary || "")}</p>
   `;
+}
+
+function renderAgentAnswer(result) {
+  const status = document.querySelector("[data-agent-status]");
+  updateAgentModeStatus(result.mode || "default");
+  if (status) {
+    status.textContent = result.refused ? "refused" : "answered";
+  }
+  appendAgentAssistantMessage(result);
+}
+
+function renderStoredConversationMessages(messages) {
+  clearAgentChat();
+  for (const message of messages) {
+    if (message.role === "user") {
+      appendAgentUserMessage(message.content);
+    } else if (message.role === "assistant") {
+      const metadata = message.metadata || {};
+      appendAgentAssistantMessage({
+        answer: message.content,
+        mode: message.mode || metadata.mode || "default",
+        tool_calls: metadata.tool_calls || [],
+        search_results: metadata.search_results || [],
+        sources: metadata.sources || [],
+        citations: metadata.citations || [],
+        refused: metadata.refused || false,
+        refusal_reason: metadata.refusal_reason || null,
+        reasoning_summary: metadata.reasoning_summary || "",
+        workflow_steps: metadata.workflow_steps || [],
+        iteration_count: metadata.iteration_count || 0,
+        invalid_citations: metadata.invalid_citations || [],
+        refusal_category: metadata.refusal_category || null,
+      });
+    } else if (message.role === "summary") {
+      appendAgentSummaryMessage(message.content);
+    }
+  }
+}
+
+function renderConversationList() {
+  const select = document.querySelector("[data-conversation-list]");
+  if (!select) {
+    return;
+  }
+  if (!state.conversations.length) {
+    select.innerHTML = '<option value="">暂无会话</option>';
+    return;
+  }
+  select.innerHTML = state.conversations
+    .map((conversation) => {
+      const selected = String(conversation.id) === String(state.currentConversationId) ? " selected" : "";
+      return `<option value="${escapeHtml(conversation.id)}"${selected}>${escapeHtml(conversation.title)}</option>`;
+    })
+    .join("");
+}
+
+function setConversationListPlaceholder(message) {
+  const select = document.querySelector("[data-conversation-list]");
+  if (select) {
+    select.innerHTML = `<option value="">${escapeHtml(message)}</option>`;
+  }
+}
+
+async function refreshConversationList() {
+  try {
+    const payload = await fetchJson(apiEndpoints.conversations);
+    state.conversations = payload.conversations || [];
+    renderConversationList();
+  } catch (error) {
+    state.conversations = [];
+    state.currentConversationId = null;
+    setConversationListPlaceholder("加载失败");
+    throw error;
+  }
+}
+
+async function createAgentConversation(title = "新对话") {
+  const conversation = await fetchJson(apiEndpoints.conversations, {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+  state.currentConversationId = conversation.id;
+  await refreshConversationList();
+  clearAgentChat();
+  updateAgentModeStatus("auto");
+  return conversation;
+}
+
+async function loadConversationMessages(conversationId) {
+  if (!conversationId) {
+    clearAgentChat();
+    return;
+  }
+  const payload = await fetchJson(apiEndpoints.conversationMessages(conversationId));
+  state.currentConversationId = payload.conversation.id;
+  renderStoredConversationMessages(payload.messages || []);
+  renderConversationList();
+  updateAgentModeStatus("auto");
+}
+
+async function loadAgentConversations() {
+  await refreshConversationList();
+  if (state.conversations.length) {
+    await loadConversationMessages(state.conversations[0].id);
+  } else {
+    await createAgentConversation();
+  }
+}
+
+async function deleteCurrentConversation() {
+  if (!state.currentConversationId) {
+    return;
+  }
+  await fetchJson(apiEndpoints.conversation(state.currentConversationId), {
+    method: "DELETE",
+  });
+  state.currentConversationId = null;
+  await refreshConversationList();
+  if (state.conversations.length) {
+    await loadConversationMessages(state.conversations[0].id);
+  } else {
+    await createAgentConversation();
+  }
 }
 
 async function submitChat() {
@@ -503,6 +786,10 @@ async function submitChat() {
 }
 
 async function submitAgent() {
+  if (state.agentRequestInFlight) {
+    setApiStatus("Agent 正在运行，请等待当前请求完成");
+    return;
+  }
   const question = document.querySelector("[data-agent-question]")?.value.trim();
   const topK = Number(document.querySelector("[data-agent-top-k]")?.value || 5);
   const maxToolCalls = Number(document.querySelector("[data-agent-max-tool-calls]")?.value || 2);
@@ -511,27 +798,52 @@ async function submitAgent() {
     setApiStatus("请输入 Agent 任务");
     return;
   }
-  setApiStatus("Agent 运行中");
-  updateAgentModeStatus("pending");
-  const body = {
-    question,
-    top_k: topK,
-    max_tool_calls: maxToolCalls,
-  };
-  if (sourceId) {
-    body.source_id = sourceId;
+  let pendingUserMessage = null;
+  let pendingThinkingMessage = null;
+  setAgentBusy(true);
+  try {
+    setApiStatus("Agent 运行中");
+    setAgentPanelStatus("running");
+    updateAgentModeStatus("pending");
+    const body = {
+      question,
+      top_k: topK,
+      max_tool_calls: maxToolCalls,
+    };
+    if (!state.currentConversationId) {
+      const conversation = await createAgentConversation();
+      state.currentConversationId = conversation.id;
+    }
+    pendingUserMessage = appendAgentUserMessage(question);
+    pendingThinkingMessage = appendAgentThinkingMessage();
+    body.conversation_id = state.currentConversationId;
+    if (sourceId) {
+      body.source_id = sourceId;
+    }
+    const result = await fetchJson(apiEndpoints.agent, {
+      method: "POST",
+      body: JSON.stringify(body),
+      timeoutMs: 45000,
+    });
+    pendingThinkingMessage?.remove();
+    pendingThinkingMessage = null;
+    renderAgentAnswer(result);
+    if ((result.workflow_steps || []).length) {
+      renderAgentWorkflowSteps(result.workflow_steps || []);
+    } else {
+      renderAgentToolCalls(result.tool_calls || []);
+    }
+    setApiStatus(result.refused ? "Agent 已拒答" : "Agent 已完成");
+    await refreshConversationList();
+  } catch (error) {
+    pendingThinkingMessage?.remove();
+    setAgentPanelStatus("error");
+    updateAgentModeStatus("auto");
+    appendAgentErrorMessage(error.message);
+    throw error;
+  } finally {
+    setAgentBusy(false);
   }
-  const result = await fetchJson(apiEndpoints.agent, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  renderAgentAnswer(result);
-  if ((result.workflow_steps || []).length) {
-    renderAgentWorkflowSteps(result.workflow_steps || []);
-  } else {
-    renderAgentToolCalls(result.tool_calls || []);
-  }
-  setApiStatus(result.refused ? "Agent 已拒答" : "Agent 已完成");
 }
 
 function renderAll() {
@@ -591,7 +903,28 @@ function bindCommands() {
   document.querySelector("[data-agent-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     submitAgent().catch((error) => {
+      updateAgentModeStatus("auto");
       setApiStatus(`Agent 失败：${error.message}`);
+    });
+  });
+  document.querySelector("[data-new-conversation]")?.addEventListener("click", () => {
+    createAgentConversation().catch((error) => {
+      setApiStatus(`新建会话失败：${error.message}`);
+    });
+  });
+  document.querySelector("[data-refresh-conversations]")?.addEventListener("click", () => {
+    loadAgentConversations().catch((error) => {
+      setApiStatus(`刷新会话失败：${error.message}`);
+    });
+  });
+  document.querySelector("[data-delete-conversation]")?.addEventListener("click", () => {
+    deleteCurrentConversation().catch((error) => {
+      setApiStatus(`删除会话失败：${error.message}`);
+    });
+  });
+  document.querySelector("[data-conversation-list]")?.addEventListener("change", (event) => {
+    loadConversationMessages(event.target.value).catch((error) => {
+      setApiStatus(`切换会话失败：${error.message}`);
     });
   });
   document.querySelector("[data-sync-sources]")?.addEventListener("click", () => {
@@ -622,6 +955,7 @@ async function initializeShell() {
   try {
     await fetchJson("/health");
     await loadWorkspaceData();
+    await loadAgentConversations();
   } catch (error) {
     setApiStatus(`连接异常：${error.message}`);
   }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.services.agentic.state import MAX_ITERATIONS, AgenticState
+from app.services.brain.service import rewrite_contextual_question
 from app.services.brain.workflow import (
     DEFAULT_REFUSAL_ANSWER,
     RESPONSIBILITY_REFUSAL_ANSWER,
@@ -134,9 +135,10 @@ def re_retrieve_node(state: AgenticState) -> dict:
 def generate_node(state: AgenticState) -> dict:
     question = state["question"]
     results = state.get("results", [])
+    generation_question = rewrite_contextual_question(question, state.get("history", []))
     chat_model_provider = state["_chat_model_provider"]
 
-    gate = evaluate_responsibility_gate(question)
+    gate = evaluate_responsibility_gate(generation_question)
     if gate.triggered:
         return {
             "answer": RESPONSIBILITY_REFUSAL_ANSWER,
@@ -168,7 +170,7 @@ def generate_node(state: AgenticState) -> dict:
         }
 
     if not state.get("evidence_sufficient", False):
-        confidence = evaluate_evidence_confidence(question, results)
+        confidence = evaluate_evidence_confidence(generation_question, results)
         if not confidence.sufficient:
             return {
                 "answer": DEFAULT_REFUSAL_ANSWER,
@@ -185,7 +187,7 @@ def generate_node(state: AgenticState) -> dict:
             }
 
     try:
-        rag_prompt = build_rag_prompt(question=question, search_results=results)
+        rag_prompt = build_rag_prompt(question=generation_question, search_results=results)
     except ValueError as exc:
         return {
             "answer": DEFAULT_REFUSAL_ANSWER,

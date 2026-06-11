@@ -20,7 +20,8 @@
 -> Agent 工具编排
 -> Agentic 可观测响应契约
 -> Agent 自动模式路由
--> 前端工作台展示、只读模式指示和步骤可视化
+-> 会话历史装配与摘要压缩
+-> 前端工作台展示、聊天气泡、会话管理、只读模式指示和步骤可视化
 ```
 
 ## 初始分层
@@ -30,13 +31,94 @@ API 层：FastAPI 路由
 Schema 层：Pydantic 请求和响应模型
 Service 层：导入、切分、检索、问答业务逻辑
 Agent 层：受控工具封装、意图路由、工具调用记录和拒答约束
-Agentic 层：LangGraph 状态图编排，迭代式 retrieve-grade-rewrite-generate 循环（阶段 21），向前端暴露只读可观测字段（阶段 22），并在阶段 23 通过规则式复杂度路由接入 `/agent/query` 自动分流
+Agentic 层：LangGraph 状态图编排，迭代式 retrieve-grade-rewrite-generate 循环（阶段 21），向前端暴露只读可观测字段（阶段 22），在阶段 23 通过规则式复杂度路由接入 `/agent/query` 自动分流，并在阶段 24 的 generate 节点利用会话 history 补全追问
 Brain 层：RAG workflow 中控、RetrievalConfig、WorkflowConfig、step 记录和 chat/agent 复用
-DB 层：文档、chunk、问答日志元数据
+Conversation 层：会话历史装配、Conversation/Message 持久化、长对话 summary 压缩和 `/conversations` API
+DB 层：文档、chunk、问答日志元数据、会话和消息
 Source Registry 层：来源登记、去重、可信度、全文权限和重新索引
 Model Provider 层：聊天模型和 embedding 模型适配
-Frontend 层：来源、资料、检索、问答、引用来源展示，以及 Agent 自动模式结果指示和 workflow 步骤可视化
+Frontend 层：来源、资料、检索、问答、引用来源展示，以及 Agent 聊天气泡、会话管理、自动模式结果指示和 workflow 步骤可视化
 ```
+
+## 阶段 24 多轮对话 UI 与会话持久化架构
+
+阶段 24 不改变默认 `/chat`，也不把会话系统扩展成跨会话长期记忆。新增边界集中在 `/conversations` 与 `/agent/query`：
+
+```text
+前端 Agent 面板
+-> loadAgentConversations()
+-> GET /conversations
+-> 选择或创建 currentConversationId
+-> submitAgent()
+-> POST /agent/query { question, source_id?, conversation_id }
+-> 后端加载 conversation messages
+-> history_from_messages()
+-> default AgentService.query(history=...) 或 run_agentic_rag(history=...)
+-> 成功后保存 user / assistant Message
+-> summarize_conversation_if_needed()
+-> 前端追加 user / assistant 气泡并刷新会话列表
+```
+
+新增数据库模型：
+
+```text
+Conversation
+  id
+  title
+  created_at
+  updated_at
+
+Message
+  id
+  conversation_id -> conversations.id
+  role: user / assistant / summary
+  content
+  mode
+  metadata_json
+  created_at
+```
+
+`ConversationRepository` 是会话读写边界，负责创建会话、列出最近会话、读取消息、追加消息、删除会话、默认标题生成和 metadata JSON 序列化。删除会话时通过 ORM cascade 删除对应消息。
+
+会话 API：
+
+```text
+POST /conversations
+GET /conversations
+GET /conversations/{conversation_id}/messages
+DELETE /conversations/{conversation_id}
+```
+
+`/agent/query` 的兼容规则：
+
+- `conversation_id` 不传：保持阶段 23 单次 Agent 行为，不写会话，不加载服务端历史。
+- `conversation_id` 传入：先校验会话存在，读取消息并装配 history；响应成功后再保存 user 和 assistant 消息，避免失败请求留下半条会话记录。
+- `request.history` 仍保留为兼容字段，但服务端 conversation history 优先，减少前端伪造或重复历史带来的混乱。
+
+摘要压缩策略：
+
+```text
+messages after latest summary
+-> 非 summary 消息数 > 16
+-> 旧消息 + 既有 summary 交给 ChatModelProvider 生成摘要
+-> 追加 role="summary" Message
+-> 下一轮 history = 最新 summary + summary 之后的消息
+```
+
+agentic 集成：
+
+- `run_agentic_rag()` 新增 `history` 参数。
+- `AgenticState` 新增 `history` 字段。
+- generate 节点用 `rewrite_contextual_question(question, history)` 生成更完整的生成问题。
+- retrieve / grade / rewrite / re_retrieve 仍以当前问题为主，避免把短期会话历史误当作长期资料库。
+
+前端架构：
+
+- Agent 结果区从单个覆盖式 answer box 改为 `chat-messages` 列表。
+- 每条消息渲染为 user / assistant / summary 气泡。
+- 助手气泡复用阶段 22/23 的 mode、iteration、citations、invalid citations、refusal_category 和 workflow 元数据展示。
+- 会话管理栏使用原生 HTML/CSS/JS：会话列表、新建、刷新、删除。
+- 所有动态 HTML 继续经 `escapeHtml()` 处理，不引入前端框架或 Node 构建链。
 
 ## 阶段 23 Agentic 自动模式路由架构
 

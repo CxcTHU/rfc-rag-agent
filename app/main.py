@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.agent import router as agent_router
 from app.api.chat import router as chat_router
+from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
 from app.api.frontend import FRONTEND_DIR
 from app.api.frontend import router as frontend_router
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(documents_router)
     app.include_router(search_router)
     app.include_router(chat_router)
+    app.include_router(conversations_router)
     app.include_router(sources_router)
     app.include_router(agent_router)
     app.mount(

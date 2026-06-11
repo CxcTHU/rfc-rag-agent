@@ -129,7 +129,7 @@
           </section>
         </div>
 
-        <div class="operations-grid">
+        <div class="operations-grid" hidden style="display: none">
           <section class="data-panel" aria-labelledby="search-title">
             <div class="panel-heading">
               <h2 id="search-title">检索</h2>
@@ -172,7 +172,7 @@
           </section>
         </div>
 
-        <div class="answer-grid">
+        <div class="answer-grid" hidden style="display: none">
           <section class="data-panel" aria-labelledby="chat-title">
             <div class="panel-heading">
               <h2 id="chat-title">问答</h2>
@@ -231,6 +231,17 @@
               <h2 id="agent-title">Agent</h2>
               <span data-agent-status>idle</span>
             </div>
+            <div class="conversation-bar" aria-label="会话管理">
+              <button class="secondary-button" type="button" data-new-conversation>新建</button>
+              <label>
+                <span>会话</span>
+                <select data-conversation-list>
+                  <option value="">加载中</option>
+                </select>
+              </label>
+              <button class="secondary-button" type="button" data-refresh-conversations>刷新</button>
+              <button class="secondary-button danger-button" type="button" data-delete-conversation>删除</button>
+            </div>
             <form class="chat-form" data-agent-form>
               <label class="question-field">
                 <span>任务</span>
@@ -261,9 +272,9 @@
                 <button class="command-button" type="submit" data-agent-submit>运行</button>
               </div>
             </form>
-            <article class="answer-box" data-agent-answer-box>
+            <div class="chat-messages" data-agent-answer-box data-agent-chat-list aria-live="polite">
               <div class="empty-state">暂无 Agent 结果</div>
-            </article>
+            </div>
           </section>
 
           <aside class="data-panel" aria-labelledby="agent-tools-title">

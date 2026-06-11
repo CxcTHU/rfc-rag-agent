@@ -358,6 +358,26 @@ def test_end_to_end_agentic_rag_on_topic(tmp_path):
     assert result.iteration_count <= MAX_ITERATIONS
 
 
+def test_end_to_end_agentic_rag_accepts_history(tmp_path):
+    session_factory = make_session(tmp_path)
+    with session_factory() as db:
+        seed_rfc_documents(db)
+        result = run_agentic_rag(
+            question="rock-filled concrete filling performance 堆石混凝土填充",
+            db=db,
+            embedding_provider=DeterministicEmbeddingProvider(dimension=32),
+            chat_model_provider=DeterministicChatModelProvider(),
+            history=[
+                "用户：What affects filling capacity?",
+                "助手：Filling capacity depends on flowability.",
+            ],
+        )
+
+    assert result.answer
+    assert not result.refused
+    assert result.iteration_count <= MAX_ITERATIONS
+
+
 def test_end_to_end_agentic_rag_off_topic(tmp_path):
     session_factory = make_session(tmp_path)
     with session_factory() as db:

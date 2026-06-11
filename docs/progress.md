@@ -1,6 +1,86 @@
 # 项目进度
 
-## 最新状态：2026-06-11（阶段 23 Agentic 评测闭环与自动模式路由，已获用户确认提交/合并）
+## 最新状态：2026-06-11（阶段 24 已通过用户核验，进入提交合并）
+
+用户已完成阶段 24 人工核验，并明确要求提交阶段 24 整体开发工作、创建 `phase-24-complete` tag、推送阶段分支、合并到 `main` 并上传 GitHub。提交前复核结果：阶段 24 从阶段 23 合并后的 `main`（`8fc1cfa Merge phase 23 agentic eval and auto routing`）出发，未移动任何已有阶段 tag；`phase-24-complete` 在提交前不存在。最终提交前全量测试结果为：
+
+```text
+.\.venv\Scripts\python.exe -m pytest -q
+483 passed in 46.23s
+```
+
+本次发布范围包括 Conversation/Message 持久化模型、`/conversations` CRUD API、`/agent/query conversation_id` 历史加载与消息持久化、agentic generate history 支持、长对话 summary 压缩、Agent 聊天气泡与会话管理、首页隐藏普通用户不需要的“问答”和“检索”调试面板，以及阶段 24 普通文档和 Obsidian 草稿收尾。后端 `/chat`、`/search`、`/search/vector`、`/search/hybrid` 和 `/quality-report` 保持兼容。
+
+## 最新状态：2026-06-11（阶段 24 多轮对话 UI 与会话持久化，开发与测试完成，等待用户人工核验）
+
+当前阶段：阶段 24，Multi-turn Conversation UI 与会话持久化。在 `codex/phase-24-multi-turn-conversation` 分支完成核心开发、聚焦回归、全量测试、浏览器验证、普通文档同步和 Obsidian 草稿收尾。本阶段当前**尚未提交**：未执行 `git add`、未 commit、未创建 `phase-24-complete` tag、未 push、未创建 PR，等待用户人工核验和明确确认。
+
+Git / tag / main 起点：
+
+- 阶段 23 已完成、创建 `phase-23-complete` tag，并合并推送到 GitHub。
+- `phase-23-complete -> dd7d953 Complete phase 23 agentic eval and auto routing`。
+- 阶段 23 合并提交：`8fc1cfa Merge phase 23 agentic eval and auto routing`。
+- `main` 与 `origin/main` 均指向 `8fc1cfa`；`phase-23-complete` 是二者祖先。
+- 阶段 24 从阶段 23 合并后的 `main` 出发，未移动任何已有阶段 tag。
+
+阶段 24 完成内容：
+
+- 新增 `docs/stage24_multi_turn_conversation.md`，固定会话模型、API 设计、`/agent/query` 集成、摘要压缩、前端 UI、安全边界和完成标准。
+- 新增 `Conversation` 与 `Message` 模型，支持会话级消息分组、持久化、更新时间排序、默认标题生成和级联删除。
+- 新增 `ConversationRepository`、`ConversationCreate`、`MessageCreate`，封装会话创建、列表、查询消息、追加消息、删除和 metadata JSON 处理。
+- 新增会话 API：`POST /conversations`、`GET /conversations`、`GET /conversations/{conversation_id}/messages`、`DELETE /conversations/{conversation_id}`。
+- `/agent/query` 新增可选 `conversation_id`；传入时校验会话、加载服务端历史、成功后持久化 user/assistant 消息，不传时保持阶段 23 兼容行为。
+- agentic 路径新增 `history` 支持：`run_agentic_rag(..., history=...)` -> `AgenticState.history` -> generate 节点利用历史补全追问；retrieve/grade/rewrite 仍由当前问题驱动。
+- 新增 `app/services/conversation/history.py`，非 summary 消息超过 16 条后自动摘要旧消息，保留最近 6 条原文消息；summary 保存为 `role="summary"` 的 `Message`。
+- 前端 Agent 面板改为聊天气泡列表，支持 user/assistant/summary 追加渲染，保留 mode、workflow_steps、citations、invalid_citations、refusal_category 展示。
+- 前端新增会话管理：会话列表、新建、切换、删除、刷新恢复；发送 Agent 请求前自动确保存在当前会话并传入 `conversation_id`。
+- 修复阶段 23 遗留的请求失败后只读 mode 指示器可能停在“判断中”的问题。
+
+验证结果：
+
+```text
+focused examples:
+.\.venv\Scripts\python.exe -m pytest tests\test_db_models.py tests\test_repositories.py -q
+8 passed
+
+.\.venv\Scripts\python.exe -m pytest tests\test_conversations_api.py -q
+6 passed
+
+.\.venv\Scripts\python.exe -m pytest tests\test_conversation_summary.py tests\test_agent_api.py -q
+17 passed
+
+.\.venv\Scripts\python.exe -m pytest tests\test_frontend_app.py tests\test_conversations_api.py tests\test_agent_api.py tests\test_conversation_summary.py -q
+29 passed
+
+full:
+.\.venv\Scripts\python.exe -m pytest -q
+479 passed in 48.60s
+
+browser:
+desktop 1280x720: conversation list/chat list/new/delete controls present, no legacy data-agent-mode select, no horizontal overflow, console errors=0
+agent submit: source detail missing-source path produced 1 user bubble + 1 assistant bubble, refusal_category metadata visible, no real model dependency
+mobile 390x844: conversation bar and chat list visible, no horizontal overflow, console errors=0
+```
+
+遗留风险：
+
+- 阶段 24 当前等待用户人工核验，不能提交、不能创建 `phase-24-complete` tag、不能推送 GitHub。
+- 当前会话列表没有用户隔离或登录体系，这是阶段 24 明确边界；后续若引入认证，需要给 `Conversation` 增加 owner 维度和列表过滤。
+- 摘要压缩使用同一 `ChatModelProvider` 接口；deterministic 测试稳定，真实 provider 只在实际长会话运行时调用，不应成为 CI 前提。
+- 本阶段不做跨会话长期记忆，summary 只服务当前 conversation 的短期上下文压缩。
+
+下一步：
+
+- 用户人工核验阶段 24 的模型/API/Agent 历史装配/摘要压缩/前端会话管理/文档和 Obsidian 草稿。
+- 核验通过后，才允许执行 `git add`、commit、创建 `phase-24-complete` tag、推送 GitHub；tag 必须指向阶段 24 最终功能提交，不要移动已有阶段 tag。
+
+面试表达：
+
+```text
+阶段 24 我把 Agent 从“单次问答”升级成“服务端持久化的多轮会话”。后端新增 Conversation 和 Message 表，并提供 /conversations CRUD；/agent/query 只在传入 conversation_id 时加载历史和保存消息，不传仍保持旧兼容。长对话不是无限塞 prompt，而是在超过 16 条非摘要消息后生成 summary 消息，只把最新 summary 和近期消息装配进下一轮历史。前端仍用原生 HTML/CSS/JS，不引入 React 或 Node 构建链，把 Agent 面板改成聊天气泡和会话列表，刷新后能恢复历史，同时保留阶段 23 的自动 mode、workflow_steps、citations 和 refusal_category 可观测字段。最后用 479 个全量测试和桌面/移动浏览器检查证明 search、chat、agent、quality-report 等入口没有被破坏。
+```
+
+## 历史状态：2026-06-11（阶段 23 Agentic 评测闭环与自动模式路由，已获用户确认提交/合并）
 
 当前阶段：阶段 23，Agentic 评测闭环与自动模式路由。在 `codex/phase-23-agentic-eval-and-auto-routing` 分支完成核心开发、聚焦回归、全量测试、浏览器验证、普通文档同步和验收报告；用户已明确要求提交阶段 23 整体开发工作、创建 `phase-23-complete` tag，并合并推送到 GitHub。本记录随阶段 23 最终提交落盘。
 
