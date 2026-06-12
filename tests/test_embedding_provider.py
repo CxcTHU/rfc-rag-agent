@@ -78,6 +78,21 @@ def test_create_embedding_provider_builds_openai_compatible_embedding_provider()
     assert provider.dimension == 3
 
 
+def test_create_embedding_provider_builds_jina_alias_provider() -> None:
+    provider = create_embedding_provider(
+        "jina",
+        model_name="jina-embeddings-v3",
+        api_key="test-key",
+        base_url="https://api.jina.ai/v1",
+        dimension=1024,
+    )
+
+    assert isinstance(provider, OpenAICompatibleEmbeddingProvider)
+    assert provider.provider_name == "jina"
+    assert provider.model_name == "jina-embeddings-v3"
+    assert provider.dimension == 1024
+
+
 def test_openai_compatible_embedding_provider_requires_configuration() -> None:
     with pytest.raises(ValueError, match="model_name"):
         OpenAICompatibleEmbeddingProvider(

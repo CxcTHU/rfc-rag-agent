@@ -1,5 +1,36 @@
 # 架构说明
 
+## 阶段 29 架构增量：真实 Embedding 重建与端到端质量闭环
+
+阶段 29 不新增外部资料采集入口，而是把阶段 28 已入库的新语料纳入真实语义检索质量闭环。核心变化在 Embedding 构建、评测脚本和质量报告展示三处：
+
+```text
+chunk_embeddings 历史数据
+-> cleanup_stale_embeddings.py --execute
+-> chunk_embeddings 21634 -> 0
+
+chunks 12716
+-> build_vector_index.py --provider jina
+-> chunk_embeddings: jina/jina-embeddings-v3/dim=1024 12716
+
+chunks 12716
+-> build_vector_index.py --provider deterministic
+-> chunk_embeddings: deterministic/hash-token-v1/dim=64 12716
+
+stage29_new_corpus_queries.csv
+-> evaluate_stage29_real_quality.py
+-> stage29_real_quality_results.csv
+-> stage29_real_quality_summary.csv
+-> build_stage29_quality_report.py
+-> docs/stage29_quality_report.md
+-> app/frontend/quality_report.html
+-> GET /quality-report
+```
+
+`create_embedding_provider()` 在阶段 29 支持 `provider="jina"` 作为 OpenAI-compatible embedding provider 的显式别名。这样数据库中的 provider 名称能区分真实 Jina embedding 与其他 OpenAI-compatible 供应商，同时继续复用既有 HTTP 适配、批处理、重试和向量写入逻辑。
+
+阶段 29 的质量闭环故意把“真实检索质量”和“CI 可复现测试”分开：真实评测使用 Jina v3 embedding；pytest 和 deterministic embedding 仍保持离线、可重复、不依赖 API key。`/quality-report` 展示的是评测与数据质量摘要，不调用真实供应商，也不暴露供应商原始响应。
+
 ## 阶段 28 续架构增量
 
 阶段 28 续在原有 Crawling 层之后补齐三类数据治理能力：低质量语料删除、Wikipedia 百科补充、公开标准 PDF 补充。它们都复用既有 `IngestionService.import_document()`、文本清洗、切分、Source Registry 和 deterministic 索引重建链路，不引入第二套入库系统。

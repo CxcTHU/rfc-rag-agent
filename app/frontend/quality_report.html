@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>阶段 20 质量门槛报告</title>
+  <title>阶段 29 质量报告</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
@@ -11,9 +11,9 @@
     <section class="hero">
       <div>
         <p class="eyebrow">只读质量报告</p>
-        <h1>阶段 20 质量门槛报告</h1>
-        <p class="hero-copy">汇总评测判定升级、真实 Jina query 校验、默认链路决策与责任边界拒答。只读，不触发真实 API。</p>
-        <p class="hero-copy">当前质量门槛：<strong id="gate-badge">pass/low</strong></p>
+        <h1>阶段 29 真实 Embedding 质量报告</h1>
+        <p class="hero-copy">汇总真实 Jina v3 全量索引、端到端检索质量、拒答边界与人工复核队列。只读，不触发真实 API。</p>
+        <p class="hero-copy">当前质量门槛：<strong id="gate-badge">review_required/medium</strong></p>
       </div>
       <a class="secondary-link" href="/">返回工作台</a>
     </section>
@@ -56,13 +56,13 @@
     <section class="panel">
       <h2>人工核验边界</h2>
       <ul class="compact-list">
-        <li>阶段 20 当前不执行 git add、commit、tag、push 或 PR。</li>
-        <li>报告只读取本地 CSV 质量产物，不调用真实模型或检索 API。</li>
+        <li>阶段 29 当前不执行 git add、commit、tag、push 或 PR。</li>
+        <li>报告只读取本地脱敏 CSV 质量产物，不调用真实模型或检索 API。</li>
         <li>真实 API key、Bearer token、供应商原始敏感响应和受限全文不得写入报告。</li>
       </ul>
     </section>
   </main>
-  <script id="quality-data" type="application/json">[{&quot;section&quot;: &quot;eval_judge_upgrade&quot;, &quot;metric&quot;: &quot;coverage_ratio&quot;, &quot;status&quot;: &quot;completed&quot;, &quot;value&quot;: &quot;baseline p@1=0.133, best_deep=hybrid_topic_anchor_strict deep_top1=0.733&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_eval_upgrade_summary.csv&quot;, &quot;recommendation&quot;: &quot;已用 expected_answer_points 的 coverage_ratio 替代题录关键词命中主判定；结果显示 deep top-1 上浮但答案覆盖 p@1 未提升。&quot;}, {&quot;section&quot;: &quot;real_jina_query_validation&quot;, &quot;metric&quot;: &quot;query_only&quot;, &quot;status&quot;: &quot;completed&quot;, &quot;value&quot;: &quot;completed, baseline p@1=0.133&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_eval_upgrade_real_jina_summary.csv&quot;, &quot;recommendation&quot;: &quot;真实 Jina 只在 query 端校验，复用已有 chunk embeddings；本轮无真实错误。&quot;}, {&quot;section&quot;: &quot;default_chain_decision&quot;, &quot;metric&quot;: &quot;source_type_reweight&quot;, &quot;status&quot;: &quot;keep_existing_hybrid&quot;, &quot;value&quot;: &quot;no candidate passed delta_precision_at_1 threshold&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_default_chain_decision.csv&quot;, &quot;recommendation&quot;: &quot;不接入默认链路；保留 source_type_reweight 为候选/评测开关。 Blockers: delta_precision_at_1=+0.000&lt;0.10; real:delta_precision_at_1=+0.000&lt;0.10 | delta_precision_at_1=+0.000&lt;0.10; real:delta_precision_at_1=+0.000&lt;0.10 | delta_precision_at_1=+0.000&lt;0.10; real:delta_precision_at_1=+0.000&lt;0.10&quot;}, {&quot;section&quot;: &quot;responsibility_gate&quot;, &quot;metric&quot;: &quot;engineering_responsibility_refusal&quot;, &quot;status&quot;: &quot;closed&quot;, &quot;value&quot;: &quot;4/4 matched&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_eval_upgrade_results.csv&quot;, &quot;recommendation&quot;: &quot;responsibility_gate 已闭环工程责任拒答遗留，且正反例测试覆盖学习题不误拒。&quot;}, {&quot;section&quot;: &quot;api_regression&quot;, &quot;metric&quot;: &quot;core_routes_and_tests&quot;, &quot;status&quot;: &quot;passed&quot;, &quot;value&quot;: &quot;full regression passed&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;progress.md&quot;, &quot;recommendation&quot;: &quot;核心 API 与全量测试通过。&quot;}, {&quot;section&quot;: &quot;overall&quot;, &quot;metric&quot;: &quot;stage20_quality_gate&quot;, &quot;status&quot;: &quot;pass&quot;, &quot;value&quot;: &quot;low&quot;, &quot;risk&quot;: &quot;low&quot;, &quot;evidence_file&quot;: &quot;data\\evaluation\\stage20_quality_summary.csv&quot;, &quot;recommendation&quot;: &quot;阶段 20 核心质量闭环完成；等待用户人工核验。&quot;}]</script>
+  <script id="quality-data" type="application/json">[{"section": "embedding_rebuild", "metric": "provider_coverage", "status": "completed", "value": "documents=635, chunks=12716, chunk_embeddings=25432, deterministic/hash-token-v1/dim=64:12716;jina/jina-embeddings-v3/dim=1024:12716", "risk": "low", "evidence_file": "data/evaluation/stage29_quality_summary.csv", "recommendation": "Jina 与 deterministic 双索引完整；人工核验前不要提交或打 tag。"}, {"section": "real_jina_quality", "metric": "precision_and_coverage", "status": "completed", "value": "p@1=0.600, p@3=0.867, p@5=0.933, coverage=0.664", "risk": "medium", "evidence_file": "data/evaluation/stage29_real_quality_summary.csv", "recommendation": "重点复核 p@5 未命中与 coverage<0.5 的样例，不伪造成全部通过。"}, {"section": "new_corpus_coverage", "metric": "source_type_distribution", "status": "completed", "value": "institutional_access_pdf:17;metadata_record:6;open_access_pdf:5;standard_document:25;web_page:28;wikipedia:9", "risk": "low", "evidence_file": "data/evaluation/stage29_real_quality_results.csv", "recommendation": "新语料已进入 top-k；继续关注 Wikipedia dam applications 召回失败样例。"}, {"section": "refusal_boundary", "metric": "refusal_accuracy", "status": "closed", "value": "1.000 over 3 refusal queries", "risk": "low", "evidence_file": "data/evaluation/stage29_real_quality_results.csv", "recommendation": "工程签字、密钥泄露、绕过付费墙三类边界当前均正确拒答。"}, {"section": "known_issues", "metric": "manual_review_queue", "status": "review_required", "value": "p@5_misses=1, low_coverage=2", "risk": "medium", "evidence_file": "data/evaluation/stage29_real_quality_results.csv", "recommendation": "人工核验 stage29_wiki_dam_applications 与 stage29_web_rfc_advantages。"}, {"section": "api_regression", "metric": "full_tests", "status": "passed", "value": "556 passed, 1 warning", "risk": "low", "evidence_file": "progress.md", "recommendation": "阶段 8 将再次运行全量回归，确认核心 API 未被破坏。"}, {"section": "overall", "metric": "stage29_quality_gate", "status": "review_required", "value": "medium", "risk": "medium", "evidence_file": "docs/stage29_quality_report.md", "recommendation": "阶段 29 功能完成后应停在用户人工核验前，不提交、不打 tag、不 push。"}]</script>
   <script>
     (function () {
       var raw = document.getElementById("quality-data").textContent || "[]";
@@ -75,39 +75,32 @@
         var o = document.createElement("option"); o.value = s; o.textContent = s; sectionSel.appendChild(o);
       });
       function esc(v) { var d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
-      function riskClass(r) { return "risk-" + (r || "low"); }
       function render() {
         var sf = sectionSel.value, rf = riskSel.value;
-        var filtered = rows.filter(function (r) {
-          return (!sf || r.section === sf) && (!rf || r.risk === rf);
-        });
+        var filtered = rows.filter(function (r) { return (!sf || r.section === sf) && (!rf || r.risk === rf); });
         document.getElementById("summary-body").innerHTML = filtered.map(function (r) {
-          return "<tr class='" + riskClass(r.risk) + "'><td>" + esc(r.section) + "</td><td>" + esc(r.metric) +
-            "</td><td>" + esc(r.status) + "</td><td>" + esc(r.value) + "</td><td>" + esc(r.risk) +
-            "</td><td>" + esc(r.recommendation) + "</td></tr>";
+          return "<tr><td>" + esc(r.section) + "</td><td>" + esc(r.metric) + "</td><td>" + esc(r.status) + "</td><td>" + esc(r.value) + "</td><td>" + esc(r.risk) + "</td><td>" + esc(r.recommendation) + "</td></tr>";
         }).join("");
-        var queue = rows.filter(function (r) { return r.risk === "high" || r.risk === "medium"; });
-        document.getElementById("risk-queue").innerHTML = queue.length ? queue.map(function (r) {
-          return "<tr class='" + riskClass(r.risk) + "'><td>" + esc(r.section) + "</td><td>" + esc(r.metric) +
-            "</td><td>" + esc(r.risk) + "</td><td>" + esc(r.status) + "</td><td>" + esc(r.recommendation) + "</td></tr>";
-        }).join("") : "<tr><td colspan='5'>无 high/medium 风险</td></tr>";
+        document.getElementById("risk-queue").innerHTML = rows.filter(function (r) { return r.risk === "high" || r.risk === "medium"; }).map(function (r) {
+          return "<tr><td>" + esc(r.section) + "</td><td>" + esc(r.metric) + "</td><td>" + esc(r.risk) + "</td><td>" + esc(r.status) + "</td><td>" + esc(r.recommendation) + "</td></tr>";
+        }).join("");
       }
-      function download(name, text, type) {
+      function download(name, type, text) {
         var blob = new Blob([text], { type: type });
         var url = URL.createObjectURL(blob);
-        var a = document.createElement("a"); a.href = url; a.download = name; a.click();
+        var a = document.createElement("a");
+        a.href = url; a.download = name; a.click();
         URL.revokeObjectURL(url);
       }
       document.getElementById("export-json").addEventListener("click", function () {
-        download("stage20_quality_summary.json", JSON.stringify(rows, null, 2), "application/json");
+        download("stage29_quality_summary.json", "application/json", JSON.stringify(rows, null, 2));
       });
       document.getElementById("export-csv").addEventListener("click", function () {
-        var fields = ["section", "metric", "status", "value", "risk", "recommendation"];
-        var lines = [fields.join(",")];
-        rows.forEach(function (r) {
-          lines.push(fields.map(function (f) { return '"' + String(r[f] == null ? "" : r[f]).replace(/"/g, '""') + '"'; }).join(","));
-        });
-        download("stage20_quality_summary.csv", lines.join("\n"), "text/csv");
+        var header = ["section","metric","status","value","risk","evidence_file","recommendation"];
+        var csv = [header.join(",")].concat(rows.map(function (r) {
+          return header.map(function (key) { return '"' + String(r[key] || "").replace(/"/g, '""') + '"'; }).join(",");
+        })).join("\n");
+        download("stage29_quality_summary.csv", "text/csv", csv);
       });
       sectionSel.addEventListener("change", render);
       riskSel.addEventListener("change", render);

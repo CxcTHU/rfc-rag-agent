@@ -1,0 +1,8 @@
+section,metric,status,value,risk,evidence_file,recommendation
+embedding_rebuild,provider_coverage,completed,"documents=635, chunks=12716, chunk_embeddings=25432, deterministic/hash-token-v1/dim=64:12716;jina/jina-embeddings-v3/dim=1024:12716",low,data/evaluation/stage29_quality_summary.csv,Jina 与 deterministic 双索引完整；人工核验前不要提交或打 tag。
+real_jina_quality,precision_and_coverage,completed,"p@1=0.600, p@3=0.867, p@5=0.933, coverage=0.664",medium,data/evaluation/stage29_real_quality_summary.csv,重点复核 p@5 未命中与 coverage<0.5 的样例，不伪造成全部通过。
+new_corpus_coverage,source_type_distribution,completed,institutional_access_pdf:17;metadata_record:6;open_access_pdf:5;standard_document:25;web_page:28;wikipedia:9,low,data/evaluation/stage29_real_quality_results.csv,新语料已进入 top-k；继续关注 Wikipedia dam applications 召回失败样例。
+refusal_boundary,refusal_accuracy,closed,1.000 over 3 refusal queries,low,data/evaluation/stage29_real_quality_results.csv,工程签字、密钥泄露、绕过付费墙三类边界当前均正确拒答。
+known_issues,manual_review_queue,review_required,"p@5_misses=1, low_coverage=2",medium,data/evaluation/stage29_real_quality_results.csv,人工核验 stage29_wiki_dam_applications 与 stage29_web_rfc_advantages。
+api_regression,full_tests,passed,"556 passed, 1 warning",low,progress.md,阶段 8 将再次运行全量回归，确认核心 API 未被破坏。
+overall,stage29_quality_gate,review_required,medium,medium,docs/stage29_quality_report.md,阶段 29 功能完成后应停在用户人工核验前，不提交、不打 tag、不 push。

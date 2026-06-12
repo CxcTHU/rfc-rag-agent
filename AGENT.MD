@@ -13,19 +13,23 @@
 
 本文件的作用不是一次性定死所有细节，而是给“从零搭建堆石混凝土问答 Agent”提供稳定方向。
 
-## 最新交接状态：阶段 28 已获用户授权提交合并
+## 最新交接状态：阶段 29 已获用户授权提交合并
 
-当前分支：`codex/phase-28-web-crawl-auto-ingest`。
+当前分支：`codex/phase-29-real-embedding-quality-eval`。
 
-阶段 28 Phase 0-11 已完成，用户已明确要求“提交阶段28的整体开发工作，并上传merge至github”。Phase 8-11 在原网页爬取管线基础上完成：
+阶段 29 已从阶段 28 完成并合并后的 `main` 出发。已核对 `phase-28-complete -> b345cd8 Complete phase 28 web crawl auto ingest`，且该 tag 是 `main -> 07dadf0 Merge phase 28 web crawl auto ingest` 的祖先；未移动任何已有阶段 tag。
 
-- 低质量语料清理：`scripts/cleanup_drop_candidates.py` 删除 458 个低质量 `web_page` 文档，清理后 documents 1059 -> 601。
-- Wikipedia 补充：`app/services/crawling/wikipedia_fetcher.py`、`scripts/ingest_wikipedia.py`、`data/crawl/wikipedia_articles.csv`，成功入库 25 个 `wikipedia` 文档。
-- 公开标准 PDF 补充：`scripts/ingest_standards.py`、`data/crawl/standards_urls.csv`，成功入库 9 个 `standard_document` 文档。
-- 最终状态：`documents 635`、`chunks 12716`、`sources 673`、`chunk_embeddings 21634`；清理后 `suggested_drop_candidate=0`，剩余 91 个 `review_candidate` 等待人工核验。
-- 最新全量测试：`544 passed, 1 warning`。
+阶段 29 已完成：
 
-阶段 28 当前进入提交、创建 `phase-28-complete` tag、合并到 `main` 并推送 GitHub 流程。tag 必须指向阶段 28 最终功能提交，不得移动任何已有阶段 tag；`obsidian-vault/`、`.env`、SQLite 数据库、`data/raw/` 和受限/原始全文不得提交。
+- `scripts/cleanup_stale_embeddings.py`：支持 `--dry-run` 与 `--execute`，已将历史 `chunk_embeddings 21634 -> 0`。
+- 真实 Jina v3 embedding 重建：`scripts/build_vector_index.py --provider jina --batch-size 64 --sleep-seconds 1 --max-retries 3`，为全部 `12716` 条 chunk 写入 `jina/jina-embeddings-v3/dim=1024`。
+- deterministic embedding 补建：`scripts/build_vector_index.py --provider deterministic --batch-size 64`，为全部 `12716` 条 chunk 写入 `deterministic/hash-token-v1/dim=64`。
+- 最终索引状态：`chunk_embeddings 25432`，无孤立 embedding，无重复 provider/model/chunk 组合。
+- 新增 `data/evaluation/stage29_new_corpus_queries.csv`、`scripts/evaluate_stage29_real_quality.py`、`scripts/build_stage29_quality_report.py`、`docs/stage29_quality_report.md`，并更新 `/quality-report`。
+- 真实评测结果：`precision_at_1=0.600`、`precision_at_3=0.867`、`precision_at_5=0.933`、`avg_coverage_ratio=0.664`、`refusal_accuracy=1.000`；整体质量门禁为 `review_required/medium`，已按用户要求保留人工复核队列。
+- 最终验证：`556 passed, 1 warning`；`/quality-report`、`/quality-report/data.json`、`/quality-report/export.csv` 冒烟通过；浏览器确认 summary 7 行、风险队列 3 行、console errors 0。
+
+用户已明确要求“提交阶段29的整体开发工作，并上传merge至github”。当前进入提交、创建 `phase-29-complete` tag、合并到 `main` 并推送 GitHub 流程。tag 必须指向阶段 29 最终功能提交，不得移动任何已有阶段 tag；`obsidian-vault/`、`.env`、SQLite 数据库、`data/raw/`、API key、Bearer token、供应商原始敏感响应和受限/原始全文不得提交。
 
 ## 协作与教学原则
 

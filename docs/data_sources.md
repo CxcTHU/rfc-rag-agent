@@ -19,6 +19,34 @@ URL:
 
 ## 当前状态
 
+阶段 29 完成真实 Embedding 重建与质量闭环后，外部资料来源数量不变，新增的是由现有 chunks 派生出的索引和评测产物：
+
+```text
+documents 635
+chunks 12716
+sources 673
+chunk_embeddings 25432
+jina_embeddings 12716
+deterministic_embeddings 12716
+orphan_embeddings 0
+duplicate_provider_model_groups 0
+```
+
+阶段 29 新增评测与报告文件：
+
+- `data/evaluation/stage29_new_corpus_queries.csv`：18 条评测问题，覆盖 Wikipedia、公开标准、网页语料和拒答边界。
+- `data/evaluation/stage29_real_quality_results.csv`：真实 Jina embedding 检索 + deterministic 问答的逐题评测结果。
+- `data/evaluation/stage29_real_quality_summary.csv`：precision@k、coverage_ratio、refusal_accuracy 和 source_type_distribution 汇总。
+- `data/evaluation/stage29_quality_summary.csv`：`/quality-report` 使用的阶段 29 质量门禁摘要。
+- `docs/stage29_quality_report.md`：人工核验用质量报告。
+
+数据安全边界：
+
+- `chunk_embeddings` 是从 `chunks` 派生出的可重建索引数据，不是新的外部资料来源。
+- 阶段 29 的真实 Jina API 调用只用于本地 embedding 重建和质量评测；API key、Bearer token、Authorization header 和供应商原始敏感响应不得写入 Git、CSV、文档、测试或 Obsidian。
+- 评测 CSV 只保存问题、指标、source type、文档/来源标识、延迟和脱敏摘要，不保存受限全文或供应商原始响应。
+- 全量测试继续使用 deterministic provider，不让真实 API 成为 CI 前提。
+
 阶段 28 续完成后，数据来源进入“清理后待人工核验”状态：
 
 ```text
