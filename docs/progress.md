@@ -1,5 +1,143 @@
 # 项目进度
 
+## 最新状态：2026-06-12（阶段 28 已获用户授权提交合并）
+
+当前阶段：阶段 28 Phase 0-11 已完成，并已获得用户明确授权提交阶段 28 整体开发工作、创建 `phase-28-complete` tag、合并到 `main` 并上传 GitHub。当前分支为 `codex/phase-28-web-crawl-auto-ingest`；提交前最终全量测试结果为 `544 passed, 1 warning`。
+
+Phase 8-11 结果：
+
+- Phase 8：`scripts/cleanup_drop_candidates.py` 清理 458 个低质量 `web_page` 文档，documents 1059 -> 601，chunks 12103 -> 10632，chunk_embeddings 21021 -> 19550，并删除对应 `data/raw/web_crawl/` Markdown 文件。
+- Phase 9：新增 Wikipedia REST API fetcher 与入库 CLI，`data/crawl/wikipedia_articles.csv` 共 38 条候选，成功入库 25 个 `source_type="wikipedia"` 文档。
+- Phase 10：新增公开标准 PDF 入库 CLI，`data/crawl/standards_urls.csv` 共 15 条候选，成功入库 9 个 `source_type="standard_document"` 文档；大于 20MB 或远端拒绝访问的公开 PDF 已按规则跳过。
+- Phase 11：重新运行质量审查，清理后 `suggested_drop_candidate=0`，剩余 91 个 `review_candidate` 等待人工核验；更新 `docs/stage28_crawl_quality_report.md` 和 `docs/phase_reviews/phase-28.md`。
+
+最终计数：
+
+```text
+documents 635
+web_page_documents 136
+wikipedia_documents 25
+standard_documents 9
+chunks 12716
+sources 673
+wikipedia_sources 19
+standard_sources 9
+chunk_embeddings 21634
+```
+
+验证结果：
+
+```text
+python scripts/build_vector_index.py --provider deterministic --batch-size 64
+python scripts/review_stage28_crawl_quality.py --sample-size 80
+python -m pytest -q
+
+544 passed, 1 warning
+```
+
+提交合并计划：阶段最终功能提交完成后创建 `phase-28-complete` tag，tag 必须指向阶段 28 最终功能提交；随后将阶段分支合并到 `main` 并推送分支、main 和 tag 到 GitHub。
+
+## 最新状态：2026-06-12（阶段 28 网页爬取 + 自动入库管线，开发与测试已完成，等待用户人工核验）
+
+当前阶段：阶段 28。在 `codex/phase-28-web-crawl-auto-ingest` 分支完成本地网页爬取程序、trafilatura 正文提取、自动入库、来源注册、受控同站发现、种子 URL、索引重建、全量测试、普通文档同步和阶段验收草稿。用户追加要求“运行本地爬取程序，爬取资料到 1000 篇”后，已继续用本地程序分批爬取并将资料库扩充到 1059 篇。本阶段按用户要求停在人工核验前：**尚未执行 `git add`、未提交、未创建 `phase-28-complete` tag、未 push、未创建 PR**。
+
+阶段 28 起点校准：
+
+- `main -> 800b39a Merge phase 27 chainlit docker ci`。
+- `phase-27-complete -> 79f612e Complete phase 27 chainlit docker ci`。
+- `git merge-base --is-ancestor phase-27-complete main` 通过，阶段 27 已合并到 main。
+- 已从阶段 27 合并后的 main 创建并切换到 `codex/phase-28-web-crawl-auto-ingest`。
+- 未移动任何已有阶段 tag。
+
+阶段 28 完成内容：
+
+- 新增 `docs/stage28_web_crawl_auto_ingest.md`，记录网页爬取 + 自动入库设计、本地自行爬取命令、安全边界和完成标准。
+- 新增 `app/services/crawling/`：
+  - `fetcher.py`：HTTP GET、robots.txt 检查、默认 delay >= 2 秒、User-Agent 自标识、超时/网络错误处理。
+  - `extractor.py`：trafilatura 正文提取，输出 Markdown 和元数据。
+  - `url_manager.py`：读取 `seed_urls.csv`，去重，维护 `crawl_results*.csv`。
+  - `pipeline.py`：编排 fetch -> extract -> Markdown -> `IngestionService.import_document()` -> `SourceRegistryService.register_candidate()`。
+- `pyproject.toml` 新增 `trafilatura>=2.0.0`。
+- 新增 `scripts/crawl_and_ingest.py`，支持 `--seed-csv`、`--results-csv`、`--output-dir`、`--max-urls`、`--timeout`、`--dry-run`、`--quiet`、`--discover-links`、`--max-discovered-per-page`、`--rebuild-index`。
+- 新增 `data/crawl/seed_urls.csv`，100 条 URL，五类各 20 条：百科词条、高校机构、工程案例、开放论文、行业标准。
+- 新增测试：`tests/test_crawling_fetcher.py`、`tests/test_crawling_extractor.py`、`tests/test_crawling_url_manager.py`、`tests/test_crawling_pipeline.py`、`tests/test_crawl_and_ingest_cli.py`。
+- 新增 `tests/conftest.py`，在 pytest 中强制 deterministic reranking，避免本地 `.env` 的真实 reranker 配置触发外部 API。
+
+批量入库结果：
+
+```text
+baseline:
+  documents 465
+  chunks 8918
+  sources 125
+  chunk_embeddings 17836
+
+after first crawl/import:
+  documents 625
+  chunks 10543
+  sources 242
+  chunk_embeddings 17836
+
+after user-requested crawl to 1000:
+  documents 1059
+  chunks 12103
+  sources 645
+
+after deterministic index rebuild:
+  chunk_embeddings 21021
+```
+
+结果说明：
+
+- 相对阶段 28 起点净新增文档 594 个，总文档数达到 1059。
+- 相对阶段 28 起点新增 chunks 3185 个。
+- 索引重建命令：`.\.venv\Scripts\python.exe scripts\build_vector_index.py --provider deterministic --batch-size 64`。
+- 真实批量爬取由本地程序执行，不需要大模型逐页读取网页内容；后续用户可自行用 `--quiet` 分批运行。
+- 用户追加的 to1000 批次结果文件包括：`crawl_results_to1000_batch1.csv`、`crawl_results_to1000_batch2.csv`、`crawl_results_to1000_batch3.csv`、`crawl_results_to1000_engineering_articles.csv`、`crawl_results_to1000_tsinghua_news.csv`。
+
+验证结果：
+
+```text
+爬虫 + CLI 聚焦测试：64 passed（受影响 agent/hybrid/search 子集）
+全量测试：533 passed, 1 warning
+API smoke：GET /health 200，POST /search 200，POST /search/hybrid 200
+检索 smoke：HybridSearchService(deterministic, reranking_enabled=False) 返回 5 条结果
+```
+
+主要发现：
+
+- 大量 Wikipedia、部分开放论文和标准/政务页面被 robots.txt 禁止或抓取/提取失败，均按 `skipped_robots`、`fetch_failed`、`extract_failed` 记录，没有绕过限制。
+- 慢站点会触发 bare `TimeoutError` / `socket.timeout`，已扩展 `WebFetcher` 捕获并补测试。
+- 100 条 seed 无法天然新增 150+ 文档，因此新增显式受控同站发现和 targeted RFC seed；没有拆分同一网页伪造文档数量。
+- 本机 `.env` 的真实 reranker 配置曾导致全量测试误触发真实 Jina API；已通过 `tests/conftest.py` 使 pytest 回到 deterministic/offline。
+
+人工核验重点：
+
+- 抽查 `data/raw/web_crawl/*.md` 中网页正文质量、标题和来源 URL。
+- 抽查 `data/crawl/crawl_results*.csv` 中 `skipped_robots`、`fetch_failed`、`extract_failed` 是否符合预期。
+- 检查 `sources` 表中 web_page 来源与 `document_id` 关联是否合理。
+- 确认 `--quiet`、`--dry-run`、`--discover-links` 的本地使用方式满足后续自行爬取需求。
+- 人工核验通过后，用户再明确授权是否 `git add`、commit、创建 `phase-28-complete` tag、push 或 PR。
+
+阶段 28 爬取质量审查：
+
+- 已新增 `scripts/review_stage28_crawl_quality.py`，只读分析 `web_page` 文档质量，不改数据库。
+- 已生成 `docs/stage28_crawl_quality_report.md`。
+- 已生成：
+  - `data/evaluation/stage28_crawl_quality_summary.csv`
+  - `data/evaluation/stage28_crawl_quality_documents.csv`
+  - `data/evaluation/stage28_crawl_quality_review_sample.csv`
+  - `data/evaluation/stage28_crawl_quality_domains.csv`
+  - `data/evaluation/stage28_crawl_quality_keep_candidates.csv`
+  - `data/evaluation/stage28_crawl_quality_manual_review_candidates.csv`
+  - `data/evaluation/stage28_crawl_quality_drop_candidates.csv`
+- 自动筛选建议：keep_candidate 45、review_candidate 91、drop_candidate 458。
+- 结论：达到 1000 篇主要依赖清华公开新闻扩展批次，其中大量 low/泛新闻/导航页应先人工核验，不建议直接提交入库结果。
+
+阶段 28 面试表达：
+
+阶段 28 我把“网页采集”做成 RAG 数据采集层的本地程序，而不是让大模型去网上逐页读内容。程序从人工维护的 seed URL 出发，先遵守 robots.txt 和限速规则抓取公开 HTML，再用 trafilatura 提取正文为 Markdown，最后复用现有 IngestionService 完成清洗、切分、去重和入库，并通过 SourceRegistryService 注册来源。这样新增采集能力不会破坏原有 RAG 主链路，也能通过 deterministic 测试和本地结果 CSV 保持可复现、可审计、可人工核验。
+
 ## 最新状态：2026-06-12（阶段 27 Chainlit 前端 + Docker 容器化 + GitHub Actions CI，已通过验收并进入提交合并流程）
 
 当前阶段：阶段 27。在 `codex/phase-27-chainlit-docker-ci` 分支完成 Chainlit 对话界面、Docker 容器化、GitHub Actions pytest CI、端到端 smoke 验证、普通文档同步、Obsidian 草稿收尾和阶段验收报告。Docker Desktop 安装后，已完成 Docker Compose 实跑部署验证。用户随后要求先优化前端界面，因此新增 Phase 7，将原生 FastAPI 首页升级为深色科技风 RAG 产品首页，并将“开始问答”和“资料库”拆成两个可切换界面。当前已通过验收，用户已授权提交、创建 `phase-27-complete` tag、合并并推送 GitHub。本次验收报告已落盘：

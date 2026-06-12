@@ -1,0 +1,149 @@
+url,category,trust_level,status,http_status,title,document_id,source_id,content_hash,fetched_at,error
+https://discovery.researcher.life/article/filling-capacity-evaluation-of-self-compacting-concrete-in-rock-filled-concrete/bca7a958329e3348a29cf2e741c5bec2,开放论文,medium,imported,200,Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete. - R Discovery,605,crawl_b6df60e30213,51977d5ec0d7184831827d9740a0778619fb0e04e6e2bb2a512a3eb1e2439444,,
+https://kw.beijing.gov.cn/ztzl/gdzt/2017ngjkxjsjldh/2017ngjkxjsjldhgjt/2017ngjkxjsjldhgjjsfmj/201712/t20171219_3804439.html,工程案例,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://rockmech.whrsm.ac.cn/CN/abstract/abstract25492.shtml,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://rockmech.whrsm.ac.cn/EN/Y2007/V26/IS1/3231,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://sklhse.tsinghua.edu.cn/info/1017/1076.htm,工程案例,high,imported,200,实验室动态,597,crawl_01c11c6b0bf1,38cda07630b9ae6d7fe7094c7ad587f8504a2aba225ac5c0fe0d488b49b69b1b,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/1070.htm,工程案例,high,imported,200,清华大学举办堆石混凝土高坝建设关键技术研讨会 -清华大学水利水电工程系,589,crawl_0bca5810ecd8,e4ff598ffeaad97edb0e9daa04fd63dc4cad5903f2f3d4d3d923b15c1adaec19,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/1277.htm,高校机构,high,imported,200,著名计算力学期刊 Int J Numer Meth Eng 封面文章刊发清华大学水利系研究成果 推动研发高性能水利海洋新材料 -清华大学水利水电工程系,590,crawl_ee3d52b40a8d,df93d3e20179c6342d031f39ca6062356888cbf30b5ad193917d67dab7e8edf2,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/1459.htm,工程案例,high,imported,200,水利系两项成果获2017年度国家科学技术奖励 -清华大学水利水电工程系,591,crawl_a76f82e98ec3,2bacf9ef39fd607f995e4d7bf85a06891e6bd4694989034e5d7b319a58f8f7e8,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/1926.htm,工程案例,high,imported,200,清华大学举办堆石混凝土坝工程考察与筑坝技术专家咨询会 -清华大学水利水电工程系,588,crawl_6013f750bc5d,fa4237ac29f31b19b81f1a40973ddfff55a51521833d7890717fbe7866507b80,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/2052.htm,工程案例,high,imported,200,“基于堆石混凝土的全材料筑坝关键技术研究” 项目启动会在京顺利召开-清华大学水利水电工程系,587,crawl_a7e8e39d0c67,638254d28cd308de9fa9f382c0318594491568468d38a4e16eb72d7c52b8577d,,
+https://www.civil.tsinghua.edu.cn/he/info/1077/1637.htm,高校机构,high,imported,200,王进廷-清华大学水利水电工程系,594,crawl_cc01c744f6b7,4b3b7cc6e6f63ab677f2805706c6b409fcd25efa59b46df0823693b2a349b3c4,,
+https://www.civil.tsinghua.edu.cn/he/info/1077/1648.htm,高校机构,high,imported,200,金峰-清华大学水利水电工程系,593,crawl_0a03a71181df,0da3443d45f46402934e23158446c335ea86eb7b5ac0edb068cd90a6e819e717,,
+https://www.civil.tsinghua.edu.cn/he/info/1103/1775.htm,工程案例,high,imported,200,我的大学集体,596,crawl_2179e937ef40,3cb1aaf8749872fa0782bc0a33e2ae85263761af05f9b0318763a1d09ab9015f,,
+https://www.civil.tsinghua.edu.cn/he/info/1111/1840.htm,高校机构,high,imported,200,清华大学水利水电工程系建系70周年纪念大会暨“新时代水利教育与科技发展论坛”成功举办-清华大学水利水电工程系,595,crawl_86405b1550d4,d5f29b4ad89415f69ee69b5cbfe9a735c01fb0ec69a838ab13ccee16cee5be3b,,
+https://www.civil.tsinghua.edu.cn/he/info/1111/1846.htm,工程案例,high,imported,200,"中国原创助力冬奥会——清华堆石混凝土技术引发""革命""-清华大学水利水电工程系",586,crawl_5f9eb99323a1,773102293f6652e7356f78371b7059bab3a226cef174e179f63276795f9e8c4f,,
+https://www.civil.tsinghua.edu.cn/info/1045/1224.htm,工程案例,high,imported,200,水利系两项成果获2017年度国家科学技术奖励 -清华大学土木水利学院,592,crawl_f24a7477c90c,4d757af922a0b8e53e3bfcc84ad963483a5cb49daea88f170ecd2245b8eb477b,,
+https://www.engineering.org.cn/engi/CN/10.1016/J.ENG.2016.04.003,开放论文,high,imported,200,胶结颗粒料坝——环境友好的新坝型,604,crawl_c09ab0cd18ce,57c60494402b93b18c220aceff66784bf0140af269a6ad1ba103e80ca2b045b1,,
+https://www.engineering.org.cn/engi/CN/10.1016/j.eng.2023.09.020,开放论文,high,imported,200,堆石混凝土坝综述与下一代混凝土筑坝技术前瞻,600,crawl_24afafd4a759,4d276c8af584aeeea62770721af8a59b97205ebdac0a92744a58912d7c534d9a,,
+https://www.engineering.org.cn/engi/CN/2024/32/1,开放论文,high,imported,200,工程（英文）,603,crawl_f80219d45367,dbe7304bdcaecbff4a9cc41833284643bfc353e56483ed9a9a034a2ff9349d13,,
+https://www.engineering.org.cn/engi/CN/collections/1162450953531220739,开放论文,high,imported,200,中国工程科学,602,crawl_a7f58e490825,a5e85c15fe51e1344edeb58957dde30fc546d3dc44c10efde9afa289de1cb2d4,,
+https://www.engineering.org.cn/engi/EN/10.1016/j.eng.2023.09.020,开放论文,high,imported,200,A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology,601,crawl_343d1fca603f,449fc6f3bcc78985121f2923288ee52664ae1d0a27507b75ab6b3a0a520f5dc0,,
+https://www.icsd.tsinghua.edu.cn/info/syly/1643,工程案例,high,imported,200,清华大学2017年度国家科技奖获奖项目介绍,598,crawl_7af60aac157c,0c13222c93b78fd5b9867356493a6ed17f497ee8ec11fb9481c96664982c004d,,
+https://www.mdpi.com/1996-1944/12/19/3128,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;1996&#45;1944&#47;12&#47;19&#47;3128"" on this server.<P>
+Reference&#32;&#35;18&#46;26f41002&#46;1781252923&#46;7af2b4a0
+<P>https&#58;&#47;"
+https://www.mdpi.com/1996-1944/13/1/108,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;1996&#45;1944&#47;13&#47;1&#47;108"" on this server.<P>
+Reference&#32;&#35;18&#46;26f41002&#46;1781252896&#46;7af114da
+<P>https&#58;&#47;&#"
+https://www.mdpi.com/2075-5309/12/5/555,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2075&#45;5309&#47;12&#47;5&#47;555"" on this server.<P>
+Reference&#32;&#35;18&#46;26f41002&#46;1781252920&#46;7af28aad
+<P>https&#58;&#47;&#"
+https://www.mdpi.com/2075-5309/14/10/3171,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2075&#45;5309&#47;14&#47;10&#47;3171"" on this server.<P>
+Reference&#32;&#35;18&#46;26f41002&#46;1781252888&#46;7af0a8c7
+<P>https&#58;&#47;"
+https://www.mdpi.com/2075-5309/14/12/3985,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2075&#45;5309&#47;14&#47;12&#47;3985"" on this server.<P>
+Reference&#32;&#35;18&#46;5f41002&#46;1781252893&#46;eb4e9e38
+<P>https&#58;&#47;&"
+https://www.mdpi.com/2076-3417/13/10/6246,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/2076-3417/15/5/2479,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2076&#45;3417&#47;15&#47;5&#47;2479"" on this server.<P>
+Reference&#32;&#35;18&#46;5f41002&#46;1781252925&#46;eb50a371
+<P>https&#58;&#47;&#"
+https://www.mdpi.com/2076-3417/9/18/3767,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2076&#45;3417&#47;9&#47;18&#47;3767"" on this server.<P>
+Reference&#32;&#35;18&#46;5f41002&#46;1781252891&#46;eb4e754a
+<P>https&#58;&#47;&#"
+https://www.mdpi.com/2412-3811/9/2/23,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2412&#45;3811&#47;9&#47;2&#47;23"" on this server.<P>
+Reference&#32;&#35;18&#46;26f41002&#46;1781252886&#46;7af0854c
+<P>https&#58;&#47;&#47"
+https://www.mdpi.com/journal/applsci/special_issues/Jointed_Rock_Mass,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;applsci&#47;special&#95;issues&#47;Jointed&#95;Rock&#95;Mass"" on this server.<P>
+Reference&#32;&#35;18&#46;5f41002&#46;1781252"
+https://www.mdpi.com/journal/applsci/special_issues/Structural_Performances_of_Concrete,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;applsci&#47;special&#95;issues&#47;Structural&#95;Performances&#95;of&#95;Concrete"" on this server.<P>
+Reference&#32;&#35;18&#"
+https://www.mdpi.com/journal/buildings/special_issues/01QX299L1J,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;buildings&#47;special&#95;issues&#47;01QX299L1J"" on this server.<P>
+Reference&#32;&#35;18&#46;5f41002&#46;1781252951&#46;eb524"
+https://www.mdpi.com/journal/buildings/special_issues/AETQ71UC4K,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;buildings&#47;special&#95;issues&#47;AETQ71UC4K"" on this server.<P>
+Reference&#32;&#35;18&#46;26f41002&#46;1781252934&#46;7af3"
+https://www.mdpi.com/journal/buildings/special_issues/High_performance_Materials,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;buildings&#47;special&#95;issues&#47;High&#95;performance&#95;Materials"" on this server.<P>
+Reference&#32;&#35;18&#46;5f41002&"
+https://www.mdpi.com/journal/buildings/special_issues/LXVFJODZV1,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;buildings&#47;special&#95;issues&#47;LXVFJODZV1"" on this server.<P>
+Reference&#32;&#35;18&#46;26f41002&#46;1781252943&#46;7af4"
+https://www.mdpi.com/journal/infrastructures/special_issues/2P247HJ4DK,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;infrastructures&#47;special&#95;issues&#47;2P247HJ4DK"" on this server.<P>
+Reference&#32;&#35;18&#46;5f41002&#46;1781252928&#46"
+https://www.mdpi.com/journal/materials/special_issues/8PUY81OM64,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;materials&#47;special&#95;issues&#47;8PUY81OM64"" on this server.<P>
+Reference&#32;&#35;18&#46;26f41002&#46;1781252961&#46;7af5"
+https://www.sciopen.com/article/10.16511/j.cnki.qhdxxb.2021.21.019,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.tsinghua.edu.cn/info/1173/18745.htm,高校机构,high,imported,200,【清华新思】为创新驱动发展战略贡献清华力量-清华大学,585,crawl_79030e943dce,e8470b18819da8f403f475f00141d191dd845eb07964d3d128cc2fab06c40a1b,,
+https://www.tsinghua.edu.cn/info/1181/84053.htm,工程案例,high,imported,200,清华大学主办堆石混凝土高坝建设关键技术研讨会-清华大学,584,crawl_ffe4cf765e1e,efaccb25a2144daf22a0f854376a5ca946dd454ad9d89d2f3dd7db599f97fa15,,
+https://www.tsinghua.edu.cn/info/1367/81635.htm,工程案例,high,imported,200,清华新闻,583,crawl_1b69bba197a2,599ea33caef364aa87e9e4632ef2cb5800e73836d83e48f87498bae932f36b04,,
+https://yskyz.tsinghua.edu.cn/info/1022/1179.htm,工程案例,high,imported,200,上一篇：高性能锂离子电池用石墨和石墨烯材料,599,crawl_ebc2a71114f8,4f49957743d2726d2e971100edb702e9d17a71850e7b98c489ec190837917b8d,,

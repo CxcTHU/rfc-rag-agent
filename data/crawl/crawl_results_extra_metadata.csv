@@ -1,0 +1,114 @@
+url,category,trust_level,status,http_status,title,document_id,source_id,content_hash,fetched_at,error
+http://link.springer.com/content/pdf/10.1007/s40999-018-0313-0.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://dl.astm.org/jte/article-pdf/41/6/951/137114/10_1520_jte20120293.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://doi.org/10.1007/978-981-16-8298-8,????,high,imported,200,Rock-Filled Concrete Dam,575,crawl_0fa5a3af4550,16810ffbed12464ec5e0e3463f9ba4538dbc6ad9d9a2c86f714bd25828d8a8bb,,
+https://doi.org/10.1007/978-981-16-8298-8_1,????,high,imported,200,Introduction,572,crawl_7a3672ea11a6,f2bac1e725f0b163a1eb1504875075a0bd235a36b4e4a6ccacbe91043c9075e1,,
+https://doi.org/10.1007/978-981-16-8298-8_10,????,high,imported,200,State-of-the-Art and Future Prospects,577,crawl_fac474ebbfdd,cba9b2f44502777a7353c4b0c7ceaaf28c529ea95b8a0e42291d8c63f9835061,,
+https://doi.org/10.1007/978-981-16-8298-8_2,????,high,imported,200,The History of Rock-Filled Concrete Dams,578,crawl_256f3687ff54,0652b47a00d0120bfd5b5fd927314739c0e9c90aac3b0c5b2d15cd4ab10bca98,,
+https://doi.org/10.1007/978-981-16-8298-8_3,????,high,imported,200,Filling Process of HSCC and Compactness of RFC,571,crawl_af7dac65f466,e944a2079157f63bd6fd901f1d5fc5fab1a00884704ebc6fdaa938a4b04e3609,,
+https://doi.org/10.1007/978-981-16-8298-8_4,????,high,imported,200,Mechanical and Physical Properties,573,crawl_5eadf151b3c1,f5483659a9724c68ebc0bda50864b047ffd796b7ab62edbabd7757c800093696,,
+https://doi.org/10.1007/978-981-16-8298-8_5,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1007/978-981-16-8298-8_6,????,high,imported,200,Design of RFC Arch Dam,570,crawl_12952187ccb4,1651f82fe4f25d994ed90ee67cf47aec35fa12baad4185d9771bef4ac176e9cb,,
+https://doi.org/10.1007/978-981-16-8298-8_7,????,high,imported,200,Construction,569,crawl_a79ed619511f,0ad2ad8a446972d671a7318411a79d87e46341eed9cc7e05a762cb1e0e0e98c6,,
+https://doi.org/10.1007/978-981-16-8298-8_8,????,high,imported,200,Quality Control and Instrumentation,582,crawl_5b7895d36974,16c6bbb064c3aa6b895372be6458262121ab2804a884514ebf11c4fbee3a75ee,,
+https://doi.org/10.1007/978-981-16-8298-8_9,????,high,imported,200,Other Rock-Filled Concrete Related Technologies,574,crawl_ffba47d10bca,fdbe63e3d0a7b9fd418f21782bf32c74cbf2117cafa8940efff46446e8ebcb6c,,
+https://doi.org/10.1007/978-981-19-6313-1_7,????,high,imported,200,Rock-Filled Concrete with Manufactured Sand,576,crawl_f791052dfdd5,e934397499926f56dd5d1c2d2af4f7abfdd30392426f6561f8a727fc48529e6a,,
+https://doi.org/10.1007/s40999-018-0313-0,????,high,imported,200,Research on Rock-Filled Concrete Dam - International Journal of Civil Engineering,567,crawl_fdaaf0ae09e1,1f514297d074adaf28c684de3c24ed7dd5a7d31ef75b9ea7e8b506d8df359c6c,,
+https://doi.org/10.1016/j.cemconcomp.2014.08.001,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1016/j.cemconcomp.2014.09.002,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1016/j.cemconres.2013.11.010,????,high,extract_failed,200,https://doi.org/10.1016/j.cemconres.2013.11.010,,,,,Extracted text is too short
+https://doi.org/10.1016/j.compgeo.2024.106820,????,high,extract_failed,200,https://doi.org/10.1016/j.compgeo.2024.106820,,,,,Extracted text is too short
+https://doi.org/10.1016/j.compstruc.2023.107020,????,high,extract_failed,200,https://doi.org/10.1016/j.compstruc.2023.107020,,,,,Extracted text is too short
+https://doi.org/10.1016/j.conbuildmat.2018.07.083,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1016/j.conbuildmat.2019.117321,????,high,extract_failed,200,https://doi.org/10.1016/j.conbuildmat.2019.117321,,,,,Extracted text is too short
+https://doi.org/10.1016/j.conbuildmat.2022.127315,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1016/j.conbuildmat.2022.127819,????,high,extract_failed,200,https://doi.org/10.1016/j.conbuildmat.2022.127819,,,,,Extracted text is too short
+https://doi.org/10.1016/j.conbuildmat.2022.128213,????,high,extract_failed,200,https://doi.org/10.1016/j.conbuildmat.2022.128213,,,,,Extracted text is too short
+https://doi.org/10.1016/j.conbuildmat.2024.136581,????,high,extract_failed,200,https://doi.org/10.1016/j.conbuildmat.2024.136581,,,,,Extracted text is too short
+https://doi.org/10.1016/j.conbuildmat.2024.138626,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1016/j.csite.2023.103800,????,high,extract_failed,200,https://doi.org/10.1016/j.csite.2023.103800,,,,,Extracted text is too short
+https://doi.org/10.1016/j.eng.2023.09.020,????,high,extract_failed,200,https://doi.org/10.1016/j.eng.2023.09.020,,,,,Extracted text is too short
+https://doi.org/10.1016/j.engfracmech.2021.108047,????,high,extract_failed,200,https://doi.org/10.1016/j.engfracmech.2021.108047,,,,,Extracted text is too short
+https://doi.org/10.1016/j.engstruct.2020.111721,????,high,extract_failed,200,https://doi.org/10.1016/j.engstruct.2020.111721,,,,,Extracted text is too short
+https://doi.org/10.1016/j.istruc.2021.03.077,????,high,extract_failed,200,https://doi.org/10.1016/j.istruc.2021.03.077,,,,,Extracted text is too short
+https://doi.org/10.1016/j.jmrt.2022.09.056,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1016/j.mtcomm.2024.110652,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1016/j.scitotenv.2024.175462,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1061/(asce)co.1943-7862.0000752,????,high,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE html><html lang=""en-US""><head><title>Just a moment...</title><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><meta http-equiv=""X-UA-Compatible"" content=""IE=Edge""><meta name=""robots"" content=""noindex,nofollow""><meta name=""viewport"" content=""width=device-width,initial-scal"
+https://doi.org/10.1061/(asce)mt.1943-5533.0001558,????,high,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE html><html lang=""en-US""><head><title>Just a moment...</title><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><meta http-equiv=""X-UA-Compatible"" content=""IE=Edge""><meta name=""robots"" content=""noindex,nofollow""><meta name=""viewport"" content=""width=device-width,initial-scal"
+https://doi.org/10.1061/(asce)mt.1943-5533.0002681,????,high,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE html><html lang=""en-US""><head><title>Just a moment...</title><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><meta http-equiv=""X-UA-Compatible"" content=""IE=Edge""><meta name=""robots"" content=""noindex,nofollow""><meta name=""viewport"" content=""width=device-width,initial-scal"
+https://doi.org/10.1080/21650373.2014.956238,????,high,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE html><html lang=""en-US""><head><title>Just a moment...</title><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><meta http-equiv=""X-UA-Compatible"" content=""IE=Edge""><meta name=""robots"" content=""noindex,nofollow""><meta name=""viewport"" content=""width=device-width,initial-scal"
+https://doi.org/10.1109/icetce.2011.5774287,????,high,extract_failed,200,https://doi.org/10.1109/icetce.2011.5774287,,,,,Extracted text is too short
+https://doi.org/10.1109/ichceswidr54323.2021.9656221,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1109/ichceswidr54323.2021.9656283,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1109/ichceswidr54323.2021.9656422,????,high,extract_failed,200,https://doi.org/10.1109/ichceswidr54323.2021.9656422,,,,,Extracted text is too short
+https://doi.org/10.1109/wsc.2013.6721678,????,high,extract_failed,200,https://doi.org/10.1109/wsc.2013.6721678,,,,,Extracted text is too short
+https://doi.org/10.1201/9781439828410.ch170,????,high,fetch_failed,,,,,,,Timeout: timed out
+https://doi.org/10.12677/hjce.2024.139191,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.1520/jte20120293,????,high,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE html><html lang=""en-US""><head><title>Just a moment...</title><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><meta http-equiv=""X-UA-Compatible"" content=""IE=Edge""><meta name=""robots"" content=""noindex,nofollow""><meta name=""viewport"" content=""width=device-width,initial-scal"
+https://doi.org/10.15407/fm29.02.274,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.16511/j.cnki.qhdxxb.2019.22.029,????,high,imported,200,https://doi.org/10.16511/j.cnki.qhdxxb.2019.22.029,581,crawl_1b9b20530dd0,e65bc76e2cdfa33c9519feb9632a53c445b9e3e88b97464eeae2c46d2894df25,,
+https://doi.org/10.21203/rs.3.rs-5109210/v1,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.2139/ssrn.4370599,????,high,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE html><html lang=""en-US""><head><title>Just a moment...</title><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><meta http-equiv=""X-UA-Compatible"" content=""IE=Edge""><meta name=""robots"" content=""noindex,nofollow""><meta name=""viewport"" content=""width=device-width,initial-scal"
+https://doi.org/10.4028/www.scientific.net/amm.438-439.1347,????,high,imported,200,The Research and Application of Dam Construction Technology of Rock-Filled Concrete | Scientific.Net,566,crawl_f7cbde42ab42,81fd48e1ce98842dd3d05b6948d23de9f02938dcde87988f59f49222dd2546cd,,
+https://doi.org/10.4028/www.scientific.net/amm.438-439.719,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.4028/www.scientific.net/amm.470.802,????,high,imported,200,Cheap Mix Design of the Rock-Filled Concrete Materials | Scientific.Net,563,crawl_53a27a7f2eae,ff199b95ed3a9f5e817848dae92d893c421927f657f9af3b3992eef47784ecec,,
+https://doi.org/10.4028/www.scientific.net/amm.513-517.20,????,high,imported,200,The Comparison of Self-Compacting Rock-Filled Concrete with Large-Size Natural and Recycled Aggregate | Scientific.Net,580,crawl_7423a54a27f0,e98ad1bb2b3cfb36b2a69623bf2763fb268d8d240e2d1f35ad4e5466194e8f27,,
+https://doi.org/10.4028/www.scientific.net/amm.584-586.1504,????,high,imported,200,Particle Size Distribution of Sandstone Aggregate Influence on Recycled Aggregate Concrete Properties | Scientific.Net,579,crawl_75ee99faf278,378ef827589a1ae322c338bfa7af74306cfcc894fb488e425f25d58b042b0e8a,,
+https://doi.org/10.4028/www.scientific.net/amr.482-484.1362,????,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://doi.org/10.4028/www.scientific.net/amr.753-755.558,????,high,imported,200,Study on Strength Mechanism of Self-Compacting Rock-Fill Concrete with Big Aggregates | Scientific.Net,565,crawl_e59d87c5665e,b758a9f9b6d799b2b4a45efdf2d6f7d22d36895014b91175fab52da66919321d,,
+https://doi.org/10.5555/2675983.2676367,????,high,fetch_failed,,,,,,,"HTTP 404: <!DOCTYPE html>
+<html lang=""en-us"">
+<head>
+
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
+    <meta http-equiv=""X-UA-Compatible"" content=""IE=edge"">
+    <title>Error: DOI Not Found</title>
+
+
+
+    <link href=""https://cdn.jsdelivr.net/npm/bootstrap@"
+https://downloads.hindawi.com/journals/mpe/2018/3964926.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://easychair.org/publications/preprint_open/Hdvz,????,medium,fetch_failed,,,,,,,HTTP 404: <html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p></body></html>
+https://etasr.com/index.php/ETASR/article/download/7126/3731,????,medium,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://link.springer.com/content/pdf/10.1007/978-981-16-8298-8.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://mdpi-res.com/d_attachment/applsci/applsci-09-03767/article_deploy/applsci-09-03767.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://mdpi-res.com/d_attachment/applsci/applsci-13-06246/article_deploy/applsci-13-06246.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://mdpi-res.com/d_attachment/buildings/buildings-12-00555/article_deploy/buildings-12-00555.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://mdpi-res.com/d_attachment/buildings/buildings-14-03171/article_deploy/buildings-14-03171.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://mdpi-res.com/d_attachment/infrastructures/infrastructures-09-00023/article_deploy/infrastructures-09-00023.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://mdpi-res.com/d_attachment/materials/materials-12-03128/article_deploy/materials-12-03128.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://mdpi-res.com/d_attachment/materials/materials-13-00108/article_deploy/materials-13-00108.pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W1544477565,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2347215594,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2353642955,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2356476913,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2359924054,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2360189484,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2361619819,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2362249076,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2364825947,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2366850826,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2370612668,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2373849249,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2374306986,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2377400947,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2377464461,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2378204619,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2387255985,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2390353849,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2391808854,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W2493035609,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W77762984,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W907397951,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/W940914289,????,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.jstage.jst.go.jp/article/jact/17/10/17_559/_pdf,????,medium,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/1996-1944/12/19/3128/pdf?version=1569487945,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/1996-1944/13/1/108/pdf?version=1577274421,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/2075-5309/12/5/555/pdf?version=1650985102,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/2075-5309/14/10/3171/pdf?version=1728175948,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/2076-3417/13/10/6246/pdf?version=1684827077,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/2076-3417/9/18/3767/pdf,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/2412-3811/9/2/23/pdf?version=1706624514,????,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://zenodo.org/record/2416888,????,medium,imported,200,Study on Rock Filled Self Compacting Concrete,568,crawl_baf2dc53294d,83905ceb9d4f165f0033021ff8aa046429b3b61a69877c0ace44d583afca0a8e,,

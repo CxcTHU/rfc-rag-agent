@@ -1,0 +1,101 @@
+url,category,trust_level,notes
+https://en.wikipedia.org/wiki/Concrete,百科词条,medium,concrete overview
+https://en.wikipedia.org/wiki/Self-consolidating_concrete,百科词条,medium,self consolidating concrete overview
+https://en.wikipedia.org/wiki/Roller-compacted_concrete,百科词条,medium,roller compacted concrete overview
+https://en.wikipedia.org/wiki/Concrete_dam,百科词条,medium,concrete dam overview
+https://en.wikipedia.org/wiki/Arch_dam,百科词条,medium,dam type overview
+https://en.wikipedia.org/wiki/Gravity_dam,百科词条,medium,gravity dam overview
+https://en.wikipedia.org/wiki/Embankment_dam,百科词条,medium,embankment dam overview
+https://en.wikipedia.org/wiki/Rock-fill_dam,百科词条,medium,rock fill dam overview
+https://en.wikipedia.org/wiki/Concrete_slump_test,百科词条,medium,workability test overview
+https://en.wikipedia.org/wiki/Compressive_strength,百科词条,medium,mechanical property overview
+https://en.wikipedia.org/wiki/Young%27s_modulus,百科词条,medium,elastic modulus overview
+https://en.wikipedia.org/wiki/Hydration_reaction,百科词条,medium,cement hydration background
+https://en.wikipedia.org/wiki/Adiabatic_process,百科词条,medium,thermal background
+https://en.wikipedia.org/wiki/Finite_element_method,百科词条,medium,numerical simulation background
+https://en.wikipedia.org/wiki/Lattice_Boltzmann_methods,百科词条,medium,simulation method background
+https://en.wikipedia.org/wiki/Discrete_element_method,百科词条,medium,simulation method background
+https://en.wikipedia.org/wiki/Peridynamics,百科词条,medium,fracture simulation background
+https://en.wikipedia.org/wiki/Seismic_analysis,百科词条,medium,seismic analysis background
+https://en.wikipedia.org/wiki/Dam_safety,百科词条,medium,dam safety background
+https://en.wikipedia.org/wiki/Concrete_degradation,百科词条,medium,durability background
+https://www.tsinghua.edu.cn/en/info/1418/10419.htm,高校机构,high,Tsinghua RFC feature
+https://www.civil.tsinghua.edu.cn/heen/info/1159/1950.htm,高校机构,high,Tsinghua faculty patent page
+https://www.civil.tsinghua.edu.cn/en/,高校机构,high,Tsinghua civil engineering homepage
+https://www.tsinghua.edu.cn/en/Research.htm,高校机构,high,Tsinghua research page
+https://www.hhu.edu.cn/,高校机构,high,Hohai University homepage
+https://en.hhu.edu.cn/,高校机构,high,Hohai University English homepage
+https://www.iwhr.com/,高校机构,high,China Institute of Water Resources and Hydropower Research
+https://www.iwhr.com/zgskywwnew/index.htm,高校机构,high,IWHR English site
+https://www.chincold-smart.com/,高校机构,high,China dam committee public site
+https://www.iahr.org/,高校机构,high,IAHR public site
+https://www.icold-cigb.org/,高校机构,high,ICOLD public site
+https://www.ussdams.org/,高校机构,high,USSD public site
+https://www.usbr.gov/,高校机构,high,US Bureau of Reclamation
+https://www.usbr.gov/tsc/techreferences/,高校机构,high,USBR technical references
+https://www.usace.army.mil/,高校机构,high,US Army Corps of Engineers
+https://www.erdc.usace.army.mil/,高校机构,high,USACE ERDC research
+https://www.cement.org/,高校机构,high,Portland Cement Association
+https://www.concrete.org/,高校机构,high,American Concrete Institute
+https://www.rilem.net/,高校机构,high,RILEM public site
+https://www.asce.org/,高校机构,high,ASCE public site
+https://en.wikipedia.org/wiki/Three_Gorges_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Xiluodu_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Xiangjiaba_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Longtan_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Ertan_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Goupitan_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Jinping-I_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Nuozhadu_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Xiaowan_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Danjiangkou_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Hoover_Dam,工程案例,medium,classic concrete dam case
+https://en.wikipedia.org/wiki/Grand_Coulee_Dam,工程案例,medium,classic concrete dam case
+https://en.wikipedia.org/wiki/Itaipu_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Tarbela_Dam,工程案例,medium,rockfill dam case background
+https://en.wikipedia.org/wiki/Oroville_Dam,工程案例,medium,embankment dam case background
+https://en.wikipedia.org/wiki/Kariba_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Guri_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Aswan_Dam,工程案例,medium,large dam case background
+https://en.wikipedia.org/wiki/Dam_construction,工程案例,medium,dam construction background
+https://en.wikipedia.org/wiki/List_of_largest_dams,工程案例,medium,dam case index
+https://www.mdpi.com/1996-1944/12/19/3128,开放论文,high,MDPI RFC LBM DEM article
+https://www.engineering.org.cn/engi/CN/PDF/10.1016/j.eng.2023.09.020,开放论文,high,Engineering RFC review PDF page
+https://www.sciencedirect.com/science/article/pii/S0958946514001413,开放论文,medium,ScienceDirect RFC abstract page
+https://www.scholars.northwestern.edu/en/publications/experimental-study-of-filling-capacity-of-self-compacting-concret,开放论文,high,Northwestern publication metadata
+https://rockmech.whrsm.ac.cn/CN/abstract/abstract25492.shtml,开放论文,high,Chinese journal abstract page
+https://www.mdpi.com/journal/materials,开放论文,high,MDPI Materials journal
+https://www.mdpi.com/journal/applsci,开放论文,high,MDPI Applied Sciences journal
+https://www.mdpi.com/journal/buildings,开放论文,high,MDPI Buildings journal
+https://www.frontiersin.org/journals/materials,开放论文,high,Frontiers materials journal
+https://www.frontiersin.org/journals/built-environment,开放论文,high,Frontiers built environment journal
+https://www.hindawi.com/journals/ace/,开放论文,high,Advances in Civil Engineering journal
+https://www.springeropen.com/journals,开放论文,medium,SpringerOpen journals index
+https://www.nature.com/srep/,开放论文,medium,Scientific Reports journal
+https://www.mdpi.com/2075-5309,开放论文,high,Buildings journal index
+https://www.mdpi.com/2412-3811,开放论文,high,Infrastructures journal index
+https://www.tandfonline.com/journals/tcem20,开放论文,medium,Civil Engineering and Management journal page
+https://www.sciencedirect.com/journal/cement-and-concrete-composites,开放论文,medium,Cement and Concrete Composites journal
+https://www.sciencedirect.com/journal/construction-and-building-materials,开放论文,medium,Construction and Building Materials journal
+https://doaj.org/,开放论文,high,Directory of Open Access Journals
+https://openalex.org/,开放论文,high,OpenAlex metadata source
+https://www.iso.org/ics/91.100.30/x/,行业标准,high,ISO concrete cement standard category
+https://www.iso.org/ics/93.160/x/,行业标准,high,ISO hydraulic construction category
+https://www.iso.org/ics/93.020/x/,行业标准,high,ISO earthworks excavation foundation category
+https://www.iso.org/ics/91.080.40/x/,行业标准,high,ISO concrete structure category
+https://www.iso.org/ics/91.200/x/,行业标准,high,ISO construction technology category
+https://www.astm.org/products-services/standards-and-publications/standards/concrete-and-aggregates-standards.html,行业标准,high,ASTM concrete and aggregates standards
+https://www.astm.org/standards/c33,行业标准,high,ASTM C33 aggregate standard page
+https://www.astm.org/standards/c39,行业标准,high,ASTM C39 compressive strength standard page
+https://www.astm.org/standards/c143,行业标准,high,ASTM C143 slump standard page
+https://www.astm.org/standards/c150,行业标准,high,ASTM C150 cement standard page
+https://www.concrete.org/store/productdetail.aspx?ItemID=31819,行业标准,high,ACI 318 product page
+https://www.concrete.org/store/productdetail.aspx?ItemID=30120,行业标准,high,ACI 301 product page
+https://www.concrete.org/store/productdetail.aspx?ItemID=211122,行业标准,high,ACI 211 product page
+https://www.concrete.org/store/productdetail.aspx?ItemID=309R05,行业标准,high,ACI consolidation guide page
+https://www.concrete.org/store/productdetail.aspx?ItemID=2071R05,行业标准,high,ACI mass concrete guide page
+https://www.fema.gov/emergency-managers/risk-management/dam-safety,行业标准,high,FEMA dam safety guidance
+https://www.fema.gov/sites/default/files/2020-08/fema_dam-safety_p-93.pdf,行业标准,high,FEMA federal guidelines PDF
+https://www.usbr.gov/tsc/techreferences/mands/mands-pdfs/ConcreteManual.pdf,行业标准,high,USBR concrete manual PDF
+https://www.usbr.gov/tsc/techreferences/mands/mands-pdfs/SmallDams.pdf,行业标准,high,USBR design of small dams PDF
+https://www.usbr.gov/tsc/techreferences/mands/mands-pdfs/earthmanual.pdf,行业标准,high,USBR earth manual PDF

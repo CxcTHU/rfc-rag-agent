@@ -1,0 +1,133 @@
+url,category,trust_level,status,http_status,title,document_id,source_id,content_hash,fetched_at,error
+https://doaj.org/,开放论文,high,fetch_failed,,,,,,,URL error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+https://en.hhu.edu.cn/,高校机构,high,duplicate,200,NAV,471,crawl_bdb8c0836772,7fcb2144e7dcac9cffae49cb3a54b18beb7a7ada5c108ccb8e0aa207a95af3a3,,
+https://en.wikipedia.org/wiki/Adiabatic_process,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Arch_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Aswan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Compressive_strength,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Concrete,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Concrete_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Concrete_degradation,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Concrete_slump_test,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Dam_construction,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Dam_safety,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Danjiangkou_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Discrete_element_method,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Embankment_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Ertan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Finite_element_method,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Goupitan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Grand_Coulee_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Gravity_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Guri_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Hoover_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Hydration_reaction,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Itaipu_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Jinping-I_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Kariba_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Lattice_Boltzmann_methods,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/List_of_largest_dams,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Longtan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Nuozhadu_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Oroville_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Peridynamics,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Rock-fill_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Roller-compacted_concrete,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Seismic_analysis,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Self-consolidating_concrete,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Tarbela_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Three_Gorges_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Xiangjiaba_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Xiaowan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Xiluodu_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Young%27s_modulus,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/,开放论文,high,extract_failed,200,https://openalex.org/,,,,,Extracted text is too short
+https://rockmech.whrsm.ac.cn/CN/abstract/abstract25492.shtml,开放论文,high,fetch_failed,,,,,,,URL error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+https://www.asce.org/,高校机构,high,imported,200,American Society of Civil Engineers (ASCE) | Infrastructure leaders building communities,483,crawl_51e525daeef1,8f358c5f8b802c745e474a1b0e65c79142d5a217196d78cf7caa44b4e686ec2b,,
+https://www.astm.org/products-services/standards-and-publications/standards/concrete-and-aggregates-standards.html,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.astm.org/standards/c143,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.astm.org/standards/c150,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.astm.org/standards/c33,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.astm.org/standards/c39,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.cement.org/,高校机构,high,imported,200,American Cement Association,482,crawl_1309f73de97b,fad81d97bd2805117bd4132d723f06291f8259f2da686c19cd3d45eb7e85d739,,
+https://www.chincold-smart.com/,高校机构,high,extract_failed,200,https://www.chincold-smart.com/,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/en/,高校机构,high,duplicate,200,School of Civil Engineering Tsinghua University,468,crawl_70d1a6211e7b,578695f15e3c8084c4329468585cac538e3d17303743c65173725d7c5f24c2b5,,
+https://www.civil.tsinghua.edu.cn/heen/info/1159/1950.htm,高校机构,high,duplicate,200,JIN Feng-Department of Hydraulic Engineering,467,crawl_62dba71b9ee7,7d3af80b6c7a6b8dbcdb57c41f8488e38ab34604e9ce7e72c862c2ab641b9bd7,,
+https://www.concrete.org/,高校机构,high,duplicate,200,ACI Sustaining Members are dedicated to advancing concrete knowledge and are concrete industry leaders. Learn more.,475,crawl_98985fdf734c,e4d3d39420128fef3c3750051ff0521bbc79ddcf042b1fe446f3665885da5813,,
+https://www.concrete.org/store/productdetail.aspx?ItemID=2071R05,行业标准,high,fetch_failed,,,,,,,"HTTP 404: <!DOCTYPE html>
+<html  lang=""en-US"">
+<head id=""Head""><meta content=""text/html; charset=UTF-8"" http-equiv=""Content-Type"" />
+<meta name=""REVISIT-AFTER"" content=""1 DAYS"" />
+<meta name=""RATING"" content=""GENERAL"" />
+<meta name=""RESOURCE-TYPE"" content=""DOCUMENT"" />
+<meta content=""text/javascript"" http-e"
+https://www.concrete.org/store/productdetail.aspx?ItemID=211122,行业标准,high,fetch_failed,,,,,,,URL error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+https://www.concrete.org/store/productdetail.aspx?ItemID=30120,行业标准,high,fetch_failed,,,,,,,URL error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+https://www.concrete.org/store/productdetail.aspx?ItemID=309R05,行业标准,high,fetch_failed,,,,,,,URL error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+https://www.concrete.org/store/productdetail.aspx?ItemID=31819,行业标准,high,fetch_failed,,,,,,,URL error: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+https://www.engineering.org.cn/engi/CN/PDF/10.1016/j.eng.2023.09.020,开放论文,high,extract_failed,200,https://www.engineering.org.cn/engi/CN/PDF/10.1016/j.eng.2023.09.020,,,,,Extracted text is too short
+https://www.erdc.usace.army.mil/,高校机构,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;erdc&#46;usace&#46;army&#46;mil&#47;"" on this server.<P>
+Reference&#32;&#35;18&#46;1c5145cb&#46;1781249898&#46;2598f92f
+<P>https&#58;&#47;&#47;errors&#46;e"
+https://www.fema.gov/emergency-managers/risk-management/dam-safety,行业标准,high,imported,200,National Dam Safety Program,484,crawl_83d0d651d9a9,aeff44fd922e62d08fb7c2b8d08955072d6182b6cb0df55df82a57e3dbe5e278,,
+https://www.frontiersin.org/journals/built-environment,开放论文,high,fetch_failed,,,,,,,URL error: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+https://www.frontiersin.org/journals/materials,开放论文,high,fetch_failed,,,,,,,URL error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+https://www.hhu.edu.cn/,高校机构,high,duplicate,200,河海大学-Hohai University,470,crawl_9f388f141b8f,eba94e6785ed18f34f6b8cad2846a0f3a8c6508cddf2c088b3ac6d1d7926d000,,
+https://www.hindawi.com/journals/ace/,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iahr.org/,高校机构,high,imported,200,Chinese IAHR-YPN Doctoral Forum,481,crawl_589a45a0f58a,5e96cbb52aa3501a391c5f54d64a572b4bba753890bce5d8fda93256b9e391e4,,
+https://www.icold-cigb.org/,高校机构,high,duplicate,200,28th Congress,472,crawl_b937796fd5b8,22710823ca6c912e2783834d5a24bb6b66aedb65369992351bb8d903dee75030,,
+https://www.iso.org/ics/91.080.40/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iso.org/ics/91.100.30/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iso.org/ics/91.200/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iso.org/ics/93.020/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iso.org/ics/93.160/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iwhr.com/,高校机构,high,fetch_failed,,,,,,,URL error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+https://www.iwhr.com/zgskywwnew/index.htm,高校机构,high,fetch_failed,,,,,,,URL error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+https://www.mdpi.com/1996-1944/12/19/3128,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/2075-5309,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/2412-3811,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/journal/applsci,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/journal/buildings,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.mdpi.com/journal/materials,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.nature.com/srep/,开放论文,medium,duplicate,200,Scientific Reports,476,crawl_2b846c9f542a,7157945512dd1027433c212cd8f76b90bb71c751594f87e5636bdd6f8d78ffe3,,
+https://www.rilem.net/,高校机构,high,fetch_failed,,,,,,,HTTP 403: Access not allowed
+https://www.scholars.northwestern.edu/en/publications/experimental-study-of-filling-capacity-of-self-compacting-concret,开放论文,high,fetch_failed,,,,,,,"HTTP 404: <!DOCTYPE HTML PUBLIC ""-//IETF//DTD HTML 2.0//EN"">
+<html><head>
+<title>404 Not Found</title>
+</head><body>
+<h1>Not Found</h1>
+<p>The requested URL was not found on this server.</p>
+<p>Additionally, a 404 Not Found
+error was encountered while trying to use an ErrorDocument to handle the request.</p>
+"
+https://www.sciencedirect.com/journal/cement-and-concrete-composites,开放论文,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.sciencedirect.com/journal/construction-and-building-materials,开放论文,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.sciencedirect.com/science/article/pii/S0958946514001413,开放论文,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.springeropen.com/journals,开放论文,medium,extract_failed,200,https://www.springeropen.com/journals,,,,,Extracted text is too short
+https://www.tandfonline.com/journals/tcem20,开放论文,medium,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE html><html lang=""en-US""><head><title>Just a moment...</title><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><meta http-equiv=""X-UA-Compatible"" content=""IE=Edge""><meta name=""robots"" content=""noindex,nofollow""><meta name=""viewport"" content=""width=device-width,initial-scal"
+https://www.tsinghua.edu.cn/en/Research.htm,高校机构,high,duplicate,200,About,469,crawl_b9aba1d5ffde,94eecde82f70b966de5b1caa7f43d16644146491467457721d8540e4a9cf2465,,
+https://www.tsinghua.edu.cn/en/info/1418/10419.htm,高校机构,high,duplicate,200,Filling the gaps in large concrete dams,466,crawl_a67ca89d8ffb,93d575d47d54973c811081fed563da33f6e160465b887afaa65357f90b446866,,
+https://www.usace.army.mil/,高校机构,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;usace&#46;army&#46;mil&#47;"" on this server.<P>
+Reference&#32;&#35;18&#46;1c5145cb&#46;1781249886&#46;2598bd19
+<P>https&#58;&#47;&#47;errors&#46;edgesuite&"
+https://www.usbr.gov/,高校机构,high,duplicate,200,Bureau of Reclamation,474,crawl_a4c73bd78c79,36bff77f9fd40325f450da666401e27b375211a5e106f99e20192a999a411ce1,,
+https://www.usbr.gov/tsc/techreferences/,高校机构,high,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE HTML PUBLIC ""-//IETF//DTD HTML 2.0//EN"">
+<html><head>
+<title>403 Forbidden</title>
+</head><body>
+<h1>Forbidden</h1>
+<p>You don't have permission to access /tsc/techreferences/
+on this server.</p>
+</body></html>
+"
+https://www.ussdams.org/,高校机构,high,fetch_failed,,,,,,,URL error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
