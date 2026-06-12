@@ -1,22 +1,21 @@
-# 阶段 27 任务计划：Chainlit 前端 + Docker 容器化 + GitHub Actions CI
+# 阶段 28 任务计划：网页爬取 + 自动入库管线
 
 ## 目标
 
-在阶段 26「检索性能优化 + Cross-Encoder 重排序」已完成并合并到 `main` 的基础上，完成阶段 27：新增 Chainlit 专业级 AI 对话界面（流式输出、引用展示、步骤可视化、会话管理），并保留原 FastAPI API 与原生前端；用 Docker + docker-compose 容器化应用；用 GitHub Actions 建立 CI 管线自动运行全量测试。阶段完成后停在用户人工核验前，不提交、不打 tag、不推送。
+在阶段 27「Chainlit 前端 + Docker 容器化 + GitHub Actions CI」已完成并合并到 `main` 的基础上，完成阶段 28：构建网页爬取 + 自动入库管线（Web Crawl & Auto-Ingest Pipeline）。给定一个种子 URL 列表（CSV），自动抓取网页内容、提取正文（trafilatura）、清洗、切分、向量化、入库，扩充堆石混凝土领域语料至 600+ 文档。阶段完成后停在用户人工核验前，不提交、不打 tag、不推送。
 
 ## 硬约束
 
-- 阶段 27 开发完成前后均不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR。
-- 不移动任何已有阶段 tag，尤其是 `phase-26-complete`。
+- 阶段 28 开发完成前后均不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR。
+- 不移动任何已有阶段 tag，尤其是 `phase-27-complete`。
 - 保留用户或其他 session 的已有改动，不重置 Git，不覆盖无关文件。
-- 不做用户认证/登录系统。
-- 不引入 `torch` / `sentence-transformers` 等重量级依赖。
+- 爬虫必须遵守 robots.txt，默认请求间隔 ≥ 2 秒，不绕登录/验证码/付费墙。
+- User-Agent 必须标识自身身份，不伪装浏览器。
+- 不引入 `torch` / `sentence-transformers` / `selenium` / `playwright` 等重依赖。
 - 不让真实 API 成为 CI 或本地全量测试前提。
 - 不把 API key、Bearer token、供应商原始敏感响应、受限全文写入 Git、CSV、文档、测试或 Obsidian。
-- 保证 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`POST /agent/query/stream`、`GET /quality-report` 不被破坏。
-- FastAPI API 层完整保留，Chainlit 作为前端界面层对接已有后端逻辑，不替代 API。
-- Docker 镜像不包含 `.env`、API key、SQLite 数据文件或 Obsidian 知识库。
-- GitHub Actions CI 只使用 deterministic provider，不在 CI 中配置真实 API 凭据。
+- 保证现有 API 端点不被破坏。
+- 爬取的原始 HTML 不长期保存，只保存提取后的 markdown 正文。
 
 ## Phase 顺序
 
@@ -24,362 +23,374 @@
 
 **状态：已完成**
 
-**解决的问题**：确认阶段 26 的最终状态、tag、main 起点和阶段 27 分支。
+**解决的问题**：确认阶段 27 的最终状态、tag、main 起点和阶段 28 分支。
 
 **RAG 链路位置**：阶段起点校准，不改运行链路。
 
-**为什么现在做**：阶段 27 依赖阶段 26 的性能优化和重排序，必须先确认已进入 `main`。
+**为什么现在做**：阶段 28 依赖阶段 27 的 Chainlit/Docker/CI 基础设施，必须先确认已合并到 `main`。
 
 **任务**
 - 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-- 阅读阶段 26 设计文档、phase review，以及根目录 `task_plan.md`、`findings.md`、`progress.md`。
-- 核对 `phase-26-complete` tag 指向阶段 26 最终功能提交，且已合并到 main。
-- 从阶段 26 完成并合并后的 main 出发，创建或切换到 `codex/phase-27-chainlit-docker-ci`。
-- 将根目录三份 Planning with Files 文件校准为阶段 27。
+- 阅读阶段 27 设计文档、phase review，以及根目录 `task_plan.md`、`findings.md`、`progress.md`。
+- 核对 `phase-27-complete` tag 指向阶段 27 最终功能提交，且已合并到 main。
+- 从阶段 27 完成并合并后的 main 出发，创建或切换到 `codex/phase-28-web-crawl-auto-ingest`。
+- 将根目录三份 Planning with Files 文件校准为阶段 28。
 
 **验证方式**
 - `git status -sb`
 - `git log --oneline -5`
-- `git merge-base --is-ancestor phase-26-complete main`
+- `git merge-base --is-ancestor phase-27-complete main`
 
 **完成标准**
-- 当前分支为 `codex/phase-27-chainlit-docker-ci`。
-- `phase-26-complete` 不移动，且已并入 `main`。
-- `task_plan.md`、`findings.md`、`progress.md` 已切换为阶段 27。
+- 当前分支为 `codex/phase-28-web-crawl-auto-ingest`。
+- `phase-27-complete` 不移动，且已并入 `main`。
+- `task_plan.md`、`findings.md`、`progress.md` 已切换为阶段 28。
 
-**执行记录**
-- 已读取 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/stage26_retrieval_performance_reranking.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- 已确认 `phase-26-complete -> 5000d4fa790d95931862d3f8b2bfc34e91c91ee7 Complete phase 26 retrieval performance reranking`。
-- 已确认 `phase-26-complete` 已合并到 `main`，当前 `main`/起点 HEAD 为 `74afce9fa359c25b9730cf414cef69f3db0215da Merge phase 26 retrieval performance reranking`。
-- 已从阶段 26 合并后的 `main` 创建并切换到 `codex/phase-27-chainlit-docker-ci`。
-- 未移动任何已有阶段 tag，未执行 `git add`、`git commit`、`git tag`、`git push`。
+**2026-06-12 校准记录**
+- 已确认开工前当前 `main` 为 `800b39a Merge phase 27 chainlit docker ci`。
+- 已确认 `phase-27-complete -> 79f612e Complete phase 27 chainlit docker ci`。
+- 已确认 `phase-27-complete` 是 `main` 的 ancestor，阶段 27 已合并到 `main`。
+- 已从 `main` 创建并切换到 `codex/phase-28-web-crawl-auto-ingest`。
+- 未移动任何已有阶段 tag。
+- 当前工作树启动前已有 `task_plan.md`、`findings.md`、`progress.md` 修改；本阶段继续维护这三份阶段 28 planning 文件，不重置、不覆盖无关改动。
+- Phase 0 自检通过：当前分支为 `codex/phase-28-web-crawl-auto-ingest`，`git merge-base --is-ancestor phase-27-complete main` 返回通过。
 
-### Phase 1：阶段 27 设计文档
+**错误记录**
+| 时间 | 错误 | 处理 |
+| --- | --- | --- |
+| 2026-06-12 | 按 planning-with-files 示例用 `& (Get-Command python).Source ...` 运行 catchup 脚本时，PowerShell 报 `The expression after '&' ... was not valid` | 改为直接执行 `python C:\Users\admin\.codex\skills\planning-with-files\scripts\session-catchup.py .`，脚本运行成功且无额外输出 |
+
+### Phase 1：阶段 28 设计文档
 
 **状态：已完成**
 
-**解决的问题**：把 Chainlit 接入、Docker 容器化和 CI 管线的设计先固化成可审查合同。
+**解决的问题**：把网页爬取 + 自动入库管线的设计固化成可审查文档。
 
-**RAG 链路位置**：横跨前端层、部署层和测试自动化。
+**RAG 链路位置**：数据采集层（Data Ingestion Pipeline 的前端扩展）。
 
-**为什么现在做**：先明确 Chainlit 与现有 FastAPI 的集成方式、Docker 分层策略和 CI 触发规则，后续实现可以对齐。
+**为什么现在做**：先明确爬虫架构、与现有 IngestionService 的集成方式、安全边界和种子 URL 管理方式。
 
 **任务**
-- 新增 `docs/stage27_chainlit_docker_ci.md`。
-- 说明 Chainlit 集成方式：Chainlit 直接调用 Python 服务层（`AgentService`、`detect_chitchat()`、`run_agentic_rag()`、`HybridSearchService`），不经过 HTTP 自调用；FastAPI API 端点保留给外部客户端。
-- 说明 Chainlit 功能映射：
-  - `@cl.on_message` → 闲聊短路 / default AgentService / agentic LangGraph
-  - `cl.Message.stream_token()` → 流式输出（复用 `stream_generate()`）
-  - `cl.Step` → agentic workflow 步骤可视化（retrieve / grade / rewrite / generate）
-  - `cl.Text` / `cl.Element` → 引用来源、citations 展示
-  - 会话管理 → 复用 `ConversationRepository`
-- 说明 Docker 分层：基础镜像 `python:3.11-slim`，安装依赖层，复制代码层，暴露端口。
-- 说明 docker-compose：应用服务 + SQLite 数据卷挂载 + `.env` 环境变量。
-- 说明 GitHub Actions CI：push/PR 触发，`pip install` + `pytest`，deterministic provider，不配置真实 API。
+- 新增 `docs/stage28_web_crawl_auto_ingest.md`。
+- 说明爬虫架构：`seed_urls.csv` → `fetcher.py` → `extractor.py` → `pipeline.py` → `IngestionService.import_document()`。
+- 说明与现有模块的集成：复用 IngestionService、split_text()、clean_text()、DocumentRepository、SourceRegistryService。
+- 说明种子 URL 管理：CSV 格式、分类字段、可信度字段、状态跟踪。
+- 说明 CLI 入口 `scripts/crawl_and_ingest.py`。
 - 说明安全边界和完成标准。
 
-**验证方式**
-- 人工阅读文档覆盖阶段 27 验收项。
-
 **完成标准**
-- 设计文档存在且覆盖 Chainlit 集成、Docker、CI、安全与收尾标准。
+- 设计文档存在且覆盖爬虫架构、集成方式、URL 管理、安全边界与收尾标准。
 
-**执行记录**
-- 已新增 `docs/stage27_chainlit_docker_ci.md`。
-- 文档覆盖 Chainlit 双入口架构、服务层直接调用、`@cl.on_message` 处理顺序、`stream_generate()` 与 `msg.stream_token()` 流式映射、`cl.Step` workflow 展示、`cl.Text` 引用展示、`ConversationRepository` 会话映射、Docker / docker-compose / `.dockerignore` 安全边界、GitHub Actions CI 触发和 deterministic provider 约束。
-- 已明确 Chainlit 不删除 FastAPI API，也不删除原生 `app/frontend/` 调试入口。
+**2026-06-12 完成记录**
+- 已新增 `docs/stage28_web_crawl_auto_ingest.md`。
+- 文档已覆盖：阶段起点、模块职责、CLI 参数、seed CSV、crawl results 状态、source registry 注册、索引重建、安全边界、测试方案和完成标准。
+- 已明确本阶段爬虫只负责获取公开网页与正文提取，入库继续复用 `IngestionService.import_document()`，不重复实现清洗、切分和 documents/chunks 写入。
 
-### Phase 2：Chainlit 前端集成
+### Phase 2：爬虫核心模块
 
 **状态：已完成**
 
-**解决的问题**：当前原生 HTML/CSS/JS 前端界面粗糙，缺乏专业感。
+**解决的问题**：项目目前只能手动导入本地文件，无法自动从网页获取内容。
 
-**RAG 链路位置**：前端展示层，对接已有 Agent/Agentic/检索/会话服务。
+**RAG 链路位置**：数据采集层，在 IngestionService 上游新增网页抓取能力。
 
-**为什么现在做**：后端已稳定（26 阶段、511+ 测试），前端是部署前最后的体验短板。
+**为什么现在做**：这是阶段 28 的核心工程模块，后续 CLI 脚本和批量入库都依赖它。
 
 **任务**
-- `pyproject.toml` 新增 `chainlit` 依赖。
-- 新增 `chainlit_app.py`（项目根目录），作为 Chainlit 入口。
-- 实现 `@cl.on_chat_start`：初始化 DB Session、加载或创建 Conversation。
-- 实现 `@cl.on_message`：
-  - 调用 `detect_chitchat()`，命中直接回复。
-  - 未命中：`classify_query_complexity()` → default `AgentService.query()` 或 `run_agentic_rag()`。
-  - 流式输出：使用 `stream_generate()` + `msg.stream_token()`。
-  - 引用展示：从 `AgentQueryResult` / `AgenticResult` 提取 citations，用 `cl.Text` 元素展示。
-  - 步骤可视化：agentic 路径的 retrieve / grade / rewrite / generate 用 `cl.Step` 展示。
-- 实现会话管理：Chainlit 线程 ID 映射到 `Conversation.id`，复用 `ConversationRepository`。
-- 保留原有 FastAPI API 端点和原生前端（不删除 `app/frontend/`），Chainlit 作为独立入口并行可用。
-- 新增 `.chainlit/config.toml` 配置项目名称、主题色等。
-- 补充 Chainlit 集成测试。
-
-**验证方式**
-- `chainlit run chainlit_app.py` 可启动。
-- 浏览器验证：闲聊短路、RAG 问答流式输出、引用展示、步骤可视化。
+- 新增 `app/services/crawling/` 模块：
+  - `__init__.py`
+  - `fetcher.py`：HTTP 抓取，User-Agent 标识，请求间隔，robots.txt 检查，超时/重试。
+  - `extractor.py`：trafilatura 正文提取，输出 markdown 格式，提取元数据。
+  - `url_manager.py`：读取 seed_urls.csv，URL 去重，状态跟踪，写入 crawl_results.csv。
+  - `pipeline.py`：编排全链路：fetch → extract → 写入 markdown → IngestionService → 注册来源。
+- `pyproject.toml` 新增 `trafilatura>=2.0.0`。
+- 新增爬虫模块单元测试。
 
 **完成标准**
-- Chainlit 界面可用，覆盖闲聊、default、agentic 三条路径。
-- 流式输出、引用、步骤可视化正常。
-- FastAPI 原有 API 不受影响。
+- `app/services/crawling/` 4 个模块存在且可导入。
+- 单元测试覆盖 HTTP 抓取、正文提取、URL 管理和管线编排。
 
-**执行记录**
-- `pyproject.toml` 已新增 `chainlit>=2.0.0`，本地实际安装验证版本为 Chainlit 2.11.1。
-- 新增 `chainlit_app.py`，使用 `@cl.on_chat_start` 初始化 Conversation，使用 `@cl.on_message` 复用 `stream_agent_query_events()` 接入闲聊、default AgentService、agentic LangGraph、流式 token、metadata、引用和步骤展示。
-- 新增 `.chainlit/config.toml`，按 Chainlit 2.11.1 当前 schema 配置项目名、布局、CoT 展示、安全项和禁用 MCP/audio。
-- 新增 `chainlit.md`，替换 Chainlit 默认欢迎页。
-- 新增 `tests/test_chainlit_app.py`，覆盖 SSE event 解析、引用 markdown、workflow markdown、安全 metadata 和 Conversation 映射。
-- 新增 `tests/__init__.py`，避免 Chainlit 依赖带来的顶层 `tests` 包遮蔽本仓库测试模块。
-- 已验证 `chainlit_app.py` 可在真实 Chainlit 包存在时导入，且短暂启动 `chainlit run chainlit_app.py --host 127.0.0.1 --port 8010 --headless` 后首页返回 HTTP 200。
+**2026-06-12 完成记录**
+- 已新增 `app/services/crawling/__init__.py`、`fetcher.py`、`extractor.py`、`url_manager.py`、`pipeline.py`。
+- 已在 `pyproject.toml` 新增 `trafilatura>=2.0.0`。
+- 已新增 `tests/test_crawling_fetcher.py`、`tests/test_crawling_extractor.py`、`tests/test_crawling_url_manager.py`、`tests/test_crawling_pipeline.py`。
+- 验证通过：`.\.venv\Scripts\python.exe -m pytest tests\test_crawling_fetcher.py tests\test_crawling_extractor.py tests\test_crawling_url_manager.py tests\test_crawling_pipeline.py -q` -> 9 passed。
 
-**验证结果**
-```text
-.\.venv\Scripts\python.exe -m pytest tests\test_chainlit_app.py tests\test_agent_stream_api.py tests\test_agent_api.py -q
-30 passed, 1 warning
-
-chainlit smoke:
-GET http://127.0.0.1:8010 -> 200
-```
-
-### Phase 3：Docker 容器化
+### Phase 3：CLI 脚本与种子 URL
 
 **状态：已完成**
 
-**解决的问题**：项目只能在本机运行，无法分享或部署。
+**解决的问题**：需要一个用户可用的入口来批量执行爬取 + 入库。
 
-**RAG 链路位置**：部署层，封装应用运行环境。
+**RAG 链路位置**：CLI 入口层，连接爬虫模块和 IngestionService。
 
-**为什么现在做**：Chainlit 就绪后，需要把整个应用打包成可移植的容器。
+**为什么现在做**：核心模块就绪后，CLI 脚本是批量执行的入口。
 
 **任务**
-- 新增 `Dockerfile`：
-  - 基础镜像 `python:3.11-slim`。
-  - 安装依赖（利用 Docker 层缓存：先复制 `pyproject.toml`，再 `pip install`，再复制代码）。
-  - 暴露端口（Chainlit 默认 8000）。
-  - 入口命令 `chainlit run chainlit_app.py --host 0.0.0.0 --port 8000`。
-- 新增 `docker-compose.yml`：
-  - 应用服务，映射端口 8000:8000。
-  - SQLite 数据目录通过 volume 挂载 `./data:/app/data`。
-  - `.env` 通过 `env_file` 注入环境变量（不打入镜像）。
-- 新增 `.dockerignore`：排除 `.venv`、`__pycache__`、`.git`、`obsidian-vault`、`.env`、`*.sqlite`、`.claude`、`.codex`。
-- 验证 `docker-compose up --build` 可启动应用。
-
-**验证方式**
-- `docker-compose up --build` 成功启动。
-- 浏览器访问容器内 Chainlit 可正常对话。
+- 新增 `scripts/crawl_and_ingest.py`：接受 `--seed-csv`、`--output-dir`、`--delay`、`--max-urls` 参数。
+- 新增 `data/crawl/seed_urls.csv`，80-120 个种子 URL，覆盖 5 个分类。
+- CSV 格式：`url,category,trust_level,notes`。
+- 新增 CLI 集成测试。
 
 **完成标准**
-- `Dockerfile` + `docker-compose.yml` + `.dockerignore` 存在。
-- 容器内应用可启动，Chainlit 界面可访问。
-- 镜像不包含 `.env`、API key 或 SQLite 数据文件。
+- CLI 脚本可运行，参数解析正确。
+- 种子 URL 文件包含 80-120 个分类标注的 URL。
 
-**执行记录**
-- 已新增 `Dockerfile`，基于 `python:3.11-slim`，安装项目依赖并以 `chainlit run chainlit_app.py --host 0.0.0.0 --port 8000 --headless` 启动。
-- 已新增 `docker-compose.yml`，挂载 `./data:/app/data`，用 `.env` 运行时注入配置，并设置容器内 `DATABASE_URL=sqlite:////app/data/app.sqlite`。
-- 已新增 `.dockerignore`，排除 `.env`、`.venv`、`.git`、`.claude`、`.codex`、`obsidian-vault`、SQLite/DB、受限全文目录、raw data 和日志。
-- 已新增 `tests/test_docker_assets.py`，静态验证 Dockerfile、compose 和 dockerignore 的关键边界。
-- 当前环境未安装 Docker CLI，`docker compose build` 无法执行；已记录为环境限制，后续人工核验需在安装 Docker 的机器上运行 `docker compose up --build`。
+**2026-06-12 完成记录**
+- 已新增 `scripts/crawl_and_ingest.py`。
+- 已新增 `data/crawl/seed_urls.csv`，共 100 条 URL，五类各 20 条。
+- 已新增 `tests/test_crawl_and_ingest_cli.py`。
+- 验证通过：爬虫 + CLI 聚焦测试 11 passed。
+- 验证通过：seed CSV 100 行、无空 URL、无重复 URL、分类分布为百科词条/高校机构/工程案例/开放论文/行业标准各 20 条。
+- 验证通过：CLI dry-run `--max-urls 1` 正常输出 `processed=1`，未触发真实网页抓取。
 
-**验证结果**
-```text
-.\.venv\Scripts\python.exe -m pytest tests\test_docker_assets.py -q
-3 passed
-
-docker compose build
-failed: docker command not found
-```
-
-### Phase 4：GitHub Actions CI 管线
+### Phase 4：批量爬取与入库
 
 **状态：已完成**
 
-**解决的问题**：没有自动化测试管线，代码质量依赖人工运行 pytest。
+**解决的问题**：需要实际执行爬取，将语料库从 ~465 文档扩充到 600+ 文档。
 
-**RAG 链路位置**：CI/CD 自动化，不改业务链路。
+**RAG 链路位置**：数据采集层实际执行。
 
-**为什么现在做**：容器化完成后，CI 是部署前最后一个工程化基础设施。
+**为什么现在做**：CLI 和种子 URL 就绪后，实际执行来验证管线和扩充语料。
 
 **任务**
-- 新增 `.github/workflows/ci.yml`：
-  - 触发条件：push 到 `main`、`codex/*`、`claude/*` 分支，以及 PR 到 `main`。
-  - 运行环境：`ubuntu-latest`、`python 3.11`。
-  - 步骤：checkout → setup python → pip install (含 dev 依赖) → pytest -q。
-  - 不配置真实 API key，所有测试使用 deterministic provider。
-- 可选：添加 Docker 构建验证步骤（`docker build .` 能成功）。
-- 补充 CI 相关说明到 README。
-
-**验证方式**
-- CI 配置文件语法正确（`actionlint` 或人工审查）。
-- 本地模拟：`pip install -e ".[dev]" && python -m pytest -q` 通过。
+- 执行批量爬取。
+- 监控成功/失败/跳过统计。
+- 检查入库结果和来源注册。
+- 处理失败 URL。
+- 目标：新增 ≥ 150 个文档，总文档数达到 600+。
 
 **完成标准**
-- `.github/workflows/ci.yml` 存在。
-- CI 配置使用 deterministic provider，不依赖真实 API。
-- README 说明 CI 状态。
+- 入库文档 ≥ 600。
+- crawl_results.csv 记录完整。
+- 新增文档质量抽查通过。
 
-**执行记录**
-- 已新增 `.github/workflows/ci.yml`，push 到 `main`、`codex/**`、`claude/**` 和 PR 到 `main` 时运行。
-- CI 使用 `ubuntu-latest` + Python 3.11，执行 `python -m pip install -e ".[dev]"` 和 `python -m pytest -q`。
-- CI 环境变量显式设置 `CHAT_MODEL_PROVIDER=deterministic`、`EMBEDDING_PROVIDER=deterministic`、`RERANKING_PROVIDER=deterministic`，不配置真实 API key。
-- 已扩展 `tests/test_docker_assets.py` 覆盖 CI workflow 静态校验。
-
-**验证结果**
-```text
-.\.venv\Scripts\python.exe -m pytest tests\test_docker_assets.py tests\test_chainlit_app.py tests\test_agent_stream_api.py tests\test_agent_api.py -q
-34 passed, 1 warning
-```
+**2026-06-12 完成记录**
+- 阶段 28 批量爬取前基线：documents 465、chunks 8918、sources 125、chunk_embeddings 17836。
+- 已执行主 seed、受控同站发现、元数据补充 seed、targeted RFC seed 多批次爬取；所有批次均保持 robots.txt 检查、默认限速、短超时和自标识 User-Agent。
+- 已新增受控同站发现能力，仅在显式 `--discover-links` 下启用，同 host、过滤 fragment 和常见二进制/静态资源，并限制每页发现数量。
+- 第一轮完成后数据库计数：documents 625、chunks 10543、sources 242、chunk_embeddings 17836。
+- 用户追加要求爬取到 1000 篇后，继续本地批量爬取并达到：documents 1059、chunks 12103、sources 645、chunk_embeddings 21021。
+- 本阶段净新增文档 594 个，总文档数已超过 1000，满足阶段 28 批量扩充目标和用户追加目标。
+- 主要结果文件：`data/crawl/crawl_results.csv`、`data/crawl/crawl_results_discovery2.csv`、`data/crawl/crawl_results_extra_metadata.csv`、`data/crawl/crawl_results_targeted_rfc.csv`、`data/crawl/crawl_results_targeted_rfc_discovery.csv`。
+- 质量抽查：导入内容来自公开 HTML 页面，原始 HTML 未长期保存；重复内容由 `IngestionService.import_document()` content_hash 去重并在 results CSV 标记为 `duplicate`。
 
 ### Phase 5：端到端验证与回归
 
 **状态：已完成**
 
-**解决的问题**：确认 Chainlit 前端、Docker 容器和 CI 管线全链路可用，既有功能未被破坏。
+**解决的问题**：确认新增语料不破坏现有检索质量。
 
-**RAG 链路位置**：全链路回归。
-
-**为什么现在做**：功能开发完成后必须先测试，再进入文档收尾。
+**RAG 链路位置**：全链路验证。
 
 **任务**
-- 运行全量测试，目标 >= 511（阶段 26 基线）。
-- `docker-compose up --build` 验证容器启动和 Chainlit 可用。
-- 浏览器桌面/移动验证 Chainlit 界面。
-- 验证 FastAPI 原有 API 端点仍可访问。
-
-**验证方式**
-- `pytest` 全量测试。
-- 容器内 Chainlit 可正常对话。
-- 浏览器验证。
+- 全量测试。
+- API 端点冒烟。
+- 新入库内容检索测试。
+- Docker 镜像更新验证（新增 trafilatura 依赖）。
 
 **完成标准**
-- 全量测试通过，且不依赖真实 API。
-- 容器内 Chainlit 和 FastAPI API 均可正常使用。
+- 全量测试 ≥ 520 passed。
+- 新旧内容检索正常。
 
-**执行记录**
-- 已运行全量 pytest，结果 520 passed，超过阶段 26 基线 511。
-- 已启动 FastAPI 临时服务 `127.0.0.1:8020`，验证 `/health`、`/agent/query`、`/agent/query/stream`、`/search/hybrid`、`/quality-report`。
-- 已启动 Chainlit 临时服务 `127.0.0.1:8021`，验证首页和 `/project/settings` 为 200。
-- 已用浏览器检查 FastAPI 原生工作台桌面/移动加载，console error 为 0。
-- 已用浏览器检查 Chainlit 桌面/移动加载，console error 为 0。
-- 首次 Chainlit 浏览器检查发现 `/project/settings` 500，根因是 Chainlit 2.11.1 data layer 运行时导入 `asyncpg`；已新增 `asyncpg>=0.30.0` 并验证修复。
-- 当前环境无 Docker CLI，无法执行 `docker compose up --build`；保留为人工核验重点。
-
-**验证结果**
-```text
-.\.venv\Scripts\python.exe -m pytest -q
-520 passed, 1 warning in 56.85s
-
-FastAPI:
-GET /health -> 200
-POST /agent/query -> 200
-POST /agent/query/stream -> 200, contains event: done
-POST /search/hybrid -> 200
-GET /quality-report -> 200
-
-Browser:
-FastAPI desktop/mobile loaded, console errors=0
-Chainlit desktop/mobile loaded, console errors=0
-```
+**2026-06-12 完成记录**
+- 第一轮 deterministic 索引重建：total=10543、indexed=1625、updated=0、skipped=8918。
+- 用户追加 to1000 后再次重建：total=12103、indexed=1560、updated=0、skipped=10543。
+- 重建后数据库计数：documents 1059、chunks 12103、sources 645、chunk_embeddings 21021。
+- API smoke 通过：`GET /health` 200，`POST /search` 200，`POST /search/hybrid` 200。
+- 检索 smoke 通过：`HybridSearchService(deterministic, reranking_enabled=False)` 返回 5 条结果。
+- 受影响 agent/hybrid/search/CLI 子集回归通过：64 passed。
+- 全量测试通过：533 passed, 1 warning。
+- Docker build 已尝试两次，但当前环境无法从 Docker Hub 拉取 `python:3.11-slim`：BuildKit token 请求超时、legacy builder manifest 请求 EOF。该失败发生在项目构建步骤前，记录为用户人工核验项；本地 Python 依赖中 `trafilatura 2.1.0` 已安装并通过测试。
 
 ### Phase 6：文档同步、Obsidian 收尾与人工核验待提交状态
 
 **状态：已完成**
 
-**解决的问题**：把阶段 27 的设计、代码行为同步到项目文档和 Obsidian，并停在可核验状态。
-
-**RAG 链路位置**：项目知识层和阶段交付边界。
-
-**为什么现在做**：测试通过后文档才能准确描述最终行为。
+**解决的问题**：阶段 28 收尾。
 
 **任务**
-- 更新 `README.md`：新增 Chainlit 启动方式、Docker 启动方式、阶段 27 验证结果。
-- 更新 `docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-- 更新 `AGENT.MD`：新增阶段 27 之后 Chainlit、Docker 和 CI 维护规则。
-- 建立或更新 Obsidian 阶段 27 目录、汇报索引和各 Phase 小汇报。
-- 确认未创建 `phase-27-complete` tag。
-
-**验证方式**
-- `git status -sb`
-- `git tag --list phase-27-complete`
-- 文档无过期表述。
+- 更新 README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、AGENT.MD。
+- 新增 docs/phase_reviews/phase-28.md。
+- 新增 Obsidian 阶段 28 知识条目。
 
 **完成标准**
-- 当前分支保持阶段 27 分支。
-- 所有阶段 27 改动未提交，等待用户人工核验。
+- 所有文档同步完成。
+- 不提交、不打 tag、不推送，等待用户人工核验。
 
-**执行记录**
-- 已更新 `README.md`，记录阶段 27 当前状态、Chainlit / Docker 启动方式、全量测试结果和人工核验边界。
-- 已更新 `docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`，同步阶段 27 的功能、架构、数据边界和验证结果。
-- 已更新 `AGENT.MD`，新增阶段 27 之后 Chainlit / Docker / CI 规则，并把当前推荐第一步改为阶段 27 人工核验。
-- 已新增 Obsidian 阶段页、阶段 27 Phase 汇报索引、Phase 0-6 小汇报、Chainlit / Docker / CI 知识点，并更新首页、阶段索引、阶段汇报索引和相关分类页。
-- 当前仍未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR。
+**2026-06-12 完成记录**
+- 已同步 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD`。
+- 已新增 `docs/phase_reviews/phase-28.md`。
+- 已新增 Obsidian 阶段页、统一 Phase 汇报、知识点，并更新首页、阶段索引、阶段汇报索引和分类页。
+- 当前仍未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR，停在用户人工核验前状态。
 
-**验证结果**
-```text
-阶段 27 全量测试：520 passed, 1 warning
-FastAPI / Chainlit browser smoke：desktop/mobile console errors=0
-Docker CLI：当前环境未安装，docker compose up --build 待用户人工核验
-phase-27-complete：未创建
-```
-
-### Phase 7：原生前端视觉升级与可用首页
+### Phase 8：低质量语料清理
 
 **状态：已完成**
 
-**解决的问题**：当前原生 FastAPI 前端偏后台表格工作台，不像可展示的 AI/RAG 产品首页。
+**解决的问题**：Phase 4 批量爬取中 `--discover-links` 在 `www.tsinghua.edu.cn` 上失控扩展，导致 594 个新增 web_page 文档中 458 个（77%）是导航页、泛新闻、机构首页等无关内容（drop_candidate），严重稀释 RAG 检索质量。
 
-**RAG 链路位置**：前端展示层，复用 `/agent/query/stream`、sources、documents、conversations 等已有 API，不改检索、生成、rerank 或数据库模型。
+**RAG 链路位置**：数据质量治理层，位于入库之后、提交之前。
 
-**为什么现在做**：Docker 部署已跑通，但用户明确前端界面还需要优化；先把本地可访问首页升级成深色科技风作品展示页，再考虑提交。
+**为什么现在做**：在提交阶段 28 之前必须清理，否则这些垃圾数据会进入 Git 历史和生产索引。
 
 **任务**
-- 参考用户截图，把 `app/frontend/index.html` 改成深色科技风：顶部导航、左侧 hero、能力卡片、右侧可用 Agent demo、资料库状态。
-- 保留现有 data 属性和 JS 绑定，确保 Agent 问答、会话管理、来源同步、资料表格仍可用。
-- 优化 `app/frontend/static/styles.css`，覆盖桌面和移动端，避免文字溢出、按钮挤压和横向滚动。
-- 如需少量 JS 增强，只在 `app/frontend/static/app.js` 内做兼容性小改动，不引入 Node/React/Vue。
-- 补充或调整前端测试。
+- 新增 `scripts/cleanup_drop_candidates.py` 清理脚本：
+  - 读取 `data/evaluation/stage28_crawl_quality_drop_candidates.csv`，提取 458 个 document_id。
+  - 删除对应的 `documents` 记录（SQLAlchemy cascade 会自动删除关联的 `chunks` 和 `chunk_embeddings`）。
+  - 对应的 `sources` 记录的 `document_id` 会被 `SET NULL`（保留来源记录但断开文档关联）。
+  - 删除对应的 `data/raw/web_crawl/*.md` 文件。
+  - 支持 `--dry-run` 模式，先预览要删除的数量。
+  - 输出清理前后的 documents/chunks/chunk_embeddings 计数对比。
+- 执行清理（非 dry-run）。
+- 重建 deterministic 向量索引：`python scripts/build_vector_index.py --provider deterministic --batch-size 64`。
+- 运行全量测试确认无回归。
 
 **验证方式**
-- `python -m pytest tests/test_frontend_app.py tests/test_docker_assets.py tests/test_chainlit_app.py -q`
-- FastAPI 本地启动后浏览器桌面/移动 smoke。
-- 确认 Docker/Chainlit 入口不被破坏。
+- 清理前：documents ~1059, chunks ~12103, chunk_embeddings ~21021。
+- 清理后：documents ~601, chunks 减少（减去 drop_candidate 的 chunks），chunk_embeddings 相应减少。
+- 全量测试 ≥ 530 passed。
+- 随机抽查 5 个保留文档，确认是 strong/medium/weak 相关内容。
 
 **完成标准**
-- 首页视觉接近用户提供的深色科技风参考。
-- 原有 FastAPI API、原生前端工作台功能和 Chainlit/Docker 入口不被破坏。
-- 暂不提交、暂不创建 tag、暂不 merge、暂不 push。
+- 458 个 drop_candidate 文档及关联 chunks/embeddings 已删除。
+- 向量索引已重建。
+- 全量测试通过。
+- 清理脚本可复用（后续如需清理 review_candidate 可直接改 CSV 路径）。
 
-**执行记录**
-- 已重构 `app/frontend/index.html`，新增深色科技风导航、hero、能力卡片、右侧真实 Agent demo 面板、资料库工作台和指标区域。
-- 已根据人工反馈继续收敛信息架构：将“开始问答”和“资料库”拆成两个可切换视图，默认显示问答页，资料库通过顶部导航切换。
-- 已将首页主标题改为“面向堆石混凝土的 RAG 智能检索系统”，能力展示精简为“混合检索、流式回答、结构化分块”三项。
-- 已重写 `app/frontend/static/styles.css`，覆盖桌面与移动端响应式布局，表格在移动端使用内部横向滚动，避免整页被撑宽或拉长。
-- 已小改 `app/frontend/static/app.js` 的 `updateMetric()` 和视图切换逻辑，支持同一指标多处同步刷新，并用 `data-view-target` / `data-view` 控制两个页面视图。
-- 已更新 `tests/test_frontend_app.py`，覆盖新首页关键文案、结构 class、真实 Agent 面板 hook 和静态资源特征。
+**2026-06-12 完成记录**
+- 新增 `scripts/cleanup_drop_candidates.py`，支持 `--dry-run`，读取 `data/evaluation/stage28_crawl_quality_drop_candidates.csv` 中的 458 个 `document_id`。
+- 新增 `tests/test_cleanup_drop_candidates.py`，覆盖候选 CSV 去重、dry-run 不改数据、正式清理会删除 web_page 文档并把 `sources.document_id` 置空。
+- dry-run 结果：candidate_ids=458，existing_web_page_documents=458，chunks_to_delete=1471，embeddings_to_delete=1471，sources_to_unlink=421，raw_files_to_delete=879，unsafe_raw_paths=0。
+- 清理脚本发现阶段 28 入库后 `documents.raw_path` 指向 `data/raw/<content_hash>.md`，而 `sources.local_path` 指向 `data/raw/web_crawl/web_*.md`；脚本已改为同时删除这两类项目内 Markdown 文件，安全根目录限定为 `data/raw`，且只允许 `.md` 文件。
+- 正式清理结果：documents 1059 -> 601，chunks 12103 -> 10632，chunk_embeddings 21021 -> 19550，sources 保持 645；458 个 drop_candidate 文档删除，879 个 Markdown 文件删除，421 条 source 断开 document 关联。
+- 已重建 deterministic 索引：`python scripts/build_vector_index.py --provider deterministic --batch-size 64` -> total=10632, indexed=0, updated=0, skipped=10632。
+- 全量测试通过：`python -m pytest -q` -> 536 passed, 1 warning。
 
-**验证结果**
-```text
-python -m pytest tests/test_frontend_app.py tests/test_docker_assets.py tests/test_chainlit_app.py -q
-15 passed, 1 warning
+### Phase 9：Wikipedia API 百科知识补充
 
-python -m pytest -q
-520 passed, 1 warning in 83.56s
+**状态：已完成**
 
-FastAPI preview GET http://127.0.0.1:8022 -> 200
-桌面 1280x720 浏览器 smoke：console error 0
-移动 390x844 浏览器 smoke：console error 0
+**解决的问题**：原 seed_urls.csv 中 40 条 Wikipedia URL 全部被 robots.txt 拦截（`skipped_robots`），百科类知识完全缺失。Wikipedia 禁止通用爬虫但提供官方 REST API（合规渠道）。
 
-问答/资料库双视图补充验证：
-顶部导航切换到 #library-view 成功
-浏览器 console error/warning：0
-聚焦回归：15 passed, 1 warning in 1.59s
+**RAG 链路位置**：数据采集层，新增 Wikipedia API 数据源，补充概念类百科知识。
 
-Reranking API key 最小真实 smoke：
-provider=jina，base host=api.jina.ai，api key 已配置；最小 rerank 调用成功，返回 2 条结果并完成解析。未打印 key，未保存供应商原始响应。
+**为什么现在做**：百科知识对"堆石混凝土是什么""自密实混凝土原理"等概念类问答至关重要，是检索覆盖面的关键补充。
 
-提交前最终回归：
-python -m pytest -q
-520 passed, 1 warning in 145.76s
+**任务**
+- 新增 `app/services/crawling/wikipedia_fetcher.py`：
+  - 使用 Wikipedia REST API：`https://en.wikipedia.org/api/rest_v1/page/html/{title}`（英文）和 `https://zh.wikipedia.org/api/rest_v1/page/html/{title}`（中文）。
+  - 不需要 API key，不违反 robots.txt（官方 API 渠道）。
+  - 请求间隔仍保持 ≥ 2 秒。
+  - User-Agent 标识 RFC-RAG-Agent。
+  - 返回 HTML 后交给 `WebContentExtractor` 提取 markdown。
+- 新增 `data/crawl/wikipedia_articles.csv`：精选 30-40 篇与堆石混凝土/大坝/混凝土直接相关的 Wikipedia 文章：
+  - 中文：堆石混凝土、自密实混凝土、碾压混凝土、混凝土坝、重力坝、拱坝、面板堆石坝、水泥、骨料、坍落度、抗压强度、水化反应、大体积混凝土、温控措施 等
+  - 英文：Rock-filled concrete、Self-consolidating concrete、Roller-compacted concrete、Concrete dam、Gravity dam、Arch dam、Aggregate (composite)、Portland cement、Compressive strength、Mass concrete 等
+- CLI 入口：扩展 `scripts/crawl_and_ingest.py` 添加 `--source wikipedia` 选项，或新增独立脚本 `scripts/ingest_wikipedia.py`。
+- 新增 `tests/test_wikipedia_fetcher.py`：mock API 响应，验证 HTML 提取和入库流程。
 
-真实 reranking 配置隔离：
-修复两个离线测试误触发真实 rerank 的问题，确保真实 API 不成为全量测试前提。
-```
+**验证方式**
+- Wikipedia API 请求成功率 ≥ 90%。
+- 新增 25-35 个 Wikipedia 文档。
+- 全量测试通过。
+
+**完成标准**
+- `wikipedia_fetcher.py` 存在且可导入。
+- Wikipedia 文章已入库，来源类型标记为 `wikipedia`。
+- 单元测试覆盖 API 请求和提取流程。
+
+**2026-06-12 完成记录**
+- 新增 `app/services/crawling/wikipedia_fetcher.py`，使用 Wikipedia REST API `https://{lang}.wikipedia.org/api/rest_v1/page/html/{title}`，支持 `en`/`zh`、项目 User-Agent、默认 2 秒限速、网络错误有限重试，不需要 API key。
+- 新增 `data/crawl/wikipedia_articles.csv`，共 38 条中英文百科候选，覆盖混凝土、混凝土坝、重力坝、拱坝、水泥、骨料、坍落度、抗压强度、碾压混凝土、自密实混凝土、大体积混凝土等主题。
+- 新增 `scripts/ingest_wikipedia.py`，将 Wikipedia HTML 交给 `WebContentExtractor` 提取 Markdown，再复用 `IngestionService.import_document()` 入库，并通过 `SourceRegistryService` 注册 `source_type="wikipedia"`。
+- 新增 `tests/test_wikipedia_fetcher.py`，mock Wikipedia API 响应，覆盖 URL 编码、User-Agent 边界、HTML 获取、正文提取和网络错误重试；测试不依赖真实 Wikipedia。
+- dry-run 结果：`scripts/ingest_wikipedia.py --dry-run --quiet` -> processed=38。
+- 第一轮真实 API 入库：imported=11，fetch_failed=27；失败主要来自远端连接重置和少量 404。
+- 加入网络错误有限重试后第二轮入库：imported=14，duplicate=11，fetch_failed=11，extract_failed=2；累计 `wikipedia` documents=25。
+- 入库后数据库计数：documents=626，wikipedia_documents=25，chunks=11121，sources=664，wikipedia_sources=19，chunk_embeddings 在重建前为 19550。
+- 已重建 deterministic 索引：`python scripts/build_vector_index.py --provider deterministic --batch-size 64` -> total=11121, indexed=489, updated=0, skipped=10632。
+- 全量测试通过：`python -m pytest -q` -> 541 passed, 1 warning。
+
+### Phase 10：公开标准文档 PDF 补充
+
+**状态：已完成**
+
+**解决的问题**：当前语料缺少设计规范和行业标准类文档。堆石混凝土相关的国标（GB/T）、水利行业标准（SL）和国际标准有部分公开可获取。
+
+**RAG 链路位置**：数据采集层，利用已有 PDF 入库管线补充标准类文档。
+
+**为什么现在做**：标准文档是高可信度来源，对"配合比设计""施工质量控制""验收规范"等问题的回答质量至关重要。
+
+**任务**
+- 新增 `data/crawl/standards_urls.csv`，列出 10-15 个可公开获取的标准文档 URL（PDF 或 HTML）：
+  - 国家标准全文公开系统（openstd.samr.gov.cn）上的公开标准
+  - 水利部公开的 SL 标准文件
+  - USBR Concrete Manual、Design of Small Dams 等公开 PDF（部分已在 seed_urls.csv 中）
+  - FEMA Dam Safety 指南（公开 PDF）
+  - 其他可公开获取的混凝土/大坝标准摘要
+- 新增 `scripts/ingest_standards.py`：
+  - 读取 standards_urls.csv。
+  - 下载 PDF/HTML 到 `data/raw/standards/`。
+  - 调用 `IngestionService.import_document()` 入库。
+  - 注册来源类型 `standard_document`。
+- 下载和入库过程中：
+  - 不绕付费墙，只获取公开免费文档。
+  - 大于 20MB 的 PDF 跳过（避免超大文件）。
+  - 下载间隔 ≥ 2 秒。
+- 新增相关测试。
+
+**验证方式**
+- 新增 5-10 个标准类文档。
+- 全量测试通过。
+
+**完成标准**
+- 标准类文档已入库，来源类型标记为 `standard_document`。
+- standards_urls.csv 记录完整。
+- 不包含付费/受限文档。
+
+**2026-06-12 完成记录**
+- 新增 `data/crawl/standards_urls.csv`，15 条公开 PDF 候选，来源覆盖 USACE、USBR、FEMA/FERC/ASDSO；脚本按 20MB 上限自动跳过大 PDF。
+- 新增 `scripts/ingest_standards.py`，支持 `--dry-run`、`--quiet`、`--delay`、`--timeout`、`--max-mb`、`--max-retries`、`--rebuild-index`，下载 PDF 到 `data/raw/standards/` 后复用 `IngestionService.import_document()`，并注册 `source_type="standard_document"`。
+- 新增 `tests/test_ingest_standards.py`，mock PDF 下载、Content-Length 超限跳过和项目 User-Agent；测试不依赖真实网络。
+- 第一轮标准 PDF 入库：imported=2，download_failed=10，skipped_too_large=1。
+- 调整清单并加入网络错误有限重试后第二轮入库：imported=7，duplicate=2，download_failed=4，skipped_too_large=2；累计 `standard_document` documents=9。
+- 入库后数据库计数：documents=635，standard_documents=9，chunks=12716，sources=673，standard_sources=9，chunk_embeddings 在重建前为 20039。
+- 已重建 deterministic 索引：`python scripts/build_vector_index.py --provider deterministic --batch-size 64` -> total=12716, indexed=1595, updated=0, skipped=11121。
+- 全量测试通过：`python -m pytest -q` -> 544 passed, 1 warning。
+
+### Phase 11：清理后验证 + 文档同步 + 人工核验待提交
+
+**状态：已完成，等待用户人工核验**
+
+**解决的问题**：Phase 8-10 完成后的最终验证和文档同步。
+
+**RAG 链路位置**：全链路验证 + 文档层。
+
+**任务**
+- 运行全量测试。
+- 统计最终 documents/chunks/sources/chunk_embeddings 计数。
+- 用新增的百科和标准文档相关问题测试检索效果。
+- 更新 `docs/stage28_crawl_quality_report.md` 反映清理后的质量分布。
+- 更新 `docs/phase_reviews/phase-28.md`。
+- 更新 README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md。
+- 更新 Obsidian 知识条目。
+
+**完成标准**
+- 全量测试通过。
+- 文档全部同步。
+- 不提交、不打 tag、不推送，等待用户人工核验。
+
+**2026-06-12 完成记录**
+- 重新运行 `scripts/review_stage28_crawl_quality.py --sample-size 80`，更新 `data/evaluation/stage28_crawl_quality_*.csv` 和 `docs/stage28_crawl_quality_report.md`；清理后 `suggested_drop_candidate=0`，剩余 `review_candidate=91`。
+- 统计最终数据库计数：documents=635，web_page_documents=136，wikipedia_documents=25，standard_documents=9，chunks=12716，sources=673，wikipedia_sources=19，standard_sources=9，chunk_embeddings=21634。
+- 更新 `docs/phase_reviews/phase-28.md`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD`。
+- 更新 Obsidian 阶段页、阶段汇报索引、阶段 28 续汇总和知识点：`低质量语料清理`、`Wikipedia API 百科补充`、`公开标准 PDF 自动入库`。
+- 修正 `data/crawl/standards_urls.csv` 中 FEMA P-94 标题。
+- 当前仍停在人工核验前：未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR。
+
+**最终验证**
+- 最终全量测试：`python -m pytest -q` -> 544 passed, 1 warning。
+- 最终质量复核：`suggested_drop_candidate=0`。
+- 最终索引状态：deterministic provider 已重建，`chunk_embeddings=21634`。

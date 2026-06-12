@@ -1,0 +1,39 @@
+language,title,category,trust_level,notes
+zh,混凝土,百科词条,high,concrete concept
+zh,混凝土坝,百科词条,high,dam engineering concept
+zh,重力坝,百科词条,high,dam engineering concept
+zh,拱坝,百科词条,high,dam engineering concept
+zh,大坝,百科词条,high,dam engineering concept
+zh,水泥,百科词条,high,cement material concept
+zh,波特兰水泥,百科词条,high,cement material concept
+zh,骨料,百科词条,high,aggregate material concept
+zh,坍落度,百科词条,high,concrete workability concept
+zh,抗压强度,百科词条,high,mechanical property concept
+zh,水化反应,百科词条,high,cement hydration concept
+zh,碾压混凝土,百科词条,high,roller compacted concrete concept
+zh,自密实混凝土,百科词条,high,self compacting concrete concept
+zh,大体积混凝土,百科词条,high,mass concrete concept
+zh,面板堆石坝,百科词条,high,concrete face rockfill dam concept
+zh,堆石坝,百科词条,high,rockfill dam concept
+zh,水利工程,百科词条,high,hydraulic engineering concept
+zh,粉煤灰,百科词条,high,supplementary cementitious material concept
+zh,减水剂,百科词条,high,concrete admixture concept
+en,Concrete,encyclopedia,high,concrete concept
+en,Concrete dam,encyclopedia,high,dam engineering concept
+en,Gravity dam,encyclopedia,high,dam engineering concept
+en,Arch dam,encyclopedia,high,dam engineering concept
+en,Dam,encyclopedia,high,dam engineering concept
+en,Roller-compacted concrete,encyclopedia,high,roller compacted concrete concept
+en,Self-consolidating concrete,encyclopedia,high,self consolidating concrete concept
+en,Portland cement,encyclopedia,high,cement material concept
+en,Aggregate (composite),encyclopedia,high,aggregate material concept
+en,Construction aggregate,encyclopedia,high,construction aggregate concept
+en,Concrete slump test,encyclopedia,high,concrete workability concept
+en,Compressive strength,encyclopedia,high,mechanical property concept
+en,Hydration reaction,encyclopedia,high,cement hydration concept
+en,Mass concrete,encyclopedia,high,mass concrete concept
+en,Concrete masonry unit,encyclopedia,medium,concrete construction concept
+en,Concrete degradation,encyclopedia,medium,durability concept
+en,Concrete cover,encyclopedia,medium,reinforced concrete durability concept
+en,Spillway,encyclopedia,high,dam engineering component
+en,Embankment dam,encyclopedia,high,dam engineering concept

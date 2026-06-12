@@ -1,0 +1,258 @@
+url,category,trust_level,status,http_status,title,document_id,source_id,content_hash,fetched_at,error
+http://en.hhu.edu.cn/10329/list.htm,高校机构,high,duplicate,200,NAV,511,crawl_09eba1b9810e,6cf42c036172d3e5d95f8a6998d83551646e8d2545b384d4fd32dc0e8f7add1c,,
+http://en.hhu.edu.cn/10330/list.htm,高校机构,high,duplicate,200,NAV,512,crawl_c32d8847c19c,7e8ba7ad70fa3a2ed6eb176bbce456c4fd56ca6f09c03c05881b053e826bd388,,
+http://en.hhu.edu.cn/335/list.htm,高校机构,high,duplicate,200,NAV,510,crawl_d9e66b8234c8,d4bf34fc817c74306d7a6e5dface61f35b96ca04834cdee2bfc319493230c9ae,,
+http://en.hhu.edu.cn/342/list.htm,高校机构,high,duplicate,200,NAV,513,crawl_7b6ebe84986e,ca51953f108c2bbed9793351ba4a10aeab4ebbbd8cb1fddbffe9ef5345e58c5c,,
+http://en.hhu.edu.cn/main.htm,高校机构,high,duplicate,200,NAV,471,crawl_2e4ff1257190,7fcb2144e7dcac9cffae49cb3a54b18beb7a7ada5c108ccb8e0aa207a95af3a3,,
+http://www.hhu.edu.cn/,高校机构,high,duplicate,200,河海大学-Hohai University,470,crawl_f51302863c76,eba94e6785ed18f34f6b8cad2846a0f3a8c6508cddf2c088b3ac6d1d7926d000,,
+http://www.hhu.edu.cn/23413/list.htm,高校机构,high,duplicate,200,历史名人,508,crawl_d2961a475239,e08c06d61d507941906c92cc5eae72e0c5bcddb78325d6447e5bb6445a9dcd8b,,
+http://www.hhu.edu.cn/23414/list.htm,高校机构,high,duplicate,200,历任党政负责人,509,crawl_4f86cb3d1111,8a3b91874014833cfdac1cb8d626fd78d55e69b9bb6f94e7d71a6f6c369c38e4,,
+http://www.hhu.edu.cn/23451/list.htm,高校机构,high,extract_failed,200,http://www.hhu.edu.cn/23451/list.htm,,,,,Extracted text is too short
+http://www.hhu.edu.cn/dxzc/list.htm,高校机构,high,duplicate,200,大学章程,507,crawl_fea07bb356c5,d71f3e98064cd0633856b5065a63c24fac0b3fefdba623842ebf9f2d5e959813,,
+http://www.hhu.edu.cn/main.htm,高校机构,high,duplicate,200,河海大学-Hohai University,470,crawl_3b527241f589,eba94e6785ed18f34f6b8cad2846a0f3a8c6508cddf2c088b3ac6d1d7926d000,,
+http://www.hhu.edu.cn/xrld_23325/list.htm,高校机构,high,extract_failed,200,http://www.hhu.edu.cn/xrld_23325/list.htm,,,,,Extracted text is too short
+http://www.hhu.edu.cn/xxjj_23318/list.htm,高校机构,high,duplicate,200,学校简介,506,crawl_dd6044c6505c,60ae485e5f1805b2dc77b19d381915d88d389a160862fdcff344393310a57c3c,,
+https://doaj.org/,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://en.hhu.edu.cn/,高校机构,high,duplicate,200,NAV,471,crawl_bdb8c0836772,7fcb2144e7dcac9cffae49cb3a54b18beb7a7ada5c108ccb8e0aa207a95af3a3,,
+https://en.hhu.edu.cn/10329/list.htm,高校机构,high,imported,200,NAV,511,crawl_d5aa48dee6a7,6cf42c036172d3e5d95f8a6998d83551646e8d2545b384d4fd32dc0e8f7add1c,,
+https://en.hhu.edu.cn/10330/list.htm,高校机构,high,imported,200,NAV,512,crawl_7157c81a70a8,7e8ba7ad70fa3a2ed6eb176bbce456c4fd56ca6f09c03c05881b053e826bd388,,
+https://en.hhu.edu.cn/335/list.htm,高校机构,high,imported,200,NAV,510,crawl_5978641af337,d4bf34fc817c74306d7a6e5dface61f35b96ca04834cdee2bfc319493230c9ae,,
+https://en.hhu.edu.cn/342/list.htm,高校机构,high,imported,200,NAV,513,crawl_d913a24df327,ca51953f108c2bbed9793351ba4a10aeab4ebbbd8cb1fddbffe9ef5345e58c5c,,
+https://en.hhu.edu.cn/343/list.htm,高校机构,high,imported,200,NAV,514,crawl_5b7b4143ca7d,3827b939d67ee6db2445b5c6318828e309b84119542c9ba1bd14cc23bedf62b2,,
+https://en.hhu.edu.cn/344/list.htm,高校机构,high,imported,200,NAV,564,crawl_9909f58c186b,026c0f0540e85a96e159a04f5bc11a56752ab4025bb6f95a21e519650fe1da1c,,
+https://en.hhu.edu.cn/345/list.htm,高校机构,high,imported,200,NAV,515,crawl_a0e5d2de5bbc,a31c99190731f604e0426060e0615541aa53058f5bcf4d30365b27bea8772e35,,
+https://en.hhu.edu.cn/main.htm,高校机构,high,duplicate,200,NAV,471,crawl_c8aec7283724,7fcb2144e7dcac9cffae49cb3a54b18beb7a7ada5c108ccb8e0aa207a95af3a3,,
+https://en.wikipedia.org/wiki/Adiabatic_process,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Arch_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Aswan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Compressive_strength,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Concrete,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Concrete_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Concrete_degradation,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Concrete_slump_test,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Dam_construction,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Dam_safety,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Danjiangkou_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Discrete_element_method,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Embankment_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Ertan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Finite_element_method,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Goupitan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Grand_Coulee_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Gravity_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Guri_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Hoover_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Hydration_reaction,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Itaipu_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Jinping-I_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Kariba_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Lattice_Boltzmann_methods,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/List_of_largest_dams,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Longtan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Nuozhadu_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Oroville_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Peridynamics,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Rock-fill_dam,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Roller-compacted_concrete,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Seismic_analysis,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Self-consolidating_concrete,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Tarbela_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Three_Gorges_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Xiangjiaba_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Xiaowan_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Xiluodu_Dam,工程案例,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://en.wikipedia.org/wiki/Young%27s_modulus,百科词条,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://openalex.org/,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://rockmech.whrsm.ac.cn/CN/abstract/abstract25492.shtml,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.asce.org/,高校机构,high,duplicate,200,American Society of Civil Engineers (ASCE) | Infrastructure leaders building communities,483,crawl_51e525daeef1,8f358c5f8b802c745e474a1b0e65c79142d5a217196d78cf7caa44b4e686ec2b,,
+https://www.asce.org/membership/join,高校机构,high,imported,200,Become a member,527,crawl_4a3f61a15f3c,af76161bb42be18d4fb5754b0f18453f875fc15fb929889021d970381f6a80a6,,
+https://www.asce.org/publications-and-news,高校机构,high,imported,200,Publications & News,528,crawl_c5da62e6208c,80425582774ee8ac482221b9a6f81226f0ad696ebda8adaefab46003fea91c00,,
+https://www.asce.org/publications-and-news/asce-7,高校机构,high,imported,200,ASCE 7 standard,529,crawl_cef257f423ee,04b8e0b2e357ff04d05a258dd536c72f6d78c3e81e1073db97541e005b4aed7f,,
+https://www.asce.org/publications-and-news/civil-engineering-source,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.asce.org/publications-and-news/civil-engineering-source/civil-engineering-magazine,高校机构,high,imported,200,Civil Engineering Online,531,crawl_506be76b9ab7,0e2e81e9a7ab747dbc0c2110949c2aa88d12d9ee66b4072089ca61c0c8369496,,
+https://www.asce.org/publications-and-news/codes-and-standards,高校机构,high,imported,200,Codes and Standards,532,crawl_4807c2238077,25bac90e0a16eff03790c5fb4a5f4352bf6f4036a5835232317325c1017c87fb,,
+https://www.asce.org/publications-and-news/newsroom,高校机构,high,imported,200,Newsroom,530,crawl_94361a3231db,029666e881841f8c83e53c1756d62046ae19f0324b3cca91ccbaaa899b4b0333,,
+https://www.asce.org/search/bookstore-incl-books---proceedings---codes-standards,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.astm.org/products-services/standards-and-publications/standards/concrete-and-aggregates-standards.html,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.astm.org/standards/c143,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.astm.org/standards/c150,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.astm.org/standards/c33,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.astm.org/standards/c39,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.cement.org,高校机构,high,duplicate,200,American Cement Association,482,crawl_bea72533065f,fad81d97bd2805117bd4132d723f06291f8259f2da686c19cd3d45eb7e85d739,,
+https://www.cement.org/,高校机构,high,duplicate,200,American Cement Association,482,crawl_1309f73de97b,fad81d97bd2805117bd4132d723f06291f8259f2da686c19cd3d45eb7e85d739,,
+https://www.cement.org/build-america/,高校机构,high,imported,200,Build America - American Cement Association,523,crawl_3709fdf59581,93a8002f8bd9795aa69f49d64699bf3b3c06601d00415b99d9e2edd558d3a315,,
+https://www.cement.org/cement-concrete/,高校机构,high,imported,200,Cement & Concrete - American Cement Association,524,crawl_6e38b38607e0,13378346b5ee0ed0be70f7174823a9372317bfa20ca99ec700eb4701c8932d40,,
+https://www.cement.org/cement-concrete/applications-of-cement/,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.cement.org/cement-concrete/applications-of-cement/uses-in-infrastructure/,高校机构,high,imported,200,Uses in Infrastructure - American Cement Association,526,crawl_a0b9b41ca437,6b4feafba8805576c9d3c1fb0e2903e6b680aec01cf5daa650870b75b41dd9b8,,
+https://www.cement.org/cement-concrete/how-cement-is-made/,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.cement.org/cement-concrete/the-resilience-of-concrete/,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.cement.org/cement-concrete/types-of-cement/,高校机构,high,imported,200,Types of Cement - American Cement Association,525,crawl_75f9ad0f7582,044280831cdf03a4cfe20368f8abdead2f98b6daf07ccad686e7c76ec7d6f849,,
+https://www.chincold-smart.com/,高校机构,high,extract_failed,200,https://www.chincold-smart.com/,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/,高校机构,high,imported,200,清华大学土木水利学院,499,crawl_552a6c138e54,7a95ce03198ef82130483929263bf3710c29d6a49215e8758a2b9953bf39923d,,
+https://www.civil.tsinghua.edu.cn/en,高校机构,high,duplicate,200,School of Civil Engineering Tsinghua University,468,crawl_29f84d45bc69,578695f15e3c8084c4329468585cac538e3d17303743c65173725d7c5f24c2b5,,
+https://www.civil.tsinghua.edu.cn/en/,高校机构,high,duplicate,200,School of Civil Engineering Tsinghua University,468,crawl_70d1a6211e7b,578695f15e3c8084c4329468585cac538e3d17303743c65173725d7c5f24c2b5,,
+https://www.civil.tsinghua.edu.cn/en/About/Committee.htm,高校机构,high,imported,200,Committee-School of Civil Engineering Tsinghua University,503,crawl_9a6d51fb24b0,87be4bb9e04ce84bf4c4663c96d7610d65e8054924c92cb0ae9d98f6ced39ec0,,
+https://www.civil.tsinghua.edu.cn/en/About/Current_Administrators.htm,高校机构,high,imported,200,Current Administrators-School of Civil Engineering Tsinghua University,502,crawl_930745dd82b5,41f358a295d81398d0e76b33ab6dd7eb060f997596c94c7c9f5d1c480f2329f5,,
+https://www.civil.tsinghua.edu.cn/en/About/General_Information.htm,高校机构,high,imported,200,General Information-School of Civil Engineering Tsinghua University,500,crawl_514de6bfbd2c,2a76b451a6f4d0d57e4e1bcbc993524223819e35dc535740618c4d4d3892deae,,
+https://www.civil.tsinghua.edu.cn/en/About/History_of_SCE.htm,高校机构,high,imported,200,History of SCE-School of Civil Engineering Tsinghua University,501,crawl_b1bef1c3b96f,733e304247ff00098a4e8fdf86d8d52be39662d454add0750245cd1343bf18ae,,
+https://www.civil.tsinghua.edu.cn/en/About/Organizational_Structure.htm,高校机构,high,imported,200,Organizational Structure-School of Civil Engineering Tsinghua University,504,crawl_05bd45326423,5f8eb67a7f2abb27be39b42682ea52464661919f38150ffa485355d4658a2f12,,
+https://www.civil.tsinghua.edu.cn/en/Education/Graduate.htm,高校机构,high,imported,200,Graduate-School of Civil Engineering Tsinghua University,552,crawl_7d16474ead24,d266ea31fad7cfb440463726cb77e4fbddba0ebd81b6e4cce88ce7fc7db9526e,,
+https://www.civil.tsinghua.edu.cn/en/Education/Undergraduate.htm,高校机构,high,imported,200,Undergraduate-School of Civil Engineering Tsinghua University,505,crawl_b13ec13e71fc,fc5763b20bfe4b0f8bba224b8792f94c3b60edc55bc25514d119e8e8db45b6f2,,
+https://www.civil.tsinghua.edu.cn/en/index.htm,高校机构,high,duplicate,200,School of Civil Engineering Tsinghua University,468,crawl_99b28b989c00,578695f15e3c8084c4329468585cac538e3d17303743c65173725d7c5f24c2b5,,
+https://www.civil.tsinghua.edu.cn/gyxy/lsyg.htm,高校机构,high,imported,200,历史沿革-清华大学土木水利学院,560,crawl_9efa22c308a4,4c604a55a695fb51a8a24fcd431886faff544e6d94b311725ee371f212893d04,,
+https://www.civil.tsinghua.edu.cn/gyxy/wyh.htm,高校机构,high,imported,200,委员会-清华大学土木水利学院,561,crawl_66cca66cb2d9,431348d7ccd3f7c63195ba19af3e188d3b0ac59b78e87e6b6202df6904078cc9,,
+https://www.civil.tsinghua.edu.cn/gyxy/xygk.htm,高校机构,high,imported,200,学院概况-清华大学土木水利学院,558,crawl_f8838395aa8a,32eba0b979964c3144976124c04d24ce1a35c94b41a1f5bab27c05d70a346ba7,,
+https://www.civil.tsinghua.edu.cn/gyxy/xyld/ydw.htm,高校机构,high,extract_failed,200,https://www.civil.tsinghua.edu.cn/gyxy/xyld/ydw.htm,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/gyxy/xyxw.htm,高校机构,high,imported,200,学院新闻-清华大学土木水利学院,557,crawl_2d8483ba449d,a6aaf446e098c4dba8dfd416d01c174e537efdc7aa7b5220f59052f80dc11a79,,
+https://www.civil.tsinghua.edu.cn/gyxy/yzzc.htm,高校机构,high,imported,200,院长致辞-清华大学土木水利学院,559,crawl_1f534a8672ae,c313a6e8c2e6db9547231bb8c9ad958d740b30f6f31f992070a439058434408c,,
+https://www.civil.tsinghua.edu.cn/he/,高校机构,high,imported,200,清华大学水利水电工程系,493,crawl_82072e48f56f,2dbc3dfb1c99b5755ee9bdaa74b9e5fc391095b9c6ec9c9f62af6ba1f0d954ed,,
+https://www.civil.tsinghua.edu.cn/he/gysl/jgzz.htm,高校机构,high,extract_failed,200,https://www.civil.tsinghua.edu.cn/he/gysl/jgzz.htm,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/he/gysl/lsyg.htm,高校机构,high,imported,200,历史沿革-清华大学水利水电工程系,556,crawl_9f4330a067f7,299dcf12b032d952fb61c1b4a33b5526e37cc12ab9f3bf6378d036e33024efbd,,
+https://www.civil.tsinghua.edu.cn/he/gysl/slgk.htm,高校机构,high,imported,200,水利概况-清华大学水利水电工程系,555,crawl_71c5798150e0,5c5a51f8b0a510d4d9e5051ce81b0522f8f95c476709b75c78ecb23915fa7e9b,,
+https://www.civil.tsinghua.edu.cn/he/gysl/slxw.htm,高校机构,high,imported,200,水利新闻-清华大学水利水电工程系,554,crawl_90c7a79e1438,6648f48c50448d69da45e8b5cc6ff8ef0e2a6605eb91e68796e4f0a3fb9ef56c,,
+https://www.civil.tsinghua.edu.cn/he/gysl/wyh.htm,高校机构,high,extract_failed,200,https://www.civil.tsinghua.edu.cn/he/gysl/wyh.htm,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/he/index.htm,高校机构,high,duplicate,200,清华大学水利水电工程系,493,crawl_8e8b44783a03,2dbc3dfb1c99b5755ee9bdaa74b9e5fc391095b9c6ec9c9f62af6ba1f0d954ed,,
+https://www.civil.tsinghua.edu.cn/heen/,高校机构,high,duplicate,200,Department of Hydraulic Engineering,492,crawl_fef53128551e,f6e69473dc6a520856852ce1d001bfb231ef530a3e22c54d60d796ebd861ae0b,,
+https://www.civil.tsinghua.edu.cn/heen/About/Committee.htm,高校机构,high,imported,200,Committee-Department of Hydraulic Engineering,496,crawl_76e9c6a26c43,70c8dd33be06c70cf4f9e94e2c623aa7ca4df92318e4de983bbdcd7f98081aa3,,
+https://www.civil.tsinghua.edu.cn/heen/About/General_Introduction.htm,高校机构,high,imported,200,General Introduction-Department of Hydraulic Engineering,494,crawl_2b29a7a5bca0,910b959f85ccb4934257254477e80d7bd5d4b4f5d34d082ea004162f1cf56942,,
+https://www.civil.tsinghua.edu.cn/heen/About/History.htm,高校机构,high,imported,200,History-Department of Hydraulic Engineering,495,crawl_13cfcd7765e4,11c32cfb1376a49d49dec21523683048a1b751bcc60ee341239917f401dbfb16,,
+https://www.civil.tsinghua.edu.cn/heen/Education/Graduate.htm,高校机构,high,imported,200,Graduate-Department of Hydraulic Engineering,553,crawl_dfc0928ce218,bcead9d063ff2e8a47e03f78d66960f98a28861bd7e0b27f378f513482bf37c4,,
+https://www.civil.tsinghua.edu.cn/heen/Education/Overview.htm,高校机构,high,imported,200,Overview-Department of Hydraulic Engineering,497,crawl_a7f35c2e3f52,6a4db9b863f894e136a6b958dbe5b390e36ce9910dfe42ff5049f2abf16c6f27,,
+https://www.civil.tsinghua.edu.cn/heen/Education/Undergraduate.htm,高校机构,high,imported,200,Undergraduate-Department of Hydraulic Engineering,498,crawl_a5e7803edbf7,e774fca6beda78c2f2b5e7c59e786c6917113a298a03e05fa732e5391ec2b10d,,
+https://www.civil.tsinghua.edu.cn/heen/index.htm,高校机构,high,imported,200,Department of Hydraulic Engineering,492,crawl_bfbd72428f9b,f6e69473dc6a520856852ce1d001bfb231ef530a3e22c54d60d796ebd861ae0b,,
+https://www.civil.tsinghua.edu.cn/heen/info/1159/1950.htm,高校机构,high,duplicate,200,JIN Feng-Department of Hydraulic Engineering,467,crawl_62dba71b9ee7,7d3af80b6c7a6b8dbcdb57c41f8488e38ab34604e9ce7e72c862c2ab641b9bd7,,
+https://www.civil.tsinghua.edu.cn/index.htm,高校机构,high,duplicate,200,清华大学土木水利学院,499,crawl_554faa9a5629,7a95ce03198ef82130483929263bf3710c29d6a49215e8758a2b9953bf39923d,,
+https://www.concrete.org/,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.concrete.org/store/productdetail.aspx?ItemID=2071R05,行业标准,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.concrete.org/store/productdetail.aspx?ItemID=211122,行业标准,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.concrete.org/store/productdetail.aspx?ItemID=30120,行业标准,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.concrete.org/store/productdetail.aspx?ItemID=309R05,行业标准,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.concrete.org/store/productdetail.aspx?ItemID=31819,行业标准,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.engineering.org.cn/engi/CN/PDF/10.1016/j.eng.2023.09.020,开放论文,high,extract_failed,200,https://www.engineering.org.cn/engi/CN/PDF/10.1016/j.eng.2023.09.020,,,,,Extracted text is too short
+https://www.erdc.usace.army.mil/,高校机构,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;erdc&#46;usace&#46;army&#46;mil&#47;"" on this server.<P>
+Reference&#32;&#35;18&#46;4d965468&#46;1781250371&#46;1d23554
+<P>https&#58;&#47;&#47;errors&#46;ed"
+https://www.fema.gov/emergency-managers/risk-management/dam-safety,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.fema.gov/sites/default/files/2020-08/fema_dam-safety_p-93.pdf,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.frontiersin.org/,开放论文,high,imported,200,Frontiers | Publisher of peer-reviewed articles in open access journals,533,crawl_93ebb987bb9d,804814133e1e5313856167f835081a05735c1b0c42b1fba131bb2080b21acf3b,,
+https://www.frontiersin.org/about/annual-reports,开放论文,high,extract_failed,200,https://www.frontiersin.org/about/annual-reports,,,,,Extracted text is too short
+https://www.frontiersin.org/about/awards,开放论文,high,imported,200,Frontiers | Awards,537,crawl_2ef01e026d2b,8f0268ec15ecc530082954b016282e9a3e98b93ce8077b67dab24bf7805bd753,,
+https://www.frontiersin.org/about/history,开放论文,high,imported,200,Frontiers | History,535,crawl_48dc85431ccb,9fa686d8f455457b70d430dd6a4197c1595644b11e1021cec3c2ff60bae7f135,,
+https://www.frontiersin.org/about/impact,开放论文,high,imported,200,Frontiers | Frontiers' impact,538,crawl_7ea2adcbd5fb,243572e3a4d1c28c9b45d35322cdcab1d48f450b2bfa213e49baefd67bf432d9,,
+https://www.frontiersin.org/about/leadership,开放论文,high,imported,200,Frontiers | Leadership,536,crawl_0d8a5956c8bb,3cc298c52174a1c47208dc0d4628c9e08a768b76d13b08cf4b39195d1bd63bc9,,
+https://www.frontiersin.org/about/mission,开放论文,high,imported,200,Frontiers | Mission,534,crawl_97ebfad909ae,1364b231f6b4a5f1f8d5a747f5b633c3461ca4940de981932f5bbfbac5687727,,
+https://www.frontiersin.org/about/thought-leadership,开放论文,high,imported,200,"Frontiers' reports, whitepapers, and thought leadership",539,crawl_9bb9ee1d95ff,b60d888b954b815791030b9ef6f6413fab9ba6ee77fe205ae79dbc0d7e934be0,,
+https://www.frontiersin.org/journals/built-environment,开放论文,high,imported,200,Frontiers in Built Environment,485,crawl_afcd3646ab72,4b2e5c54db181dccabfe83795925d36274922bae50bf91a807ac69c9a8100db3,,
+https://www.frontiersin.org/journals/materials,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.hhu.edu.cn/,高校机构,high,duplicate,200,河海大学-Hohai University,470,crawl_9f388f141b8f,eba94e6785ed18f34f6b8cad2846a0f3a8c6508cddf2c088b3ac6d1d7926d000,,
+https://www.hhu.edu.cn/190/list.htm,高校机构,high,imported,200,院系设置,562,crawl_a5079028af7e,9d8e8c76661231cda2e8c60c1e7db3f72467959aced1b5451c2f058fe5fdf472,,
+https://www.hhu.edu.cn/191/list.htm,高校机构,high,duplicate,200,院系设置,562,crawl_ed8a2b3c49da,9d8e8c76661231cda2e8c60c1e7db3f72467959aced1b5451c2f058fe5fdf472,,
+https://www.hhu.edu.cn/23413/list.htm,高校机构,high,imported,200,历史名人,508,crawl_b739e428e063,e08c06d61d507941906c92cc5eae72e0c5bcddb78325d6447e5bb6445a9dcd8b,,
+https://www.hhu.edu.cn/23414/list.htm,高校机构,high,imported,200,历任党政负责人,509,crawl_d32b44db71bc,8a3b91874014833cfdac1cb8d626fd78d55e69b9bb6f94e7d71a6f6c369c38e4,,
+https://www.hhu.edu.cn/23451/list.htm,高校机构,high,extract_failed,200,https://www.hhu.edu.cn/23451/list.htm,,,,,Extracted text is too short
+https://www.hhu.edu.cn/23622/list.htm,高校机构,high,extract_failed,200,https://www.hhu.edu.cn/23622/list.htm,,,,,Extracted text is too short
+https://www.hhu.edu.cn/dxzc/list.htm,高校机构,high,imported,200,大学章程,507,crawl_df556811860b,d71f3e98064cd0633856b5065a63c24fac0b3fefdba623842ebf9f2d5e959813,,
+https://www.hhu.edu.cn/main.htm,高校机构,high,duplicate,200,河海大学-Hohai University,470,crawl_133d2a2fa977,eba94e6785ed18f34f6b8cad2846a0f3a8c6508cddf2c088b3ac6d1d7926d000,,
+https://www.hhu.edu.cn/xrld_23325/list.htm,高校机构,high,extract_failed,200,https://www.hhu.edu.cn/xrld_23325/list.htm,,,,,Extracted text is too short
+https://www.hhu.edu.cn/xxjj_23318/list.htm,高校机构,high,imported,200,学校简介,506,crawl_ec433cefd82d,60ae485e5f1805b2dc77b19d381915d88d389a160862fdcff344393310a57c3c,,
+https://www.hindawi.com/journals/ace/,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iahr.org/,高校机构,high,duplicate,200,Chinese IAHR-YPN Doctoral Forum,481,crawl_589a45a0f58a,5e96cbb52aa3501a391c5f54d64a572b4bba753890bce5d8fda93256b9e391e4,,
+https://www.iahr.org/index/council,高校机构,high,imported,200,Council,521,crawl_6b935d2930d5,e39cb5635a023b479ae5c64f933904b72734b4afffcb067807d1763358f5b977,,
+https://www.iahr.org/index/detail/200,高校机构,high,imported,200,What is IAHR,518,crawl_d7f1bacda06e,f46ee671b2d91c36eef234282a36230bcff95acc85680b3e32d7bac541e6fc82,,
+https://www.iahr.org/index/detail/234,高校机构,high,imported,200,Please Donate to IAHR,517,crawl_9a94183c05f1,1661f6dae6d7fc8e7ab683336846bb039dbc651cf0dfdfaacb287e36fdde2cb6,,
+https://www.iahr.org/index/detail/765,高校机构,high,imported,200,IAHR Resource Guides,519,crawl_311cae770e29,602847bed874b937fa63f73ef95f6750922cbca3a463833db5d7634100908ff1,,
+https://www.iahr.org/index/detail/98,高校机构,high,imported,200,IAHR Presidents since 1935,522,crawl_2b6ccb027f8e,9e2df7729e75fba59b12979f382001b8cb40210f2d3362ef3d8b89e9eebe49b9,,
+https://www.iahr.org/index/rule,高校机构,high,imported,200,Constitution and By-Laws,520,crawl_1b8027775ad9,a3078000bc01b948f4b2206637d045b368dbe16c6c8c973f91d1ca880b28af66,,
+https://www.iahr.org/individual-member/register-one,高校机构,high,imported,200,Register,516,crawl_1608e8433de9,430182c6212d11d92e46a6cdaf98546be0f7699f67873d80ad31f7482cf7c7d1,,
+https://www.iahr.org/site/login,高校机构,high,extract_failed,200,https://www.iahr.org/site/login,,,,,Extracted text is too short
+https://www.icold-cigb.org/,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.iso.org/ics/91.080.40/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iso.org/ics/91.100.30/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iso.org/ics/91.200/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iso.org/ics/93.020/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iso.org/ics/93.160/x/,行业标准,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.iwhr.com/,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.iwhr.com/zgskywwnew/index.htm,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/1996-1944/12/19/3128,开放论文,high,fetch_failed,,,,,,,URL error: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+https://www.mdpi.com/2075-5309,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/2412-3811,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/journal/applsci,开放论文,high,fetch_failed,,,,,,,URL error: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+https://www.mdpi.com/journal/buildings,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/journal/materials,开放论文,high,fetch_failed,,,,,,,URL error: [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1028)
+https://www.nature.com/,开放论文,medium,imported,200,Nature,542,crawl_9d88de4ae765,d575d907c2270e1e5ce1ef10ad8f54a54d407f8c20c980a762b84356aa7b8506,,
+https://www.nature.com/siteindex,开放论文,medium,imported,200,Journals A-Z,540,crawl_a990b27817ed,00b72972b98fd48d4dcdd095824d26182ef3697ad57c56f60397d61ae683d22e,,
+https://www.nature.com/srep,开放论文,medium,duplicate,200,Scientific Reports,476,crawl_0ddf83f59a3e,7157945512dd1027433c212cd8f76b90bb71c751594f87e5636bdd6f8d78ffe3,,
+https://www.nature.com/srep.rss,开放论文,medium,imported,200,https://www.nature.com/srep.rss,541,crawl_503f6db9fd29,b9ff3a616154b9fe9b473011d61234de6389f443337316bd33e1c9dc00c1b36d,,
+https://www.nature.com/srep/,开放论文,medium,duplicate,200,Scientific Reports,476,crawl_2b846c9f542a,7157945512dd1027433c212cd8f76b90bb71c751594f87e5636bdd6f8d78ffe3,,
+https://www.nature.com/srep/about,开放论文,medium,imported,200,About Scientific Reports,543,crawl_e4905c31c894,6c0c1849ad20794ce0fce6f2e802bc41282723949664ffd6e0af6b87746ebbba,,
+https://www.nature.com/srep/announcements/engineering,开放论文,medium,imported,200,Announcements,545,crawl_1db2e8b14b77,3cd60d7f30bac5a654484f18979ef702d282fcb302b8d8b875d6dbb401b16e1d,,
+https://www.nature.com/srep/guestedited,开放论文,medium,extract_failed,200,https://www.nature.com/srep/guestedited,,,,,Extracted text is too short
+https://www.nature.com/srep/highlights/top-articles,开放论文,medium,imported,200,Top articles,544,crawl_4ee9bb696d36,c609517cf94b0a10690f4f1fd17ca4721020f730f3f74d375c21aced3fc089ba,,
+https://www.rilem.net/,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.scholars.northwestern.edu/en/publications/experimental-study-of-filling-capacity-of-self-compacting-concret,开放论文,high,fetch_failed,,,,,,,"HTTP 404: <!DOCTYPE HTML PUBLIC ""-//IETF//DTD HTML 2.0//EN"">
+<html><head>
+<title>404 Not Found</title>
+</head><body>
+<h1>Not Found</h1>
+<p>The requested URL was not found on this server.</p>
+<p>Additionally, a 404 Not Found
+error was encountered while trying to use an ErrorDocument to handle the request.</p>
+"
+https://www.sciencedirect.com/journal/cement-and-concrete-composites,开放论文,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.sciencedirect.com/journal/construction-and-building-materials,开放论文,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.sciencedirect.com/science/article/pii/S0958946514001413,开放论文,medium,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.springeropen.com/journals,开放论文,medium,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.tandfonline.com/journals/tcem20,开放论文,medium,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE html><html lang=""en-US""><head><title>Just a moment...</title><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8""><meta http-equiv=""X-UA-Compatible"" content=""IE=Edge""><meta name=""robots"" content=""noindex,nofollow""><meta name=""viewport"" content=""width=device-width,initial-scal"
+https://www.tsinghua.edu.cn/,高校机构,high,imported,200,清华新闻,490,crawl_2dc3e1fe7da2,f4bc80a4a7a52adf15eb97cfa5dfa1bd5953a37b6148a86daf4da3d9bd939956,,
+https://www.tsinghua.edu.cn/en/,高校机构,high,duplicate,200,About,486,crawl_d26ccb38120d,c143e6e3b2ba6ffae9404eda957946a3a8f4db9b681df0d8ed1f0a099220ee5a,,
+https://www.tsinghua.edu.cn/en/About.htm,高校机构,high,imported,200,About,491,crawl_89401c27b322,025d6ab201b73eba5aa942a5067486997453e8dd749d19f6f4b8b4dbbcb49a53,,
+https://www.tsinghua.edu.cn/en/About/General_Information.htm,高校机构,high,imported,200,General Information,546,crawl_a3044702b61e,80f1a32ca9f2d18df8e894c93bd97fbd7b94ba2d495d2f67009e9518edb79c13,,
+https://www.tsinghua.edu.cn/en/Alumni.htm,高校机构,high,imported,200,About,488,crawl_976a5409f350,cf3262ace679665bd3c5c66ad9090e8b4d35ea0398ea192b652ef163aa8106ac,,
+https://www.tsinghua.edu.cn/en/Faculty___Staff.htm,高校机构,high,imported,200,About,487,crawl_79604042eae6,6f364a4784cfb953589450815ce9de90a2989303b6a41ffdab39507d6556b499,,
+https://www.tsinghua.edu.cn/en/Media.htm,高校机构,high,imported,200,About,489,crawl_4dedb74dd8d2,ec43afcae5fd2ca12accb39cbc430386047914bfc39ff8a3eb7039dbeffb455d,,
+https://www.tsinghua.edu.cn/en/Research.htm,高校机构,high,duplicate,200,About,469,crawl_b9aba1d5ffde,94eecde82f70b966de5b1caa7f43d16644146491467457721d8540e4a9cf2465,,
+https://www.tsinghua.edu.cn/en/Student_Life.htm,高校机构,high,extract_failed,200,https://www.tsinghua.edu.cn/en/Student_Life.htm,,,,,Extracted text is too short
+https://www.tsinghua.edu.cn/en/Visitor.htm,高校机构,high,extract_failed,200,https://www.tsinghua.edu.cn/en/Visitor.htm,,,,,Extracted text is too short
+https://www.tsinghua.edu.cn/en/index.htm,高校机构,high,imported,200,About,486,crawl_87ab8e4f1711,c143e6e3b2ba6ffae9404eda957946a3a8f4db9b681df0d8ed1f0a099220ee5a,,
+https://www.tsinghua.edu.cn/en/info/1418/10419.htm,高校机构,high,duplicate,200,Filling the gaps in large concrete dams,466,crawl_a67ca89d8ffb,93d575d47d54973c811081fed563da33f6e160465b887afaa65357f90b446866,,
+https://www.tsinghua.edu.cn/fk.htm,高校机构,high,extract_failed,200,https://www.tsinghua.edu.cn/fk.htm,,,,,Extracted text is too short
+https://www.tsinghua.edu.cn/index.htm,高校机构,high,duplicate,200,清华新闻,490,crawl_1f3d7434aa19,f4bc80a4a7a52adf15eb97cfa5dfa1bd5953a37b6148a86daf4da3d9bd939956,,
+https://www.tsinghua.edu.cn/news.htm,高校机构,high,imported,200,专题推荐,547,crawl_7df69269c311,0ccd7f701e1c55dd1faea2ee6e33354cb9bf70e48ae61cef3269d202366940e8,,
+https://www.tsinghua.edu.cn/xxgk.htm,高校机构,high,imported,200,清华新闻,548,crawl_103aeef91a9d,a67dc6aa64aafde9fad21525d488ea2fb587ede5079442c88f8ccc641fccb43b,,
+https://www.tsinghua.edu.cn/xxgk/lrld.htm,高校机构,high,imported,200,清华新闻,551,crawl_5a29f08f8aaa,704929924cde02ad0407082164d0ee9ebad09acc45d39e1bdd2b93c5793a55e4,,
+https://www.tsinghua.edu.cn/xxgk/xqxc.htm,高校机构,high,imported,200,清华新闻,549,crawl_aae34133818e,6e385ee93d16c6ed9c8c6291a65487f2014fcd6be626d3597e45dc1b487ffbc6,,
+https://www.tsinghua.edu.cn/xxgk/xxyg.htm,高校机构,high,imported,200,清华新闻,550,crawl_b44151710e6f,b6a1763e7199fdfc69469d84bff3512deb98f064fa8147110bb0932cce82ee91,,
+https://www.usace.army.mil/,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.usbr.gov/,高校机构,high,fetch_failed,,,,,,,Timeout: The read operation timed out
+https://www.usbr.gov/tsc/techreferences/,高校机构,high,fetch_failed,,,,,,,"HTTP 403: <!DOCTYPE HTML PUBLIC ""-//IETF//DTD HTML 2.0//EN"">
+<html><head>
+<title>403 Forbidden</title>
+</head><body>
+<h1>Forbidden</h1>
+<p>You don't have permission to access /tsc/techreferences/
+on this server.</p>
+</body></html>
+"
+https://www.usbr.gov/tsc/techreferences/mands/mands-pdfs/ConcreteManual.pdf,行业标准,high,fetch_failed,,,,,,,"HTTP 404: <!DOCTYPE HTML PUBLIC ""-//IETF//DTD HTML 2.0//EN"">
+<html><head>
+<title>404 Not Found</title>
+</head><body>
+<h1>Not Found</h1>
+<p>The requested URL /tsc/techreferences/mands/mands-pdfs/ConcreteManual.pdf was not found on this server.</p>
+</body></html>
+"
+https://www.usbr.gov/tsc/techreferences/mands/mands-pdfs/SmallDams.pdf,行业标准,high,fetch_failed,,,,,,,Timeout: The read operation timed out
+https://www.usbr.gov/tsc/techreferences/mands/mands-pdfs/earthmanual.pdf,行业标准,high,fetch_failed,,,,,,,"HTTP 404: <!DOCTYPE HTML PUBLIC ""-//IETF//DTD HTML 2.0//EN"">
+<html><head>
+<title>404 Not Found</title>
+</head><body>
+<h1>Not Found</h1>
+<p>The requested URL /tsc/techreferences/mands/mands-pdfs/earthmanual.pdf was not found on this server.</p>
+</body></html>
+"
+https://www.ussdams.org/,高校机构,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out

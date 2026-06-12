@@ -1,0 +1,39 @@
+language,title,category,status,url,document_id,source_id,content_hash,error
+zh,混凝土,百科词条,imported,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B7%B7%E5%87%9D%E5%9C%9F,1034,wikipedia_3cba76f70f24,532f173bf8011f69ca9b9aa1d6b0c95e9b8ce96a2e0246b766c482b63e0d90a5,
+zh,混凝土坝,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B7%B7%E5%87%9D%E5%9C%9F%E5%9D%9D,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,重力坝,百科词条,imported,https://zh.wikipedia.org/api/rest_v1/page/html/%E9%87%8D%E5%8A%9B%E5%9D%9D,1035,wikipedia_bc2e6c1a26f3,fa463578f77d273c78ae4026ccdff963ce6855ffbd3778e2b2b6d641cbc00b2a,
+zh,拱坝,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%8B%B1%E5%9D%9D,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,大坝,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%A4%A7%E5%9D%9D,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,水泥,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B0%B4%E6%B3%A5,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,波特兰水泥,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B3%A2%E7%89%B9%E5%85%B0%E6%B0%B4%E6%B3%A5,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,骨料,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E9%AA%A8%E6%96%99,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,坍落度,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%9D%8D%E8%90%BD%E5%BA%A6,,,,HTTP 404: Not Found
+zh,抗压强度,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%8A%97%E5%8E%8B%E5%BC%BA%E5%BA%A6,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,水化反应,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B0%B4%E5%8C%96%E5%8F%8D%E5%BA%94,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,碾压混凝土,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E7%A2%BE%E5%8E%8B%E6%B7%B7%E5%87%9D%E5%9C%9F,,,,HTTP 404: Not Found
+zh,自密实混凝土,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E8%87%AA%E5%AF%86%E5%AE%9E%E6%B7%B7%E5%87%9D%E5%9C%9F,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,大体积混凝土,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%A4%A7%E4%BD%93%E7%A7%AF%E6%B7%B7%E5%87%9D%E5%9C%9F,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,面板堆石坝,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E9%9D%A2%E6%9D%BF%E5%A0%86%E7%9F%B3%E5%9D%9D,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,堆石坝,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%A0%86%E7%9F%B3%E5%9D%9D,,,,HTTP 404: Not Found
+zh,水利工程,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B0%B4%E5%88%A9%E5%B7%A5%E7%A8%8B,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,粉煤灰,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E7%B2%89%E7%85%A4%E7%81%B0,,,,HTTP 404: Not Found
+zh,减水剂,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%87%8F%E6%B0%B4%E5%89%82,,,,HTTP 404: Not Found
+en,Concrete,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Concrete,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+en,Concrete dam,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_dam,,,,HTTP 404: Not Found
+en,Gravity dam,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Gravity_dam,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+en,Arch dam,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Arch_dam,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+en,Dam,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Dam,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+en,Roller-compacted concrete,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Roller-compacted_concrete,1036,wikipedia_080b2d31c178,84a798917b92cb0011cd42a409d13702f400d1e11c1a88583624cd5514b27509,
+en,Self-consolidating concrete,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Self-consolidating_concrete,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+en,Portland cement,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Portland_cement,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+en,Aggregate (composite),encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Aggregate_%28composite%29,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+en,Construction aggregate,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Construction_aggregate,1037,wikipedia_d2110127a02a,1a93159ff1a4bf922854c6a89f98c3458b4fa08725188a77f95c57830a15a851,
+en,Concrete slump test,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_slump_test,1038,wikipedia_cdbd59f343e0,b8895ffc246aab1150ee05a0923632c22661d747477138910fcaa625c4347430,
+en,Compressive strength,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Compressive_strength,1039,wikipedia_0091c2df870f,c4b38d3d7dc5d5b77cbee875aff2e4d177e07c7701b2030ceecdbc603fdd6b53,
+en,Hydration reaction,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Hydration_reaction,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+en,Mass concrete,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Mass_concrete,1040,wikipedia_9f4a373d602a,bed1f4e7e0b4f67bde4bc2e2ed9d07fb6c9ac32d57832f850e7c90153a25944c,
+en,Concrete masonry unit,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_masonry_unit,1041,wikipedia_dc8a9872e877,9aa3ef1152a694baf64bae2c6ec75dfe8dbf006d09b65190dcb20ec4e4cb88a7,
+en,Concrete degradation,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_degradation,1042,wikipedia_3eb3a4e0a837,080e015d930df5bc5908c56dc0c07e33e5a804feb7bc7841c49943e5c133ff2a,
+en,Concrete cover,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_cover,1043,wikipedia_f158349c0419,74b47fcbb38d3e196a87e28265dc7ef10f508745985417e00181b08fba1f38d5,
+en,Spillway,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Spillway,1044,wikipedia_14af37f08477,1a1ad37f5c5e5f817cca961048885a31dfd8084d95641dc6bb36cb21da631b51,
+en,Embankment dam,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Embankment_dam,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>

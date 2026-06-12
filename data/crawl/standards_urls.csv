@@ -1,0 +1,16 @@
+title,url,category,trust_level,notes
+USACE EM 1110-2-2000 Standard Practice for Concrete for Civil Works Structures,https://www.publications.usace.army.mil/Portals/76/Publications/EngineerManuals/EM_1110-2-2000.pdf,concrete_standard,high,Public USACE engineering manual; may return 403 from this environment
+USACE EM 1110-2-2006 Roller-Compacted Concrete,https://www.publications.usace.army.mil/Portals/76/Publications/EngineerManuals/EM_1110-2-2006.pdf,roller_compacted_concrete,high,Public USACE engineering manual; may return 403 from this environment
+USBR Concrete Manual,https://www.usbr.gov/tsc/techreferences/mands/mands-pdfs/ConcreteManual.pdf,concrete_manual,high,Public USBR manual; may fail if remote closes TLS
+USBR Design of Small Dams,https://www.usbr.gov/tsc/techreferences/mands/mands-pdfs/SmallDams.pdf,dam_design,high,Public USBR manual; expected to skip if over 20MB
+FEMA P-64 Emergency Action Planning for Dams,https://www.fema.gov/sites/default/files/2020-08/eap_federal_guidelines_fema_p-64.pdf,dam_safety,high,Public FEMA guideline
+FEMA P-65 Earthquake Analyses and Design of Dams,https://www.fema.gov/sites/default/files/2020-08/fema_dam-safety_earthquake-analysis_P-65.pdf,dam_safety,high,Public FEMA guideline
+FEMA P-94 Selecting and Accommodating Inflow Design Floods for Dams,https://www.fema.gov/sites/default/files/2020-08/fema_dam-safety_inflow-designs_P-94.pdf,dam_safety,high,Public FEMA guideline
+FEMA Living with Dams Know Your Risks,https://www.fema.gov/sites/default/files/2020-08/fema_living-with-dams_p-956.pdf,dam_safety,high,Public FEMA risk communication guide
+FEMA Dam Safety Pocket Safety Guide for Dams and Impoundments,https://www.fema.gov/sites/default/files/2020-08/fema_911_pocket_safety_guide_dams_impoundments_2016.pdf,dam_safety,high,Public FEMA field guide
+FEMA Dam Incident Planning Guide,https://www.fema.gov/sites/default/files/2020-08/dam_incident_planning_guide_2019.pdf,dam_safety,high,Public FEMA incident planning guide
+FEMA Dam Awareness Technical Assistance,https://www.fema.gov/sites/default/files/2020-08/ta3-dam_awareness.pdf,dam_safety,high,Public FEMA technical assistance document
+FEMA Dam Awareness Fact Sheet,https://www.fema.gov/sites/default/files/2020-08/fact-sheet_dam-awareness.pdf,dam_safety,high,Public FEMA fact sheet
+FEMA Dam Safety Inundation Mapping and Flood Risks,https://www.fema.gov/sites/default/files/2020-08/fema_dam-safety_inundation-mapping-flood-risks.pdf,dam_safety,high,Public FEMA inundation mapping guide
+FEMA 148 Glossary of Terms for Dam Safety,https://www.ferc.gov/sites/default/files/2020-04/fema-148.pdf,dam_safety,high,Public FEMA/FERC archive; may return 403 from this environment
+FEMA P-679 Technical Manual Outlet Works Energy Dissipators,https://damsafety.org/sites/default/files/files/FEMA%20TM%20EnergyDissipators%20P679-2010.pdf,dam_safety,medium,Public dam safety technical manual; skip if over 20MB

@@ -1,0 +1,39 @@
+language,title,category,status,url,document_id,source_id,content_hash,error
+zh,混凝土,百科词条,duplicate,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B7%B7%E5%87%9D%E5%9C%9F,1034,wikipedia_3cba76f70f24,532f173bf8011f69ca9b9aa1d6b0c95e9b8ce96a2e0246b766c482b63e0d90a5,
+zh,混凝土坝,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B7%B7%E5%87%9D%E5%9C%9F%E5%9D%9D,,,,HTTP 404: Not Found
+zh,重力坝,百科词条,duplicate,https://zh.wikipedia.org/api/rest_v1/page/html/%E9%87%8D%E5%8A%9B%E5%9D%9D,1035,wikipedia_bc2e6c1a26f3,fa463578f77d273c78ae4026ccdff963ce6855ffbd3778e2b2b6d641cbc00b2a,
+zh,拱坝,百科词条,imported,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%8B%B1%E5%9D%9D,1045,wikipedia_852d88c7e99f,703416b0d53e4883b6c029a4e0208e3ecb87fafa7204c3ea973d6972640ef596,
+zh,大坝,百科词条,extract_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%A4%A7%E5%9D%9D,,,,Extracted text is too short
+zh,水泥,百科词条,imported,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B0%B4%E6%B3%A5,1046,wikipedia_96bfba474410,db045588d51f5f140111b9d2694eead6988f5e0b0dda1a8631e8c05821de1088,
+zh,波特兰水泥,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B3%A2%E7%89%B9%E5%85%B0%E6%B0%B4%E6%B3%A5,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,骨料,百科词条,extract_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E9%AA%A8%E6%96%99,,,,Extracted text is too short
+zh,坍落度,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%9D%8D%E8%90%BD%E5%BA%A6,,,,URLError: <urlopen error [WinError 10054] 远程主机强迫关闭了一个现有的连接。>
+zh,抗压强度,百科词条,imported,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%8A%97%E5%8E%8B%E5%BC%BA%E5%BA%A6,1047,wikipedia_675e2e66f06b,12ee22392f4ce4438af927af298046048f1c3395a55bbf602254e6d3d4be1d8b,
+zh,水化反应,百科词条,imported,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B0%B4%E5%8C%96%E5%8F%8D%E5%BA%94,1048,wikipedia_37b359e0589e,f0dcaeda49ec8db13933106e8e25605a82ced7504fa14c18d8d9591cebef6ea2,
+zh,碾压混凝土,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E7%A2%BE%E5%8E%8B%E6%B7%B7%E5%87%9D%E5%9C%9F,,,,HTTP 404: Not Found
+zh,自密实混凝土,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E8%87%AA%E5%AF%86%E5%AE%9E%E6%B7%B7%E5%87%9D%E5%9C%9F,,,,HTTP 404: Not Found
+zh,大体积混凝土,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%A4%A7%E4%BD%93%E7%A7%AF%E6%B7%B7%E5%87%9D%E5%9C%9F,,,,HTTP 404: Not Found
+zh,面板堆石坝,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E9%9D%A2%E6%9D%BF%E5%A0%86%E7%9F%B3%E5%9D%9D,,,,HTTP 404: Not Found
+zh,堆石坝,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%A0%86%E7%9F%B3%E5%9D%9D,,,,HTTP 404: Not Found
+zh,水利工程,百科词条,imported,https://zh.wikipedia.org/api/rest_v1/page/html/%E6%B0%B4%E5%88%A9%E5%B7%A5%E7%A8%8B,1049,wikipedia_8f936f9d2afd,f8f3f6321d17c676c1e69124d5a0fc657e4f07d6789226379eacb42c45f7275c,
+zh,粉煤灰,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E7%B2%89%E7%85%A4%E7%81%B0,,,,HTTP 404: Not Found
+zh,减水剂,百科词条,fetch_failed,https://zh.wikipedia.org/api/rest_v1/page/html/%E5%87%8F%E6%B0%B4%E5%89%82,,,,HTTP 404: Not Found
+en,Concrete,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Concrete,1050,wikipedia_61293e332386,10c9f42505e6c60b2ad017e74ff8809a2db255e70bb17b8a5dcc5aee99169f62,
+en,Concrete dam,encyclopedia,fetch_failed,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_dam,,,,HTTP 404: Not Found
+en,Gravity dam,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Gravity_dam,1051,wikipedia_3b0b85fa0537,f474b741299d7b610556e1cad9a7bac37a1220c54994dce3a5277192011b38e1,
+en,Arch dam,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Arch_dam,1052,wikipedia_7d75e705e3a5,336ccb43621ab76cad5b80568c97be20cc066cd0069fa792bbecb0456eb8f5ab,
+en,Dam,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Dam,1053,wikipedia_791cd6de32f9,5eb60a5f30bd97248d71589cfd51133f8b79dd8210d80ab2fd97298ee407ef29,
+en,Roller-compacted concrete,encyclopedia,duplicate,https://en.wikipedia.org/api/rest_v1/page/html/Roller-compacted_concrete,1036,wikipedia_080b2d31c178,84a798917b92cb0011cd42a409d13702f400d1e11c1a88583624cd5514b27509,
+en,Self-consolidating concrete,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Self-consolidating_concrete,1054,wikipedia_2d374ce50f30,4a24f5ec172fca91a2cede3fe1a0e2e45d1f4670c671b3f4f060febfee67cd28,
+en,Portland cement,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Portland_cement,1055,wikipedia_7204caa31999,ee40e64f00dd8e1c0adba8e6562638af8f54d0484c57d9869b8fdd4b6a0cbade,
+en,Aggregate (composite),encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Aggregate_%28composite%29,1056,wikipedia_5962e9d37283,76b321c4b463510d56a816e511be20101d3f66dbf797c382890ffb869e5c1ae9,
+en,Construction aggregate,encyclopedia,duplicate,https://en.wikipedia.org/api/rest_v1/page/html/Construction_aggregate,1037,wikipedia_d2110127a02a,1a93159ff1a4bf922854c6a89f98c3458b4fa08725188a77f95c57830a15a851,
+en,Concrete slump test,encyclopedia,duplicate,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_slump_test,1038,wikipedia_cdbd59f343e0,b8895ffc246aab1150ee05a0923632c22661d747477138910fcaa625c4347430,
+en,Compressive strength,encyclopedia,duplicate,https://en.wikipedia.org/api/rest_v1/page/html/Compressive_strength,1039,wikipedia_0091c2df870f,c4b38d3d7dc5d5b77cbee875aff2e4d177e07c7701b2030ceecdbc603fdd6b53,
+en,Hydration reaction,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Hydration_reaction,1057,wikipedia_c2acb3771657,0a080be635330df5eac469092939a669b9912313d00bbd515f993d1a28654c99,
+en,Mass concrete,encyclopedia,duplicate,https://en.wikipedia.org/api/rest_v1/page/html/Mass_concrete,1040,wikipedia_9f4a373d602a,bed1f4e7e0b4f67bde4bc2e2ed9d07fb6c9ac32d57832f850e7c90153a25944c,
+en,Concrete masonry unit,encyclopedia,duplicate,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_masonry_unit,1041,wikipedia_dc8a9872e877,9aa3ef1152a694baf64bae2c6ec75dfe8dbf006d09b65190dcb20ec4e4cb88a7,
+en,Concrete degradation,encyclopedia,duplicate,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_degradation,1042,wikipedia_3eb3a4e0a837,080e015d930df5bc5908c56dc0c07e33e5a804feb7bc7841c49943e5c133ff2a,
+en,Concrete cover,encyclopedia,duplicate,https://en.wikipedia.org/api/rest_v1/page/html/Concrete_cover,1043,wikipedia_f158349c0419,74b47fcbb38d3e196a87e28265dc7ef10f508745985417e00181b08fba1f38d5,
+en,Spillway,encyclopedia,duplicate,https://en.wikipedia.org/api/rest_v1/page/html/Spillway,1044,wikipedia_14af37f08477,1a1ad37f5c5e5f817cca961048885a31dfd8084d95641dc6bb36cb21da631b51,
+en,Embankment dam,encyclopedia,imported,https://en.wikipedia.org/api/rest_v1/page/html/Embankment_dam,1058,wikipedia_2bde0ddae767,f4dc41386904768d75c97a5808dd78818e9788753560e328ece44978d038bf45,

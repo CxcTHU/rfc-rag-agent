@@ -19,6 +19,35 @@ URL:
 
 ## 当前状态
 
+阶段 28 续完成后，数据来源进入“清理后待人工核验”状态：
+
+```text
+documents 635
+web_page_documents 136
+wikipedia_documents 25
+standard_documents 9
+chunks 12716
+sources 673
+wikipedia_sources 19
+standard_sources 9
+chunk_embeddings 21634
+```
+
+新增来源类型：
+
+- `web_page`：阶段 28 本地网页爬取保留语料。Phase 8 已删除 458 个低质量网页文档，清理后剩余 136 个网页文档，其中 91 个仍建议人工复核。
+- `wikipedia`：Phase 9 通过 Wikipedia REST API 获取的中英文百科页面，作为概念背景知识，不作为工程规范强证据。
+- `standard_document`：Phase 10 下载的公开免费 PDF 标准/指南类资料，保存于 `data/raw/standards/`，下载前检查文件大小，超过 20MB 或无法公开获取的文档跳过。
+
+阶段 28 续相关数据文件：
+
+- `data/crawl/wikipedia_articles.csv`：38 条 Wikipedia 候选。
+- `data/crawl/standards_urls.csv`：15 条公开 PDF 候选。
+- `data/evaluation/stage28_crawl_quality_*.csv`：清理后质量审查输出。
+- `docs/stage28_crawl_quality_report.md`：清理后质量报告。
+
+当前仍等待用户人工核验；人工核验前不提交、不打 tag、不推送。
+
 已完成阶段 4 source registry 来源治理。
 
 阶段 4 已新增数据库表 `sources`，作为本项目的 source registry。它统一承接：
@@ -135,6 +164,37 @@ messages
 - Docker 镜像不得包含 `.env`、API key、SQLite 数据库、`data/raw`、`data/fulltext` 或 Obsidian 知识库；运行时数据通过 `./data:/app/data` volume 挂载。
 - GitHub Actions CI 使用 deterministic provider，不读取真实 `.env`，不要求真实模型 API，也不保存真实供应商响应。
 - 当前阶段停在用户人工核验前状态，尚未提交、尚未创建 `phase-27-complete` tag、尚未推送。
+
+阶段 28 新增外部网页资料来源，但限定为**公开 HTML 页面**的本地合规采集和自动入库：
+
+- `docs/stage28_web_crawl_auto_ingest.md`：阶段 28 设计文档，说明 crawling 模块、CLI、本地运行方式、安全边界和完成标准。
+- `app/services/crawling/`：网页采集服务层，包含 seed URL 管理、robots.txt 检查、限速 HTTP 抓取、trafilatura 正文提取和入库编排。
+- `scripts/crawl_and_ingest.py`：本地批量爬取与自动入库 CLI。
+- `data/crawl/seed_urls.csv`：100 条人工维护种子 URL，覆盖百科词条、高校机构、工程案例、开放论文、行业标准 5 类。
+- `data/crawl/crawl_results*.csv`：本地批处理状态记录，只保存 URL、分类、状态、标题、document/source 标识和错误摘要，不保存网页正文。
+- `data/raw/web_crawl/*.md`：公开网页经 trafilatura 提取后的 Markdown 正文，用于复用现有 `IngestionService.import_document()` 入库。
+
+阶段 28 读取和写入边界：
+
+```text
+公开 seed URL
+-> robots.txt / 限速 / User-Agent
+-> trafilatura 提取正文
+-> data/raw/web_crawl/*.md
+-> documents/chunks
+-> sources
+-> chunk_embeddings
+```
+
+数据安全边界：
+
+- 只抓取公开可访问页面；不绕登录、验证码、付费墙、机构授权墙或 robots.txt 禁止。
+- User-Agent 标识 RFC-RAG-Agent，不伪装浏览器，不使用 Selenium/Playwright。
+- 不长期保存原始 HTML，不保存 cookie、session、Authorization header、Bearer token 或用户凭据。
+- `crawl_results*.csv` 不保存网页正文或供应商原始响应，只保存状态和错误摘要。
+- 已入库网页来源统一注册到 `sources` 表，继续复用 DOI/URL/标题去重和 `document_id` 关联。
+- 批量执行后数据库从 documents 465 / chunks 8918 / sources 125 增至 documents 1059 / chunks 12103 / sources 645；新增内容为本地运行数据，阶段 28 停在人工核验前，不提交 SQLite 数据库。
+- 新增索引通过 deterministic provider 重建，`chunk_embeddings` 增至 21021；真实 API 不作为本地全量测试或 CI 前提。
 
 阶段 1 第一批试导入资料登记仍保留在下方，作为早期人工来源记录和历史审计依据。
 

@@ -14,21 +14,28 @@
 
 ## 当前阶段
 
-阶段 27（Chainlit 前端 + Docker 容器化 + GitHub Actions CI，已通过验收并进入提交合并流程）：当前在 `codex/phase-27-chainlit-docker-ci` 分支完成 `chainlit_app.py` 对话入口、Chainlit 流式输出、workflow 步骤与 citations 展示、Dockerfile、`docker-compose.yml`、`.dockerignore`、GitHub Actions pytest CI、普通文档、Obsidian 草稿和阶段验收报告。Docker Desktop 安装后，已完成 `docker compose up --build -d` 实跑验证；随后新增 Phase 7，把原生 FastAPI 首页升级为深色科技风 RAG 产品首页，并将“开始问答”和“资料库”拆成两个可切换界面。
+阶段 28 续（低质量语料清理 + Wikipedia API 百科补充 + 公开标准 PDF 补充 + 最终验证，Phase 8-11 已完成并获用户授权提交合并）：当前仍在 `codex/phase-28-web-crawl-auto-ingest` 分支，已按顺序完成低质量网页语料清理、Wikipedia REST API 入库、公开标准 PDF 入库、质量复核、索引重建、全量测试和文档/Obsidian 草稿收尾。阶段 28 当前总计 `documents 635`、`chunks 12716`、`sources 673`、`chunk_embeddings 21634`；其中 `web_page` 136 篇、`wikipedia` 25 篇、`standard_document` 9 篇。用户已明确要求提交阶段 28 整体开发工作，并上传 merge 至 GitHub。
 
-阶段 27 起点：阶段 26 已完成并合并到 `main`，`phase-26-complete -> 5000d4f Complete phase 26 retrieval performance reranking`，合并提交为 `74afce9 Merge phase 26 retrieval performance reranking`；本阶段未移动任何已有阶段 tag。
+阶段 28 续要点：
 
-阶段 27 要点：
+- **低质量清理**：新增 `scripts/cleanup_drop_candidates.py`，从 `data/evaluation/stage28_crawl_quality_drop_candidates.csv` 读取 458 个低质量 `web_page` 文档，支持 `--dry-run`，实际清理后 documents 1059 -> 601，并同步删除 `data/raw/web_crawl/` 中对应 Markdown 原文。
+- **Wikipedia 补充**：新增 `app/services/crawling/wikipedia_fetcher.py`、`scripts/ingest_wikipedia.py` 和 `data/crawl/wikipedia_articles.csv`，通过 Wikipedia REST API 获取中英文百科 HTML，再复用 `WebContentExtractor` 和既有入库链路，成功入库 25 个 `wikipedia` 文档。
+- **公开标准 PDF 补充**：新增 `scripts/ingest_standards.py` 和 `data/crawl/standards_urls.csv`，下载公开免费 PDF 到 `data/raw/standards/`，大于 20MB 或远端拒绝访问的文档跳过，成功入库 9 个 `standard_document` 文档。
+- **质量与验证**：清理后质量复核显示 `suggested_drop_candidate=0`，剩余 91 个 `review_candidate` 等待人工核验；全量测试最新结果 **544 passed, 1 warning**。
 
-- **Chainlit 入口**：新增 `chainlit_app.py`，作为 FastAPI 之外的 Python 原生对话界面入口；它直接复用 `detect_chitchat`、`AgentService`、`run_agentic_rag` 和 `/agent/query/stream` 背后的 service 层，不通过 HTTP 自调用。
-- **流式体验**：Chainlit 的 `@cl.on_message` 消费阶段 25 的 SSE 事件，使用 `stream_generate()` 生成 token，并通过 `msg.stream_token()` 逐段显示。
-- **可观测展示**：使用 `cl.Step` 展示 agentic workflow 步骤，用 `cl.Text` 展示 citations 与 workflow 摘要；默认 FastAPI API 和原生前端继续保留。
-- **会话管理**：Chainlit 会话复用 `ConversationRepository`，支持刷新后按当前 Chainlit session 对应本地 conversation 保存 user/assistant 消息。
-- **原生前端优化**：Phase 7 保留 FastAPI API 和 `app/frontend/` 原生入口，把 `GET /` 升级为深色科技风首页，并将“开始问答”和“资料库”拆成两个可切换界面；首页聚焦“面向堆石混凝土的 RAG 智能检索系统”，只突出混合检索、流式回答和结构化分块。
-- **容器化**：新增 `Dockerfile`、`docker-compose.yml` 和 `.dockerignore`；镜像不包含 `.env`、SQLite 数据文件、`data/raw`、`data/fulltext` 或 Obsidian 知识库，运行数据通过 volume 挂载。
-- **CI**：新增 `.github/workflows/ci.yml`，push/PR 触发 Python 3.11 + deterministic provider 的 `pytest`，不要求真实 API key。
-- **验证结果**：阶段 27 聚焦回归 **34 passed**；验收复跑全量测试 **520 passed**；Phase 7 前端聚焦回归 **15 passed**，提交前最终全量回归 **520 passed**；FastAPI 桌面/移动浏览器 smoke console error 为 0；Chainlit 桌面/移动浏览器 smoke console error 为 0；Docker Desktop 安装后 `docker compose up --build -d` 成功构建并启动容器，首页和 `/project/settings` 均返回 200。
-- **边界**：不做登录系统，不引入 `torch` / `sentence-transformers`，不让真实 API 成为 CI 或本地全量测试前提，不写入 API key、Bearer token、供应商原始敏感响应或受限全文。
+阶段 28（网页爬取 + 自动入库管线，开发与测试已完成，等待用户人工核验）：当前在 `codex/phase-28-web-crawl-auto-ingest` 分支新增本地网页爬取程序、正文提取、自动入库、来源注册、受控同站发现、种子 URL、阶段设计文档和测试。阶段 28 已按要求停在人工核验前：**尚未执行 `git add`、未提交、未创建 `phase-28-complete` tag、未 push、未创建 PR**。
+
+阶段 28 起点：阶段 27 已完成并合并到 `main`，`phase-27-complete -> 79f612e Complete phase 27 chainlit docker ci`，合并提交为 `800b39a Merge phase 27 chainlit docker ci`；本阶段未移动任何已有阶段 tag。
+
+阶段 28 要点：
+
+- **本地爬取程序**：新增 `app/services/crawling/`，包含 `fetcher.py`、`extractor.py`、`url_manager.py` 和 `pipeline.py`，链路为 seed CSV -> robots.txt/限速抓取 -> trafilatura 正文提取 -> Markdown -> `IngestionService.import_document()` -> `SourceRegistryService`。
+- **CLI 入口**：新增 `scripts/crawl_and_ingest.py`，支持 `--seed-csv`、`--results-csv`、`--output-dir`、`--max-urls`、`--timeout`、`--dry-run`、`--quiet`、`--discover-links` 和 `--rebuild-index`。真实批量网页抓取由本地程序自行执行，不需要把网页正文交给大模型阅读。
+- **种子 URL**：新增 `data/crawl/seed_urls.csv`，共 100 条，覆盖百科词条、高校机构、工程案例、开放论文、行业标准 5 类。
+- **安全边界**：爬虫遵守 robots.txt，默认请求间隔不低于 2 秒，User-Agent 标识 RFC-RAG-Agent，不伪装浏览器，不绕登录、验证码、付费墙，不长期保存原始 HTML。
+- **批量结果**：本地批量执行后，数据库从 documents 465 / chunks 8918 / sources 125 增至 documents 1059 / chunks 12103 / sources 645；总文档数已超过用户追加的 1000 篇目标。
+- **索引与验证**：使用 deterministic provider 重建向量索引后，`chunk_embeddings` 增至 21021；API smoke 通过；全量测试 **533 passed, 1 warning**。
+- **离线测试保障**：新增 `tests/conftest.py`，强制 pytest 使用 deterministic reranking，避免本地 `.env` 中真实 reranker 配置让全量测试误触发真实 API。
 
 阶段 26（检索性能优化 + Cross-Encoder 重排序，已通过用户人工核验并合并到 main）：在 `codex/phase-26-retrieval-performance-reranking` 分支完成检索 profiling、`numpy` 向量化、`VectorIndexCache` 内存矩阵缓存、hybrid search 并行召回、`ReRankingProvider` 重排序协议、默认 deterministic rerank、基准脚本、全量测试、浏览器/API 验证、阶段验收报告和文档/Obsidian 草稿收尾。`phase-26-complete` 指向阶段 26 最终功能提交 `5000d4f`。
 
@@ -432,6 +439,53 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 python -m uvicorn app.main:app --reload --port 8001
 ```
 
+## 网页爬取与自动入库
+
+阶段 28 提供本地 CLI 程序执行网页爬取，不需要大模型逐页读取网页内容。推荐先 dry-run，再分批正式爬取：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\crawl_and_ingest.py `
+  --seed-csv data\crawl\seed_urls.csv `
+  --results-csv data\crawl\crawl_results.csv `
+  --output-dir data\raw\web_crawl `
+  --dry-run `
+  --max-urls 5
+```
+
+正式小批量爬取：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\crawl_and_ingest.py `
+  --seed-csv data\crawl\seed_urls.csv `
+  --results-csv data\crawl\crawl_results.csv `
+  --output-dir data\raw\web_crawl `
+  --max-urls 50 `
+  --timeout 8 `
+  --quiet
+```
+
+需要补充同站公开链接时，显式启用受控发现：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\crawl_and_ingest.py `
+  --seed-csv data\crawl\seed_urls.csv `
+  --results-csv data\crawl\crawl_results_discovery.csv `
+  --output-dir data\raw\web_crawl `
+  --max-urls 150 `
+  --timeout 8 `
+  --discover-links `
+  --max-discovered-per-page 3 `
+  --quiet
+```
+
+爬取后重建 deterministic 向量索引：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\build_vector_index.py --provider deterministic --batch-size 64
+```
+
+`scripts/crawl_and_ingest.py` 默认遵守 robots.txt，请求间隔不低于 2 秒，使用自标识 User-Agent，不绕登录、验证码、付费墙，不长期保存原始 HTML。
+
 ## 运行测试
 
 ```powershell
@@ -441,7 +495,7 @@ python -m pytest -q
 当前全量测试结果：
 
 ```text
-阶段 27：520 passed, 1 warning
+阶段 28：533 passed, 1 warning
 ```
 
 ```text

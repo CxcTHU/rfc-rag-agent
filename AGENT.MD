@@ -13,6 +13,20 @@
 
 本文件的作用不是一次性定死所有细节，而是给“从零搭建堆石混凝土问答 Agent”提供稳定方向。
 
+## 最新交接状态：阶段 28 已获用户授权提交合并
+
+当前分支：`codex/phase-28-web-crawl-auto-ingest`。
+
+阶段 28 Phase 0-11 已完成，用户已明确要求“提交阶段28的整体开发工作，并上传merge至github”。Phase 8-11 在原网页爬取管线基础上完成：
+
+- 低质量语料清理：`scripts/cleanup_drop_candidates.py` 删除 458 个低质量 `web_page` 文档，清理后 documents 1059 -> 601。
+- Wikipedia 补充：`app/services/crawling/wikipedia_fetcher.py`、`scripts/ingest_wikipedia.py`、`data/crawl/wikipedia_articles.csv`，成功入库 25 个 `wikipedia` 文档。
+- 公开标准 PDF 补充：`scripts/ingest_standards.py`、`data/crawl/standards_urls.csv`，成功入库 9 个 `standard_document` 文档。
+- 最终状态：`documents 635`、`chunks 12716`、`sources 673`、`chunk_embeddings 21634`；清理后 `suggested_drop_candidate=0`，剩余 91 个 `review_candidate` 等待人工核验。
+- 最新全量测试：`544 passed, 1 warning`。
+
+阶段 28 当前进入提交、创建 `phase-28-complete` tag、合并到 `main` 并推送 GitHub 流程。tag 必须指向阶段 28 最终功能提交，不得移动任何已有阶段 tag；`obsidian-vault/`、`.env`、SQLite 数据库、`data/raw/` 和受限/原始全文不得提交。
+
 ## 协作与教学原则
 
 本项目是用户的第一个完整工程项目。后续开发不能只“把代码写出来”，还要让用户真正理解项目为什么这样设计、代码怎样运行、面试时怎样讲清楚。
@@ -194,6 +208,19 @@ codex/phase-27-chainlit-docker-ci
 - GitHub Actions CI 使用 deterministic chat / embedding / reranking provider 跑 `pytest`，不读取真实 `.env`，不要求真实 API key，不依赖 Docker daemon。
 - 当前阶段环境未安装 Docker CLI 时，可以记录为人工核验项；不要把 Docker 未实跑伪装成已通过。
 - 阶段 27 未获用户明确核验与提交授权前，不得执行 `git add`、commit、创建 `phase-27-complete` tag、push 或 PR；tag 必须指向阶段 27 最终功能提交，不得移动已有阶段 tag。
+
+### 阶段 28 之后的网页爬取与自动入库规则
+
+- 阶段 28 从阶段 27 合并后的 `main -> 800b39a Merge phase 27 chainlit docker ci` 出发；`phase-27-complete -> 79f612e Complete phase 27 chainlit docker ci`，不要移动已有阶段 tag。
+- 网页爬取必须由本地程序执行，不让大模型逐页读取网页正文来替代爬虫；大模型只负责开发程序、解释命令、审查聚合结果和修复代码。
+- `app/services/crawling/` 是阶段 28 的爬虫边界：`fetcher.py` 负责 HTTP + robots.txt + 限速，`extractor.py` 负责 trafilatura 正文提取，`url_manager.py` 负责 seed/results CSV，`pipeline.py` 负责复用现有入库链路。
+- 爬虫必须遵守 robots.txt，默认请求间隔不低于 2 秒，User-Agent 标识 RFC-RAG-Agent，不伪装浏览器，不使用 Selenium/Playwright，不绕登录、验证码、付费墙或机构授权墙。
+- 阶段 28 只保存提取后的 Markdown 正文，不长期保存原始 HTML；`crawl_results*.csv` 只保存 URL、状态、标题、document/source 标识和错误摘要，不保存网页正文。
+- 入库必须复用 `IngestionService.import_document()`、`clean_text()`、`split_text()`、`DocumentRepository` 和 `SourceRegistryService`，不得重复实现清洗、切分、去重和 documents/chunks 写入。
+- 受控同站发现只能通过显式 `--discover-links` 启用，默认关闭；只保留同 host HTTP(S) 链接，过滤二进制/静态资源，并用 `--max-discovered-per-page` 限制规模。
+- 本地长批量爬取建议使用 `--quiet`，只读取聚合计数和结果 CSV；不要把逐 URL 长日志灌入对话上下文。
+- 新增 `tests/conftest.py` 后，pytest 必须强制 deterministic reranking，避免本地 `.env` 中真实 reranker API 影响全量测试；真实 API 不得成为 CI 或本地全量测试前提。
+- 阶段 28 未获用户明确核验与提交授权前，不得执行 `git add`、commit、创建 `phase-28-complete` tag、push 或 PR；tag 必须指向阶段 28 最终功能提交，不得移动已有阶段 tag。
 
 ## Obsidian 知识库规则
 

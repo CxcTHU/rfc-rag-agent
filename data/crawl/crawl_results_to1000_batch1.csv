@@ -1,0 +1,300 @@
+url,category,trust_level,status,http_status,title,document_id,source_id,content_hash,fetched_at,error
+https://discovery.researcher.life,开放论文,medium,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://discovery.researcher.life/,开放论文,medium,duplicate,200,Academic Research Reading: Personalised Research Discovery - R Discovery,619,crawl_ce8827ac8a2e,532b6248c3aaf7156b02cb8fe7284aacb269296b9c3910a09c6c47a7783d322a,,
+https://discovery.researcher.life/article/filling-capacity-evaluation-of-self-compacting-concrete-in-rock-filled-concrete/bca7a958329e3348a29cf2e741c5bec2,开放论文,medium,duplicate,200,Filling Capacity Evaluation of Self-Compacting Concrete in Rock-Filled Concrete. - R Discovery,605,crawl_b6df60e30213,51977d5ec0d7184831827d9740a0778619fb0e04e6e2bb2a512a3eb1e2439444,,
+https://discovery.researcher.life/ask-rdiscovery,开放论文,medium,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://discovery.researcher.life/feed/top-paper,开放论文,medium,imported,200,Academic Research Reading: Personalised Research Discovery - R Discovery,647,crawl_903e3553ddbf,ffb25f48cb3a4ad5c9768f2e74132ce4dafbbef47359100ced4af1785e6767c8,,
+https://discovery.researcher.life/library-solutions,开放论文,medium,duplicate,200,Academic Research Reading: Personalised Research Discovery - R Discovery,620,crawl_43bfd6e85b98,3d6afdcca5743d3d137b4287f26af2602ec2b2f85bfa7fa172a6297e1cc1171b,,
+https://discovery.researcher.life/my-library,开放论文,medium,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://discovery.researcher.life/prime,开放论文,medium,duplicate,200,Academic Research Reading: Personalised Research Discovery - R Discovery,621,crawl_aa7fa20ec4bc,d07c46f71c8d06d3661e5ab090305129a2b4ac1859c94f8ee3c5f214a423817f,,
+https://discovery.researcher.life/search,开放论文,medium,imported,200,Recently Published Papers - Latest Published Research Articles | R Discovery,648,crawl_ed24a0c79c5a,6378fb48f946de7336870651e89d1e0bc767dd62503724817384907cc70004b3,,
+https://kw.beijing.gov.cn/ztzl/gdzt/2017ngjkxjsjldh/2017ngjkxjsjldhgjt/2017ngjkxjsjldhgjjsfmj/201712/t20171219_3804439.html,工程案例,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://rockmech.whrsm.ac.cn/CN/abstract/abstract25492.shtml,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://rockmech.whrsm.ac.cn/EN/Y2007/V26/IS1/3231,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://sklhse.tsinghua.edu.cn/index.htm,工程案例,high,duplicate,200,清华大学水圈科学与水利工程全国重点实验室,608,crawl_adfb8cc7c02f,3836cb8863366cf9e0579add441d5f774b8eb7916f34ddbd82801afcb49a018a,,
+https://sklhse.tsinghua.edu.cn/info/1017/1076.htm,工程案例,high,duplicate,200,实验室动态,597,crawl_01c11c6b0bf1,38cda07630b9ae6d7fe7094c7ad587f8504a2aba225ac5c0fe0d488b49b69b1b,,
+https://sklhse.tsinghua.edu.cn/kxyj/yjfx.htm,工程案例,high,extract_failed,200,https://sklhse.tsinghua.edu.cn/kxyj/yjfx.htm,,,,,Extracted text is too short
+https://sklhse.tsinghua.edu.cn/sysdt/jzbg.htm,工程案例,high,imported,200,实验室动态,634,crawl_90cc90842a24,ff94485fda80b8bb2d636d9746ec5f498ce046b4164ba7ccc81d058e752bf4a3,,
+https://sklhse.tsinghua.edu.cn/sysdt/tzgg.htm,工程案例,high,imported,200,实验室动态,633,crawl_a1845f838a97,c736b443e6b25b0cb66201ec3d46818549e8089be3ad07bec0ec892aac28fdeb,,
+https://sklhse.tsinghua.edu.cn/sysdt/zxzx.htm,工程案例,high,imported,200,实验室动态,632,crawl_b574f85870de,05cda11eb00e417fdd3aa8fde666054ecbce86aa4c0e6f561701d8ef1cc19ba4,,
+https://sklhse.tsinghua.edu.cn/sysgk/glgz.htm,工程案例,high,imported,200,实验室概况,631,crawl_bfaecf67dc78,21efbd252fa4dc7630c91dd3a098a67b0c17e7728cd4765ff7a245c16c39f2ec,,
+https://sklhse.tsinghua.edu.cn/sysgk/sysjj.htm,工程案例,high,duplicate,200,实验室概况,609,crawl_bd3fa9990d20,ec44c53685da340ea25503b8c1169c1768ffaa0012170be376e0cc3a3b097e4d,,
+https://sklhse.tsinghua.edu.cn/sysgk/xswyh.htm,工程案例,high,duplicate,200,实验室概况,623,crawl_c11cf2a7cf06,ee47300d3eb49aa363243ea2bfdfc2067fbad771c98be895d67cd1898f39eee1,,
+https://sklhse.tsinghua.edu.cn/sysgk/zzjg.htm,工程案例,high,duplicate,200,实验室概况,610,crawl_64abcd067609,0c84676bec073ac3ed1d9b8131a498f764265b6ac1f962b91529ed4494c2b692,,
+https://www.civil.tsinghua.edu.cn/,工程案例,high,duplicate,200,清华大学土木水利学院,499,crawl_552a6c138e54,7a95ce03198ef82130483929263bf3710c29d6a49215e8758a2b9953bf39923d,,
+https://www.civil.tsinghua.edu.cn/About/Committee.htm,工程案例,high,fetch_failed,,,,,,,"HTTP 404: <html>
+<head>
+	<meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8"" />
+	<meta name=""viewport"" content=""user-scalable=no, width=device-width, initial-scale=1.0"" />
+	<meta name=""apple-mobile-web-app-capable"" content=""yes"" />
+	<meta http-equiv=""Pragma"" content=""no-cache"" />  
+    <m"
+https://www.civil.tsinghua.edu.cn/About/Current_Administrators.htm,工程案例,high,fetch_failed,,,,,,,"HTTP 404: <html>
+<head>
+	<meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8"" />
+	<meta name=""viewport"" content=""user-scalable=no, width=device-width, initial-scale=1.0"" />
+	<meta name=""apple-mobile-web-app-capable"" content=""yes"" />
+	<meta http-equiv=""Pragma"" content=""no-cache"" />  
+    <m"
+https://www.civil.tsinghua.edu.cn/About/General_Information.htm,工程案例,high,fetch_failed,,,,,,,"HTTP 404: <html>
+<head>
+	<meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8"" />
+	<meta name=""viewport"" content=""user-scalable=no, width=device-width, initial-scale=1.0"" />
+	<meta name=""apple-mobile-web-app-capable"" content=""yes"" />
+	<meta http-equiv=""Pragma"" content=""no-cache"" />  
+    <m"
+https://www.civil.tsinghua.edu.cn/About/History_of_SCE.htm,工程案例,high,fetch_failed,,,,,,,"HTTP 404: <html>
+<head>
+	<meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8"" />
+	<meta name=""viewport"" content=""user-scalable=no, width=device-width, initial-scale=1.0"" />
+	<meta name=""apple-mobile-web-app-capable"" content=""yes"" />
+	<meta http-equiv=""Pragma"" content=""no-cache"" />  
+    <m"
+https://www.civil.tsinghua.edu.cn/About/Organizational_Structure.htm,工程案例,high,fetch_failed,,,,,,,"HTTP 404: <html>
+<head>
+	<meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8"" />
+	<meta name=""viewport"" content=""user-scalable=no, width=device-width, initial-scale=1.0"" />
+	<meta name=""apple-mobile-web-app-capable"" content=""yes"" />
+	<meta http-equiv=""Pragma"" content=""no-cache"" />  
+    <m"
+https://www.civil.tsinghua.edu.cn/Education/Undergraduate.htm,工程案例,high,fetch_failed,,,,,,,"HTTP 404: <html>
+<head>
+	<meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8"" />
+	<meta name=""viewport"" content=""user-scalable=no, width=device-width, initial-scale=1.0"" />
+	<meta name=""apple-mobile-web-app-capable"" content=""yes"" />
+	<meta http-equiv=""Pragma"" content=""no-cache"" />  
+    <m"
+https://www.civil.tsinghua.edu.cn/en,工程案例,high,duplicate,200,School of Civil Engineering Tsinghua University,468,crawl_29f84d45bc69,578695f15e3c8084c4329468585cac538e3d17303743c65173725d7c5f24c2b5,,
+https://www.civil.tsinghua.edu.cn/en/index.htm,工程案例,high,duplicate,200,School of Civil Engineering Tsinghua University,468,crawl_99b28b989c00,578695f15e3c8084c4329468585cac538e3d17303743c65173725d7c5f24c2b5,,
+https://www.civil.tsinghua.edu.cn/gyxy/jgzz.htm,工程案例,high,extract_failed,200,https://www.civil.tsinghua.edu.cn/gyxy/jgzz.htm,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/gyxy/lsyg.htm,工程案例,high,duplicate,200,历史沿革-清华大学土木水利学院,560,crawl_9efa22c308a4,4c604a55a695fb51a8a24fcd431886faff544e6d94b311725ee371f212893d04,,
+https://www.civil.tsinghua.edu.cn/gyxy/wyh.htm,工程案例,high,duplicate,200,委员会-清华大学土木水利学院,561,crawl_66cca66cb2d9,431348d7ccd3f7c63195ba19af3e188d3b0ac59b78e87e6b6202df6904078cc9,,
+https://www.civil.tsinghua.edu.cn/gyxy/xygk.htm,工程案例,high,duplicate,200,学院概况-清华大学土木水利学院,558,crawl_f8838395aa8a,32eba0b979964c3144976124c04d24ce1a35c94b41a1f5bab27c05d70a346ba7,,
+https://www.civil.tsinghua.edu.cn/gyxy/xyld/ydw.htm,工程案例,high,extract_failed,200,https://www.civil.tsinghua.edu.cn/gyxy/xyld/ydw.htm,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/gyxy/xyxw.htm,工程案例,high,duplicate,200,学院新闻-清华大学土木水利学院,557,crawl_2d8483ba449d,a6aaf446e098c4dba8dfd416d01c174e537efdc7aa7b5220f59052f80dc11a79,,
+https://www.civil.tsinghua.edu.cn/gyxy/yzzc.htm,工程案例,high,duplicate,200,院长致辞-清华大学土木水利学院,559,crawl_1f534a8672ae,c313a6e8c2e6db9547231bb8c9ad958d740b30f6f31f992070a439058434408c,,
+https://www.civil.tsinghua.edu.cn/he/,工程案例,high,duplicate,200,清华大学水利水电工程系,493,crawl_82072e48f56f,2dbc3dfb1c99b5755ee9bdaa74b9e5fc391095b9c6ec9c9f62af6ba1f0d954ed,,
+https://www.civil.tsinghua.edu.cn/he/gysl/jgzz.htm,工程案例,high,extract_failed,200,https://www.civil.tsinghua.edu.cn/he/gysl/jgzz.htm,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/he/gysl/lsyg.htm,工程案例,high,duplicate,200,历史沿革-清华大学水利水电工程系,556,crawl_9f4330a067f7,299dcf12b032d952fb61c1b4a33b5526e37cc12ab9f3bf6378d036e33024efbd,,
+https://www.civil.tsinghua.edu.cn/he/gysl/slgk.htm,工程案例,high,duplicate,200,水利概况-清华大学水利水电工程系,555,crawl_71c5798150e0,5c5a51f8b0a510d4d9e5051ce81b0522f8f95c476709b75c78ecb23915fa7e9b,,
+https://www.civil.tsinghua.edu.cn/he/gysl/slxw.htm,工程案例,high,duplicate,200,水利新闻-清华大学水利水电工程系,554,crawl_90c7a79e1438,6648f48c50448d69da45e8b5cc6ff8ef0e2a6605eb91e68796e4f0a3fb9ef56c,,
+https://www.civil.tsinghua.edu.cn/he/gysl/wyh.htm,工程案例,high,extract_failed,200,https://www.civil.tsinghua.edu.cn/he/gysl/wyh.htm,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/he/index.htm,工程案例,high,duplicate,200,清华大学水利水电工程系,493,crawl_8e8b44783a03,2dbc3dfb1c99b5755ee9bdaa74b9e5fc391095b9c6ec9c9f62af6ba1f0d954ed,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/1070.htm,工程案例,high,duplicate,200,清华大学举办堆石混凝土高坝建设关键技术研讨会 -清华大学水利水电工程系,589,crawl_0bca5810ecd8,e4ff598ffeaad97edb0e9daa04fd63dc4cad5903f2f3d4d3d923b15c1adaec19,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/1277.htm,高校机构,high,duplicate,200,著名计算力学期刊 Int J Numer Meth Eng 封面文章刊发清华大学水利系研究成果 推动研发高性能水利海洋新材料 -清华大学水利水电工程系,590,crawl_ee3d52b40a8d,df93d3e20179c6342d031f39ca6062356888cbf30b5ad193917d67dab7e8edf2,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/1459.htm,工程案例,high,duplicate,200,水利系两项成果获2017年度国家科学技术奖励 -清华大学水利水电工程系,591,crawl_a76f82e98ec3,2bacf9ef39fd607f995e4d7bf85a06891e6bd4694989034e5d7b319a58f8f7e8,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/1926.htm,工程案例,high,duplicate,200,清华大学举办堆石混凝土坝工程考察与筑坝技术专家咨询会 -清华大学水利水电工程系,588,crawl_6013f750bc5d,fa4237ac29f31b19b81f1a40973ddfff55a51521833d7890717fbe7866507b80,,
+https://www.civil.tsinghua.edu.cn/he/info/1043/2052.htm,工程案例,high,duplicate,200,“基于堆石混凝土的全材料筑坝关键技术研究” 项目启动会在京顺利召开-清华大学水利水电工程系,587,crawl_a7e8e39d0c67,638254d28cd308de9fa9f382c0318594491568468d38a4e16eb72d7c52b8577d,,
+https://www.civil.tsinghua.edu.cn/he/info/1077/1637.htm,高校机构,high,duplicate,200,王进廷-清华大学水利水电工程系,594,crawl_cc01c744f6b7,4b3b7cc6e6f63ab677f2805706c6b409fcd25efa59b46df0823693b2a349b3c4,,
+https://www.civil.tsinghua.edu.cn/he/info/1077/1648.htm,高校机构,high,duplicate,200,金峰-清华大学水利水电工程系,593,crawl_0a03a71181df,0da3443d45f46402934e23158446c335ea86eb7b5ac0edb068cd90a6e819e717,,
+https://www.civil.tsinghua.edu.cn/he/info/1103/1775.htm,工程案例,high,duplicate,200,我的大学集体,596,crawl_2179e937ef40,3cb1aaf8749872fa0782bc0a33e2ae85263761af05f9b0318763a1d09ab9015f,,
+https://www.civil.tsinghua.edu.cn/he/info/1111/1840.htm,高校机构,high,duplicate,200,清华大学水利水电工程系建系70周年纪念大会暨“新时代水利教育与科技发展论坛”成功举办-清华大学水利水电工程系,595,crawl_86405b1550d4,d5f29b4ad89415f69ee69b5cbfe9a735c01fb0ec69a838ab13ccee16cee5be3b,,
+https://www.civil.tsinghua.edu.cn/he/info/1111/1846.htm,工程案例,high,duplicate,200,"中国原创助力冬奥会——清华堆石混凝土技术引发""革命""-清华大学水利水电工程系",586,crawl_5f9eb99323a1,773102293f6652e7356f78371b7059bab3a226cef174e179f63276795f9e8c4f,,
+https://www.civil.tsinghua.edu.cn/he/rcpy/gk.htm,工程案例,high,extract_failed,200,https://www.civil.tsinghua.edu.cn/he/rcpy/gk.htm,,,,,Extracted text is too short
+https://www.civil.tsinghua.edu.cn/heen/,工程案例,high,duplicate,200,Department of Hydraulic Engineering,492,crawl_fef53128551e,f6e69473dc6a520856852ce1d001bfb231ef530a3e22c54d60d796ebd861ae0b,,
+https://www.civil.tsinghua.edu.cn/heen/About/Committee.htm,工程案例,high,duplicate,200,Committee-Department of Hydraulic Engineering,496,crawl_76e9c6a26c43,70c8dd33be06c70cf4f9e94e2c623aa7ca4df92318e4de983bbdcd7f98081aa3,,
+https://www.civil.tsinghua.edu.cn/heen/About/General_Introduction.htm,工程案例,high,duplicate,200,General Introduction-Department of Hydraulic Engineering,494,crawl_2b29a7a5bca0,910b959f85ccb4934257254477e80d7bd5d4b4f5d34d082ea004162f1cf56942,,
+https://www.civil.tsinghua.edu.cn/heen/About/History.htm,工程案例,high,duplicate,200,History-Department of Hydraulic Engineering,495,crawl_13cfcd7765e4,11c32cfb1376a49d49dec21523683048a1b751bcc60ee341239917f401dbfb16,,
+https://www.civil.tsinghua.edu.cn/heen/Education/Overview.htm,工程案例,high,duplicate,200,Overview-Department of Hydraulic Engineering,497,crawl_a7f35c2e3f52,6a4db9b863f894e136a6b958dbe5b390e36ce9910dfe42ff5049f2abf16c6f27,,
+https://www.civil.tsinghua.edu.cn/heen/Education/Undergraduate.htm,工程案例,high,duplicate,200,Undergraduate-Department of Hydraulic Engineering,498,crawl_a5e7803edbf7,e774fca6beda78c2f2b5e7c59e786c6917113a298a03e05fa732e5391ec2b10d,,
+https://www.civil.tsinghua.edu.cn/heen/index.htm,工程案例,high,duplicate,200,Department of Hydraulic Engineering,492,crawl_bfbd72428f9b,f6e69473dc6a520856852ce1d001bfb231ef530a3e22c54d60d796ebd861ae0b,,
+https://www.civil.tsinghua.edu.cn/index.htm,工程案例,high,duplicate,200,清华大学土木水利学院,499,crawl_554faa9a5629,7a95ce03198ef82130483929263bf3710c29d6a49215e8758a2b9953bf39923d,,
+https://www.civil.tsinghua.edu.cn/info/1045/1224.htm,工程案例,high,duplicate,200,水利系两项成果获2017年度国家科学技术奖励 -清华大学土木水利学院,592,crawl_f24a7477c90c,4d757af922a0b8e53e3bfcc84ad963483a5cb49daea88f170ecd2245b8eb477b,,
+https://www.cjw.gov.cn/zwzc/tzgg/202512/t20251203_59811.shtml,行业标准,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.engineering.org.cn/CN/about,开放论文,high,extract_failed,200,https://www.engineering.org.cn/CN/about,,,,,Extracted text is too short
+https://www.engineering.org.cn/CN/advsearch,开放论文,high,extract_failed,200,https://www.engineering.org.cn/CN/advsearch,,,,,Extracted text is too short
+https://www.engineering.org.cn/CN/home,开放论文,high,extract_failed,200,https://www.engineering.org.cn/CN/home,,,,,Extracted text is too short
+https://www.engineering.org.cn/CN/journals,开放论文,high,extract_failed,200,https://www.engineering.org.cn/CN/journals,,,,,Extracted text is too short
+https://www.engineering.org.cn/CN/searchfigure,开放论文,high,extract_failed,200,https://www.engineering.org.cn/CN/searchfigure,,,,,Extracted text is too short
+https://www.engineering.org.cn/CN/subscription,开放论文,high,extract_failed,200,https://www.engineering.org.cn/CN/subscription,,,,,Extracted text is too short
+https://www.engineering.org.cn/EN,开放论文,high,duplicate,200,Focus More,618,crawl_a7595451eaf6,2044774c03f5549b86781109cb2687d8b43dd2a27f3936724241d3086368370e,,
+https://www.engineering.org.cn/EN/Subscription,开放论文,high,extract_failed,200,https://www.engineering.org.cn/EN/Subscription,,,,,Extracted text is too short
+https://www.engineering.org.cn/EN/about,开放论文,high,extract_failed,200,https://www.engineering.org.cn/EN/about,,,,,Extracted text is too short
+https://www.engineering.org.cn/EN/advsearch,开放论文,high,imported,200,Engineering,658,crawl_9e4e83ee2309,0f58323771a556320968a916fd4d964ae21f920fb60a26707fe883811d24ff5d,,
+https://www.engineering.org.cn/EN/figure_result,开放论文,high,imported,200,Engineering,659,crawl_4c6924751964,13ce64d86fa39ae134dd4b5b736bdebfb4e2d4f3ba9a66540134e8d8881aaa0e,,
+https://www.engineering.org.cn/EN/home,开放论文,high,duplicate,200,Focus More,618,crawl_0c3090bb6a80,2044774c03f5549b86781109cb2687d8b43dd2a27f3936724241d3086368370e,,
+https://www.engineering.org.cn/EN/journals,开放论文,high,extract_failed,200,https://www.engineering.org.cn/EN/journals,,,,,Extracted text is too short
+https://www.engineering.org.cn/achievements/CN,开放论文,high,extract_failed,200,https://www.engineering.org.cn/achievements/CN,,,,,Extracted text is too short
+https://www.engineering.org.cn/achievements/CN/file/download?fileId=00iqXpYYx309pyjkMhHH2w==,开放论文,high,extract_failed,200,https://www.engineering.org.cn/achievements/CN/file/download?fileId=00iqXpYYx309pyjkMhHH2w==,,,,,Extracted text is too short
+https://www.engineering.org.cn/achievements/CN/file/download?fileId=jAq406w7NUPss0Lc0KvMYA==,开放论文,high,extract_failed,200,https://www.engineering.org.cn/achievements/CN/file/download?fileId=jAq406w7NUPss0Lc0KvMYA==,,,,,Extracted text is too short
+https://www.engineering.org.cn/achievements/CN/file/download?fileId=qtI7Gghtqehkgq5TpjnbGw==,开放论文,high,extract_failed,200,https://www.engineering.org.cn/achievements/CN/file/download?fileId=qtI7Gghtqehkgq5TpjnbGw==,,,,,Extracted text is too short
+https://www.engineering.org.cn/achievements/EN,开放论文,high,imported,200,Videos,644,crawl_059ab3b14d6c,426eaf4b1b1c98d13e28c64326f8078b9be89e3558c881b32efbd299db38d081,,
+https://www.engineering.org.cn/achievements/EN/file/download?fileId=40D+SQg3nUfAqG6QHbMo1w==,开放论文,high,extract_failed,200,https://www.engineering.org.cn/achievements/EN/file/download?fileId=40D+SQg3nUfAqG6QHbMo1w==,,,,,Extracted text is too short
+https://www.engineering.org.cn/achievements/EN/file/download?fileId=IEg1uCAIgAsH6uuR9ejQCg==,开放论文,high,imported,200,https://www.engineering.org.cn/achievements/EN/file/download?fileId=IEg1uCAIgAsH6uuR9ejQCg==,663,crawl_7e98c6cde0fd,ca95acb7911dc043435fdc2563e1a5dbe61a48664f2b4627901a0878370cfbac,,
+https://www.engineering.org.cn/engi/CN,开放论文,high,duplicate,200,工程（英文）,617,crawl_6d1a37f734f4,d93b0e42a611760601a7f4432ff1e7f46d6074ce9b070bcebb88bc004c8171b3,,
+https://www.engineering.org.cn/engi/CN/10.1016/J.ENG.2016.04.003,开放论文,high,duplicate,200,胶结颗粒料坝——环境友好的新坝型,604,crawl_c09ab0cd18ce,57c60494402b93b18c220aceff66784bf0140af269a6ad1ba103e80ca2b045b1,,
+https://www.engineering.org.cn/engi/CN/10.1016/j.eng.2023.09.020,开放论文,high,duplicate,200,堆石混凝土坝综述与下一代混凝土筑坝技术前瞻,600,crawl_24afafd4a759,4d276c8af584aeeea62770721af8a59b97205ebdac0a92744a58912d7c534d9a,,
+https://www.engineering.org.cn/engi/CN/2024/32/1,开放论文,high,duplicate,200,工程（英文）,603,crawl_f80219d45367,dbe7304bdcaecbff4a9cc41833284643bfc353e56483ed9a9a034a2ff9349d13,,
+https://www.engineering.org.cn/engi/CN/collections,开放论文,high,extract_failed,200,https://www.engineering.org.cn/engi/CN/collections,,,,,Extracted text is too short
+https://www.engineering.org.cn/engi/CN/collections/1162450953531220739,开放论文,high,duplicate,200,中国工程科学,602,crawl_a7f58e490825,a5e85c15fe51e1344edeb58957dde30fc546d3dc44c10efde9afa289de1cb2d4,,
+https://www.engineering.org.cn/engi/CN/home,开放论文,high,duplicate,200,工程（英文）,617,crawl_67ec0efeadc1,d93b0e42a611760601a7f4432ff1e7f46d6074ce9b070bcebb88bc004c8171b3,,
+https://www.engineering.org.cn/engi/CN/online_first,开放论文,high,imported,200,https://www.engineering.org.cn/engi/CN/online_first,657,crawl_657b7d5b4cca,6588895bd4e933c26768cf25650455bf900ccb66ee980eb871cbf18718d162a0,,
+https://www.engineering.org.cn/engi/EN,开放论文,high,imported,200,Engineering,646,crawl_044e935e68a4,79d66ca8c1a390295cefd936a7324fdf6ab5ed4471240dc5a3b4aa482d24df55,,
+https://www.engineering.org.cn/engi/EN/10.1016/j.eng.2023.09.020,开放论文,high,duplicate,200,A Brief Review of Rock-Filled Concrete Dams and Prospects for Next-Generation Concrete Dam Construction Technology,601,crawl_343d1fca603f,449fc6f3bcc78985121f2923288ee52664ae1d0a27507b75ab6b3a0a520f5dc0,,
+https://www.engineering.org.cn/engi/EN/collections,开放论文,high,imported,200,Engineering,662,crawl_fc87ee2dc892,a39fbb77a0c9244fcd58195587760ac4a877772f43a23854d1c17be849979855,,
+https://www.engineering.org.cn/focus/CN,开放论文,high,extract_failed,200,https://www.engineering.org.cn/focus/CN,,,,,Extracted text is too short
+https://www.engineering.org.cn/focus/CN/collections,开放论文,high,extract_failed,200,https://www.engineering.org.cn/focus/CN/collections,,,,,Extracted text is too short
+https://www.engineering.org.cn/focus/EN,开放论文,high,extract_failed,200,https://www.engineering.org.cn/focus/EN,,,,,Extracted text is too short
+https://www.engineering.org.cn/focus/EN/alert/showAlertInfoAllJournal.do,开放论文,high,fetch_failed,,,,,,,HTTP 403: 
+https://www.engineering.org.cn/focus/EN/collections,开放论文,high,imported,200,Engineering Focus,660,crawl_84d9b992331d,1e24b15a7581a6071cf6e8051f61ab126af4a280697aadfc572f8143a8fe6457,,
+https://www.engineering.org.cn/fronts/CN,开放论文,high,imported,200,前沿解读 更多,643,crawl_4c6a582ac10c,4d282f6b3b7840cd95022620b0444f6f6454711802c51c19c61a616b427a94c7,,
+https://www.engineering.org.cn/fronts/EN,开放论文,high,imported,200,Videos,645,crawl_9efa907a636d,ce2fb67b3c3ba85727759b96db9f75684d40b364c7b9487352fa287f95848d77,,
+https://www.engineering.org.cn/sscae/EN/collections,开放论文,high,imported,200,Strategic Study of CAE,661,crawl_302cf50d964e,85fa8f476cb1992817093248d41a6c850f10fabbb029af1b2195c4212cc64487,,
+https://www.engineering.org.cn/videos/CN/multimedia_collections/video/1162833295090180557,开放论文,high,extract_failed,200,https://www.engineering.org.cn/videos/CN/multimedia_collections/video/1162833295090180557,,,,,Extracted text is too short
+https://www.engineering.org.cn/videos/CN/multimedia_collections/video/1162833339176509903,开放论文,high,extract_failed,200,https://www.engineering.org.cn/videos/CN/multimedia_collections/video/1162833339176509903,,,,,Extracted text is too short
+https://www.engineering.org.cn/videos/CN/multimedia_collections/video/1162839173914747791,开放论文,high,extract_failed,200,https://www.engineering.org.cn/videos/CN/multimedia_collections/video/1162839173914747791,,,,,Extracted text is too short
+https://www.icsd.tsinghua.edu.cn/column/INDEX,工程案例,high,duplicate,200,新闻动态更多>>,611,crawl_1d29cb9e4a87,1b092788a53683f9d1444d6538de652d864f5e719a9fd0de771cf6226bc3a0a9,,
+https://www.icsd.tsinghua.edu.cn/column/jrytzsyb,工程案例,high,duplicate,200,研究成果,613,crawl_8d2c4713c0a4,d534ceb71dc355a66026a47bb2f52c7f3872e2c66ada6b01cdbcaa1846835913,,
+https://www.icsd.tsinghua.edu.cn/column/jscgzh,工程案例,high,imported,200,高峰论坛,637,crawl_61f8f72a49c2,5cae58c134b4ebee0748ddcde1d7930b4922578bcdbb171136f1783ad333408d,,
+https://www.icsd.tsinghua.edu.cn/column/jy,工程案例,high,imported,200,交流互访,656,crawl_8e819de1e74b,624aea31890aad9c8d23e7e818407078a991a161c45ebd6d04d51d384c91abca,,
+https://www.icsd.tsinghua.edu.cn/column/kjyjysyb,工程案例,high,duplicate,200,研究领域,624,crawl_aa084275d7ff,22f6652d0f5d59e98dd2d381b423b0205556d5bd25dc8a7349909ea6306eca88,,
+https://www.icsd.tsinghua.edu.cn/column/ktyj,工程案例,high,imported,200,项目与活动,636,crawl_abcd2a706547,0a62c91ba67c22720418937062cf8f20c4894c8aec715cf7c99372ecbdb4b0df,,
+https://www.icsd.tsinghua.edu.cn/column/ly,工程案例,high,imported,200,研讨会,638,crawl_bd10d649cd94,f5768a78d252686c21772ac245d51ea6646ac7242a0912f180fb1551efa8c561,,
+https://www.icsd.tsinghua.edu.cn/column/xwzx,工程案例,high,duplicate,200,2026（第四届）两岸碳中和大会,612,crawl_6dcacfbf6493,03c90df83d867b387a3952cc8ef5187824793a9504e70eabf63f5d2a842083c1,,
+https://www.icsd.tsinghua.edu.cn/column/zhsyb,工程案例,high,imported,200,研究机构,635,crawl_536b8baa4c4c,4c7fc838657ca377ca9828ab36938e4b0ff0ef2548a1345af0469812b246ac6c,,
+https://www.icsd.tsinghua.edu.cn/info/syly/1643,工程案例,high,imported,200,清华大学2017年度国家科技奖获奖项目介绍,626,crawl_7af60aac157c,0c09e593f651878138f6736379f8e47f213527e335ea2813cecbec9319d3023d,,
+https://www.mdpi.com/1996-1944/12/19/3128,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;1996&#45;1944&#47;12&#47;19&#47;3128"" on this server.<P>
+Reference&#32;&#35;18&#46;24f93dd2&#46;1781255527&#46;1e9b10ec
+<P>https&#58;&#47;"
+https://www.mdpi.com/1996-1944/13/1/108,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/2075-5309/12/5/555,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/2075-5309/14/10/3171,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2075&#45;5309&#47;14&#47;10&#47;3171"" on this server.<P>
+Reference&#32;&#35;18&#46;1ef93dd2&#46;1781255483&#46;25484dd9
+<P>https&#58;&#47;"
+https://www.mdpi.com/2075-5309/14/12/3985,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/2076-3417/13/10/6246,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2076&#45;3417&#47;13&#47;10&#47;6246"" on this server.<P>
+Reference&#32;&#35;18&#46;1ef93dd2&#46;1781255513&#46;25487c77
+<P>https&#58;&#47;"
+https://www.mdpi.com/2076-3417/15/5/2479,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2076&#45;3417&#47;15&#47;5&#47;2479"" on this server.<P>
+Reference&#32;&#35;18&#46;24f93dd2&#46;1781255539&#46;1e9b21c7
+<P>https&#58;&#47;&"
+https://www.mdpi.com/2076-3417/9/18/3767,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;2076&#45;3417&#47;9&#47;18&#47;3767"" on this server.<P>
+Reference&#32;&#35;18&#46;24f93dd2&#46;1781255486&#46;1e9ac733
+<P>https&#58;&#47;&"
+https://www.mdpi.com/2412-3811/9/2/23,开放论文,high,fetch_failed,,,,,,,URL error: _ssl.c:1011: The handshake operation timed out
+https://www.mdpi.com/journal/applsci/special_issues/Jointed_Rock_Mass,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;applsci&#47;special&#95;issues&#47;Jointed&#95;Rock&#95;Mass"" on this server.<P>
+Reference&#32;&#35;18&#46;24f93dd2&#46;178125"
+https://www.mdpi.com/journal/applsci/special_issues/Structural_Performances_of_Concrete,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;applsci&#47;special&#95;issues&#47;Structural&#95;Performances&#95;of&#95;Concrete"" on this server.<P>
+Reference&#32;&#35;18&#"
+https://www.mdpi.com/journal/buildings/special_issues/01QX299L1J,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;buildings&#47;special&#95;issues&#47;01QX299L1J"" on this server.<P>
+Reference&#32;&#35;18&#46;24f93dd2&#46;1781255579&#46;1e9b"
+https://www.mdpi.com/journal/buildings/special_issues/AETQ71UC4K,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;buildings&#47;special&#95;issues&#47;AETQ71UC4K"" on this server.<P>
+Reference&#32;&#35;18&#46;24f93dd2&#46;1781255560&#46;1e9b"
+https://www.mdpi.com/journal/buildings/special_issues/High_performance_Materials,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;buildings&#47;special&#95;issues&#47;High&#95;performance&#95;Materials"" on this server.<P>
+Reference&#32;&#35;18&#46;1ef93dd2"
+https://www.mdpi.com/journal/buildings/special_issues/LXVFJODZV1,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;buildings&#47;special&#95;issues&#47;LXVFJODZV1"" on this server.<P>
+Reference&#32;&#35;18&#46;24f93dd2&#46;1781255564&#46;1e9b"
+https://www.mdpi.com/journal/infrastructures/special_issues/2P247HJ4DK,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;infrastructures&#47;special&#95;issues&#47;2P247HJ4DK"" on this server.<P>
+Reference&#32;&#35;18&#46;24f93dd2&#46;1781255541&#4"
+https://www.mdpi.com/journal/materials/special_issues/8PUY81OM64,开放论文,high,fetch_failed,,,,,,,"HTTP 403: <HTML><HEAD>
+<TITLE>Access Denied</TITLE>
+</HEAD><BODY>
+<H1>Access Denied</H1>
+ 
+You don't have permission to access ""http&#58;&#47;&#47;www&#46;mdpi&#46;com&#47;journal&#47;materials&#47;special&#95;issues&#47;8PUY81OM64"" on this server.<P>
+Reference&#32;&#35;18&#46;1ef93dd2&#46;1781255588&#46;2548"
+https://www.sciopen.com/article/10.16511/j.cnki.qhdxxb.2021.21.019,开放论文,high,skipped_robots,,,,,,,Blocked by robots.txt
+https://www.tsinghua.edu.cn/,工程案例,high,duplicate,200,清华新闻,490,crawl_2dc3e1fe7da2,f4bc80a4a7a52adf15eb97cfa5dfa1bd5953a37b6148a86daf4da3d9bd939956,,
+https://www.tsinghua.edu.cn/en/,工程案例,high,duplicate,200,About,486,crawl_d26ccb38120d,c143e6e3b2ba6ffae9404eda957946a3a8f4db9b681df0d8ed1f0a099220ee5a,,
+https://www.tsinghua.edu.cn/en/About.htm,工程案例,high,duplicate,200,About,491,crawl_89401c27b322,025d6ab201b73eba5aa942a5067486997453e8dd749d19f6f4b8b4dbbcb49a53,,
+https://www.tsinghua.edu.cn/en/Alumni.htm,工程案例,high,duplicate,200,About,488,crawl_976a5409f350,cf3262ace679665bd3c5c66ad9090e8b4d35ea0398ea192b652ef163aa8106ac,,
+https://www.tsinghua.edu.cn/en/Faculty___Staff.htm,工程案例,high,duplicate,200,About,487,crawl_79604042eae6,6f364a4784cfb953589450815ce9de90a2989303b6a41ffdab39507d6556b499,,
+https://www.tsinghua.edu.cn/en/Media.htm,工程案例,high,duplicate,200,About,489,crawl_4dedb74dd8d2,ec43afcae5fd2ca12accb39cbc430386047914bfc39ff8a3eb7039dbeffb455d,,
+https://www.tsinghua.edu.cn/en/Media1/In_the_media.htm,工程案例,high,imported,200,About,651,crawl_eae4e7352755,a605ccfaff6f8e9dcc2954a9b1dd34f6359fa71b47c737469f3a5d6475a44c9d,,
+https://www.tsinghua.edu.cn/en/News.htm,工程案例,high,duplicate,200,LATEST NEWS,607,crawl_47adb687860f,ef760dfa5c9bd0ab2b88ec44316e6a6c7a6443d2a4fc3afc78c15a8d16e639a4,,
+https://www.tsinghua.edu.cn/en/News/FEATURES_AND_VOICES.htm,工程案例,high,imported,200,FEATURES AND VOICES,652,crawl_3b5c6de801d9,a7fbf557a45f70e4f13cbcf0e95a733e8d19e4f066be83e094fd8885119b2328,,
+https://www.tsinghua.edu.cn/en/News/HEADLINES.htm,工程案例,high,extract_failed,200,https://www.tsinghua.edu.cn/en/News/HEADLINES.htm,,,,,Extracted text is too short
+https://www.tsinghua.edu.cn/en/News/LATEST_NEWS.htm,工程案例,high,imported,200,LATEST NEWS,650,crawl_66b9a9bb8ca4,aa78e7ae322b54505562206a014eaf0a96c9171d1706288643492c41cc2400d0,,
+https://www.tsinghua.edu.cn/en/News/NEWSLETTER.htm,工程案例,high,imported,200,NEWSLETTER-Tsinghua University,653,crawl_d7be075c42cb,41029677b8009d35a89dee1e451b0b10b7fe35f087e2bb50e7b47460c09b1e91,,
+https://www.tsinghua.edu.cn/en/Student_Life.htm,工程案例,high,extract_failed,200,https://www.tsinghua.edu.cn/en/Student_Life.htm,,,,,Extracted text is too short
+https://www.tsinghua.edu.cn/en/Visitor.htm,工程案例,high,extract_failed,200,https://www.tsinghua.edu.cn/en/Visitor.htm,,,,,Extracted text is too short
+https://www.tsinghua.edu.cn/en/index.htm,工程案例,high,duplicate,200,About,486,crawl_87ab8e4f1711,c143e6e3b2ba6ffae9404eda957946a3a8f4db9b681df0d8ed1f0a099220ee5a,,
+https://www.tsinghua.edu.cn/en/info/1244/14915.htm,工程案例,high,imported,200,Serbian President Aleksandar Vucic visits Tsinghua-Tsinghua University,655,crawl_52e740d72455,67fce4f75ed84aead2fafa97afafe33bc939cee11cf9175bc5769a5e9a83f304,,
+https://www.tsinghua.edu.cn/en/info/1244/14938.htm,工程案例,high,imported,200,"Xi replies to letter from Chinese, U.S. students participating in ""A Shared Voyage: China-U.S. Youth Friendship Program""-Tsinghua University",654,crawl_9684df3807c7,60fb6832487152799c0c75dbfa3e8e0dafef83e694e26774ca386319e62c5d88,,
+https://www.tsinghua.edu.cn/fk.htm,工程案例,high,extract_failed,200,https://www.tsinghua.edu.cn/fk.htm,,,,,Extracted text is too short
+https://www.tsinghua.edu.cn/index.htm,工程案例,high,duplicate,200,清华新闻,490,crawl_1f3d7434aa19,f4bc80a4a7a52adf15eb97cfa5dfa1bd5953a37b6148a86daf4da3d9bd939956,,
+https://www.tsinghua.edu.cn/info/1173/18745.htm,高校机构,high,duplicate,200,【清华新思】为创新驱动发展战略贡献清华力量-清华大学,585,crawl_79030e943dce,e8470b18819da8f403f475f00141d191dd845eb07964d3d128cc2fab06c40a1b,,
+https://www.tsinghua.edu.cn/info/1181/84053.htm,工程案例,high,duplicate,200,清华大学主办堆石混凝土高坝建设关键技术研讨会-清华大学,584,crawl_ffe4cf765e1e,efaccb25a2144daf22a0f854376a5ca946dd454ad9d89d2f3dd7db599f97fa15,,
+https://www.tsinghua.edu.cn/info/1367/81635.htm,工程案例,high,duplicate,200,清华新闻,583,crawl_1b69bba197a2,599ea33caef364aa87e9e4632ef2cb5800e73836d83e48f87498bae932f36b04,,
+https://www.tsinghua.edu.cn/news.htm,工程案例,high,duplicate,200,专题推荐,547,crawl_7df69269c311,0ccd7f701e1c55dd1faea2ee6e33354cb9bf70e48ae61cef3269d202366940e8,,
+https://www.tsinghua.edu.cn/news/mtqh.htm,工程案例,high,imported,200,媒体清华-清华大学,629,crawl_9b9341667d07,a385df91827fa19dd934093ff382a88329e66213d8739cd248adc4c9a226c9d5,,
+https://www.tsinghua.edu.cn/news/rcpy.htm,工程案例,high,imported,200,人才培养-清华大学,649,crawl_f1b84963df01,034d18a75532acdf6f25dbfa6cc1466f679087cd2e85efb7e3fb3435a0679b10,,
+https://www.tsinghua.edu.cn/news/ttxw.htm,工程案例,high,duplicate,200,头条新闻-清华大学,622,crawl_70563e05fc3f,1d9e973c3caa8cfb07e59db8abd6045d76f1ce7510c471b601792f6b8965bfc9,,
+https://www.tsinghua.edu.cn/news/zhsx.htm,工程案例,high,imported,200,综合时讯-清华大学,630,crawl_e9b169af4de2,f97974a4ddc89a8a19c3832d0d055ab904a887a53baacad805f22ef92c53954d,,
+https://www.tsinghua.edu.cn/news/zttj.htm,工程案例,high,imported,200,专题推荐-清华大学,627,crawl_7c9ba0915192,8b57a51b507d279eb783a73e1a9ee59c7eda554674993b5ac2030b5bb1273c60,,
+https://www.tsinghua.edu.cn/news/zxdt.htm,工程案例,high,imported,200,最新动态-清华大学,628,crawl_f158edaa1439,660c82e289dcb4a324c615e15e65a503295a312eae7f33c87eae79be6d07b701,,
+https://www.tsinghua.edu.cn/xxgk.htm,工程案例,high,duplicate,200,清华新闻,548,crawl_103aeef91a9d,a67dc6aa64aafde9fad21525d488ea2fb587ede5079442c88f8ccc641fccb43b,,
+https://www.tsinghua.edu.cn/xxgk/lrld.htm,工程案例,high,duplicate,200,清华新闻,551,crawl_5a29f08f8aaa,704929924cde02ad0407082164d0ee9ebad09acc45d39e1bdd2b93c5793a55e4,,
+https://www.tsinghua.edu.cn/xxgk/xqxc.htm,工程案例,high,duplicate,200,清华新闻,549,crawl_aae34133818e,6e385ee93d16c6ed9c8c6291a65487f2014fcd6be626d3597e45dc1b487ffbc6,,
+https://www.tsinghua.edu.cn/xxgk/xrld.htm,工程案例,high,extract_failed,200,https://www.tsinghua.edu.cn/xxgk/xrld.htm,,,,,Extracted text is too short
+https://www.tsinghua.edu.cn/xxgk/xxyg.htm,工程案例,high,duplicate,200,清华新闻,550,crawl_b44151710e6f,b6a1763e7199fdfc69469d84bff3512deb98f064fa8147110bb0932cce82ee91,,
+https://yskyz.tsinghua.edu.cn/gxylcxcg/xslwspcxtg.htm,工程案例,high,extract_failed,200,https://yskyz.tsinghua.edu.cn/gxylcxcg/xslwspcxtg.htm,,,,,Extracted text is too short
+https://yskyz.tsinghua.edu.cn/gxylcxcg/zdkyptjszlbdts.htm,工程案例,high,imported,200,重大科研平台建设质量不断提升-清华大学110年校庆云上科研展,642,crawl_c56be4454053,9cc2ceca3ffe159f265ab49d155fa8526bcc1b9eb14a728ab19f567bb2456482,,
+https://yskyz.tsinghua.edu.cn/index.htm,工程案例,high,duplicate,200,推进,614,crawl_a8c0b72e93f6,7191fb7b4e78af88896a2e3df611018d1953d61531e8e91ac5e8997f40387c9e,,
+https://yskyz.tsinghua.edu.cn/info/1022/1179.htm,工程案例,high,duplicate,200,上一篇：高性能锂离子电池用石墨和石墨烯材料,599,crawl_ebc2a71114f8,4f49957743d2726d2e971100edb702e9d17a71850e7b98c489ec190837917b8d,,
+https://yskyz.tsinghua.edu.cn/tjkytzjzgg/cjkjcgzh1.htm,工程案例,high,imported,200,促进科技成果转化-清华大学110年校庆云上科研展,639,crawl_cd69c901540b,7f67c2d8076238c81da8386dec03b6870a3b195c8e4a7fb4f38cf9b1fa9cb669,,
+https://yskyz.tsinghua.edu.cn/tjkytzjzgg/gjkxkjcyjtx1.htm,工程案例,high,duplicate,200,构建跨学科交叉研究体系-清华大学110年校庆云上科研展,625,crawl_1825fd6393c5,3d52bf4b8e93dc680839fbd7140d7d8f6811e39f968db9cd15a076026ae7b414,,
+https://yskyz.tsinghua.edu.cn/tjkytzjzgg/gjxxzktx1.htm,工程案例,high,imported,200,构建新型智库体系-清华大学110年校庆云上科研展,640,crawl_214394c23848,c209700098b8eec9605d0d713b278c5575ab87be87c756a2967c7acb3aaa5f3d,,
+https://yskyz.tsinghua.edu.cn/tjkytzjzgg/jkjssjyldxcxtx.htm,工程案例,high,duplicate,200,加快建设世界一流大学创新体系-清华大学110年校庆云上科研展,615,crawl_e3110eeb319e,0af9284d97749893eb47704efa0e0de9f130f2f1d1921b4cd3a24cf2ed248d2b,,
+https://yskyz.tsinghua.edu.cn/tjkytzjzgg/tjzdqybs1.htm,工程案例,high,duplicate,200,推进重大前沿部署-清华大学110年校庆云上科研展,616,crawl_548d9edef4d6,51c779d6597bb7e6e968a70ed5d4f361666a2eb82e162345d5420c59f1822e83,,
+https://yskyz.tsinghua.edu.cn/tjkytzjzgg/wsxspjzd.htm,工程案例,high,imported,200,完善学术评价制度-清华大学110年校庆云上科研展,641,crawl_fc3c41db0ae4,42d0540c5f4de75477de9c42e1646804ef5270e9e948a887a81c61deab314aba,,
