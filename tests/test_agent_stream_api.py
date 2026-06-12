@@ -141,7 +141,11 @@ class SlowStreamingChatModelProvider:
         yield "capacity depends on SCC flowability [1]."
 
 
-def test_agent_stream_yields_first_token_before_model_finishes(tmp_path) -> None:
+def test_agent_stream_yields_first_token_before_model_finishes(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.create_reranking_provider",
+        lambda **_kwargs: None,
+    )
     database_path = tmp_path / "agent_stream_timing.sqlite"
     engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
     Base.metadata.create_all(bind=engine)

@@ -1,0 +1,60 @@
+[project]
+user_env = []
+session_timeout = 3600
+user_session_timeout = 1296000
+cache = false
+persist_user_env = false
+mask_user_env = false
+allow_origins = ["*"]
+
+[features]
+unsafe_allow_html = false
+latex = false
+user_message_markdown = true
+user_message_autoscroll = true
+assistant_message_autoscroll = true
+auto_tag_thread = true
+edit_message = true
+allow_thread_sharing = false
+favorites = false
+
+[features.slack]
+reaction_on_message_received = false
+
+[features.spontaneous_file_upload]
+enabled = false
+accept = ["text/plain", "text/markdown", "application/pdf"]
+max_files = 5
+max_size_mb = 20
+
+[features.audio]
+enabled = false
+sample_rate = 24000
+
+[features.mcp]
+enabled = false
+
+[features.mcp.sse]
+enabled = false
+
+[features.mcp.streamable-http]
+enabled = false
+
+[features.mcp.stdio]
+enabled = false
+allowed_executables = []
+
+[UI]
+name = "RFC-RAG-Agent"
+description = "Citation-first RAG agent for rock-filled concrete knowledge retrieval."
+default_theme = "light"
+layout = "wide"
+default_sidebar_state = "open"
+confirm_new_chat = true
+cot = "full"
+alert_style = "classic"
+logo_file_url = ""
+default_avatar_file_url = ""
+
+[meta]
+generated_by = "2.11.1"

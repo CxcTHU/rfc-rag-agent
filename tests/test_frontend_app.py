@@ -9,8 +9,21 @@ def test_frontend_index_is_served() -> None:
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "堆石混凝土资料工作台" in response.text
+    assert "面向堆石混凝土的 RAG 智能检索系统" in response.text
+    assert "RFC-RAG-Agent" in response.text
+    assert 'data-view-target="ask"' in response.text
+    assert 'data-view-target="library"' in response.text
+    assert 'id="ask-view"' in response.text
+    assert 'id="library-view"' in response.text
+    assert "资料库工作台" in response.text
+    assert "混合检索" in response.text
+    assert "流式回答" in response.text
+    assert "结构化分块" in response.text
     assert "/static/app.js" in response.text
+    assert 'class="hero-layout"' in response.text
+    assert 'class="demo-panel"' in response.text
+    assert 'id="agent-panel"' in response.text
+    assert 'id="library-panel"' in response.text
     assert 'data-sources-body' in response.text
     assert 'data-documents-body' in response.text
     assert 'data-source-filter' in response.text
@@ -71,6 +84,11 @@ def test_frontend_static_assets_are_served() -> None:
     assert "agentRequestInFlight" in response.text
     assert "setAgentBusy" in response.text
     assert "setAgentPanelStatus" in response.text
+    assert "querySelectorAll" in response.text
+    assert "bindViewNavigation" in response.text
+    assert "switchView" in response.text
+    assert "[data-view-target]" in response.text
+    assert "[data-view]" in response.text
     assert "timeoutMs: 45000" in response.text
     assert "请求超时" in response.text
     assert "pendingUserMessage.remove()" not in response.text
@@ -111,6 +129,11 @@ def test_frontend_static_assets_are_served() -> None:
     assert styles.status_code == 200
     assert "[hidden]" in styles.text
     assert "display: none !important" in styles.text
+    assert "hero-layout" in styles.text
+    assert "demo-panel" in styles.text
+    assert "view-section" in styles.text
+    assert 'aria-current="page"' in styles.text
+    assert "linear-gradient" in styles.text
     assert "chat-message--thinking" in styles.text
     assert "chat-message--error" in styles.text
     assert "thinking-text" in styles.text

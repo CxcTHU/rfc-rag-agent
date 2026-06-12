@@ -28,6 +28,9 @@ data/fulltext/
 # Logs
 *.log
 
+# Chainlit local runtime cache
+.chainlit/translations/
+
 # Obsidian knowledge base is local-only; never commit it.
 obsidian-vault/
 obsidian-vault/**

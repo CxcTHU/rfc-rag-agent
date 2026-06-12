@@ -1,6 +1,93 @@
 # 项目进度
 
-## 最新状态：2026-06-12（阶段 26 检索性能优化 + Cross-Encoder 重排序，已通过用户核验，进入提交合并）
+## 最新状态：2026-06-12（阶段 27 Chainlit 前端 + Docker 容器化 + GitHub Actions CI，已通过验收并进入提交合并流程）
+
+当前阶段：阶段 27。在 `codex/phase-27-chainlit-docker-ci` 分支完成 Chainlit 对话界面、Docker 容器化、GitHub Actions pytest CI、端到端 smoke 验证、普通文档同步、Obsidian 草稿收尾和阶段验收报告。Docker Desktop 安装后，已完成 Docker Compose 实跑部署验证。用户随后要求先优化前端界面，因此新增 Phase 7，将原生 FastAPI 首页升级为深色科技风 RAG 产品首页，并将“开始问答”和“资料库”拆成两个可切换界面。当前已通过验收，用户已授权提交、创建 `phase-27-complete` tag、合并并推送 GitHub。本次验收报告已落盘：
+
+```text
+docs/phase_reviews/phase-27.md
+```
+
+Git / tag / main 起点：
+
+- 阶段 26 已完成、创建 `phase-26-complete` tag，并合并到 `main`。
+- `phase-26-complete -> 5000d4f Complete phase 26 retrieval performance reranking`。
+- 阶段 26 合并提交：`74afce9 Merge phase 26 retrieval performance reranking`。
+- 阶段 27 从阶段 26 合并后的 `main` 出发，未移动任何已有阶段 tag。
+- 当前尚未创建 `phase-27-complete` tag。
+
+阶段 27 完成内容：
+
+- 新增 `docs/stage27_chainlit_docker_ci.md`，固定 Chainlit 双入口设计、service 层复用、流式映射、workflow/citations 可视化、Docker/CI 安全边界和完成标准。
+- 新增 `chainlit_app.py`，用 `@cl.on_chat_start` 和 `@cl.on_message` 接入 `ConversationRepository`、闲聊短路、default `AgentService`、agentic LangGraph 路径、流式 token、metadata、citations 与 workflow 展示。
+- 新增 `.chainlit/config.toml` 和 `chainlit.md`，用于 Chainlit 2.11.1 运行配置和欢迎页；配置包含当前版本需要的 `[meta] generated_by`。
+- `pyproject.toml` 新增 `chainlit>=2.0.0` 和 `asyncpg>=0.30.0`。`asyncpg` 是 Chainlit 运行时设置接口会加载的数据层依赖，即使本项目当前不启用外部 Postgres，也需安装以避免 `/project/settings` 500。
+- 新增 `Dockerfile`、`docker-compose.yml` 和 `.dockerignore`。Docker 镜像不包含 `.env`、SQLite 数据文件、`data/raw`、`data/fulltext` 或 Obsidian 知识库；运行时通过 `env_file` 与 `./data:/app/data` 挂载外部配置和数据。
+- 新增 `.github/workflows/ci.yml`，push/PR 触发 Python 3.11 + deterministic provider 的 `python -m pytest -q`，不要求真实 API key。
+- 新增 `tests/test_chainlit_app.py`、`tests/test_docker_assets.py`，并补充 `tests/__init__.py`，避免安装 Chainlit 后第三方顶层 `tests` 包遮蔽本地测试包。
+- 保留 FastAPI 原有 API、`/agent/query/stream` SSE 端点和 `app/frontend/` 原生前端。
+- Phase 7 重构 `app/frontend/index.html` 与 `app/frontend/static/styles.css`，把原生 `GET /` 升级为深色科技风首页，保留真实 Agent demo、会话、引用、workflow、sources/documents 工作台入口和移动端响应式布局；随后根据人工反馈将“开始问答”和“资料库”拆成两个可切换界面，并把首页标题改为“面向堆石混凝土的 RAG 智能检索系统”。
+
+验证结果：
+
+```text
+阶段 27 聚焦回归：
+python -m pytest tests/test_docker_assets.py tests/test_chainlit_app.py tests/test_agent_stream_api.py tests/test_agent_api.py -q
+34 passed, 1 warning
+
+阶段 27 验收全量回归：
+python -m pytest -q
+520 passed, 1 warning in 70.02s
+
+FastAPI smoke：
+GET /health -> 200
+POST /agent/query question=谢谢 -> 200
+POST /agent/query/stream question=谢谢 -> 200，包含 event: done
+POST /search/hybrid -> 200
+GET /quality-report -> 200
+桌面 1280x720 与移动 390x844 浏览器 console error 均为 0
+
+Chainlit smoke：
+GET / -> 200
+GET /project/settings?language=zh-CN -> 200
+桌面 1280x720 与移动 390x844 浏览器 console error 均为 0
+
+Phase 7 前端视觉升级聚焦回归：
+python -m pytest tests/test_frontend_app.py tests/test_docker_assets.py tests/test_chainlit_app.py -q
+15 passed, 1 warning in 1.59s
+
+Phase 7 收尾全量回归：
+python -m pytest -q
+520 passed, 1 warning in 83.56s
+
+FastAPI preview：
+GET http://127.0.0.1:8022 -> 200
+桌面 1280x720 与移动 390x844 浏览器 console error 均为 0
+顶部导航切换到 #library-view 成功，console error/warning 为 0
+
+真实 reranking API key 最小 smoke：
+RERANKING_PROVIDER=jina，base host=api.jina.ai，api key 已配置；最小 rerank 调用成功，返回 2 条结果并完成解析。未打印 key，未保存供应商原始响应。
+
+提交前最终回归：
+python -m pytest -q
+520 passed, 1 warning in 145.76s
+
+真实 reranking 配置隔离修复：
+本机 `.env` 配置真实 Jina reranking 后，两个离线定时测试曾误触发真实 rerank；已在测试中显式禁用/隔离 rerank provider，保证 CI 和本地全量测试不以真实 API 为前提。
+```
+
+当前环境限制：
+
+- Docker Desktop 已安装并通过 `docker run --rm hello-world` 自检；项目容器已通过 `docker compose up --build -d` 构建并启动。
+- 当前 Browser MCP 本轮只提供页面快照/控制台/视口能力，没有可用 click/type 工具，因此 Chainlit 实际发送消息未做浏览器自动化点击验证；核心链路已由单元测试、服务启动和 HTTP/浏览器 smoke 覆盖。
+
+提交合并流程：用户已授权提交阶段 27 整体开发工作、创建阶段 tag、合并并推送 GitHub。后续如果继续上线方向，优先补域名/HTTPS、反向代理、生产 `.env` 管理、数据卷备份、日志与认证权限。
+
+面试表达草稿：
+
+阶段 27 我没有替换原来的 FastAPI API 和原生前端，而是新增一个 Python 原生的 Chainlit 对话入口，让同一套 RAG service 层可以同时支撑 API、工作台和聊天式界面。Chainlit 侧复用阶段 25 的流式事件，把 token 映射到 `msg.stream_token()`，把 agentic workflow 映射到 `cl.Step`，把 citations 映射到 `cl.Text`，同时继续使用本地 ConversationRepository 保存会话。部署上用 Dockerfile 和 docker-compose 固定运行入口，但通过 `.dockerignore` 和 volume 边界排除 `.env`、SQLite、原始全文和 Obsidian；CI 则只跑 deterministic pytest，不让真实 API 或密钥成为自动回归前提。
+
+## 历史状态：2026-06-12（阶段 26 检索性能优化 + Cross-Encoder 重排序，已通过用户核验，进入提交合并）
 
 用户已明确要求验收阶段 26 开发工作，并提交阶段 26 整体开发、创建 `phase-26-complete` tag、合并到 `main` 并推送 GitHub。本次验收报告已落盘：
 

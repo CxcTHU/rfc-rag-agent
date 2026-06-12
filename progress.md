@@ -1,327 +1,370 @@
-# 阶段 26 进度日志：检索性能优化 + Cross-Encoder 重排序
+# 阶段 27 进度日志：Chainlit 前端 + Docker 容器化 + GitHub Actions CI
 
 ## 当前状态
 
-- 当前阶段：阶段 26「检索性能优化 + Cross-Encoder 重排序」。
-- 当前分支：`codex/phase-26-retrieval-performance-reranking`。
-- 前置条件：阶段 25 已完成提交、合并到 main 并创建 `phase-25-complete` tag。
-- 阶段 26 状态：Phase 0-7 已完成，当前停在用户人工核验前状态。
-- 提交状态：尚未 `git add`、尚未提交、尚未创建 `phase-26-complete` tag、尚未推送。
+- 当前阶段：阶段 27「Chainlit 前端 + Docker 容器化 + GitHub Actions CI」。
+- 当前分支：`codex/phase-27-chainlit-docker-ci`。
+- 前置条件：阶段 26 已完成提交、创建 `phase-26-complete` tag，并合并到 main。
+- 阶段 27 状态：Phase 0-6 已完成，开发、测试、普通文档、Obsidian 草稿和阶段验收报告已收尾；Docker Desktop 安装后，Docker Compose 部署已实跑通过。
+- 提交状态：用户已授权验收、提交阶段 27 整体开发工作、创建 `phase-27-complete` tag、合并并推送 GitHub。
+
+## 阶段 27 目标概述
+
+从阶段 26 完成后的 main 出发，实现三件事：
+
+1. **Chainlit 前端**：新增专业级 AI 对话界面，并保留原 FastAPI API 与原生前端。Chainlit 直接调用 Python 服务层（不经过 HTTP 自调用），复用 `AgentService`、`detect_chitchat()`、`run_agentic_rag()`、`ConversationRepository` 等已有逻辑。支持流式输出（`stream_generate()` + `msg.stream_token()`）、引用展示（`cl.Text`）、agentic 步骤可视化（`cl.Step`）和会话管理。
+2. **Docker 容器化**：`Dockerfile` + `docker-compose.yml`，打包 FastAPI + Chainlit，SQLite 数据卷挂载，`.env` 环境变量注入。镜像不含凭据或数据文件。
+3. **GitHub Actions CI**：push/PR 触发 pytest 全量测试，使用 deterministic provider，不配置真实 API。
+
+## 阶段 26 验收基线
+
+- 阶段 26 验收结论：已提交、已打 `phase-26-complete` tag、已合并到 `main`。
+- `phase-26-complete -> 5000d4fa790d95931862d3f8b2bfc34e91c91ee7 Complete phase 26 retrieval performance reranking`。
+- 阶段 26 合并提交：`74afce9fa359c25b9730cf414cef69f3db0215da Merge phase 26 retrieval performance reranking`。
+- 已验证 `phase-26-complete` 是 `main` 的祖先，未移动任何已有阶段 tag。
+- 测试基线：511 passed。
+- 关键交付：numpy 向量化（vector search 1456ms→335ms）、BM25+vector 并行、Cross-Encoder ReRankingProvider、端到端 hybrid 2199ms→733ms。
 
 ## Phase 0 日志：启动校准与文件计划
 
-本 Phase 解决阶段 26 的正确起点问题；它位于 RAG 开发链路之前，负责确认阶段 25 的提交、tag、main 合并状态和阶段 26 分支，避免从错误基线继续开发。
+时间：2026-06-12
 
-校准结果：
+已完成：
 
-- 已阅读项目入口规则、README、进度、架构、数据来源、阶段 25 设计文档，以及根目录 `task_plan.md`、`findings.md`、`progress.md`。
-- `git status -sb`：启动时位于 `main...origin/main`，工作区干净。
-- `git log --oneline -5 --decorate`：
-  - `56f5d4 (HEAD -> main, origin/main, origin/HEAD) Merge phase 25 chitchat and SSE streaming`
-  - `0a89d55 (tag: phase-25-complete, origin/codex/phase-25-chitchat-and-sse-streaming, codex/phase-25-chitchat-and-sse-streaming) Complete phase 25 chitchat and SSE streaming`
-  - `c4eda98 Merge phase 24 multi-turn conversation`
-  - `64069ba (tag: phase-24-complete, origin/codex/phase-24-multi-turn-conversation, codex/phase-24-multi-turn-conversation) Complete phase 24 multi-turn conversation`
-  - `8fc1cfa Merge phase 23 agentic eval and auto routing`
-- `phase-25-complete` 指向 `0a89d55`，未移动任何既有阶段 tag。
-- `git merge-base --is-ancestor phase-25-complete main` 通过，确认阶段 25 已合并到 `main`。
-- 已从 `56f5d4` 创建并切换到 `codex/phase-26-retrieval-performance-reranking`。
-- Planning with Files 的 session catchup 脚本在 `.claude` 路径不存在；已记录并继续使用项目根目录三份计划文件。
+- 已按入口规则读取 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/stage26_retrieval_performance_reranking.md`、`task_plan.md`、`findings.md`、`progress.md`。
+- 已运行 `git status -sb`：启动时位于 `main...origin/main`，根目录 `task_plan.md`、`findings.md`、`progress.md` 有阶段 27 预填改动。
+- 已运行 `git log --oneline -5`：最近提交为 `74afce9 Merge phase 26 retrieval performance reranking`、`5000d4f Complete phase 26 retrieval performance reranking` 等。
+- 已确认 `phase-26-complete` 指向阶段 26 最终功能提交 `5000d4fa790d95931862d3f8b2bfc34e91c91ee7`，并已合并到 `main`。
+- 已从阶段 26 合并后的 `main` 创建并切换到 `codex/phase-27-chainlit-docker-ci`。
+- 已校准 planning 文件，将 Phase 0 标记完成并进入 Phase 1。
 
-## Phase 1 日志：阶段 26 设计文档
-
-本 Phase 解决“优化方案先有可审查合同”的问题；它横跨向量检索、hybrid 检索、Provider 层和 Brain/Agent 上下文入口。现在做，是为了避免后续直接改代码时混淆性能优化、重排序质量提升和真实 API 安全边界。
-
-完成内容：
-
-- 新增 `docs/stage26_retrieval_performance_reranking.md`。
-- 文档明确当前瓶颈：`VectorSearchService._list_indexed_chunks()` 每次全表加载、JSON 反序列化、纯 Python 余弦循环。
-- 文档明确 `VectorIndexCache` 方案：进程内缓存 embedding 矩阵，查询时用 numpy 矩阵乘法。
-- 文档明确 hybrid 并行方案：keyword/BM25 与 vector search 用 `ThreadPoolExecutor` 并行，但 SQLAlchemy `Session` 不跨线程共享。
-- 文档明确 `ReRankingProvider` 协议：deterministic provider 负责测试，OpenAI-compatible provider 作为可配置真实运行能力。
-- 文档明确 Cross-Encoder 集成点：hybrid 召回 top-20~30 后精排 top-5，再送 Brain/Chat/Agent。
-- 文档明确安全边界：不引入 `torch`/`sentence-transformers`，不让真实 API 成为 CI 前提，不写入凭据或供应商原始敏感响应。
-
-## Phase 2 日志：Profiling 与基线基准
-
-本 Phase 解决“优化前哪里慢、慢多少”的问题；它位于 RAG 的 embedding、vector、keyword、hybrid 和 Agent 端到端链路。现在做，是为了给后续 numpy、缓存、并行和 rerank 建立可量化对照。
-
-完成内容：
-
-- 新增 `scripts/benchmark_retrieval.py`。
-- 脚本默认 provider 改为 `deterministic`，避免默认读取 `.env` 后误触发真实 API；真实 provider 只允许显式 `--provider` 运行。
-- 脚本输出 Markdown 表格，字段包括 query、chunk/embedding 数量、provider、operation、runs、min/mean/median/max ms。
-- 支持 `--profile` 输出单次 hybrid search 的 cProfile 摘要。
-- 新增 `tests/test_benchmark_retrieval.py`。
-
-基线结果：
+验证结果：
 
 ```text
-.\.venv\Scripts\python.exe scripts\benchmark_retrieval.py --runs 1 --top-k 5 --query "What affects filling capacity in rock-filled concrete?"
-
-chunks=8918, embeddings=8918, provider=deterministic/hash-token-v1/dim=64
-query_embedding=0.07 ms
-keyword_search=733.06 ms
-vector_search=1456.82 ms
-hybrid_search=2199.56 ms
-agent_query=2174.16 ms
+git merge-base --is-ancestor phase-26-complete main -> passed
+current branch -> codex/phase-27-chainlit-docker-ci
 ```
 
-cProfile 发现：
+提交边界：
+
+- 未执行 `git add`、`git commit`、`git tag`、`git push`。
+- 未创建 `phase-27-complete` tag，等待阶段 27 全部开发与用户人工核验。
+
+## Phase 1 日志：阶段 27 设计文档
+
+时间：2026-06-12
+
+已完成：
+
+- 新增 `docs/stage27_chainlit_docker_ci.md`。
+- 明确 Chainlit 是新增并行入口，FastAPI API 与原生 `app/frontend/` 工作台继续保留。
+- 固化 `@cl.on_message` 链路：会话加载、闲聊短路、复杂度路由、default / agentic 执行、流式输出、引用展示、步骤可视化和消息持久化。
+- 固化 Docker 边界：`.env`、SQLite、受限全文、Obsidian 不进入镜像。
+- 固化 CI 边界：GitHub Actions 只跑 deterministic pytest，不配置真实 API key。
+
+验证结果：
 
 ```text
-HybridSearchService.search(): ~3.69s cumulative
-VectorSearchService.search(): ~2.63s cumulative
-rank_vector_results(): ~1.95s cumulative
-topic_anchor_score(): ~1.94s cumulative
-normalize_text(): ~1.84s cumulative
-cosine_similarity(): ~0.26s cumulative
-_list_indexed_chunks(): ~0.19s cumulative
-deserialize_embedding(): ~0.15s cumulative
+docs/stage27_chainlit_docker_ci.md created
 ```
 
-测试结果：
+提交边界：
+
+- 未执行 `git add`、`git commit`、`git tag`、`git push`。
+
+## Phase 2 日志：Chainlit 前端集成
+
+时间：2026-06-12
+
+已完成：
+
+- `pyproject.toml` 新增 `chainlit>=2.0.0`，本地安装验证为 Chainlit 2.11.1。
+- 新增 `chainlit_app.py`，作为 Chainlit 入口；`@cl.on_chat_start` 创建会话，`@cl.on_message` 复用已有 `stream_agent_query_events()` 输出 token、metadata、done/error。
+- Chainlit 消息使用 `msg.stream_token()` 流式追加回答，用 `cl.Text` 展示引用来源和 workflow markdown，用 `cl.Step` 展示 default/tool 或 agentic workflow 步骤。
+- 新增 `.chainlit/config.toml`，按 Chainlit 2.11.1 schema 配置 UI、功能开关和安全项；禁用 unsafe HTML、audio 和 MCP。
+- 新增 `chainlit.md`，作为项目专用欢迎页。
+- 新增 `tests/test_chainlit_app.py`，覆盖事件解析、引用格式、workflow 格式、安全 metadata 和 Conversation 映射。
+- 新增 `tests/__init__.py`，修复 Chainlit 依赖安装后顶层 `tests` 包遮蔽本仓库测试模块的问题。
+
+问题与修复：
+
+- 初始 `.chainlit/config.toml` 缺少 `[meta] generated_by`，Chainlit 2.11.1 判定为旧配置并拒绝启动；已按当前 schema 重写。
+- `dataclass` 在 Chainlit 动态加载入口时触发 Python 3.13 兼容问题；已改为 `NamedTuple`。
+
+验证结果：
 
 ```text
-.\.venv\Scripts\python.exe -m pytest tests\test_benchmark_retrieval.py -q
-3 passed in 0.46s
+.\.venv\Scripts\python.exe -m pip install -e .
+successfully installed chainlit-2.11.1
+
+.\.venv\Scripts\python.exe -m pytest tests\test_chainlit_app.py tests\test_agent_stream_api.py tests\test_agent_api.py -q
+30 passed, 1 warning in 10.25s
+
+.\.venv\Scripts\chainlit.exe run chainlit_app.py --host 127.0.0.1 --port 8010 --headless
+GET http://127.0.0.1:8010 -> 200
 ```
 
-遇到的问题与处理：
+提交边界：
 
-- 初版脚本默认沿用 `.env` 的真实 Jina provider，普通基准运行可能触发真实 API；已改为默认 deterministic。
-- `time_operation()` 初版只在外层校验 `runs`，直接调用时错误信息不清晰；已在函数内部补充 `runs > 0` 校验，并用测试覆盖。
+- 未执行 `git add`、`git commit`、`git tag`、`git push`。
 
-## Phase 3 日志：numpy 向量化 + 内存索引缓存
+## Phase 3 日志：Docker 容器化
 
-本 Phase 解决向量检索重复全表加载和纯 Python 逐条计算的问题；它位于 query embedding 之后、向量召回结果排序之前。现在做，是因为 Phase 2 已证明 vector search 是 hybrid 延迟的重要组成。
+时间：2026-06-12
 
-完成内容：
+已完成：
 
-- `pyproject.toml` 新增 `numpy>=2.0.0`。
-- 新增 `app/services/retrieval/vector_cache.py`：
-  - `VectorIndexCache`
-  - `VectorIndexEntry`
-  - `VectorIndexMatch`
-  - `get_vector_index_cache()`
-  - `invalidate_vector_index_cache()`
-- `VectorSearchService.search()` 改为使用 `VectorIndexCache.search()`，查询时执行 numpy 矩阵乘法。
-- 保留 `cosine_similarity()` 纯 Python 实现，用于测试误差对照。
-- `VectorIndexService.build_index()` 在新增或更新 embedding 后自动 invalidate cache。
-- `rank_vector_results()` 避免每个结果重复 `expand_query_terms(query)`。
+- 新增 `Dockerfile`：基于 `python:3.11-slim`，安装项目依赖，暴露 8000，默认运行 `chainlit run chainlit_app.py --host 0.0.0.0 --port 8000 --headless`。
+- 新增 `docker-compose.yml`：构建应用镜像，映射 `8000:8000`，运行时读取 `.env`，挂载 `./data:/app/data`，容器内使用 `sqlite:////app/data/app.sqlite`。
+- 新增 `.dockerignore`：排除 `.env`、`.venv`、`.git`、`.claude`、`.codex`、`obsidian-vault`、SQLite/DB、`data/raw`、`data/fulltext`、日志等。
+- 新增 `tests/test_docker_assets.py`，验证 Docker 配置不显式复制敏感文件，compose 使用运行时 env 和数据卷。
 
-测试结果：
+验证结果：
 
 ```text
-.\.venv\Scripts\python.exe -m pytest tests\test_vector_cache.py tests\test_vector_search.py tests\test_vector_index_service.py tests\test_vector_search_api.py -q
-17 passed in 4.11s
+.\.venv\Scripts\python.exe -m pytest tests\test_docker_assets.py -q
+3 passed in 0.05s
+
+docker compose build
+failed: docker command not found
 ```
 
-优化后基准：
+环境限制：
+
+- 当前机器未安装 Docker CLI，无法实际执行 `docker compose up --build`。阶段 5/人工核验需在有 Docker 的环境补跑容器启动验证。
+
+提交边界：
+
+- 未执行 `git add`、`git commit`、`git tag`、`git push`。
+
+## Phase 4 日志：GitHub Actions CI 管线
+
+时间：2026-06-12
+
+已完成：
+
+- 新增 `.github/workflows/ci.yml`。
+- 触发范围：push 到 `main`、`codex/**`、`claude/**`，PR 到 `main`。
+- 运行环境：`ubuntu-latest` + Python 3.11。
+- 安装和测试命令：`python -m pip install -e ".[dev]"`、`python -m pytest -q`。
+- CI 显式使用 deterministic chat / embedding / reranking provider，不配置真实 API key。
+- 扩展 `tests/test_docker_assets.py`，静态验证 CI workflow 的触发、Python 版本、安装命令、pytest 命令和 deterministic provider 设置。
+
+验证结果：
 
 ```text
-chunks=8918, embeddings=8918, provider=deterministic/hash-token-v1/dim=64
-query_embedding=0.06 ms
-keyword_search=725.64 ms
-vector_search=335.32 ms
-hybrid_search=710.26 ms
-agent_query=685.49 ms
+.\.venv\Scripts\python.exe -m pytest tests\test_docker_assets.py tests\test_chainlit_app.py tests\test_agent_stream_api.py tests\test_agent_api.py -q
+34 passed, 1 warning in 11.83s
 ```
 
-对比 Phase 2：
+提交边界：
+
+- 未执行 `git add`、`git commit`、`git tag`、`git push`。
+
+## Phase 5 日志：端到端验证与回归
+
+时间：2026-06-12
+
+已完成：
+
+- 运行全量测试。
+- 启动 FastAPI 临时服务 `http://127.0.0.1:8020`，验证旧 API 与原生前端。
+- 启动 Chainlit 临时服务 `http://127.0.0.1:8021`，验证新入口页面、配置端点和浏览器 console。
+- 修复 Chainlit 2.11.1 缺 `asyncpg` 导致 `/project/settings` 500 的问题，`pyproject.toml` 新增 `asyncpg>=0.30.0`。
+- 验证完成后已停止临时服务并清理 smoke 日志/PID 文件。
+
+验证结果：
 
 ```text
-vector_search: 1456.82 ms -> 335.32 ms
-hybrid_search: 2199.56 ms -> 710.26 ms
-agent_query: 2174.16 ms -> 685.49 ms
-```
-
-新发现：
-
-- cache 热状态下 `VectorSearchService.search()` 在 cProfile 中约 0.007s，主热点已转移到 `KeywordSearchService.search()`。
-- 这说明 Phase 4 并行对冷启动或真实 provider 场景仍有价值，但在 deterministic/cache 热状态下 hybrid 已接近 keyword search 单路耗时。
-
-## Phase 4 日志：BM25 与向量检索并行执行
-
-本 Phase 解决 hybrid search 两路召回串行等待的问题；它位于 keyword/BM25 与 vector 两路候选召回阶段。现在做，是因为 Phase 3 后 vector 已加速，hybrid 应避免继续把两路耗时相加。
-
-完成内容：
-
-- `HybridSearchService` 新增默认并行执行路径。
-- 使用 `ThreadPoolExecutor(max_workers=2)` 同时运行 keyword 与 vector search。
-- 每个 worker 创建独立 SQLAlchemy `Session`，不跨线程共享主请求 Session。
-- 保留 `parallel=False` 串行路径，用于对照测试和排障。
-
-测试结果：
-
-```text
-.\.venv\Scripts\python.exe -m pytest tests\test_hybrid_search.py tests\test_vector_search_api.py tests\test_agent_tools.py -q
-15 passed in 4.21s
-```
-
-基准结果：
-
-```text
-chunks=8918, embeddings=8918, provider=deterministic/hash-token-v1/dim=64
-keyword_search=740.07 ms
-vector_search=357.60 ms
-hybrid_search=745.90 ms
-agent_query=690.14 ms
-```
-
-结论：
-
-- 当前 hybrid search 已接近 `max(keyword, vector)`，而非 keyword + vector。
-- cache 热状态下 keyword search 是主导耗时；后续优化重点应放在 rerank 质量和必要时 keyword 归一化热点。
-
-## Phase 5 日志：Cross-Encoder 重排序层
-
-本 Phase 解决粗召回缺少语义精排的问题；它位于 hybrid search 召回之后、Brain/Chat/Agent 组装上下文之前。现在做，是因为 Phase 3-4 已把检索延迟压低，可以在预算内加入可配置 rerank。
-
-完成内容：
-
-- 新增 `app/services/retrieval/reranking.py`。
-- 新增 `ReRankingProvider` Protocol 和 `ReRankResult`。
-- 新增 `DeterministicReRankingProvider`，用于本地测试和 CI。
-- 新增 `OpenAICompatibleReRankingProvider`，用于可选真实 rerank API。
-- 新增 `create_reranking_provider()` 工厂函数。
-- `HybridSearchService` 默认启用 deterministic rerank，召回扩大到 top-20~30 后精排 top-k。
-- `app/core/config.py` 新增 reranking 相关配置。
-- `scripts/benchmark_retrieval.py` 新增 `rerank_only` 计时指标。
-
-测试结果：
-
-```text
-.\.venv\Scripts\python.exe -m pytest tests\test_reranking.py tests\test_hybrid_search.py tests\test_vector_search_api.py tests\test_answer_service.py tests\test_agent_tools.py -q
-30 passed in 7.38s
-
-.\.venv\Scripts\python.exe -m pytest tests\test_benchmark_retrieval.py tests\test_reranking.py -q
-7 passed in 0.52s
-```
-
-基准结果：
-
-```text
-chunks=8918, embeddings=8918, provider=deterministic/hash-token-v1/dim=64
-keyword_search=745.35 ms
-vector_search=333.17 ms
-hybrid_search=733.75 ms
-rerank_only=1.50 ms
-agent_query=721.61 ms
-```
-
-边界说明：
-
-- 默认 rerank 使用 deterministic provider，不依赖真实 API。
-- OpenAI-compatible rerank provider 只作为运行时可选能力；API key 仍只允许在 `.env` 或环境变量里出现，不写入 Git、CSV、文档、测试或 Obsidian。
-
-## Phase 6 日志：端到端基准测试与回归验证
-
-本 Phase 解决优化后全链路是否更快、旧接口是否被破坏的问题；它位于代码开发完成后的全链路验收阶段。现在做，是因为必须先证明检索、问答、Agent、SSE 和 quality report 都稳定，再进入文档收尾。
-
-基准结果：
-
-```text
-英文 query:
-query_embedding=0.07 ms
-keyword_search=743.59 ms
-vector_search=349.45 ms
-hybrid_search=720.30 ms
-rerank_only=1.53 ms
-agent_query=735.48 ms
-
-中文 query:
-query_embedding=0.05 ms
-keyword_search=655.07 ms
-vector_search=1.93 ms
-hybrid_search=706.65 ms
-rerank_only=0.88 ms
-agent_query=696.88 ms
-```
-
-对比 Phase 2 英文基线：
-
-```text
-vector_search: 1456.82 ms -> 349.45 ms
-hybrid_search: 2199.56 ms -> 720.30 ms
-agent_query: 2174.16 ms -> 735.48 ms
-```
-
-测试结果：
-
-```text
-focused:
-82 passed in 20.36s
-
-full:
 .\.venv\Scripts\python.exe -m pytest -q
-511 passed in 50.49s
-```
+520 passed, 1 warning in 56.85s
 
-浏览器/API 验证：
-
-```text
-8001 current service:
-GET /health -> 200
-POST /agent/query/stream {"question":"thanks","top_k":2} -> token / metadata / done
+FastAPI:
+GET http://127.0.0.1:8020/health -> 200
+POST /agent/query -> 200
+POST /agent/query/stream -> 200, contains event: done
 POST /search/hybrid -> 200
 GET /quality-report -> 200
-Browser desktop 1280x720 -> RFC RAG 工作台
-Browser mobile 390x844 -> RFC RAG 工作台
+Browser desktop/mobile -> RFC RAG 工作台 loaded, console errors=0
+
+Chainlit:
+GET http://127.0.0.1:8021 -> 200
+GET /project/settings?language=zh-CN -> 200
+Browser desktop/mobile -> RFC-RAG-Agent loaded, console errors=0
 ```
 
-备注：
+环境限制：
 
-- 8000 端口已有旧服务占用，`/agent/query/stream` 返回 404；当前阶段代码验证改用 8001，并在验证后停止 8001 临时服务。
+- 当前机器未安装 Docker CLI，无法执行 `docker compose up --build`。此项需用户人工核验时在有 Docker 的环境补跑。
 
-## 阶段 26 目标概述
+提交边界：
 
-从阶段 25 完成后的 main 出发，实现检索性能优化 + Cross-Encoder 重排序：
+- 未执行 `git add`、`git commit`、`git tag`、`git push`。
 
-1. **Profiling 与基线基准**：用 cProfile 和 perf_counter 量化当前检索管线每层耗时，建立优化前基线。
-2. **numpy 向量化加速**：向量搜索从纯 Python 逐条余弦改为 numpy 矩阵运算，引入内存向量索引缓存。
-3. **BM25 与向量检索并行**：hybrid search 中两路检索从串行改为 ThreadPoolExecutor 并行。
-4. **Cross-Encoder 重排序**：新增 `ReRankingProvider` Protocol，hybrid search 召回 top-20~30 后 cross-encoder 精排取 top-5。
-5. **端到端基准对比**：量化优化前后各层耗时和总响应时间改善。
+## Phase 6 日志：文档同步、Obsidian 收尾与人工核验待提交状态
 
-## 阶段 25 验收基线
+时间：2026-06-12
 
-- 阶段 25 验收结论：已完成、已提交、已创建 `phase-25-complete` tag，并已合并到 `main`。
-- 阶段 25 最终功能提交：`0a89d55 Complete phase 25 chitchat and SSE streaming`。
-- 阶段 25 合并点：`56f5d4 Merge phase 25 chitchat and SSE streaming`。
-- 测试基线：497 passed。
-- 关键交付：闲聊短路、SSE 流式输出、ChatModelProvider stream_generate、/agent/query/stream 端点。
+已完成：
 
-## 已知性能瓶颈
+- 更新 `README.md`，把当前阶段切换为阶段 27，补充 Chainlit、Docker Compose 启动方式和 520 passed 验证结果。
+- 更新 `docs/progress.md`，记录阶段 27 完成内容、验证结果、Docker CLI 限制和人工核验边界。
+- 更新 `docs/architecture.md`，加入 Chainlit 并列入口、Docker Compose 和 GitHub Actions CI 架构。
+- 更新 `docs/data_sources.md`，说明阶段 27 不新增外部资料来源，Chainlit/Docker/CI 不写入密钥、供应商原始响应或受限全文。
+- 更新 `AGENT.MD`，加入阶段 27 之后的 Chainlit / Docker / CI 规则，并把当前推荐第一步改为阶段 27 人工核验。
+- 新增 Obsidian 阶段 27 阶段页、Phase 汇报索引、Phase 0-6 小汇报。
+- 新增 Obsidian 知识点：`Chainlit 对话界面`、`Docker 容器化部署`、`GitHub Actions CI`，并更新相关分类页、首页、阶段索引和阶段汇报索引。
+- 清理浏览器 smoke 产生的 `.playwright-mcp` 临时日志目录。
 
-来自 `docs/progress.md` 阶段 25 遗留风险：
-- 真实本地大库上普通 RAG 问题 `What affects filling capacity in rock-filled concrete?` 在同步和流式端点都超过 20 秒。
-- 初步判断瓶颈在 `VectorSearchService._list_indexed_chunks()`：每次查询从数据库加载全部 ChunkEmbedding 行到 Python 内存，然后用纯 Python 循环逐条计算 `cosine_similarity()`。
-- keyword search（BM25）和 vector search 串行执行，hybrid search 总耗时为两者之和。
-- 缺少重排序层，召回质量仅靠 BM25 + 余弦的简单加权。
+验证结果：
+
+```text
+沿用 Phase 5 全量验证：520 passed, 1 warning
+FastAPI / Chainlit desktop/mobile browser smoke: console errors=0
+Docker Compose 已在本机实跑通过：docker compose up --build -d
+```
+
+提交边界：
+
+- 未执行 `git add`、`git commit`、`git tag`、`git push`。
+- 未创建 `phase-27-complete` tag。
+- 未创建 PR。
+- 当前状态按用户要求停在人工核验前。
+
+## 阶段 27 验收与提交授权日志
+
+时间：2026-06-12
+
+已完成：
+
+- 用户明确要求验收阶段 27 开发工作，提交阶段 27 整体开发工作，并上传 merge 至 GitHub。
+- 已读取 `AGENT.MD`、README、docs/progress、docs/architecture、docs/data_sources，确认阶段提交规则。
+- 已复核阶段 27 新增 Chainlit、Docker、CI、测试和文档范围。
+- 已运行全量测试，结果 520 passed。
+- 已新增 `docs/phase_reviews/phase-27.md`，验收结论 PASS。
+
+验证结果：
+
+```text
+python -m pytest -q
+520 passed, 1 warning in 70.02s
+
+docker --version
+failed: docker command not found
+```
+
+提交边界：
+
+- 用户随后要求先完成 Docker 部署，但暂不提交，因为前端界面还需要优化。
+- 当前不创建 `phase-27-complete` tag，不 merge，不 push。
+
+## Docker Desktop 与 Compose 实跑日志
+
+时间：2026-06-12
+
+已完成：
+
+- Docker Desktop 已下载安装到 `G:\Docker\Docker`，WSL 数据目录配置为 `G:\Docker\wsl`。
+- Docker CLI 已进入 PATH。
+- Docker 自检通过。
+- 项目镜像 `rfc-rag-agent:phase27` 已通过 `docker compose up --build -d` 构建并启动。
+- 容器 `rfc-rag-agent-rfc-rag-agent-1` 状态为 Up，端口映射 `0.0.0.0:8000->8000/tcp`。
+
+验证结果：
+
+```text
+docker --version
+Docker version 29.5.3
+
+docker compose version
+Docker Compose version v5.1.4
+
+docker run --rm hello-world
+Hello from Docker!
+
+docker compose up --build -d
+Image rfc-rag-agent:phase27 Built
+Container rfc-rag-agent-rfc-rag-agent-1 Started
+
+GET http://127.0.0.1:8000
+200
+
+GET http://127.0.0.1:8000/project/settings?language=zh-CN
+200
+```
+
+当前状态：
+
+- Docker 容器仍在后台运行，可访问 `http://127.0.0.1:8000`。
+- 暂不提交阶段 27，等待前端界面优化。
+
+## Phase 7 日志：原生前端视觉升级与可用首页
+
+时间：2026-06-12
+
+已完成：
+
+- 用户提供深色科技风 RAG 产品首页参考图，希望把当前前端做成类似风格。
+- 本 Phase 只优化原生 FastAPI 前端 `app/frontend/`，不改 RAG 后端链路，不替换 Chainlit，不提交。
+- 目标是让 `GET /` 成为可展示的深色科技风首页，同时保留真实 Agent 流式问答、引用、workflow、会话和资料管理入口。
+- 已重构 `app/frontend/index.html`，把首页升级为顶部导航 + 左侧 hero + 能力卡片 + 右侧真实 Agent demo + 资料库工作台的深色科技风布局。
+- 已根据用户反馈继续优化为两个界面：`开始问答` 和 `资料库` 通过顶部导航切换，默认显示问答页，资料库独立展示指标、筛选、sources 和 documents。
+- 已将首页主标题改为“面向堆石混凝土的 RAG 智能检索系统”，并把小能力点精简为混合检索、流式回答、结构化分块。
+- 已重写 `app/frontend/static/styles.css`，补齐桌面和移动端响应式约束，移动端表格改为容器内滚动，避免页面异常拉长。
+- 已小改 `app/frontend/static/app.js`，让重复指标节点能同步更新，并新增原生视图切换逻辑。
+- 已更新 `tests/test_frontend_app.py`，覆盖新首页结构、关键文案、真实 Agent hook 和静态资源特征。
+- 聚焦回归通过：
+
+```text
+python -m pytest tests/test_frontend_app.py tests/test_docker_assets.py tests/test_chainlit_app.py -q
+15 passed, 1 warning in 1.59s
+
+python -m pytest -q
+520 passed, 1 warning in 83.56s
+```
+
+- FastAPI preview `GET http://127.0.0.1:8022` 返回 200。
+- 桌面 1280x720 与移动 390x844 浏览器 smoke 均无 console error。
+- 浏览器补充验证：点击顶部“资料库”后切换到 `#library-view` 成功，console error/warning 为 0。
+- Reranking API key 最小真实 smoke：`.env` 中 `RERANKING_PROVIDER=jina`、model/base_url/api_key 均已配置；对 `api.jina.ai` 发起 1 个 query + 2 个候选的最小 rerank 调用成功，返回 2 条结果并完成解析。未打印 key，未保存供应商原始响应。
+- 提交前最终回归：`python -m pytest -q` -> 520 passed, 1 warning in 145.76s。
+- 提交前修复测试隔离：本机 `.env` 配置真实 Jina reranking 后，两个离线定时测试曾误触发真实 rerank；已在 `tests/test_agent_stream_api.py` 和 `tests/test_hybrid_search.py` 中显式禁用/隔离 rerank provider，保证 CI 和本地全量测试不以真实 API 为前提。
+- Docker 容器入口仍保持 Chainlit，已跑通的 Docker 部署链路不改；原生 FastAPI 首页可通过 `uvicorn app.main:app` 单独核验。
+- 当前仍不执行 `git add`、不 commit、不创建 `phase-27-complete` tag、不 merge、不 push，等待用户人工核验。
+
+## 架构决策
+
+### Chainlit 集成方式
+
+- Chainlit 作为独立入口 `chainlit_app.py`，直接导入 Python 服务层。
+- FastAPI 入口 `app/main.py` 和原有 API 端点完整保留，供外部客户端、测试和调试使用。
+- 不删除 `app/frontend/`（原生前端保留为备用/调试入口）。
+- Chainlit 和 FastAPI 共享同一个 SQLite 数据库和 `Settings` 配置。
+
+### Docker 分层策略
+
+```text
+FROM python:3.11-slim
+  → COPY pyproject.toml → pip install（依赖缓存层）
+  → COPY . .（代码层）
+  → EXPOSE 8000
+  → CMD chainlit run chainlit_app.py --host 0.0.0.0 --port 8000
+```
+
+- `.dockerignore` 排除 `.venv`、`__pycache__`、`.git`、`obsidian-vault`、`.env`、`*.sqlite`、`.claude`、`.codex`。
+- docker-compose 通过 `volumes: ./data:/app/data` 挂载 SQLite。
+- docker-compose 通过 `env_file: .env` 注入 API 配置。
+
+### CI 管线设计
+
+- 触发：push 到 `main`、`codex/*`、`claude/*`，PR 到 `main`。
+- 环境：`ubuntu-latest`、Python 3.11。
+- 步骤：checkout → setup-python → pip install → pytest -q。
+- 全量测试使用 deterministic provider，不需要真实 API key。
 
 ## 遗留风险
 
-- 阶段 26 当前尚未经过用户人工核验，因此不能提交、不能创建 `phase-26-complete` tag、不能推送或创建 PR。
-- 真实 `OpenAICompatibleReRankingProvider` 会增加网络延迟，当前只作为可配置运行时能力；全量测试和默认 benchmark 不依赖真实 API。
-- keyword search 仍是当前 deterministic/cache 热状态下的主要耗时来源，可作为后续阶段的优化候选。
-- 若未来 chunk 数量增长到更大规模，numpy 暴力矩阵乘法之后可再评估 FAISS 等 ANN 索引；当前阶段先保持轻量依赖。
-
-## Phase 7 日志：文档同步、Obsidian 收尾与人工核验待提交状态
-
-本 Phase 解决阶段 26 的交付边界和知识沉淀问题；它位于 RAG 运行链路之外，但决定后续人工核验、提交、tag 和交接是否清晰。现在做，是因为代码、测试和基准均已完成，文档可以准确描述最终行为。
-
-完成内容：
-
-- 已同步 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD`。
-- 已新增/更新 Obsidian 阶段 26 阶段页、Phase 0-7 汇报、阶段 26 Phase 汇报索引、首页、阶段索引和阶段汇报索引。
-- 已在 `task_plan.md`、`findings.md`、`progress.md` 记录阶段 26 全部 Phase 完成、测试结果、基准对比和待人工核验状态。
-- 当前未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR。
-
-最终待核验状态：
-
-```text
-branch: codex/phase-26-retrieval-performance-reranking
-phase-26-complete tag: not created
-staged changes: none expected
-commit/push/pr: not performed
-```
+- Chainlit 版本兼容性需要确认（Chainlit 更新较快，API 可能有 breaking changes）。
+- Docker 构建时间取决于依赖安装（numpy、chainlit 等），需要利用层缓存优化。
+- GitHub Actions 首次配置后需要在 GitHub 上验证实际触发效果。
+- 阶段 27 当前尚未提交、尚未创建 `phase-27-complete` tag、尚未推送，需等待用户人工核验和明确确认。

@@ -109,6 +109,33 @@ chunk_embeddings
 - `scripts/benchmark_retrieval.py` 的输出只包含耗时、provider/model 名称和脱敏 query，不保存受限全文或供应商原始响应。
 - 阶段 26 已停在用户人工核验前状态，尚未提交、尚未创建 `phase-26-complete` tag、尚未推送。
 
+阶段 27 不新增外部资料来源，也不新增爬虫、真实 API 依赖、CSV 评测数据或受限全文文件。阶段 27 新增的是**运行入口、部署配置和 CI 配置**：
+
+- `docs/stage27_chainlit_docker_ci.md`：阶段 27 设计文档，说明 Chainlit 双入口、service 层复用、Docker/CI、安全边界和完成标准。
+- `chainlit_app.py`：Chainlit 对话界面入口，复用现有 `detect_chitchat`、Agent service、agentic workflow、ConversationRepository 和流式事件。
+- `.chainlit/config.toml` 与 `chainlit.md`：Chainlit 运行配置和欢迎页，不包含外部资料、密钥或供应商响应。
+- `Dockerfile`、`docker-compose.yml`、`.dockerignore`：容器运行配置和构建上下文排除规则。
+- `.github/workflows/ci.yml`：deterministic provider 的 pytest CI 配置。
+
+阶段 27 只读取既有运行数据边界：
+
+```text
+sources
+documents
+chunks
+chunk_embeddings
+conversations
+messages
+```
+
+数据安全边界：
+
+- Chainlit 是展示与交互入口，不是新的资料来源。它显示的回答、citations 和 workflow 来自当前请求运行结果。
+- Chainlit 会话保存复用 `ConversationRepository`，只写入本地 `conversations` 与 `messages` 表；不得保存 API key、Bearer token、Authorization header、供应商原始敏感响应或受限全文。
+- Docker 镜像不得包含 `.env`、API key、SQLite 数据库、`data/raw`、`data/fulltext` 或 Obsidian 知识库；运行时数据通过 `./data:/app/data` volume 挂载。
+- GitHub Actions CI 使用 deterministic provider，不读取真实 `.env`，不要求真实模型 API，也不保存真实供应商响应。
+- 当前阶段停在用户人工核验前状态，尚未提交、尚未创建 `phase-27-complete` tag、尚未推送。
+
 阶段 1 第一批试导入资料登记仍保留在下方，作为早期人工来源记录和历史审计依据。
 
 本批资料采用“资料卡”形式导入：保存题录、公开摘要的转述、检索关键词和来源链接，不保存受版权限制的论文全文。

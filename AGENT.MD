@@ -79,8 +79,10 @@ codex/phase-20-default-chain-and-eval-upgrade
 claude/phase-21-langgraph-agentic-rag
 codex/phase-22-frontend-agentic-observability
 codex/phase-23-agentic-eval-and-auto-routing
+codex/phase-24-multi-turn-conversation
 codex/phase-25-chitchat-and-sse-streaming
 codex/phase-26-retrieval-performance-reranking
+codex/phase-27-chainlit-docker-ci
 ```
 
 协作规则：
@@ -178,6 +180,20 @@ codex/phase-26-retrieval-performance-reranking
 - `scripts/benchmark_retrieval.py` 默认必须使用 deterministic provider；真实 provider 只能显式传参启用，避免普通基准或测试误触发 API。
 - 不得把 API key、Bearer token、Authorization header、供应商原始敏感响应、受限全文写入 Git、CSV、文档、测试或 Obsidian。
 - 阶段 26 已获用户明确核验与提交授权后，才允许提交、创建 `phase-26-complete` tag、合并到 `main` 并推送 GitHub；tag 必须指向阶段 26 最终功能提交，不得移动已有阶段 tag。
+
+### 阶段 27 之后的 Chainlit、Docker 与 CI 规则
+
+- 阶段 27 从阶段 26 合并后的 `main -> 74afce9 Merge phase 26 retrieval performance reranking` 出发；`phase-26-complete -> 5000d4f Complete phase 26 retrieval performance reranking`，不要移动已有阶段 tag。
+- Chainlit 是阶段 27 新增的并列 Python 前端入口，不替换 FastAPI API，也不删除 `app/frontend/` 原生工作台。
+- `chainlit_app.py` 必须优先复用现有 service 层和 `stream_agent_query_events()`，不要通过 HTTP 自调用本机 `/agent/query/stream`，除非后续阶段另写设计文档说明部署拓扑。
+- Chainlit 侧仍必须遵守阶段 25 边界：闲聊短路在复杂度路由前执行，default / agentic 自动路由保持一致，真实 API 不得成为 CI 或本地全量测试前提。
+- Chainlit 流式输出映射为 `msg.stream_token()`；workflow 可观测信息映射为 `cl.Step` 或等价只读展示；citations/source 信息只展示脱敏结构化字段，不展示供应商原始响应或受限全文。
+- Chainlit 2.11.x 配置需要 `.chainlit/config.toml` 中的 `[meta] generated_by`；缺失时 `/project/settings` 可能拒绝旧配置。
+- 当前依赖包含 `asyncpg`，是 Chainlit 运行时 settings/data-layer 导入链路需要的依赖；不要因为本项目默认使用 SQLite 就随意删除，除非升级 Chainlit 后复测通过。
+- Docker 镜像不得包含 `.env`、API key、SQLite 数据库、`data/raw`、`data/fulltext`、Obsidian 知识库、缓存目录或本地虚拟环境；运行数据通过 volume，运行配置通过 env/env_file 注入。
+- GitHub Actions CI 使用 deterministic chat / embedding / reranking provider 跑 `pytest`，不读取真实 `.env`，不要求真实 API key，不依赖 Docker daemon。
+- 当前阶段环境未安装 Docker CLI 时，可以记录为人工核验项；不要把 Docker 未实跑伪装成已通过。
+- 阶段 27 未获用户明确核验与提交授权前，不得执行 `git add`、commit、创建 `phase-27-complete` tag、push 或 PR；tag 必须指向阶段 27 最终功能提交，不得移动已有阶段 tag。
 
 ## Obsidian 知识库规则
 
@@ -1270,23 +1286,23 @@ source = 回答依据，必须能追溯到标题和 URL
 
 ## 当前推荐的第一步
 
-阶段 25「闲聊短路 + SSE 流式输出」当前已完成开发、测试、普通文档和 Obsidian 草稿收尾，停在用户人工核验前状态。当前分支为 `codex/phase-25-chitchat-and-sse-streaming`；阶段 24 已合并到 `main`，`phase-24-complete -> 64069ba`，合并提交为 `c4eda98`。
+阶段 27「Chainlit 前端 + Docker 容器化 + GitHub Actions CI」当前已通过用户人工核验，进入提交、tag、合并和推送流程。当前分支为 `codex/phase-27-chainlit-docker-ci`；阶段 26 已合并到 `main`，`phase-26-complete -> 5000d4f`，合并提交为 `74afce9`。
 
-下一步最适合先完成人工核验。人工核验通过并且用户明确确认后，才允许执行 `git add`、`git commit`、创建 `phase-25-complete` tag、推送 GitHub或创建 PR；tag 必须指向阶段 25 最终功能提交，不要移动任何已有阶段 tag。
+下一步最适合完成阶段 27 的最终提交、创建 `phase-27-complete` tag、合并到 `main` 并推送 GitHub。tag 必须指向阶段 27 最终功能提交，不要移动任何已有阶段 tag。
 
-阶段 25 核验重点：
+阶段 27 核验重点：
 
 ```text
-检查 /agent/query 闲聊短路是否在复杂度路由前执行，且不调用 LLM 和检索
-检查 greeting/thanks/goodbye/acknowledgment/help 五类意图的预设回复
-检查 AgentService.detect_intent 是否不再承担 greeting 分支
-检查 ChatModelProvider.generate 与 stream_generate 的兼容边界
-检查 /agent/query/stream 是否按 token/metadata/done/error 输出 SSE
-检查同步 /agent/query JSON 契约是否完全保留
-检查前端是否逐 token 追加到同一个助手气泡，并在 metadata 事件后回填 citations/mode/workflow/refusal
-检查闲聊和流式回答带 conversation_id 时的持久化行为
-检查全量测试 495 passed 和浏览器 desktop/mobile 验证记录
-确认尚未提交、尚未创建 phase-25-complete tag、尚未推送
+检查 chainlit run chainlit_app.py 是否能启动并打开 RFC-RAG-Agent 对话界面
+检查 Chainlit 闲聊短路、default AgentService、agentic LangGraph 自动路由是否复用现有 service 层
+检查 Chainlit 流式回答是否逐 token 输出，citations 是否以文本附件展示，workflow 是否以 Step 展示
+检查 ConversationRepository 是否保存 Chainlit 会话 user/assistant 消息
+检查原 FastAPI /health、/agent/query、/agent/query/stream、/search/hybrid、/quality-report 和 app/frontend/ 是否未被破坏
+检查 Dockerfile、docker-compose.yml、.dockerignore 是否不把 .env、SQLite、原始全文、Obsidian 或缓存打进镜像
+在有 Docker CLI 的环境运行 docker compose up --build
+检查 GitHub Actions CI 是否只使用 deterministic provider 跑 pytest，不要求真实 API
+检查全量测试 520 passed 和浏览器 desktop/mobile smoke 记录
+确认尚未提交、尚未创建 phase-27-complete tag、尚未推送
 ```
 
 阶段 0 到阶段 24 已完成并已有阶段 tag（含 `phase-21-complete`、`phase-22-complete`、`phase-23-complete`、`phase-24-complete`）。阶段 24 tag 指向最终功能提交 `64069ba`、合并提交 `c4eda98`。

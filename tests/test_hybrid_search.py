@@ -178,7 +178,10 @@ def test_hybrid_search_runs_keyword_and_vector_in_parallel(tmp_path, monkeypatch
     with TestingSessionLocal() as db:
         provider = DeterministicEmbeddingProvider(dimension=16)
         started = time.perf_counter()
-        results = HybridSearchService(db, provider).search("filling capacity", top_k=1)
+        results = HybridSearchService(db, provider, reranking_enabled=False).search(
+            "filling capacity",
+            top_k=1,
+        )
         elapsed = time.perf_counter() - started
 
     keyword_start = next(timestamp for channel, event, timestamp in events if channel == "keyword" and event == "start")

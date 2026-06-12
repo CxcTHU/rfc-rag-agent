@@ -3,27 +3,165 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RFC RAG 工作台</title>
+    <title>RFC-RAG-Agent</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <main class="app-shell" data-app-shell>
       <section class="workspace-band">
-        <div class="workspace-header">
-          <div>
-            <p class="eyebrow">RFC-RAG-Agent</p>
-            <h1>堆石混凝土资料工作台</h1>
-          </div>
+        <header class="top-nav" aria-label="主导航">
+          <a class="brand-lockup" href="#ask-view" data-view-target="ask" aria-label="RFC-RAG-Agent 首页">
+            <span class="brand-mark">R</span>
+            <span>
+              <strong>RFC-RAG-Agent</strong>
+              <small>Rock-filled Concrete Knowledge Base</small>
+            </span>
+          </a>
+          <nav class="nav-links" aria-label="页面视图">
+            <a href="#ask-view" data-view-target="ask" aria-current="page">开始问答</a>
+            <a href="#library-view" data-view-target="library">资料库</a>
+          </nav>
           <div class="header-actions">
             <div class="status-strip" aria-live="polite">
               <span data-api-status>连接中</span>
             </div>
-            <button class="secondary-button" type="button" data-sync-sources>同步来源</button>
-            <button class="command-button" type="button" data-refresh-all>刷新</button>
+            <button class="secondary-button" type="button" data-refresh-all>刷新</button>
           </div>
-        </div>
+        </header>
 
-        <div class="summary-grid" aria-label="资料库概览">
+        <section class="view-section is-active" id="ask-view" data-view="ask" aria-labelledby="hero-title">
+        <section class="hero-layout" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <p class="hero-kicker">面向堆石混凝土文献的 RAG 智能检索系统</p>
+            <h1 id="hero-title">面向堆石混凝土的 RAG 智能检索系统</h1>
+            <p class="hero-lede">
+              基于混合检索、结构化分块和流式回答，把堆石混凝土资料转成可追溯的智能问答入口。
+            </p>
+            <div class="hero-actions">
+              <a class="command-button" href="#agent-panel">开始问答</a>
+              <a class="secondary-button" href="#library-view" data-view-target="library">查看资料库</a>
+            </div>
+
+            <div class="feature-tabs" aria-label="核心能力">
+              <article>
+                <strong>混合检索</strong>
+                <span>关键词与向量协同召回</span>
+              </article>
+              <article>
+                <strong>流式回答</strong>
+                <span>逐 token 输出结果</span>
+              </article>
+              <article>
+                <strong>结构化分块</strong>
+                <span>引用可追踪到片段</span>
+              </article>
+            </div>
+
+            <div class="capability-grid" aria-label="核心能力">
+              <article class="capability-card">
+                <span class="card-icon">H</span>
+                <h2>混合检索</h2>
+                <p>兼顾工程术语、题名关键词和语义相近问题。</p>
+              </article>
+              <article class="capability-card">
+                <span class="card-icon">S</span>
+                <h2>流式回答</h2>
+                <p>回答逐段生成，先看到内容，再回填引用和步骤。</p>
+              </article>
+              <article class="capability-card">
+                <span class="card-icon">C</span>
+                <h2>结构化分块</h2>
+                <p>资料按片段入库，引用能回到真实 chunk。</p>
+              </article>
+            </div>
+          </div>
+
+          <section class="demo-panel" id="agent-panel" aria-labelledby="agent-title">
+            <div class="panel-heading demo-heading">
+              <div>
+                <h2 id="agent-title">Agent 问答</h2>
+                <p>输入问题后会流式输出，并回填引用与步骤。</p>
+              </div>
+              <span data-agent-status>idle</span>
+            </div>
+
+            <div class="conversation-bar" aria-label="会话管理">
+              <button class="secondary-button" type="button" data-new-conversation>新建</button>
+              <label>
+                <span>会话</span>
+                <select data-conversation-list>
+                  <option value="">加载中</option>
+                </select>
+              </label>
+              <button class="secondary-button" type="button" data-refresh-conversations>刷新</button>
+              <button class="secondary-button danger-button" type="button" data-delete-conversation>删除</button>
+            </div>
+
+            <form class="chat-form demo-form" data-agent-form>
+              <label class="question-field">
+                <span>任务</span>
+                <textarea
+                  data-agent-question
+                  rows="4"
+                  placeholder="例如：堆石混凝土的填充性能受哪些因素影响？"
+                  required
+                ></textarea>
+              </label>
+              <div class="agent-controls">
+                <div class="readonly-field">
+                  <span>模式</span>
+                  <output class="mode-indicator" data-agent-mode-status>系统自动</output>
+                </div>
+                <label>
+                  <span>召回数</span>
+                  <input type="number" min="1" max="50" value="5" data-agent-top-k />
+                </label>
+                <label>
+                  <span>工具步数</span>
+                  <input type="number" min="1" max="5" value="2" data-agent-max-tool-calls />
+                </label>
+                <label>
+                  <span>source_id</span>
+                  <input type="text" data-agent-source-id placeholder="可选" />
+                </label>
+                <button class="command-button" type="submit" data-agent-submit>运行</button>
+              </div>
+            </form>
+
+            <div class="chat-messages" data-agent-answer-box data-agent-chat-list aria-live="polite">
+              <div class="empty-state">在上方输入问题，点击运行。</div>
+            </div>
+
+            <div class="demo-stats" aria-label="系统能力摘要">
+              <article>
+                <strong data-metric="chunksTotal">0</strong>
+                <span>Chunks</span>
+              </article>
+              <article>
+                <strong>Hybrid</strong>
+                <span>Search</span>
+              </article>
+              <article>
+                <strong>Docker</strong>
+                <span>Ready</span>
+              </article>
+            </div>
+          </section>
+        </section>
+
+        <aside class="data-panel tool-panel" aria-labelledby="agent-tools-title">
+          <div class="panel-heading">
+            <h2 id="agent-tools-title">运行步骤</h2>
+            <span data-agent-tools-count>0</span>
+          </div>
+          <div class="tool-call-list" data-agent-tools-list>
+            <div class="empty-state">暂无工具调用</div>
+          </div>
+        </aside>
+        </section>
+
+        <section class="view-section" id="library-view" data-view="library" aria-labelledby="library-title" hidden>
+        <section class="summary-grid" aria-label="资料库概览">
           <div class="metric-tile">
             <span class="metric-label">来源</span>
             <strong data-metric="sourcesTotal">0</strong>
@@ -44,90 +182,101 @@
             <span class="metric-label">片段</span>
             <strong data-metric="chunksTotal">0</strong>
           </div>
-        </div>
-
-        <section class="toolbar-band" aria-label="来源筛选">
-          <label>
-            <span>关键词</span>
-            <input type="search" data-source-filter placeholder="题名 / DOI / URL" />
-          </label>
-          <label>
-            <span>状态</span>
-            <select data-status-filter>
-              <option value="">全部</option>
-              <option value="candidate">candidate</option>
-              <option value="collected">collected</option>
-              <option value="imported">imported</option>
-              <option value="duplicate">duplicate</option>
-              <option value="rejected">rejected</option>
-            </select>
-          </label>
-          <label>
-            <span>全文权限</span>
-            <select data-permission-filter>
-              <option value="">全部</option>
-              <option value="open_access">open_access</option>
-              <option value="institutional_access">institutional_access</option>
-              <option value="metadata_only">metadata_only</option>
-              <option value="unknown">unknown</option>
-            </select>
-          </label>
         </section>
 
-        <div class="content-grid">
-          <section class="data-panel" aria-labelledby="sources-title">
-            <div class="panel-heading">
-              <h2 id="sources-title">来源</h2>
-              <span data-sources-count>0</span>
+        <section class="library-section" id="library-panel" aria-labelledby="library-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Knowledge Operations</p>
+              <h2 id="library-title">资料库工作台</h2>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>题名</th>
-                    <th>状态</th>
-                    <th>可信度</th>
-                    <th>权限</th>
-                    <th>年份</th>
-                    <th>分类</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody data-sources-body>
-                  <tr>
-                    <td colspan="7" class="empty-cell">加载中</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <button class="secondary-button" type="button" data-sync-sources>同步来源</button>
+          </div>
+
+          <section class="toolbar-band" aria-label="来源筛选">
+            <label>
+              <span>关键词</span>
+              <input type="search" data-source-filter placeholder="题名 / DOI / URL" />
+            </label>
+            <label>
+              <span>状态</span>
+              <select data-status-filter>
+                <option value="">全部</option>
+                <option value="candidate">candidate</option>
+                <option value="collected">collected</option>
+                <option value="imported">imported</option>
+                <option value="duplicate">duplicate</option>
+                <option value="rejected">rejected</option>
+              </select>
+            </label>
+            <label>
+              <span>全文权限</span>
+              <select data-permission-filter>
+                <option value="">全部</option>
+                <option value="open_access">open_access</option>
+                <option value="institutional_access">institutional_access</option>
+                <option value="metadata_only">metadata_only</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </label>
           </section>
 
-          <section class="data-panel" aria-labelledby="documents-title">
-            <div class="panel-heading">
-              <h2 id="documents-title">资料</h2>
-              <span data-documents-count>0</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>题名</th>
-                    <th>类型</th>
-                    <th>文件</th>
-                    <th>状态</th>
-                    <th>片段</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody data-documents-body>
-                  <tr>
-                    <td colspan="6" class="empty-cell">加载中</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
+          <div class="content-grid">
+            <section class="data-panel" aria-labelledby="sources-title">
+              <div class="panel-heading">
+                <h2 id="sources-title">来源</h2>
+                <span data-sources-count>0</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>题名</th>
+                      <th>状态</th>
+                      <th>可信度</th>
+                      <th>权限</th>
+                      <th>年份</th>
+                      <th>分类</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody data-sources-body>
+                    <tr>
+                      <td colspan="7" class="empty-cell">加载中</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="data-panel" aria-labelledby="documents-title">
+              <div class="panel-heading">
+                <h2 id="documents-title">资料</h2>
+                <span data-documents-count>0</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>题名</th>
+                      <th>类型</th>
+                      <th>文件</th>
+                      <th>状态</th>
+                      <th>片段</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody data-documents-body>
+                    <tr>
+                      <td colspan="6" class="empty-cell">加载中</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+        </section>
 
         <div class="operations-grid" hidden style="display: none">
           <section class="data-panel" aria-labelledby="search-title">
@@ -225,68 +374,6 @@
           </aside>
         </div>
 
-        <div class="agent-grid">
-          <section class="data-panel" aria-labelledby="agent-title">
-            <div class="panel-heading">
-              <h2 id="agent-title">Agent</h2>
-              <span data-agent-status>idle</span>
-            </div>
-            <div class="conversation-bar" aria-label="会话管理">
-              <button class="secondary-button" type="button" data-new-conversation>新建</button>
-              <label>
-                <span>会话</span>
-                <select data-conversation-list>
-                  <option value="">加载中</option>
-                </select>
-              </label>
-              <button class="secondary-button" type="button" data-refresh-conversations>刷新</button>
-              <button class="secondary-button danger-button" type="button" data-delete-conversation>删除</button>
-            </div>
-            <form class="chat-form" data-agent-form>
-              <label class="question-field">
-                <span>任务</span>
-                <textarea
-                  data-agent-question
-                  rows="4"
-                  placeholder="检索 filling capacity 相关资料"
-                  required
-                ></textarea>
-              </label>
-              <div class="agent-controls">
-                <div class="readonly-field">
-                  <span>模式</span>
-                  <output class="mode-indicator" data-agent-mode-status>系统自动</output>
-                </div>
-                <label>
-                  <span>召回数</span>
-                  <input type="number" min="1" max="50" value="5" data-agent-top-k />
-                </label>
-                <label>
-                  <span>工具步数</span>
-                  <input type="number" min="1" max="5" value="2" data-agent-max-tool-calls />
-                </label>
-                <label>
-                  <span>source_id</span>
-                  <input type="text" data-agent-source-id placeholder="可选" />
-                </label>
-                <button class="command-button" type="submit" data-agent-submit>运行</button>
-              </div>
-            </form>
-            <div class="chat-messages" data-agent-answer-box data-agent-chat-list aria-live="polite">
-              <div class="empty-state">暂无 Agent 结果</div>
-            </div>
-          </section>
-
-          <aside class="data-panel" aria-labelledby="agent-tools-title">
-            <div class="panel-heading">
-              <h2 id="agent-tools-title">工具调用</h2>
-              <span data-agent-tools-count>0</span>
-            </div>
-            <div class="tool-call-list" data-agent-tools-list>
-              <div class="empty-state">暂无工具调用</div>
-            </div>
-          </aside>
-        </div>
       </section>
     </main>
     <script src="/static/app.js" type="module"></script>

@@ -14,9 +14,25 @@
 
 ## 当前阶段
 
-阶段 26（检索性能优化 + Cross-Encoder 重排序，已通过用户人工核验，进入提交合并）：当前在 `codex/phase-26-retrieval-performance-reranking` 分支完成检索 profiling、`numpy` 向量化、`VectorIndexCache` 内存矩阵缓存、hybrid search 并行召回、`ReRankingProvider` 重排序协议、默认 deterministic rerank、基准脚本、全量测试、浏览器/API 验证、阶段验收报告和文档/Obsidian 草稿收尾。用户已明确要求提交阶段 26 整体开发工作、创建 `phase-26-complete` tag、合并到 `main` 并推送 GitHub。
+阶段 27（Chainlit 前端 + Docker 容器化 + GitHub Actions CI，已通过验收并进入提交合并流程）：当前在 `codex/phase-27-chainlit-docker-ci` 分支完成 `chainlit_app.py` 对话入口、Chainlit 流式输出、workflow 步骤与 citations 展示、Dockerfile、`docker-compose.yml`、`.dockerignore`、GitHub Actions pytest CI、普通文档、Obsidian 草稿和阶段验收报告。Docker Desktop 安装后，已完成 `docker compose up --build -d` 实跑验证；随后新增 Phase 7，把原生 FastAPI 首页升级为深色科技风 RAG 产品首页，并将“开始问答”和“资料库”拆成两个可切换界面。
 
-阶段 26 起点：阶段 25 已完成并合并到 `main`，`phase-25-complete -> 0a89d55 Complete phase 25 chitchat and SSE streaming`，合并提交为 `56f5d4 Merge phase 25 chitchat and SSE streaming`；本阶段未移动任何已有阶段 tag。
+阶段 27 起点：阶段 26 已完成并合并到 `main`，`phase-26-complete -> 5000d4f Complete phase 26 retrieval performance reranking`，合并提交为 `74afce9 Merge phase 26 retrieval performance reranking`；本阶段未移动任何已有阶段 tag。
+
+阶段 27 要点：
+
+- **Chainlit 入口**：新增 `chainlit_app.py`，作为 FastAPI 之外的 Python 原生对话界面入口；它直接复用 `detect_chitchat`、`AgentService`、`run_agentic_rag` 和 `/agent/query/stream` 背后的 service 层，不通过 HTTP 自调用。
+- **流式体验**：Chainlit 的 `@cl.on_message` 消费阶段 25 的 SSE 事件，使用 `stream_generate()` 生成 token，并通过 `msg.stream_token()` 逐段显示。
+- **可观测展示**：使用 `cl.Step` 展示 agentic workflow 步骤，用 `cl.Text` 展示 citations 与 workflow 摘要；默认 FastAPI API 和原生前端继续保留。
+- **会话管理**：Chainlit 会话复用 `ConversationRepository`，支持刷新后按当前 Chainlit session 对应本地 conversation 保存 user/assistant 消息。
+- **原生前端优化**：Phase 7 保留 FastAPI API 和 `app/frontend/` 原生入口，把 `GET /` 升级为深色科技风首页，并将“开始问答”和“资料库”拆成两个可切换界面；首页聚焦“面向堆石混凝土的 RAG 智能检索系统”，只突出混合检索、流式回答和结构化分块。
+- **容器化**：新增 `Dockerfile`、`docker-compose.yml` 和 `.dockerignore`；镜像不包含 `.env`、SQLite 数据文件、`data/raw`、`data/fulltext` 或 Obsidian 知识库，运行数据通过 volume 挂载。
+- **CI**：新增 `.github/workflows/ci.yml`，push/PR 触发 Python 3.11 + deterministic provider 的 `pytest`，不要求真实 API key。
+- **验证结果**：阶段 27 聚焦回归 **34 passed**；验收复跑全量测试 **520 passed**；Phase 7 前端聚焦回归 **15 passed**，提交前最终全量回归 **520 passed**；FastAPI 桌面/移动浏览器 smoke console error 为 0；Chainlit 桌面/移动浏览器 smoke console error 为 0；Docker Desktop 安装后 `docker compose up --build -d` 成功构建并启动容器，首页和 `/project/settings` 均返回 200。
+- **边界**：不做登录系统，不引入 `torch` / `sentence-transformers`，不让真实 API 成为 CI 或本地全量测试前提，不写入 API key、Bearer token、供应商原始敏感响应或受限全文。
+
+阶段 26（检索性能优化 + Cross-Encoder 重排序，已通过用户人工核验并合并到 main）：在 `codex/phase-26-retrieval-performance-reranking` 分支完成检索 profiling、`numpy` 向量化、`VectorIndexCache` 内存矩阵缓存、hybrid search 并行召回、`ReRankingProvider` 重排序协议、默认 deterministic rerank、基准脚本、全量测试、浏览器/API 验证、阶段验收报告和文档/Obsidian 草稿收尾。`phase-26-complete` 指向阶段 26 最终功能提交 `5000d4f`。
+
+阶段 26 起点：阶段 25 已完成并合并到 `main`，`phase-25-complete -> 0a89d55 Complete phase 25 chitchat and SSE streaming`，合并提交为 `56f5d4 Merge phase 25 chitchat and SSE streaming`；阶段 26 未移动任何已有阶段 tag。
 
 阶段 26 要点：
 
@@ -374,6 +390,26 @@ python -m pip install -e ".[dev]"
 python -m uvicorn app.main:app --reload
 ```
 
+启动 Chainlit 对话界面：
+
+```powershell
+chainlit run chainlit_app.py --host 127.0.0.1 --port 8000 --headless
+```
+
+如果在 Windows 虚拟环境中找不到 `chainlit` 命令，可以使用：
+
+```powershell
+.\.venv\Scripts\chainlit.exe run chainlit_app.py --host 127.0.0.1 --port 8000 --headless
+```
+
+使用 Docker Compose 启动 Chainlit 容器：
+
+```powershell
+docker compose up --build
+```
+
+容器默认读取本地 `.env` 作为运行配置，并把 `./data` 挂载到 `/app/data`。镜像构建上下文通过 `.dockerignore` 排除 `.env`、SQLite 数据库、原始全文、Obsidian 知识库和缓存文件。
+
 访问健康检查：
 
 ```powershell
@@ -399,10 +435,14 @@ python -m uvicorn app.main:app --reload --port 8001
 ## 运行测试
 
 ```powershell
-python -m pytest
+python -m pytest -q
 ```
 
 当前全量测试结果：
+
+```text
+阶段 27：520 passed, 1 warning
+```
 
 ```text
 449 passed
@@ -1169,6 +1209,14 @@ python -m uvicorn app.main:app --reload
 ```text
 http://127.0.0.1:8000
 ```
+
+阶段 27 额外新增 Chainlit 对话界面入口：
+
+```text
+chainlit_app.py
+```
+
+Chainlit 入口面向“像聊天产品一样使用 RAG Agent”的场景，保留原 FastAPI API 和 `app/frontend/` 原生工作台。它复用现有 Agent service 层、会话仓库、闲聊短路、default/agentic 自动路由和 SSE 流式事件；回答正文逐 token 输出，citations 以文本附件展示，agentic workflow 以 Step 展示。
 
 ## Obsidian 知识库
 

@@ -1,0 +1,15 @@
+services:
+  rfc-rag-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rfc-rag-agent:phase27
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:////app/data/app.sqlite
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
