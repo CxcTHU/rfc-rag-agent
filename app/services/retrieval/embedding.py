@@ -183,7 +183,7 @@ def create_embedding_provider(
     provider = (provider_name or "deterministic").strip().casefold()
     if provider in {"", "deterministic", "fake", "local"}:
         return DeterministicEmbeddingProvider()
-    if provider in {"openai-compatible", "openai", "compatible", "domestic"}:
+    if provider in {"openai-compatible", "openai", "compatible", "domestic", "jina"}:
         if dimension is None:
             raise ValueError("dimension must be configured for OpenAI-compatible embeddings")
         return OpenAICompatibleEmbeddingProvider(
@@ -192,5 +192,6 @@ def create_embedding_provider(
             base_url=(base_url or "").strip(),
             dimension=dimension,
             timeout_seconds=timeout_seconds,
+            provider_name="jina" if provider == "jina" else "openai-compatible",
         )
     raise ValueError(f"Unsupported embedding provider: {provider_name}")

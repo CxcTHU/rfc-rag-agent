@@ -14,7 +14,17 @@
 
 ## 当前阶段
 
-阶段 28 续（低质量语料清理 + Wikipedia API 百科补充 + 公开标准 PDF 补充 + 最终验证，Phase 8-11 已完成并获用户授权提交合并）：当前仍在 `codex/phase-28-web-crawl-auto-ingest` 分支，已按顺序完成低质量网页语料清理、Wikipedia REST API 入库、公开标准 PDF 入库、质量复核、索引重建、全量测试和文档/Obsidian 草稿收尾。阶段 28 当前总计 `documents 635`、`chunks 12716`、`sources 673`、`chunk_embeddings 21634`；其中 `web_page` 136 篇、`wikipedia` 25 篇、`standard_document` 9 篇。用户已明确要求提交阶段 28 整体开发工作，并上传 merge 至 GitHub。
+阶段 29（真实 Embedding 重建 + 端到端质量闭环，已获用户授权提交合并）：当前分支为 `codex/phase-29-real-embedding-quality-eval`。本阶段已从阶段 28 合并后的 `main` 出发，确认 `phase-28-complete -> b345cd8 Complete phase 28 web crawl auto ingest` 且已并入本地 `main -> 07dadf0 Merge phase 28 web crawl auto ingest`，未移动任何已有阶段 tag。
+
+阶段 29 已完成 `chunk_embeddings` 全量清理与双索引重建：清理前 `chunks 12716 / chunk_embeddings 21634`，清理后 `chunk_embeddings 0`；随后用真实 Jina v3 为全部 12,716 条 chunk 重建 embedding，再补建 deterministic embedding。当前最终索引状态为 `chunk_embeddings 25432`，其中 `jina/jina-embeddings-v3/dim=1024 = 12716`，`deterministic/hash-token-v1/dim=64 = 12716`，无孤立 embedding、无同 provider/model 重复。
+
+阶段 29 新增覆盖新语料的评测集 `data/evaluation/stage29_new_corpus_queries.csv`（18 题，覆盖 Wikipedia、标准/指南、网页和拒答边界），并新增真实质量评测脚本 `scripts/evaluate_stage29_real_quality.py`。真实 Jina 评测结果已写入 `data/evaluation/stage29_real_quality_results.csv` 与 `data/evaluation/stage29_real_quality_summary.csv`：`precision@1=0.600`、`precision@3=0.867`、`precision@5=0.933`、`avg_coverage_ratio=0.664`、`refusal_accuracy=1.000`。质量报告见 `docs/stage29_quality_report.md`，`GET /quality-report` 已更新为阶段 29 只读报告，当前 quality gate 为 `review_required/medium`，人工复核重点是 `stage29_wiki_dam_applications` 和 `stage29_web_rfc_advantages`。
+
+阶段 29 最终验证：全量测试 `556 passed, 1 warning`；`GET /health`、`GET /quality-report`、`GET /quality-report/data.json`、`GET /quality-report/export.csv` 均返回 200；浏览器冒烟确认 `/quality-report` 渲染 7 行 summary、3 行风险队列且 console errors 为 0。
+
+用户已明确要求提交阶段 29 整体开发工作，并上传 merge 至 GitHub；进入提交、创建 `phase-29-complete` tag、合并 main 和推送流程。
+
+阶段 28 续（低质量语料清理 + Wikipedia API 百科补充 + 公开标准 PDF 补充 + 最终验证，Phase 8-11 已完成并获用户授权提交合并）：阶段 28 已完成提交、创建 `phase-28-complete` tag 并合并到 `main`。阶段 28 总计 `documents 635`、`chunks 12716`、`sources 673`、`chunk_embeddings 21634`；其中 `web_page` 136 篇、`wikipedia` 25 篇、`standard_document` 9 篇。
 
 阶段 28 续要点：
 
@@ -23,7 +33,7 @@
 - **公开标准 PDF 补充**：新增 `scripts/ingest_standards.py` 和 `data/crawl/standards_urls.csv`，下载公开免费 PDF 到 `data/raw/standards/`，大于 20MB 或远端拒绝访问的文档跳过，成功入库 9 个 `standard_document` 文档。
 - **质量与验证**：清理后质量复核显示 `suggested_drop_candidate=0`，剩余 91 个 `review_candidate` 等待人工核验；全量测试最新结果 **544 passed, 1 warning**。
 
-阶段 28（网页爬取 + 自动入库管线，开发与测试已完成，等待用户人工核验）：当前在 `codex/phase-28-web-crawl-auto-ingest` 分支新增本地网页爬取程序、正文提取、自动入库、来源注册、受控同站发现、种子 URL、阶段设计文档和测试。阶段 28 已按要求停在人工核验前：**尚未执行 `git add`、未提交、未创建 `phase-28-complete` tag、未 push、未创建 PR**。
+阶段 28（网页爬取 + 自动入库管线，已完成提交合并）：在 `codex/phase-28-web-crawl-auto-ingest` 分支新增本地网页爬取程序、正文提取、自动入库、来源注册、受控同站发现、种子 URL、阶段设计文档和测试。
 
 阶段 28 起点：阶段 27 已完成并合并到 `main`，`phase-27-complete -> 79f612e Complete phase 27 chainlit docker ci`，合并提交为 `800b39a Merge phase 27 chainlit docker ci`；本阶段未移动任何已有阶段 tag。
 

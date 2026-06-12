@@ -1,5 +1,71 @@
 # 项目进度
 
+## 最新状态：2026-06-12（阶段 29 已获用户授权提交合并）
+
+当前阶段：阶段 29。在 `codex/phase-29-real-embedding-quality-eval` 分支已完成真实 Jina v3 embedding 全量清理重建、deterministic embedding 补建、新语料端到端评测、质量报告、`/quality-report` 更新和阶段收尾文档草稿。用户已明确要求“提交阶段29的整体开发工作，并上传merge至github”，当前进入提交、创建 `phase-29-complete` tag、合并到 `main` 并推送 GitHub 流程。
+
+阶段 29 起点校准：
+
+- `phase-28-complete -> b345cd8 Complete phase 28 web crawl auto ingest`。
+- `main -> 07dadf0 Merge phase 28 web crawl auto ingest`。
+- `git merge-base --is-ancestor phase-28-complete main` 通过，阶段 28 已合并到 main。
+- 未移动任何已有阶段 tag。
+
+阶段 29 完成内容：
+
+- 新增 `scripts/cleanup_stale_embeddings.py`，支持 `--dry-run` 和 `--execute`，可按 provider 或全量清理 `chunk_embeddings`。
+- 已清理历史 embedding：`chunk_embeddings 21634 -> 0`。
+- `scripts/build_vector_index.py --provider jina --batch-size 64 --sleep-seconds 1 --max-retries 3` 已为全部 `12716` 条 chunk 构建真实 Jina v3 embedding。
+- `scripts/build_vector_index.py --provider deterministic --batch-size 64` 已补建 CI 用 deterministic embedding。
+- 最终 `chunk_embeddings 25432`：`jina/jina-embeddings-v3/dim=1024` 共 `12716` 条，`deterministic/hash-token-v1/dim=64` 共 `12716` 条；孤立 embedding 为 0，重复 provider/model/chunk 组合为 0。
+- 新增 `data/evaluation/stage29_new_corpus_queries.csv`，18 题覆盖 Wikipedia、公开标准、网页语料和拒答边界。
+- 新增 `scripts/evaluate_stage29_real_quality.py`，用真实 Jina embedding 跑检索 + deterministic 问答评测，输出 `stage29_real_quality_results.csv` 和 `stage29_real_quality_summary.csv`。
+- 新增 `scripts/build_stage29_quality_report.py`，生成 `data/evaluation/stage29_quality_summary.csv`、`docs/stage29_quality_report.md` 和 `app/frontend/quality_report.html`。
+- 更新 `GET /quality-report`、`GET /quality-report/data.json`、`GET /quality-report/export.csv` 到阶段 29 质量报告。
+
+阶段 29 真实评测结果：
+
+```text
+total_queries 18
+non_refusal_total 15
+precision_at_1 0.600
+precision_at_3 0.867
+precision_at_5 0.933
+avg_coverage_ratio 0.664
+refusal_total 3
+refusal_accuracy 1.000
+source_type_distribution institutional_access_pdf:17;metadata_record:6;open_access_pdf:5;standard_document:25;web_page:28;wikipedia:9
+decision completed
+```
+
+人工核验重点：
+
+- `stage29_wiki_dam_applications`：Top-5 未命中预期 source type，coverage_ratio 为 0.250，需要人工判断查询设计或语料标注是否合理。
+- `stage29_web_rfc_advantages`：source type 命中但 coverage_ratio 为 0.250，需要人工抽查网页语料是否覆盖“local rocks / special concrete / construction breakthroughs”。
+- `/quality-report` 当前 overall 为 `review_required/medium`，不是伪造 PASS。
+- 真实 Jina API 只在阶段 29 本地重建与评测中使用；全量测试仍应使用 deterministic provider，不依赖外部 API。
+
+阶段 29 最终验证：
+
+```text
+python -m pytest -q
+556 passed, 1 warning
+
+GET /health 200
+GET /quality-report 200
+GET /quality-report/data.json 200
+GET /quality-report/export.csv 200
+
+Browser smoke:
+/quality-report summary rows=7
+risk queue rows=3
+console errors=0
+```
+
+Phase 8 浏览器冒烟发现并修复了质量报告 HTML 内联 JSON 被转义导致表格为空的问题；已补测试防回归。
+
+提交合并计划：阶段最终功能提交完成后创建 `phase-29-complete` tag，tag 必须指向阶段 29 最终功能提交；随后将阶段分支合并到 `main` 并推送分支、main 和 tag 到 GitHub。
+
 ## 最新状态：2026-06-12（阶段 28 已获用户授权提交合并）
 
 当前阶段：阶段 28 Phase 0-11 已完成，并已获得用户明确授权提交阶段 28 整体开发工作、创建 `phase-28-complete` tag、合并到 `main` 并上传 GitHub。当前分支为 `codex/phase-28-web-crawl-auto-ingest`；提交前最终全量测试结果为 `544 passed, 1 warning`。
