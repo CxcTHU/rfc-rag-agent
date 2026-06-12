@@ -1,389 +1,163 @@
-# 阶段 26 发现与关键决策
+# 阶段 27 发现与关键决策
 
-## 性能瓶颈分析
+## 技术选型决策
 
-### 向量搜索全表扫描（核心瓶颈）
+### 为什么选 Chainlit 而非 Vue 3 + Vant 4
 
-位置：`app/services/retrieval/vector_search.py` → `VectorSearchService._list_indexed_chunks()`
+- **目标岗位**：后端 / AI 工程师，面试核心是 RAG 管线深度，不是前端框架能力。
+- **风险控制**：引入 Vue 3 后面试官一定会追问 Vue 原理（响应式、虚拟 DOM、Composition API），答不上来反而减分。
+- **时间效率**：Chainlit `pip install` + 几十行 Python 就能得到专业级对话界面，不需要学 Node/npm/Vite 构建链。
+- **生态契合**：Chainlit 原生支持 LangGraph（项目阶段 21 已引入），流式输出、步骤可视化、引用展示开箱即用。
+- **面试表达**："我选了和 LangGraph 生态最契合的前端方案，把工程精力集中在检索优化和重排序上"——这是工程判断力。
 
-当前实现：
-- 每次查询执行 `SELECT ChunkEmbedding JOIN Chunk JOIN Document`，加载全部 embedding 行到 Python 内存。
-- 对每条记录调用 `deserialize_embedding()` 反序列化 JSON → Python list[float]。
-- 对每条记录调用纯 Python `cosine_similarity()` 计算内积、模长、除法。
-- 纯 Python 循环 + JSON 反序列化是 O(N) 中最慢的操作。
+### 为什么不用 Streamlit / Gradio
 
-决策：
-- 引入 numpy，将全部 embedding 加载为 `numpy.ndarray` 矩阵，预归一化。
-- 查询时用 `normalized_matrix @ query_vector` 一次矩阵乘法完成所有余弦相似度计算。
-- 新增 `VectorIndexCache` 在进程内缓存 embedding 矩阵，避免每次查询重复加载。
+- Streamlit 的 `st.chat_message` 定制能力有限，不支持 agentic 步骤可视化。
+- Gradio 的 `ChatInterface` 面向 ML demo，不适合 RAG 的引用溯源和多轮会话。
+- 面试官看到 Streamlit/Gradio 会觉得"就是个 demo app"，Chainlit 则明确面向 production AI 应用。
 
-### 混合检索串行执行
+### 为什么不删除原有前端
 
-位置：`app/services/retrieval/hybrid_search.py` → `HybridSearchService.search()`
+- `app/frontend/` 和 FastAPI 端点保留，作为调试入口和 API 兼容层。
+- 原有 `POST /agent/query/stream` SSE 端点有完整测试覆盖，删除会丢失回归保障。
+- 部分测试依赖 FastAPI TestClient 访问前端静态文件和 API 端点。
+- 保留双入口（Chainlit + FastAPI）展示架构灵活性。
 
-当前实现：
-- 先执行 `KeywordSearchService.search()`，再执行 `VectorSearchService.search()`。
-- 两者无数据依赖，但串行执行导致 hybrid search 耗时 = keyword + vector。
-
-决策：
-- 使用 `concurrent.futures.ThreadPoolExecutor` 并行执行两路检索。
-- SQLAlchemy Session 不能跨线程共享；需要在主线程查询后传递纯数据到子线程，或使用 `sessionmaker` 为子线程创建独立 Session。
-- 并行后 hybrid search 耗时 ≈ max(keyword, vector)。
-
-### 缺少重排序层
-
-位置：hybrid search 之后、Brain/AgentService 组装 prompt 之前。
-
-当前实现：
-- 召回结果仅靠 BM25 分数 + 余弦相似度 + topic_anchor_score 加权排序。
-- 没有 Cross-Encoder 语义精排，召回质量受限于 bi-encoder 粗排能力。
-
-决策：
-- 新增 `ReRankingProvider` Protocol，遵循项目现有 Provider 三件套模式（Protocol + Deterministic + OpenAI-compatible）。
-- hybrid search 召回 top-20~30 → Cross-Encoder rerank → 返回 top-5 送 LLM。
-- Cross-Encoder 本质上是把 (query, document) 对送入一个模型打分，比 bi-encoder 的独立编码更精确。
-- 不引入 `torch` / `sentence-transformers`；通过 HTTP API 调用外部 re-rank 服务（Cohere、Jina、国产兼容），与现有 embedding/chat provider 一致。
-
-## 依赖决策
-
-### 新增 numpy
-
-- numpy 是 Python 科学计算基础库，广泛使用，体积适中（~20MB）。
-- 替代方案（不用 numpy）：保持纯 Python 但引入 `array` 模块或 `struct.pack`；速度提升有限，不值得。
-- 替代方案（用 FAISS）：`faiss-cpu` 支持 ANN 近似搜索，但当前 chunk 数量（千级）未到 FAISS 必要规模；numpy 暴力矩阵乘法在千级向量上已经足够快（< 10ms），预留后续升级空间即可。
-- 决策：先用 numpy 矩阵运算；如果后续 chunk 数量增长到万级以上，再考虑 FAISS。
-
-### 不引入 torch / sentence-transformers
-
-- Cross-Encoder 本地模型需要 torch（~2GB）+ sentence-transformers，对于轻量项目过重。
-- 通过 HTTP API 调用 re-rank 服务，与现有 OpenAI-compatible 模式一致，零额外依赖。
-- `DeterministicReRankingProvider` 用 keyword overlap 评分，保证测试不依赖真实 API。
-
-## ReRankingProvider 协议设计
-
-```python
-class ReRankingProvider(Protocol):
-    provider_name: str
-    model_name: str
-
-    def rerank(
-        self,
-        query: str,
-        candidates: Sequence[str],
-        top_k: int = 5,
-    ) -> list[ReRankResult]:
-        """Score and re-order candidates by relevance to query."""
-```
-
-- `ReRankResult` 包含 `index`（原始候选位置）、`score`（相关度评分）、`content`（文本内容）。
-- `DeterministicReRankingProvider`：基于 query term 在 candidate 中的命中次数评分，可预测、可测试。
-- `OpenAICompatibleReRankingProvider`：调用 `/rerank` API 端点，解析标准 rerank 响应格式。
-
-## 基准测试方法论
-
-- 使用 `time.perf_counter()` 测量各层耗时（比 `time.time()` 精度高）。
-- 使用 deterministic provider 确保可重复性。
-- 指标：embedding 时间、vector search 时间、keyword search 时间、hybrid search 时间、rerank 时间、全链路端到端时间。
-- 优化前后对比表记录在本文件的"基准对比"节。
-
-## Phase 0 启动校准发现
-
-- 当前工作区从 `main` 启动，`git status -sb` 显示工作区干净。
-- `phase-25-complete` 指向 `0a89d55 Complete phase 25 chitchat and SSE streaming`，这是阶段 25 最终功能提交。
-- `main` 当前指向 `56f5d4 Merge phase 25 chitchat and SSE streaming`，`phase-25-complete` 是 `main` 的祖先提交，说明阶段 25 已合并到 `main`。
-- 已从 `main` 创建并切换到 `codex/phase-26-retrieval-performance-reranking`。
-- Planning with Files 的 `session-catchup.py` 在本机 `.claude` 路径不存在；已改为以项目根目录 `task_plan.md`、`findings.md`、`progress.md` 为准继续推进。
-
-## Phase 1 设计文档发现
-
-- `VectorSearchService.search()` 当前每次查询都会调用 `_list_indexed_chunks()`，从数据库 join `ChunkEmbedding`、`Chunk`、`Document`，再逐条 JSON 反序列化并调用纯 Python `cosine_similarity()`。
-- `HybridSearchService.search()` 当前先执行 `KeywordSearchService.search()`，再执行 `VectorSearchService.search()`，两路召回串行且无数据依赖。
-- `BrainService` 已存在 `optional_rerank` step，但它当前只按 `rerank_top_n` 截断结果，不是 Cross-Encoder 语义精排；阶段 26 需要新增独立 `ReRankingProvider`。
-- 阶段 26 设计文档已新增：`docs/stage26_retrieval_performance_reranking.md`。
-- 新词已沉淀到设计文档：Profiling、VectorIndexCache、numpy 向量化、ThreadPoolExecutor、Cross-Encoder、ReRankingProvider。
-
-## Phase 2 Profiling 与基线基准
-
-新增脚本：
-
-- `scripts/benchmark_retrieval.py`
-- 默认使用 `--provider deterministic`，避免普通基准运行或测试误触发真实 API；如需真实 provider，必须显式传参。
-
-新增测试：
-
-- `tests/test_benchmark_retrieval.py`
-- 聚焦验证 `benchmark_query()`、`time_operation()` 和 Markdown 输出转义。
-
-### deterministic 本地基线
-
-命令：
-
-```powershell
-.\.venv\Scripts\python.exe scripts\benchmark_retrieval.py --runs 1 --top-k 5 --query "What affects filling capacity in rock-filled concrete?"
-```
-
-结果：
-
-| query | chunks | embeddings | provider | operation | runs | min_ms | mean_ms | median_ms | max_ms |
-| --- | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| What affects filling capacity in rock-filled concrete? | 8918 | 8918 | deterministic/hash-token-v1/dim=64 | query_embedding | 1 | 0.07 | 0.07 | 0.07 | 0.07 |
-| What affects filling capacity in rock-filled concrete? | 8918 | 8918 | deterministic/hash-token-v1/dim=64 | keyword_search | 1 | 733.06 | 733.06 | 733.06 | 733.06 |
-| What affects filling capacity in rock-filled concrete? | 8918 | 8918 | deterministic/hash-token-v1/dim=64 | vector_search | 1 | 1456.82 | 1456.82 | 1456.82 | 1456.82 |
-| What affects filling capacity in rock-filled concrete? | 8918 | 8918 | deterministic/hash-token-v1/dim=64 | hybrid_search | 1 | 2199.56 | 2199.56 | 2199.56 | 2199.56 |
-| What affects filling capacity in rock-filled concrete? | 8918 | 8918 | deterministic/hash-token-v1/dim=64 | agent_query | 1 | 2174.16 | 2174.16 | 2174.16 | 2174.16 |
-
-结论：
-
-- deterministic query embedding 几乎可以忽略，主要耗时在 keyword search、vector search 和 hybrid search。
-- 当前 hybrid search 约等于 keyword + vector 串行相加，Phase 4 并行化有明确收益空间。
-- 8918 条 deterministic embedding 下，纯 Python vector search 已达到约 1.4s；真实 1024 维 Jina 向量会更慢。
-
-### cProfile 热点
-
-命令：
-
-```powershell
-.\.venv\Scripts\python.exe scripts\benchmark_retrieval.py --runs 1 --top-k 5 --query "What affects filling capacity in rock-filled concrete?" --profile
-```
-
-主要热点：
-
-- `HybridSearchService.search()`：约 3.69s cumulative。
-- `VectorSearchService.search()`：约 2.63s cumulative。
-- `rank_vector_results()`：约 1.95s cumulative。
-- `topic_anchor_score()`：6023 次调用，约 1.94s cumulative。
-- `normalize_text()`：868445 次调用，约 1.84s cumulative。
-- `cosine_similarity()`：8918 次调用，约 0.26s cumulative。
-- `_list_indexed_chunks()`：约 0.19s cumulative。
-- `deserialize_embedding()`：8918 次调用，约 0.15s cumulative。
-
-关键发现：
-
-- 原先预判的全表加载与纯 Python 余弦确实存在，但当前 profile 还暴露出 `topic_anchor_score()` 重复计算 query expansion 和 normalize 的后处理热点。
-- Phase 3 仍先按计划做 `VectorIndexCache` + numpy；同时应顺手减少 `rank_vector_results()` 中每个结果重复 `expand_query_terms(query)` 的开销，否则矩阵运算加速后排序后处理会成为更明显瓶颈。
-
-### 真实 provider 误触发记录
-
-首次运行脚本时默认沿用 `.env` 的 OpenAI-compatible Jina provider，命令超时但已输出部分结果；该结果只作为本地观察，不作为 CI 前提，也未写入文件：
-
-- provider：`openai-compatible/jina-embeddings-v3/dim=1024`
-- chunks/embeddings：8918 / 8918
-- 英文 query：query_embedding 约 5.98s，vector_search 约 10.20s，hybrid_search 约 11.86s，agent_query 约 7.77s。
-- 中文 query：query_embedding 约 2.93s，vector_search 约 7.34s，hybrid_search 约 6.17s，agent_query 约 6.89s。
-
-决策：脚本默认已改为 deterministic；真实 provider 必须显式通过 `--provider` 启用。
-
-## Phase 3 numpy 向量化 + VectorIndexCache
-
-新增/修改：
-
-- `pyproject.toml` 新增 `numpy>=2.0.0`。
-- 新增 `app/services/retrieval/vector_cache.py`。
-- `VectorSearchService.search()` 改为使用 `VectorIndexCache.search()`。
-- `VectorIndexService.build_index()` 在新增或更新 embedding 后调用 `invalidate_vector_index_cache()`。
-- `rank_vector_results()` 现在每次查询只展开一次 query terms，避免每个结果重复调用 `expand_query_terms(query)`。
-
-实现决策：
-
-- `VectorIndexCache` 缓存 plain dataclass 元数据和 numpy 矩阵，不缓存 ORM 对象，避免 Session 生命周期污染结果。
-- 全局 cache key 使用 `database_url + provider + model_name + dimension`，保证测试临时库和不同 provider/model 互不污染。
-- 全局 cache 复用时更新当前 `Session` 引用；如果缓存已加载则查询不依赖 Session，如果失效后重载则使用当前请求的 Session。
-- numpy 使用 `float64`，与纯 Python `cosine_similarity()` 保持 `< 1e-6` 误差。
-
-测试：
+## Chainlit 与 FastAPI 的关系
 
 ```text
-.\.venv\Scripts\python.exe -m pytest tests\test_vector_cache.py tests\test_vector_search.py tests\test_vector_index_service.py tests\test_vector_search_api.py -q
-17 passed in 4.11s
+用户浏览器
+├── Chainlit (ws://localhost:8000)     ← 对话界面入口
+│   └── 直接调用 Python 服务层
+│       ├── detect_chitchat()
+│       ├── AgentService.query()
+│       ├── run_agentic_rag()
+│       ├── HybridSearchService.search()
+│       ├── ConversationRepository
+│       └── stream_generate()
+│
+└── FastAPI (http://localhost:8001)     ← API / 调试入口（保留）
+    ├── POST /agent/query
+    ├── POST /agent/query/stream
+    ├── POST /search/hybrid
+    ├── GET /conversations
+    └── GET /quality-report
 ```
 
-优化后 deterministic 基准：
+- Chainlit 和 FastAPI 是两个独立进程，共享同一个 SQLite 数据库。
+- Chainlit 不通过 HTTP 调用 FastAPI 端点，避免自调用增加的网络延迟和复杂度。
+- 两者通过 `app.core.config.get_settings()` 共享配置。
 
-```powershell
-.\.venv\Scripts\python.exe scripts\benchmark_retrieval.py --runs 1 --top-k 5 --query "What affects filling capacity in rock-filled concrete?" --profile
-```
+## Chainlit 功能映射
 
-| operation | Phase 2 baseline ms | Phase 3 optimized ms | delta |
-| --- | ---: | ---: | ---: |
-| query_embedding | 0.07 | 0.06 | -0.01 |
-| keyword_search | 733.06 | 725.64 | -7.42 |
-| vector_search | 1456.82 | 335.32 | -1121.50 |
-| hybrid_search | 2199.56 | 710.26 | -1489.30 |
-| agent_query | 2174.16 | 685.49 | -1488.67 |
+| 现有功能 | Chainlit 对应 | 说明 |
+|---------|-------------|------|
+| SSE `event: token` | `msg.stream_token(token)` | Chainlit 原生支持流式 |
+| 引用 citations | `cl.Text(name, content)` | 作为消息附件展示 |
+| agentic workflow_steps | `cl.Step(name)` 上下文管理器 | 可嵌套，展示 retrieve→grade→rewrite→generate |
+| 会话列表 / 历史 | Chainlit 原生线程管理 | 可映射到 ConversationRepository |
+| 闲聊短路 | `@cl.on_message` 内判断 | 命中直接 `cl.Message(content=reply).send()` |
+| 拒答展示 | 消息内文本标记 | `refused=True` 时在回复前加标注 |
+| mode 指示器 | `cl.Step` 或消息 metadata | 展示实际走的 default/agentic 路径 |
 
-cProfile 新状态：
+## Docker 决策
 
-- `HybridSearchService.search()`：约 1.05s cumulative。
-- `KeywordSearchService.search()`：约 1.03s cumulative，成为当前主热点。
-- `VectorSearchService.search()`：约 0.007s cumulative（cache 已加载后）。
-- `rank_vector_results()`：约 0.006s cumulative。
+### 镜像安全边界
 
-结论：
+- `.env` 通过 `env_file` 在 docker-compose 运行时注入，不 `COPY` 进镜像。
+- `*.sqlite` 通过 volume 挂载，不打入镜像。
+- `obsidian-vault/` 在 `.dockerignore` 中排除。
+- `data/raw/` 中的 PDF 原始文件如需在容器内可用，通过 volume 挂载 `./data:/app/data`。
 
-- numpy 矩阵化 + cache 已解决向量检索主要瓶颈。
-- 后续 Phase 4 并行后，真实收益取决于 keyword 与 vector 的相对耗时；当前 cache 热状态下 vector 很快，hybrid 已接近 keyword 耗时。
-- keyword search 的 `normalize_text()` / `score_match()` 已成为新热点，但不属于阶段 26 的明确核心链路，可作为后续优化候选。
+### 为什么用 docker-compose 而非单纯 Dockerfile
 
-## Phase 4 BM25/keyword 与 vector 并行
+- 应用依赖 SQLite 数据目录和 `.env` 环境变量，docker-compose 的 `volumes` 和 `env_file` 把运行时配置和镜像分离。
+- 后续如果加 PostgreSQL 或 Redis，docker-compose 可以直接加服务，不改 Dockerfile。
 
-新增/修改：
+## CI 决策
 
-- `HybridSearchService` 新增 `parallel: bool = True` 参数，默认并行执行。
-- 并行实现使用 `ThreadPoolExecutor(max_workers=2)`。
-- 每个 worker 基于当前 `db.get_bind()` 创建独立 `Session`，避免 SQLAlchemy Session 跨线程共享。
-- 保留 `parallel=False` 串行路径，便于测试和排障。
+### 为什么只跑 pytest 不跑 Docker build
 
-测试：
+- pytest 全量测试使用 deterministic provider，不需要真实 API key，CI 配置简单。
+- Docker build 在 CI 中运行需要额外时间（安装 numpy + chainlit 约 2-3 分钟），且不验证业务逻辑。
+- 可选项：在 CI 中加一个 `docker build .` 步骤验证 Dockerfile 有效性，但不运行容器内测试。
 
-```text
-.\.venv\Scripts\python.exe -m pytest tests\test_hybrid_search.py tests\test_vector_search_api.py tests\test_agent_tools.py -q
-15 passed in 4.21s
-```
+### 分支触发规则
 
-优化后 deterministic 基准：
-
-```text
-query_embedding=0.07 ms
-keyword_search=740.07 ms
-vector_search=357.60 ms
-hybrid_search=745.90 ms
-agent_query=690.14 ms
-```
-
-对比：
-
-| operation | Phase 3 ms | Phase 4 ms | 说明 |
-| --- | ---: | ---: | --- |
-| keyword_search | 725.64 | 740.07 | 正常波动 |
-| vector_search | 335.32 | 357.60 | 正常波动 |
-| hybrid_search | 710.26 | 745.90 | 约等于 max(keyword, vector)，不再等于 sum |
-| agent_query | 685.49 | 690.14 | 保持稳定 |
-
-结论：
-
-- 在 cache 热状态下，vector search 已很快，hybrid 耗时被 keyword search 主导。
-- 并行化仍满足阶段 26 目标：hybrid 总耗时接近较慢通道，而非两路相加。
-- 后续如果真实 provider query embedding 或 cold vector cache 变慢，并行结构能避免 keyword 与 vector 继续串行叠加。
-
-## Phase 5 Cross-Encoder 重排序层
-
-新增/修改：
-
-- 新增 `app/services/retrieval/reranking.py`：
-  - `ReRankingProvider` Protocol
-  - `ReRankResult`
-  - `DeterministicReRankingProvider`
-  - `OpenAICompatibleReRankingProvider`
-  - `create_reranking_provider()`
-- `app/core/config.py` 新增 reranking 配置：
-  - `reranking_enabled`
-  - `reranking_provider`
-  - `reranking_model_name`
-  - `reranking_api_key`
-  - `reranking_base_url`
-  - `reranking_timeout_seconds`
-  - `reranking_recall_k`
-- `HybridSearchService` 默认启用 deterministic reranking；召回 `max(top_k * 5, reranking_recall_k)` 后 rerank，再返回 top-k。
-- `scripts/benchmark_retrieval.py` 新增 `rerank_only` 指标。
-
-测试：
-
-```text
-.\.venv\Scripts\python.exe -m pytest tests\test_reranking.py tests\test_hybrid_search.py tests\test_vector_search_api.py tests\test_answer_service.py tests\test_agent_tools.py -q
-30 passed in 7.38s
-
-.\.venv\Scripts\python.exe -m pytest tests\test_benchmark_retrieval.py tests\test_reranking.py -q
-7 passed in 0.52s
-```
-
-Phase 5 基准：
-
-```text
-query_embedding=0.07 ms
-keyword_search=745.35 ms
-vector_search=333.17 ms
-hybrid_search=733.75 ms
-rerank_only=1.50 ms
-agent_query=721.61 ms
-```
-
-结论：
-
-- deterministic rerank 在 25 个左右候选上耗时约 1.5ms，对当前端到端耗时影响很小。
-- hybrid search 默认启用 rerank 后仍主要由 keyword search 耗时主导。
-- 真实 `OpenAICompatibleReRankingProvider` 已具备协议和解析能力，但不进入自动测试前提。
-- 当前 `HybridSearchResult.score` 仍保留原 hybrid score，rerank 只改变顺序；这是为了保持 API schema 与旧测试兼容。后续如需展示 rerank score，可单独扩展响应字段和文档。
-
-## Phase 6 端到端基准与回归验证
-
-聚焦回归：
-
-```text
-.\.venv\Scripts\python.exe -m pytest tests\test_vector_cache.py tests\test_vector_search.py tests\test_vector_index_service.py tests\test_hybrid_search.py tests\test_reranking.py tests\test_benchmark_retrieval.py tests\test_vector_search_api.py tests\test_answer_service.py tests\test_agent_api.py tests\test_agent_stream_api.py tests\test_chat_api.py tests\test_search_api.py tests\test_frontend_app.py tests\test_stage20_quality_report.py -q
-82 passed in 20.36s
-```
-
-全量测试：
-
-```text
-.\.venv\Scripts\python.exe -m pytest -q
-511 passed in 50.49s
-```
-
-最终基准：
-
-```powershell
-.\.venv\Scripts\python.exe scripts\benchmark_retrieval.py --runs 1 --top-k 5 --query "What affects filling capacity in rock-filled concrete?" --query "堆石混凝土施工质量控制有哪些要点？"
-```
-
-| query | operation | Phase 2 baseline ms | Phase 6 final ms | delta |
-| --- | --- | ---: | ---: | ---: |
-| What affects filling capacity in rock-filled concrete? | query_embedding | 0.07 | 0.07 | 0.00 |
-| What affects filling capacity in rock-filled concrete? | keyword_search | 733.06 | 743.59 | +10.53 |
-| What affects filling capacity in rock-filled concrete? | vector_search | 1456.82 | 349.45 | -1107.37 |
-| What affects filling capacity in rock-filled concrete? | hybrid_search | 2199.56 | 720.30 | -1479.26 |
-| What affects filling capacity in rock-filled concrete? | rerank_only | n/a | 1.53 | n/a |
-| What affects filling capacity in rock-filled concrete? | agent_query | 2174.16 | 735.48 | -1438.68 |
-| 堆石混凝土施工质量控制有哪些要点？ | query_embedding | n/a | 0.05 | n/a |
-| 堆石混凝土施工质量控制有哪些要点？ | keyword_search | n/a | 655.07 | n/a |
-| 堆石混凝土施工质量控制有哪些要点？ | vector_search | n/a | 1.93 | n/a |
-| 堆石混凝土施工质量控制有哪些要点？ | hybrid_search | n/a | 706.65 | n/a |
-| 堆石混凝土施工质量控制有哪些要点？ | rerank_only | n/a | 0.88 | n/a |
-| 堆石混凝土施工质量控制有哪些要点？ | agent_query | n/a | 696.88 | n/a |
-
-浏览器/API 验证：
-
-- 8000 端口已有旧服务占用，`/health` 可用但 `/agent/query/stream` 返回 404，判断为旧进程或未加载当前阶段代码。
-- 启动当前工作区服务到 8001：`http://127.0.0.1:8001`。
-- `GET /health`：200。
-- `POST /agent/query/stream`，body `{"question":"thanks","top_k":2}`：返回 `token -> metadata -> done`，metadata 显示闲聊短路，不调用检索或模型。
-- `POST /search/hybrid`：200。
-- `GET /quality-report`：200。
-- Browser desktop 1280x720：`GET /` 页面标题 `RFC RAG 工作台`。
-- Browser mobile 390x844：`GET /` 页面标题 `RFC RAG 工作台`。
-- 临时 8001 服务已停止。
+- `main`：合并后跑，保证主线始终绿色。
+- `codex/*` 和 `claude/*`：开发分支 push 时跑，尽早发现问题。
+- PR 到 `main`：合并前必须通过，作为质量门。
 
 ## 数据安全边界
 
-- numpy 向量运算仅在进程内存中进行，不写入 Git 或外部存储。
-- `VectorIndexCache` 缓存的 embedding 矩阵来自已有 `ChunkEmbedding` 表，不含 API key 或敏感信息。
-- `ReRankingProvider` 的 API key 和 base_url 通过环境变量配置，不硬编码、不写入 Git。
-- rerank API 请求只发送 query 文本和 chunk 内容，不发送 API key 以外的凭据。
+- Chainlit 界面上展示的 answer、citations、workflow_steps 来自已有 `AgentQueryResponse`，沿用阶段 25 的 metadata 安全边界。
+- Chainlit 不暴露 raw_response、API key 或供应商原始敏感响应。
+- Docker 镜像不包含 `.env`、API key 或 SQLite 数据文件。
+- GitHub Actions 不配置真实 API 凭据，secrets 列表为空。
 
-## Phase 7 文档与 Obsidian 收尾发现
+## Phase 0 启动校准发现
 
-已同步普通文档：
-- `README.md`：补充阶段 26 当前状态、起点、关键交付、基准对比、验证结果和待核验约束。
-- `docs/progress.md`：补充阶段 26 最新进展、Git/tag/main 状态、测试结果、浏览器/API 验证和下一步。
-- `docs/architecture.md`：补充 `VectorIndexCache`、并行 hybrid search、`ReRankingProvider` 与 rerank 集成位置。
-- `docs/data_sources.md`：补充阶段 26 不新增数据源、不写入敏感数据、benchmark 与 rerank 的数据边界。
-- `AGENT.MD`：补充阶段 26 分支、缓存失效、rerank provider、benchmark 默认 deterministic、人工核验前禁止提交/tag/push 等协作规则。
+- 当前阶段 27 起点正确：`main` 和 `HEAD` 均在 `74afce9fa359c25b9730cf414cef69f3db0215da Merge phase 26 retrieval performance reranking`。
+- `phase-26-complete` 指向 `5000d4fa790d95931862d3f8b2bfc34e91c91ee7 Complete phase 26 retrieval performance reranking`，并已通过 `git merge-base --is-ancestor phase-26-complete main` 验证已并入 `main`。
+- 阶段 27 分支已从阶段 26 合并后的 `main` 创建为 `codex/phase-27-chainlit-docker-ci`。
+- 根目录 `task_plan.md`、`findings.md`、`progress.md` 在启动时已有阶段 27 预填草稿，视为用户/上一轮规划成果，开发中保留并在该基础上校准。
+- 阶段 27 必须保留原有 FastAPI API 与 `app/frontend/` 调试入口；Chainlit 是新增并行界面，不是删除旧接口后的替代品。
 
-已同步 Obsidian：
-- 新增 `阶段 26 - 检索性能优化与重排序` 阶段页。
-- 新增阶段 26 Phase 0-7 小汇报和阶段 26 Phase 汇报索引。
-- 更新 `首页.md`、`阶段索引.md`、`阶段汇报索引.md`，把阶段 26 标记为等待人工核验。
+## Phase 1 设计文档发现
 
-最终交班边界：
-- 当前阶段 26 改动尚未暂存、尚未提交、尚未创建 `phase-26-complete` tag、尚未推送。
-- `phase-25-complete` tag 未移动；阶段 25 已并入 `main`，阶段 26 从该合并后的 `main` 创建分支。
+- Chainlit 最合适的集成点不是 FastAPI HTTP 自调用，而是直接复用服务层：`detect_chitchat()`、`classify_query_complexity()`、`AgentService.query()`、`run_agentic_rag()`、`ConversationRepository` 和 `ChatModelProvider.stream_generate()`。
+- Chainlit 的 `cl.Message.stream_token()` 可以替代阶段 25 前端手写 SSE parser，但阶段 25 的 `/agent/query/stream` 端点仍应保留为 API 能力和回归测试入口。
+- `cl.Step` 只用于展示只读 workflow，不引入写入型工具或新的外部副作用。
+- Docker 镜像边界必须比普通 Python 项目更严格：`data/app.sqlite`、`data/raw`、`data/fulltext`、`.env`、`obsidian-vault` 都不得进入镜像上下文。
+- CI 的质量门以 `pytest` 为主，真实 API 不进入 GitHub Actions；Docker build 可作为可选语法/依赖验证，不替代业务测试。
+
+## Phase 2 Chainlit 集成发现
+
+- Chainlit 2.11.1 会拒绝没有 `[meta] generated_by` 的旧式 `.chainlit/config.toml`，配置必须按当前 schema 提供 `[project]`、`[features]`、`[UI]` 和 `[meta]`。
+- `chainlit run` 通过动态 `spec.loader.exec_module()` 加载入口文件，在 Python 3.13 下会触发 `dataclass` 对 `sys.modules[cls.__module__]` 的兼容问题；`ParsedStreamEvent` 改为 `NamedTuple` 后启动正常。
+- 安装 Chainlit 后依赖中出现顶层 `tests` 包，会遮蔽本仓库 `tests.test_agent_api` 这种导入；新增 `tests/__init__.py` 让本地测试包解析稳定。
+- 复用 `stream_agent_query_events()` 可以让 Chainlit 与 `/agent/query/stream` 共用同一条闲聊、default、agentic、持久化和 metadata 生成逻辑，减少双入口行为漂移。
+- Chainlit 自动生成 `chainlit.md`，需要替换默认欢迎页，避免通用模板内容进入阶段交付。
+
+## Phase 3 Docker 容器化发现
+
+- 当前工作机没有 Docker CLI，`docker compose build` 无法执行，阶段内只能完成 Dockerfile / compose / dockerignore 静态校验；最终人工核验需要在安装 Docker Desktop 或 Docker Engine 的环境中重跑。
+- `docker-compose.yml` 通过 volume 挂载 `./data:/app/data`，因此 SQLite 文件和本地全文不会进入镜像层；但运行容器时本机 `data/` 会暴露给容器，符合本地部署预期。
+- `.dockerignore` 需要同时排除 `data/app.sqlite`、`*.sqlite`、`data/raw`、`data/fulltext`，因为这些路径分别覆盖单文件数据库、泛 SQLite 和受限/原始全文目录。
+- Dockerfile 没有写入 `.env` 或任何 API key；凭据只由 compose 的 `env_file` 在运行时注入。
+
+## Phase 4 CI 发现
+
+- GitHub Actions 不需要真实 API key；显式 deterministic 环境变量可以防止 CI 读取仓库外的真实 provider 配置。
+- `actions/setup-python@v5` 的 pip cache 足以覆盖当前依赖安装；不引入额外 CI 服务，避免把阶段 27 扩成部署流水线。
+- CI workflow 只在 GitHub 上真实触发后才能看到最终状态；本地阶段可用静态测试和本地 pytest 验证配置意图。
+
+## Phase 5 验证发现
+
+- 全量测试在新增 Chainlit、Docker、CI 后为 520 passed，较阶段 26 基线 511 增加 9 个测试。
+- Chainlit 2.11.1 页面 shell 能加载但 `/project/settings` 会在缺少 `asyncpg` 时返回 500；新增 `asyncpg>=0.30.0` 后该端点恢复 200，浏览器 console error 清零。
+- FastAPI 原生工作台和 Chainlit 入口可以并行运行在不同端口，验证了阶段 27 的双入口架构。
+- 当前浏览器 MCP 工具没有输入/点击能力，Chainlit 交互式发消息未在浏览器中自动执行；已通过 `chainlit_app.py` 单元测试、服务启动和 FastAPI SSE/API 冒烟覆盖核心链路。
+- Docker 实跑验证仍受本机无 Docker CLI 限制，需列为人工核验重点。
+
+## Phase 6 文档与 Obsidian 收尾发现
+
+- README 顶部曾停留在阶段 26 提交合并状态，已改为阶段 27 开发/测试/文档完成、等待人工核验，并把阶段 26 作为已合并基线保留。
+- `docs/data_sources.md` 中阶段 26 的“尚未提交”历史描述已过期；阶段 27 新增单独边界，明确 Chainlit/Docker/CI 不新增外部资料来源，且阶段 27 当前未提交。
+- `AGENT.MD` 底部当前推荐第一步曾停留在阶段 25，已更新为阶段 27 人工核验重点。
+- Obsidian 首页、阶段索引和阶段汇报索引曾停留在阶段 26，已同步到阶段 27，并新增 Chainlit、Docker、CI 三个知识点。
+- 阶段 27 收尾后最重要的人工核验项是 Docker Compose 实跑，其次是浏览器中实际发送 Chainlit 消息查看 token、citations 和 Step 展示。
+
+## Phase 7 前端视觉升级发现
+
+- 用户参考图更像“AI 产品 landing + 右侧 demo panel”，不适合强行改 Chainlit 内部布局；更稳的做法是升级 `app/frontend/` 原生入口。
+- 原生前端已有完整 data 属性和 API 绑定，视觉升级应尽量保留这些 DOM hook，避免重写 `app.js`。
+- Docker 当前默认跑 Chainlit，FastAPI 原生前端仍可通过 `uvicorn app.main:app` 单独核验；是否把 Docker 默认入口切到 FastAPI 应等前端优化效果确认后再决定。
+- 右侧 demo panel 不应做假输入框或纯静态 mock，而应继续承载真实 `data-agent-form`，这样视觉展示和 RAG 链路核验是同一个入口。
+- 原生首页存在 sources/documents 表格，移动端最稳的处理是给表格容器内部滚动，而不是让整页横向滚动或把表格拆成新组件。
+- `updateMetric()` 原先只更新第一个匹配节点；Phase 7 首页会在 hero stats 和 summary metrics 同时展示同名指标，因此改为 `querySelectorAll()` 同步更新。
+- 用户反馈“前端有点杂乱”后，最稳的信息架构不是继续在首页堆模块，而是把问答和资料库拆成两个视图；这能保留一个 HTML/JS 入口，同时让用户认知负担显著降低。
+- 当前不需要引入路由库或多 HTML 页面，`data-view-target` + `data-view` 的原生切换已经足够支撑“开始问答 / 资料库”两个界面。
+- 首页文案应更贴近项目主题，主标题使用“面向堆石混凝土的 RAG 智能检索系统”，能力文案只保留混合检索、流式回答、结构化分块，避免把 Rerank、Docker、Agentic 等工程细节提前暴露给普通用户。
+- `.env` 中真实 reranking 配置当前可读到 `RERANKING_PROVIDER=jina`、model、base_url 和 API key；最小真实调用可以连通并解析结果。但短中文 smoke 只证明 key 与接口可用，不等价于中文堆石混凝土排序质量已经通过校准。
+- 真实 reranking key 配置后，默认读取 `.env` 的服务构造会影响部分定时类测试；凡是测试目标不是 rerank 质量或真实 provider 连通性，都应显式传入 `reranking_enabled=False` 或 monkeypatch provider，避免真实 API 成为全量测试前提。

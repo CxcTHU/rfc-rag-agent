@@ -26,6 +26,7 @@ const state = {
   conversations: [],
   currentConversationId: null,
   agentRequestInFlight: false,
+  currentView: "ask",
 };
 
 async function fetchJson(url, options = {}) {
@@ -146,8 +147,8 @@ function countSourcesByStatus(status) {
 }
 
 function updateMetric(name, value) {
-  const node = document.querySelector(`[data-metric="${name}"]`);
-  if (node) {
+  const nodes = document.querySelectorAll(`[data-metric="${name}"]`);
+  for (const node of nodes) {
     node.textContent = String(value);
   }
 }
@@ -1158,7 +1159,41 @@ function bindCommands() {
   });
 }
 
+function switchView(viewName) {
+  const targetView = viewName === "library" ? "library" : "ask";
+  state.currentView = targetView;
+  document.querySelectorAll("[data-view]").forEach((section) => {
+    const isActive = section.dataset.view === targetView;
+    section.hidden = !isActive;
+    section.classList.toggle("is-active", isActive);
+  });
+  document.querySelectorAll("[data-view-target]").forEach((link) => {
+    const isActive = link.dataset.viewTarget === targetView;
+    if (isActive) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+}
+
+function bindViewNavigation() {
+  document.querySelectorAll("[data-view-target]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      switchView(link.dataset.viewTarget);
+      window.history.replaceState(null, "", link.getAttribute("href") || "#ask-view");
+    });
+  });
+  if (window.location.hash === "#library-view" || window.location.hash === "#library-panel") {
+    switchView("library");
+  } else {
+    switchView("ask");
+  }
+}
+
 async function initializeShell() {
+  bindViewNavigation();
   bindSourceFilters();
   bindCommands();
   try {
