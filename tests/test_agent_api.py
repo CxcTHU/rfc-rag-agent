@@ -447,6 +447,31 @@ def test_agent_api_explicit_agentic_overrides_auto_simple_route(tmp_path) -> Non
     assert payload["workflow_steps"]
 
 
+def test_agent_api_explicit_react_agent_mode_uses_react_service(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 2,
+                "max_tool_calls": 3,
+                "mode": "react_agent",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "react_agent"
+    assert payload["citations"] == [1]
+    assert [call["tool_name"] for call in payload["tool_calls"]] == [
+        "hybrid_search_knowledge",
+        "answer_with_citations",
+    ]
+    assert payload["workflow_steps"]
+    assert payload["iteration_count"] >= 2
+    assert "react_agent" in payload["reasoning_summary"]
+
+
 def test_agent_api_agentic_refusal_category_marks_responsibility_gate(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
@@ -462,6 +487,30 @@ def test_agent_api_agentic_refusal_category_marks_responsibility_gate(tmp_path) 
     assert payload["mode"] == "agentic"
     assert payload["refused"] is True
     assert payload["refusal_category"] == "responsibility_gate_triggered"
+
+
+def test_refusal_category_marks_tool_service_error() -> None:
+    assert (
+        agent_api_module.refusal_category_from_refusal(
+            refused=True,
+            refusal_reason="Tool execution failed before reliable evidence was available.",
+        )
+        == "service_error"
+    )
+    assert (
+        agent_api_module.refusal_category_from_refusal(
+            refused=True,
+            refusal_reason="Embedding model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING]",
+        )
+        == "service_error"
+    )
+    assert (
+        agent_api_module.refusal_category_from_refusal(
+            refused=True,
+            refusal_reason="Retrieved chunks did not provide enough evidence.",
+        )
+        == "evidence_insufficient"
+    )
 
 
 def test_agent_api_search_query_returns_hybrid_results(tmp_path) -> None:

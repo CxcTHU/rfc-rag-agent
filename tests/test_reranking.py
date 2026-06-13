@@ -1,9 +1,26 @@
+import io
+import json
+import urllib.error
+
 from app.services.retrieval.reranking import (
     DeterministicReRankingProvider,
     OpenAICompatibleReRankingProvider,
     create_reranking_provider,
     parse_openai_compatible_rerank_response,
 )
+
+
+class _RerankFakeResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self) -> bytes:
+        return json.dumps(
+            {"results": [{"index": 0, "relevance_score": 0.9, "document": {"text": "first"}}]}
+        ).encode("utf-8")
 
 
 def test_deterministic_reranker_orders_by_query_overlap() -> None:
@@ -56,6 +73,63 @@ def test_parse_openai_compatible_rerank_response() -> None:
     assert results[0].content == "second"
 
 
+def test_reranker_retries_transient_ssl_error(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def flaky_urlopen(request, timeout):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise urllib.error.URLError("[SSL: UNEXPECTED_EOF_WHILE_READING]")
+        return _RerankFakeResponse()
+
+    monkeypatch.setattr(
+        "app.services.retrieval.reranking.urlopen_without_proxy", flaky_urlopen
+    )
+    provider = OpenAICompatibleReRankingProvider(
+        model_name="BAAI/bge-reranker-v2-m3",
+        api_key="test-key",
+        base_url="https://api.siliconflow.cn/v1",
+        retry_backoff_seconds=0,
+    )
+
+    results = provider.rerank("filling capacity", ["first", "second"], top_k=1)
+
+    assert results[0].index == 0
+    assert attempts["count"] == 2
+
+
+def test_reranker_does_not_retry_client_error(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def http_error_urlopen(request, timeout):
+        attempts["count"] += 1
+        raise urllib.error.HTTPError(
+            url="https://api.siliconflow.cn/v1/rerank",
+            code=401,
+            msg="Unauthorized",
+            hdrs=None,
+            fp=io.BytesIO(b"Unauthorized"),
+        )
+
+    monkeypatch.setattr(
+        "app.services.retrieval.reranking.urlopen_without_proxy", http_error_urlopen
+    )
+    provider = OpenAICompatibleReRankingProvider(
+        model_name="BAAI/bge-reranker-v2-m3",
+        api_key="test-key",
+        base_url="https://api.siliconflow.cn/v1",
+        retry_backoff_seconds=0,
+    )
+
+    raised = False
+    try:
+        provider.rerank("filling capacity", ["first", "second"], top_k=1)
+    except RuntimeError as exc:
+        raised = "HTTP 401" in str(exc)
+    assert raised
+    assert attempts["count"] == 1
+
+
 def test_create_reranking_provider_supports_none_and_openai_compatible() -> None:
     assert create_reranking_provider("none") is None
 
@@ -68,3 +142,16 @@ def test_create_reranking_provider_supports_none_and_openai_compatible() -> None
 
     assert isinstance(provider, OpenAICompatibleReRankingProvider)
     assert provider.model_name == "rerank-model"
+
+
+def test_create_reranking_provider_supports_paratera_with_subpath() -> None:
+    provider = create_reranking_provider(
+        "paratera",
+        model_name="GLM-Rerank",
+        api_key="test-key",
+        base_url="https://llmapi.paratera.com/v1/p002",
+    )
+
+    assert isinstance(provider, OpenAICompatibleReRankingProvider)
+    # The /v1/p002 subpath must be preserved when appending /rerank.
+    assert provider._endpoint_url() == "https://llmapi.paratera.com/v1/p002/rerank"

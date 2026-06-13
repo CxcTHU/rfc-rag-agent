@@ -1,4 +1,6 @@
+import io
 import json
+import urllib.error
 
 import pytest
 
@@ -14,6 +16,19 @@ from app.services.generation.chat_model import (
     parse_openai_compatible_stream,
     split_streaming_text,
 )
+
+
+class _ChatFakeResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self) -> bytes:
+        return json.dumps(
+            {"choices": [{"message": {"content": "Answer with [1]."}}]}
+        ).encode("utf-8")
 
 
 def test_chat_message_rejects_unsupported_role() -> None:
@@ -230,6 +245,147 @@ def test_openai_compatible_provider_streams_delta_content(monkeypatch) -> None:
     assert captured["timeout"] == 9
     assert captured["headers"]["Accept"] == "text/event-stream"
     assert captured["payload"]["stream"] is True
+
+
+def test_chat_provider_retries_transient_ssl_error(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def flaky_urlopen(request, timeout):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise urllib.error.URLError(
+                "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol"
+            )
+        return _ChatFakeResponse()
+
+    monkeypatch.setattr(
+        "app.services.generation.chat_model.urlopen_without_proxy", flaky_urlopen
+    )
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="mimo-v2.5-pro",
+        api_key="test-key",
+        base_url="https://api.xiaomimimo.com/v1",
+        retry_backoff_seconds=0,
+    )
+
+    result = provider.generate(
+        [
+            ChatMessage(role="system", content="Use citations."),
+            ChatMessage(role="user", content="What is RFC?"),
+        ]
+    )
+
+    assert result.answer == "Answer with [1]."
+    assert attempts["count"] == 2
+
+
+def test_chat_provider_raises_after_exhausting_retries(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def always_failing_urlopen(request, timeout):
+        attempts["count"] += 1
+        raise urllib.error.URLError("[SSL: UNEXPECTED_EOF_WHILE_READING]")
+
+    monkeypatch.setattr(
+        "app.services.generation.chat_model.urlopen_without_proxy", always_failing_urlopen
+    )
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="mimo-v2.5-pro",
+        api_key="test-key",
+        base_url="https://api.xiaomimimo.com/v1",
+        max_attempts=3,
+        retry_backoff_seconds=0,
+    )
+
+    with pytest.raises(RuntimeError, match="Chat model request failed"):
+        provider.generate(
+            [
+                ChatMessage(role="system", content="Use citations."),
+                ChatMessage(role="user", content="What is RFC?"),
+            ]
+        )
+    assert attempts["count"] == 3
+
+
+def test_chat_provider_does_not_retry_client_error(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def http_error_urlopen(request, timeout):
+        attempts["count"] += 1
+        raise urllib.error.HTTPError(
+            url="https://api.xiaomimimo.com/v1/chat/completions",
+            code=401,
+            msg="Unauthorized",
+            hdrs=None,
+            fp=io.BytesIO(b"Unauthorized"),
+        )
+
+    monkeypatch.setattr(
+        "app.services.generation.chat_model.urlopen_without_proxy", http_error_urlopen
+    )
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="mimo-v2.5-pro",
+        api_key="test-key",
+        base_url="https://api.xiaomimimo.com/v1",
+        retry_backoff_seconds=0,
+    )
+
+    with pytest.raises(RuntimeError, match="HTTP 401"):
+        provider.generate(
+            [
+                ChatMessage(role="system", content="Use citations."),
+                ChatMessage(role="user", content="What is RFC?"),
+            ]
+        )
+    assert attempts["count"] == 1
+
+
+def test_chat_provider_stream_retries_connection_error(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    class FakeStreamResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def __iter__(self):
+            return iter(
+                [
+                    b"data: {\"choices\":[{\"delta\":{\"content\":\"Answer \"}}]}\n\n",
+                    b"data: {\"choices\":[{\"delta\":{\"content\":\"with [1].\"}}]}\n\n",
+                    b"data: [DONE]\n\n",
+                ]
+            )
+
+    def flaky_urlopen(request, timeout):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise urllib.error.URLError("[SSL: UNEXPECTED_EOF_WHILE_READING]")
+        return FakeStreamResponse()
+
+    monkeypatch.setattr(
+        "app.services.generation.chat_model.urlopen_without_proxy", flaky_urlopen
+    )
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="mimo-v2.5-pro",
+        api_key="test-key",
+        base_url="https://api.xiaomimimo.com/v1",
+        retry_backoff_seconds=0,
+    )
+
+    chunks = list(
+        provider.stream_generate(
+            [
+                ChatMessage(role="system", content="Use citations."),
+                ChatMessage(role="user", content="What is RFC?"),
+            ]
+        )
+    )
+
+    assert chunks == ["Answer ", "with [1]."]
+    assert attempts["count"] == 2
 
 
 def test_parse_openai_compatible_stream_rejects_invalid_json() -> None:

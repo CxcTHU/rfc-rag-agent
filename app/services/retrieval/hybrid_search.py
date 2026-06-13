@@ -145,11 +145,17 @@ class HybridSearchService:
     ) -> list[HybridSearchResult]:
         if not self.reranking_enabled or self.reranking_provider is None or not results:
             return results[:top_k]
-        reranked = self.reranking_provider.rerank(
-            query=query,
-            candidates=[result.content for result in results],
-            top_k=top_k,
-        )
+        try:
+            reranked = self.reranking_provider.rerank(
+                query=query,
+                candidates=[result.content for result in results],
+                top_k=top_k,
+            )
+        except RuntimeError:
+            # Reranking is a quality enhancement, not a hard requirement. If the
+            # rerank service has a transient failure, fall back to the fusion
+            # order instead of failing the whole query.
+            return results[:top_k]
         return [results[item.index] for item in reranked]
 
 

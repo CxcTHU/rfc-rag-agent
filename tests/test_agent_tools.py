@@ -88,6 +88,18 @@ def make_toolbox(db: Session) -> AgentToolbox:
     )
 
 
+class FailingEmbeddingProvider:
+    provider_name = "failing-embedding"
+    model_name = "failing-embedding-v1"
+    dimension = 32
+
+    def embed_query(self, text: str) -> list[float]:
+        raise RuntimeError("Embedding provider unavailable")
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        raise RuntimeError("Embedding provider unavailable")
+
+
 def test_agent_toolbox_search_knowledge_returns_keyword_results(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -123,6 +135,26 @@ def test_agent_toolbox_hybrid_search_uses_hybrid_tool_name_and_results(tmp_path)
     assert result.call.succeeded
     assert result.search_results
     assert result.sources[0].score is not None
+
+
+def test_agent_toolbox_hybrid_search_reports_provider_failures(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_agent_tool_documents(db)
+        toolbox = AgentToolbox(
+            db=db,
+            embedding_provider=FailingEmbeddingProvider(),
+            chat_model_provider=DeterministicChatModelProvider(),
+            log_answers=False,
+        )
+
+        result = toolbox.hybrid_search_knowledge("filling capacity", top_k=3)
+
+    assert result.tool_name == "hybrid_search_knowledge"
+    assert not result.call.succeeded
+    assert result.call.error == "Embedding provider unavailable"
+    assert result.refused
 
 
 def test_agent_toolbox_answer_with_citations_reuses_answer_service(tmp_path) -> None:

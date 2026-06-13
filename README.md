@@ -14,6 +14,35 @@
 
 ## 当前阶段
 
+阶段 32（ReAct Agent 决策升级 + 工具调用实时可视化，开发与验证已完成，等待用户人工核验）：当前分支为 `codex/phase-32-react-agent-tool-observability`，从阶段 31 完成并合并后的 `main -> 93ee058 Merge phase 31 faiss parent child retrieval` 出发；已确认 `phase-31-complete -> b03bb47 Complete phase 31 faiss parent child retrieval` 是 `main` 的祖先，未移动任何已有阶段 tag。
+
+阶段 32 完成内容：
+
+- 新增 `docs/stage32_react_agent_observability.md`，固定 ReAct action schema、只读工具权限、SSE 事件、安全边界、循环控制、评测方式和完成标准。
+- 新增 `app/services/agent/react_actions.py` 与 `app/services/agent/react_service.py`，让 `react_agent` 在受控 action schema 中选择 `search_knowledge`、`rewrite_query`、`answer_with_citations`、`refuse` 或 `final_answer`。
+- ReAct 检索和回答仍复用 `AgentToolbox` 与 Brain 链路，不绕过 citation、sources、evidence confidence、responsibility_gate 或 refusal 约束。
+- `/agent/query` 支持显式 `mode="react_agent"`；default `AgentService` 和旧 `agentic` LangGraph 路径继续保留，`/chat` 默认链路不变。
+- `/agent/query/stream` 在保留 `token`、`metadata`、`done`、`error` 的基础上新增 `agent_step`、`tool_call_start`、`tool_call_result`。
+- 前端 Agent 面板默认走 `react_agent`，运行中只显示简洁中文状态；最终 metadata 到达后用 `workflow_steps` 校准可折叠“查看思考过程”面板，展示 Agent step、准备调用的工具和工具返回摘要。
+- 新增 `scripts/evaluate_stage32_react_agent.py`，使用 deterministic fixture 对照 `default`、`agentic_langgraph`、`react_agent`，不依赖真实 provider。
+
+阶段 32 验证结果：
+
+```text
+python scripts\evaluate_stage32_react_agent.py
+default / agentic_langgraph / react_agent: errors=0, decision=pass
+
+阶段 32 聚焦测试：106 passed
+python -m pytest -q: 629 passed, 1 warning
+python scripts\score_stage30_quality.py: overall=83.17 grade=B release_decision=review_required
+
+browser smoke:
+desktop and 390x844 mobile: collapsible thought panel present, live tool cards hidden, final answer present, horizontal overflow=false, console errors=0
+API smoke: /health, /quality-report, /chat, /agent/query, /agent/query/stream, /search/hybrid all 200
+```
+
+当前必须停在用户人工核验前：**尚未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR，未创建 `phase-32-complete` tag**。
+
 阶段 31（FAISS 向量索引与父子块检索，开发与验证已完成，等待用户人工核验）：当前分支为 `codex/phase-31-faiss-parent-child-retrieval`，从阶段 30 完成并合并后的 `main -> e74ce78 Complete phase 30 rag evaluation scoring system` 出发；`phase-30-complete` 指向同一提交，未移动任何已有阶段 tag。
 
 阶段 31 完成内容：

@@ -2,6 +2,7 @@ import hashlib
 import json
 import math
 import re
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Sequence
@@ -11,6 +12,10 @@ from typing import Protocol
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+|[\u4e00-\u9fff]")
+
+# Transient HTTP statuses worth retrying. 4xx client errors (bad key, bad
+# request) are excluded because retrying them only wastes quota.
+RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
 class EmbeddingProvider(Protocol):
@@ -66,6 +71,8 @@ class OpenAICompatibleEmbeddingProvider:
     dimension: int
     timeout_seconds: float = 30.0
     provider_name: str = "openai-compatible"
+    max_attempts: int = 3
+    retry_backoff_seconds: float = 0.5
 
     def __post_init__(self) -> None:
         if not self.model_name.strip():
@@ -78,6 +85,10 @@ class OpenAICompatibleEmbeddingProvider:
             raise ValueError("dimension must be greater than 0")
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be greater than 0")
+        if self.max_attempts <= 0:
+            raise ValueError("max_attempts must be greater than 0")
+        if self.retry_backoff_seconds < 0:
+            raise ValueError("retry_backoff_seconds must be greater than or equal to 0")
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
@@ -89,27 +100,18 @@ class OpenAICompatibleEmbeddingProvider:
         }
         request = urllib.request.Request(
             self._endpoint_url(),
-            data=json.dumps(payload).encode("utf-8"),
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "api-key": self.api_key,
                 "Accept": "application/json",
-                "Content-Type": "application/json",
+                "Content-Type": "application/json; charset=utf-8",
                 "User-Agent": "rfc-rag-agent/embedding-provider",
             },
             method="POST",
         )
 
-        try:
-            with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
-                response_data = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            error_body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"Embedding model request failed with HTTP {exc.code}: {error_body}"
-            ) from exc
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"Embedding model request failed: {exc.reason}") from exc
+        response_data = self._request_with_retry(request)
 
         embeddings = parse_openai_compatible_embeddings(response_data)
         if len(embeddings) != len(texts):
@@ -125,6 +127,40 @@ class OpenAICompatibleEmbeddingProvider:
 
     def embed_query(self, query: str) -> list[float]:
         return self.embed_texts([query])[0]
+
+    def _request_with_retry(self, request: urllib.request.Request) -> dict[str, Any]:
+        """Send the request, retrying transient network failures.
+
+        Transient TLS/connection drops (e.g. ``UNEXPECTED_EOF_WHILE_READING``),
+        timeouts, and 429/5xx responses are retried with a short backoff. Other
+        4xx responses fail immediately because retrying them cannot help.
+        """
+
+        for attempt in range(1, self.max_attempts + 1):
+            is_last_attempt = attempt >= self.max_attempts
+            try:
+                with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except TimeoutError as exc:
+                if is_last_attempt:
+                    raise RuntimeError("Embedding model request timed out") from exc
+            except urllib.error.HTTPError as exc:
+                if exc.code not in RETRYABLE_HTTP_STATUS or is_last_attempt:
+                    error_body = exc.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(
+                        f"Embedding model request failed with HTTP {exc.code}: {error_body}"
+                    ) from exc
+            except urllib.error.URLError as exc:
+                if is_last_attempt:
+                    raise RuntimeError(f"Embedding model request failed: {exc.reason}") from exc
+            self._sleep_before_retry(attempt)
+        # Defensive: the loop either returns or raises on the last attempt.
+        raise RuntimeError("Embedding model request failed after retries")
+
+    def _sleep_before_retry(self, attempt: int) -> None:
+        if self.retry_backoff_seconds <= 0:
+            return
+        time.sleep(self.retry_backoff_seconds * attempt)
 
     def _endpoint_url(self) -> str:
         normalized_base_url = self.base_url.rstrip("/")
@@ -191,15 +227,30 @@ def create_embedding_provider(
     provider = (provider_name or "deterministic").strip().casefold()
     if provider in {"", "deterministic", "fake", "local"}:
         return DeterministicEmbeddingProvider()
-    if provider in {"openai-compatible", "openai", "compatible", "domestic", "jina"}:
+    if provider in {
+        "openai-compatible",
+        "openai",
+        "compatible",
+        "domestic",
+        "jina",
+        "zhipu",
+        "siliconflow",
+        "paratera",
+    }:
         if dimension is None:
             raise ValueError("dimension must be configured for OpenAI-compatible embeddings")
+        named_aliases = {
+            "jina": "jina",
+            "zhipu": "zhipu",
+            "siliconflow": "siliconflow",
+            "paratera": "paratera",
+        }
         return OpenAICompatibleEmbeddingProvider(
             model_name=(model_name or "").strip(),
             api_key=(api_key or "").strip(),
             base_url=(base_url or "").strip(),
             dimension=dimension,
             timeout_seconds=timeout_seconds,
-            provider_name="jina" if provider == "jina" else "openai-compatible",
+            provider_name=named_aliases.get(provider, "openai-compatible"),
         )
     raise ValueError(f"Unsupported embedding provider: {provider_name}")

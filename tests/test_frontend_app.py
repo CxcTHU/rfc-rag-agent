@@ -78,6 +78,18 @@ def test_frontend_static_assets_are_served() -> None:
     assert "appendAgentAssistantMessage" in response.text
     assert "appendAgentSummaryMessage" in response.text
     assert "appendAgentThinkingMessage" in response.text
+    assert "appendAgentLiveStep" in response.text
+    assert "liveAgentEventView" in response.text
+    assert "agentThoughtHtml" in response.text
+    assert "agent-thinking-status" in response.text
+    assert "agent-thought-panel" in response.text
+    assert "data-agent-live-steps" in response.text
+    assert "agent_step" in response.text
+    assert "tool_call_start" in response.text
+    assert "tool_call_result" in response.text
+    assert "onAgentStep" in response.text
+    assert "onToolCallStart" in response.text
+    assert "onToolCallResult" in response.text
     assert "appendAgentErrorMessage" in response.text
     assert "正在思考" in response.text
     assert "pendingThinkingMessage?.remove()" in response.text
@@ -129,6 +141,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "[data-agent-mode-status]" in response.text
     assert "[data-agent-mode]" not in response.text
     assert 'body.mode = "agentic"' not in response.text
+    assert 'mode: "react_agent"' in response.text
     assert 'updateAgentModeStatus("auto")' in response.text
     assert "reindexSource" in response.text
 
@@ -147,6 +160,11 @@ def test_frontend_static_assets_are_served() -> None:
     assert "chat-message--thinking" in styles.text
     assert "chat-message--error" in styles.text
     assert "thinking-text" in styles.text
+    assert "agent-live-steps" in styles.text
+    assert "agent-live-step" in styles.text
+    assert "agent-thinking-status" in styles.text
+    assert "agent-thought-panel" in styles.text
+    assert "overflow-wrap: anywhere" in styles.text
 
 
 def test_quality_report_is_served_read_only() -> None:

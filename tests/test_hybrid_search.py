@@ -223,6 +223,32 @@ def test_hybrid_search_uses_reranking_provider_by_default(tmp_path) -> None:
     assert results[0].document_title == "Thermal control note"
 
 
+def test_hybrid_search_falls_back_when_reranker_fails(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class FailingReRankingProvider:
+        provider_name = "test"
+        model_name = "failing"
+
+        def rerank(self, query, candidates, top_k=5):
+            raise RuntimeError("Reranking model request failed: [SSL: UNEXPECTED_EOF_WHILE_READING]")
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+
+        results = HybridSearchService(
+            db,
+            provider,
+            reranking_provider=FailingReRankingProvider(),
+            reranking_enabled=True,
+        ).search("filling capacity", top_k=1)
+
+    # A transient reranker failure must degrade to the fusion order, not crash.
+    assert len(results) == 1
+
+
 def test_hybrid_search_can_disable_reranking(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 

@@ -1,5 +1,7 @@
+import io
 import math
 import json
+import urllib.error
 
 import pytest
 
@@ -10,6 +12,17 @@ from app.services.retrieval.embedding import (
     parse_openai_compatible_embeddings,
     tokenize,
 )
+
+
+class _EmbeddingFakeResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def read(self):
+        return json.dumps({"data": [{"index": 0, "embedding": [1, 0, 0]}]}).encode("utf-8")
 
 
 def test_deterministic_embedding_provider_returns_expected_dimension() -> None:
@@ -90,6 +103,36 @@ def test_create_embedding_provider_builds_jina_alias_provider() -> None:
     assert isinstance(provider, OpenAICompatibleEmbeddingProvider)
     assert provider.provider_name == "jina"
     assert provider.model_name == "jina-embeddings-v3"
+    assert provider.dimension == 1024
+
+
+def test_create_embedding_provider_builds_zhipu_alias_provider() -> None:
+    provider = create_embedding_provider(
+        "zhipu",
+        model_name="embedding-3",
+        api_key="test-key",
+        base_url="https://open.bigmodel.cn/api/paas/v4",
+        dimension=2048,
+    )
+
+    assert isinstance(provider, OpenAICompatibleEmbeddingProvider)
+    assert provider.provider_name == "zhipu"
+    assert provider.model_name == "embedding-3"
+    assert provider.dimension == 2048
+
+
+def test_create_embedding_provider_builds_siliconflow_alias_provider() -> None:
+    provider = create_embedding_provider(
+        "siliconflow",
+        model_name="BAAI/bge-m3",
+        api_key="test-key",
+        base_url="https://api.siliconflow.cn/v1",
+        dimension=1024,
+    )
+
+    assert isinstance(provider, OpenAICompatibleEmbeddingProvider)
+    assert provider.provider_name == "siliconflow"
+    assert provider.model_name == "BAAI/bge-m3"
     assert provider.dimension == 1024
 
 
@@ -194,6 +237,85 @@ def test_openai_compatible_embedding_provider_rejects_dimension_mismatch(monkeyp
 
     with pytest.raises(RuntimeError, match="dimension"):
         provider.embed_query("thermal control")
+
+
+def test_embedding_provider_retries_transient_ssl_error(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def flaky_urlopen(request, timeout):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise urllib.error.URLError(
+                "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol"
+            )
+        return _EmbeddingFakeResponse()
+
+    monkeypatch.setattr("app.services.retrieval.embedding.urlopen_without_proxy", flaky_urlopen)
+    provider = OpenAICompatibleEmbeddingProvider(
+        model_name="text-embedding-test",
+        api_key="test-key",
+        base_url="https://models.example/v1",
+        dimension=3,
+        retry_backoff_seconds=0,
+    )
+
+    embedding = provider.embed_query("filling capacity")
+
+    assert embedding == [1.0, 0.0, 0.0]
+    assert attempts["count"] == 2
+
+
+def test_embedding_provider_raises_after_exhausting_retries(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def always_failing_urlopen(request, timeout):
+        attempts["count"] += 1
+        raise urllib.error.URLError("[SSL: UNEXPECTED_EOF_WHILE_READING]")
+
+    monkeypatch.setattr(
+        "app.services.retrieval.embedding.urlopen_without_proxy", always_failing_urlopen
+    )
+    provider = OpenAICompatibleEmbeddingProvider(
+        model_name="text-embedding-test",
+        api_key="test-key",
+        base_url="https://models.example/v1",
+        dimension=3,
+        max_attempts=3,
+        retry_backoff_seconds=0,
+    )
+
+    with pytest.raises(RuntimeError, match="Embedding model request failed"):
+        provider.embed_query("filling capacity")
+    assert attempts["count"] == 3
+
+
+def test_embedding_provider_does_not_retry_client_error(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def http_error_urlopen(request, timeout):
+        attempts["count"] += 1
+        raise urllib.error.HTTPError(
+            url="https://models.example/v1/embeddings",
+            code=401,
+            msg="Unauthorized",
+            hdrs=None,
+            fp=io.BytesIO(b"Unauthorized"),
+        )
+
+    monkeypatch.setattr(
+        "app.services.retrieval.embedding.urlopen_without_proxy", http_error_urlopen
+    )
+    provider = OpenAICompatibleEmbeddingProvider(
+        model_name="text-embedding-test",
+        api_key="test-key",
+        base_url="https://models.example/v1",
+        dimension=3,
+        retry_backoff_seconds=0,
+    )
+
+    with pytest.raises(RuntimeError, match="HTTP 401"):
+        provider.embed_query("filling capacity")
+    assert attempts["count"] == 1
 
 
 def test_parse_openai_compatible_embeddings_orders_by_index() -> None:
