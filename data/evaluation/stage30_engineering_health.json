@@ -1,0 +1,32 @@
+{
+  "schema_version": "stage30-engineering-health-v1",
+  "generated_at": "2026-06-13T06:05:49.355555+00:00",
+  "full_tests_status": "571 passed, 1 warning",
+  "chunk_count": 12716,
+  "embedding_count": 25432,
+  "jina_embedding_count": 12716,
+  "deterministic_embedding_count": 12716,
+  "orphan_embeddings": 0,
+  "duplicate_provider_model_groups": 0,
+  "quality_report_smoke": "passed: /health 200; /quality-report 200; /quality-review 200; review save click passed; data.json 200; review_data.json 200; export.csv 200; browser review_cases=15; needs_review=4; critical=3; console_errors=0",
+  "provider_distribution": [
+    {
+      "provider": "deterministic",
+      "model_name": "hash-token-v1",
+      "dimension": 64,
+      "count": 12716
+    },
+    {
+      "provider": "jina",
+      "model_name": "jina-embeddings-v3",
+      "dimension": 1024,
+      "count": 12716
+    }
+  ],
+  "collector_limits": {
+    "runs_pytest": false,
+    "rebuilds_embeddings": false,
+    "writes_database": false,
+    "calls_real_api": false
+  }
+}

@@ -14,6 +14,14 @@
 
 ## 当前阶段
 
+阶段 30（RAG 质量评分体系与诚实决策门禁，开发与验证已完成，等待用户人工核验）：当前分支为 `codex/phase-30-rag-evaluation-scoring-system`。本阶段已从阶段 29 完成并合并后的 `main -> cd32df6 Merge phase 29 real embedding quality eval` 出发，确认 `phase-29-complete -> b62b1a5 Complete phase 29 real embedding quality eval` 是 `main` 的祖先，未移动任何已有阶段 tag。
+
+阶段 30 把阶段 29 的散指标升级为可解释评分体系：新增 `docs/stage30_rag_evaluation_scoring_system.md`、`data/evaluation/stage30_scoring_weights.yaml`、`scripts/collect_stage30_engineering_health.py`、`data/evaluation/stage30_engineering_health.json`、`scripts/score_stage30_quality.py`、`scripts/judge_stage30_semantic_quality.py`、`scripts/build_stage30_quality_report.py` 和 `docs/stage30_quality_score_report.md`。默认评分模式为 `deterministic_rule_based`，只读取阶段 29 CSV、阶段 30 YAML 和 engineering health JSON，不跑 pytest、不重建 embedding、不写数据库、不调用真实 API。
+
+阶段 30 当前评分结果为 `overall_score=83.17`、`grade=B`、`release_decision=review_required`。维度分包括 retrieval_quality、rule_based_context_answer_quality、safety_refusal、source_quality 和 engineering_health；主要扣分项来自 `stage29_wiki_dam_applications` 的 Top-5 未命中，以及 `stage29_wiki_dam_applications`、`stage29_web_rfc_advantages` 的低规则覆盖率。阶段 30 明确不把 `coverage_ratio` 冒充为 faithfulness、answer relevancy 或 groundedness；这些语义级指标只保留在可选手动 LLM-as-Judge 中，默认 dry-run 不调用真实模型，显式 `--execute` 且本地存在 `STAGE30_JUDGE_API_KEY` 时才可调用 DeepSeek/OpenAI-compatible provider。
+
+阶段 30 最终验证：聚焦测试 `21 passed`，全量测试 `571 passed, 1 warning`；`GET /health`、`GET /quality-report`、`GET /quality-report/data.json`、`GET /quality-report/export.csv`、`GET /quality-review`、`GET /quality-review/data.json` 均返回 200；浏览器冒烟确认 `/quality-report` 仍为 `overall=83.17`、`grade=B`、`release_decision=review_required`，`/quality-review` 渲染 15 cases、4 needs_review、3 critical、点击保存人工结论成功、console errors 0。当前停在用户人工核验前：尚未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR。
+
 阶段 29（真实 Embedding 重建 + 端到端质量闭环，已获用户授权提交合并）：当前分支为 `codex/phase-29-real-embedding-quality-eval`。本阶段已从阶段 28 合并后的 `main` 出发，确认 `phase-28-complete -> b345cd8 Complete phase 28 web crawl auto ingest` 且已并入本地 `main -> 07dadf0 Merge phase 28 web crawl auto ingest`，未移动任何已有阶段 tag。
 
 阶段 29 已完成 `chunk_embeddings` 全量清理与双索引重建：清理前 `chunks 12716 / chunk_embeddings 21634`，清理后 `chunk_embeddings 0`；随后用真实 Jina v3 为全部 12,716 条 chunk 重建 embedding，再补建 deterministic embedding。当前最终索引状态为 `chunk_embeddings 25432`，其中 `jina/jina-embeddings-v3/dim=1024 = 12716`，`deterministic/hash-token-v1/dim=64 = 12716`，无孤立 embedding、无同 provider/model 重复。

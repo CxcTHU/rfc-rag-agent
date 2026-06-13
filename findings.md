@@ -1,160 +1,255 @@
-# 阶段 29 发现与关键决策
+# 阶段 30 发现与关键决策
 
-## 为什么需要重建 embedding
+## 阶段 29 基线
 
-### 问题：chunk_embeddings 数量膨胀且 provider 混杂
+阶段 29 已完成、提交、打 tag 并合并到远端 `main`。
 
-阶段 28 结束时：
-- chunks = 12,716
-- chunk_embeddings = 21,634
+```text
+main / origin/main -> cd32df6 Merge phase 29 real embedding quality eval
+phase-29-complete -> b62b1a5 Complete phase 29 real embedding quality eval
+```
 
-21,634 > 12,716 的原因：
-1. 阶段 18 为当时的 8,918 条 chunk 建了一套 **真实 Jina v3** embedding（约 8,918 条）。
-2. 阶段 18 同时建了一套 **deterministic** embedding（约 8,918 条）。
-3. 阶段 28 新增了约 3,798 条 chunk（来自网页爬取、Wikipedia、标准 PDF），只用 deterministic 重建了索引。
-4. 阶段 28 的 `--provider deterministic` 会跳过已有 deterministic embedding 的旧 chunk，但旧 Jina embedding 仍保留。
-5. 阶段 28 Phase 8 清理了 458 个低质量文档（级联删除了对应 chunks），但这些 chunk 的旧 Jina embedding 可能有孤立残留。
+阶段 29 质量产物：
 
-结果：chunk_embeddings 表中混杂了三类数据：
-- 旧 Jina embedding（覆盖旧 8,918 chunks 中仍存活的部分）
-- 旧 deterministic embedding（覆盖旧 chunks）
-- 新 deterministic embedding（覆盖新 chunks）
+- `data/evaluation/stage29_new_corpus_queries.csv`
+- `data/evaluation/stage29_real_quality_results.csv`
+- `data/evaluation/stage29_real_quality_summary.csv`
+- `data/evaluation/stage29_quality_summary.csv`
+- `docs/stage29_quality_report.md`
 
-### 问题：新增语料在真实检索中"隐形"
+核心指标：
 
-阶段 28 新增的 170 篇文档（网页 136 + Wikipedia 25 + 标准 9）只有 deterministic embedding。deterministic embedding 是哈希假向量，无语义能力。用户真实提问时，这些文档在 VectorSearchService 中的语义匹配得分是随机的，等同于不参与检索。
+```text
+precision_at_1=0.600
+precision_at_3=0.867
+precision_at_5=0.933
+avg_coverage_ratio=0.664
+refusal_accuracy=1.000
+quality_gate=review_required/medium
+```
 
-### 决策：全量清理 + 统一重建
+人工复核重点：
 
-不做增量修补，而是：
-1. 删除全部 chunk_embeddings（21,634 → 0）。
-2. 用真实 Jina v3 重建全部 12,716 条（统一 provider、统一 model、统一维度）。
-3. 再用 deterministic 重建一遍（CI/测试需要）。
-4. 最终：chunk_embeddings = 25,432（12,716 × 2 provider）。
+- `stage29_wiki_dam_applications`：Top-5 未命中预期 source type。
+- `stage29_web_rfc_advantages`：命中 web_page，但 coverage_ratio 低。
 
-理由：增量修补需要判断哪些旧 Jina embedding 仍有效、哪些已过期，逻辑复杂且容易遗漏；全量重建虽然多花 API 调用，但结果干净、可审计。
+## Phase 0 启动核对
 
-## Jina API 调用量估算
+- 当前阶段 30 分支：`codex/phase-30-rag-evaluation-scoring-system`。
+- `phase-29-complete` 指向 `b62b1a5 Complete phase 29 real embedding quality eval`。
+- `main` 指向 `cd32df6 Merge phase 29 real embedding quality eval`。
+- `git merge-base --is-ancestor phase-29-complete main` 已通过，阶段 29 已合并进 `main`。
+- 阶段 30 启动时未移动任何阶段 tag，未执行提交、打 tag、push 或 PR 操作。
 
-- chunks = 12,716
-- Jina embedding batch API 通常支持每次 100-2048 tokens 的文本
-- 假设 batch-size = 64，约需 199 次 API 调用
-- 假设 delay = 1s，纯等待约 199 秒 ≈ 3.3 分钟
-- 加上网络延迟和计算，估计总耗时 5-10 分钟
-- 成本：Jina v3 embedding API 对开源模型免费或极低成本
+## 开源评测框架调研结论
 
-## 评测方案
+### LlamaIndex
 
-### 复用已有评测集
+可借鉴点：
 
-- `data/evaluation/stage19_chinese_hard_queries.csv`：19 题（5 cross_passage + 5 confusable + 5 parameter_detail + 4 refusal）
-- `data/evaluation/cn_fulltext_queries.csv`：阶段 18 中文验证集
+- 把 RAG 评测拆成 retrieval evaluation 与 response evaluation。
+- RetrieverEvaluator 常见指标包括 hit-rate、MRR。
+- Response evaluators 包括 faithfulness、relevancy、correctness、semantic similarity。
 
-### 新增 stage29 评测集
+本项目采纳：
 
-覆盖阶段 28 新增的三类语料：
-- Wikipedia 百科语料：测试检索是否能召回大坝类型、混凝土基础知识
-- 标准/规范语料：测试检索是否能召回 FEMA dam safety 等公开标准内容
-- 高质量网页语料：测试检索是否能召回清理后保留的有效网页文档
-- 拒答边界：确认 responsibility_gate 在新语料环境下不退化
+- 采纳分层评测思想。
+- 在默认评分中加入 hit-rate/MRR 或等价排序指标。
+- 不直接引入 LlamaIndex 依赖。
 
-### 评测指标
+### Ragas
 
-- precision@1/3/5：top-k 命中率
-- coverage_ratio：答案要点覆盖率（复用阶段 20 方法论）
-- refusal_accuracy：拒答边界准确率
-- source_type_distribution：检索结果中各 source_type 的占比（检验新语料是否被召回）
-- 与 deterministic 基线对比：量化真实语义向量的增益
+可借鉴点：
 
-## 与现有模块的关系
+- context precision / context recall 用于评价检索上下文。
+- faithfulness / answer relevancy 用于语义级回答评价。
 
-- `scripts/build_vector_index.py`：已有 `--provider`、`--batch-size`、`--sleep-seconds`、`--max-retries` 参数，直接复用。
-- `app/services/retrieval/vector_cache.py`：Jina 重建后 VectorIndexCache 自动 invalidate 并重新加载。
-- `app/services/retrieval/reranking.py`：rerank 层不受 embedding provider 影响，保持不变。
-- `tests/conftest.py`：强制 pytest 使用 deterministic provider，不受真实 Jina embedding 影响。
+本项目采纳：
 
-## Phase 0 基线核验发现
+- 默认模式只实现可复现的 context 命中、coverage 和 source_type 指标。
+- faithfulness / answer relevancy 只能进入可选 LLM-as-Judge，不用规则匹配冒充。
 
-- 当前阶段 29 分支已从本地 `main` 创建：`codex/phase-29-real-embedding-quality-eval`。
-- 本地 `main` 顶部为 `07dadf0 Merge phase 28 web crawl auto ingest`，阶段 28 功能提交为 `b345cd8 Complete phase 28 web crawl auto ingest`。
-- `phase-28-complete` 指向 `b345cd8`，符合“tag 指向阶段 28 最终功能提交”的要求。
-- `git merge-base --is-ancestor phase-28-complete main` 通过，说明阶段 28 已合并到本地 `main`。
-- `git status -sb` 显示本地 `main` 领先 `origin/main` 2 个提交；阶段 29 按用户要求不推送、不创建 PR，因此该远端同步状态仅记录，不在本阶段处理。
-- 根目录 `task_plan.md`、`findings.md`、`progress.md` 在开工前已有阶段 29 规划内容，视为规划方 Claude 预写的交接文件，本阶段继续在其基础上维护，不覆盖其计划结构。
+### DeepEval
 
-## Phase 1 设计发现
+可借鉴点：
 
-- `scripts/build_vector_index.py` 已具备阶段 29 所需的 `--batch-size`、`--sleep-seconds`、`--max-retries` 参数，可直接支持限速、批处理和临时错误重试。
-- `app/services/retrieval/embedding.py` 的 `create_embedding_provider()` 当前支持 `deterministic` 和 `openai-compatible`，但不支持 `jina` 别名；阶段 29 的用户指定命令是 `--provider jina`，需要补齐 alias，映射到 OpenAI-compatible embedding provider。
-- `ChunkEmbedding` 表已有 `(chunk_id, provider, model_name)` 唯一约束，适合阶段 29 最终验证“同 provider/model 下无重复”。
-- 设计文档已落盘到 `docs/stage29_real_embedding_quality_eval.md`，后续 Phase 以该文档为执行边界。
+- G-Eval 类指标强调带理由的评分。
+- RAG 指标不只是给数字，还要输出评估理由。
 
-## Phase 2 清理发现
+本项目采纳：
 
-- 真实数据库 dry-run 结果确认阶段 29 的问题判断准确：`chunks=12716`，`chunk_embeddings=21634`。
-- provider 分布为：
-  - `deterministic / hash-token-v1 / dim=64`：12716 条。
-  - `openai-compatible / jina-embeddings-v3 / dim=1024`：8918 条。
-- 孤立 embedding 为 0，说明阶段 28 清理后没有留下指向缺失 chunk 的向量记录；本阶段仍选择全量清理，原因是旧 Jina 覆盖范围只有旧语料，不覆盖阶段 28 新增语料。
-- 已执行 `cleanup_stale_embeddings.py --execute`，当前 `chunk_embeddings=0`，`chunks=12716` 不变。
-- 后续 Phase 3 需要注意：历史 Jina provider 名在表中是 `openai-compatible`，但阶段 29 目标要求最终 provider 为 `jina`；这需要 provider alias 既能调用 OpenAI-compatible API，又能把 `provider_name` 保存为 `jina`。
+- 每个扣分项都输出 `deduction_reason` 和 `recommended_action`。
+- 对 release decision 给出解释，而不是只给裸分。
 
-## Phase 3 真实 Jina 重建发现
+### TruLens
 
-- `jina` provider alias 已补齐：底层复用 OpenAI-compatible `/embeddings` 协议，数据库中的 `provider` 保存为 `jina`，满足阶段 29 最终计数标准。
-- 本地 `.env` 中 Jina embedding 配置完整：provider 原配置为 `openai-compatible`，model 为 `jina-embeddings-v3`，base URL 为 `https://api.jina.ai/v1`，dimension 为 1024，API key 已配置但未打印。
-- 全量真实重建一次完成：`total=12716`、`indexed=12716`、`updated=0`、`skipped=0`。
-- 重建后验证：Jina embedding 12716 条，覆盖 12716 个 distinct chunk，无孤立、无同 provider/model 重复。
-- 最小 benchmark 显示真实 query embedding 单次约 0.94-1.01 秒；hybrid search 单次约 2.60-2.78 秒。该耗时可作为阶段 29 报告中的真实性能基线，但不作为 CI 门槛。
+可借鉴点：
 
-## Phase 4 deterministic 补建发现
+- RAG Triad：context relevance、groundedness、answer relevance。
 
-- deterministic 补建一次完成：`total=12716`、`indexed=12716`、`updated=0`、`skipped=0`。
-- 最终 `chunk_embeddings=25432`，精确等于 `12716 chunks × 2 providers`。
-- provider 分布符合完成标准：
-  - `jina / jina-embeddings-v3 / dim=1024`：12716 条。
-  - `deterministic / hash-token-v1 / dim=64`：12716 条。
-- 每个 provider 均覆盖 12716 个 distinct chunk，孤立记录和重复 provider/model 组均为 0。
-- 全量测试 `549 passed, 1 warning`，说明新增 Jina alias 和清理脚本没有破坏 deterministic 回归。
+本项目采纳：
 
-## Phase 5 评测集发现
+- 将 triad 作为文档和可选 judge 模式的概念参考。
+- 默认 CI 不声称自己完成了 semantic groundedness。
 
-- 阶段 29 新增评测集采用独立 schema：`query_id,question,category,expected_source_type,expected_answer_points,expected_refused,notes`，便于 Phase 6 脚本同时兼容新语料题和拒答边界题。
-- 新增 18 题覆盖：
-  - Wikipedia：RCC dam、拱坝、水利工程、concrete cover、dam applications。
-  - standard_document：FEMA EAP、earthquake analysis、Living With Dams、Pocket Safety Guide、inundation mapping。
-  - web_page：RFC 优势、RFC 发明者、Jin Feng standards、ACI 318 范围、ACI inspection/testing。
-  - refusal：工程签字、API key/Bearer token、绕过付费墙。
-- 测试首次发现 CSV 中英文问题含逗号导致列错位，已修正为无逗号文本，并用 `tests/test_stage29_new_corpus_queries.py` 防止回归。
+### Phoenix
 
-## Phase 6 真实质量评测发现
+可借鉴点：
 
-- `scripts/evaluate_stage29_real_quality.py` 已生成真实 Jina 评测结果；脚本只让 Jina 参与 embedding/query 检索，聊天回答与 reranking 均保持 deterministic，避免扩大真实 API 依赖面。
-- 评测结果：
-  - `precision_at_1=0.600`
-  - `precision_at_3=0.867`
-  - `precision_at_5=0.933`
-  - `avg_coverage_ratio=0.664`
-  - `refusal_accuracy=1.000`
-- 检索 source_type 分布显示新语料确实参与召回：`standard_document=25`、`web_page=28`、`wikipedia=9`，同时旧的 institutional/open_access/metadata 语料也仍会进入 top-k。
-- 主要问题必须诚实写入质量报告：
-  - `stage29_wiki_dam_applications` 未命中 Wikipedia，top1 为 `web_page/Introduction`。
-  - `stage29_web_rfc_advantages` top1 命中正确网页，但 expected points 中 `local rocks`、`special concrete`、`construction breakthroughs` 未在 top5 合并证据中完全覆盖，coverage 仅 0.250。
-  - 拒答题的 p@k 字段为 false 是因为它们不按检索命中计分；真正的拒答指标看 `refusal_accuracy=1.000`。
+- Retrieval eval 与 response eval 分层。
+- 质量结果和 observability 结合，便于看失败发生在哪一步。
 
-## Phase 7 质量报告发现
+本项目采纳：
 
-- `docs/stage29_quality_report.md`、`data/evaluation/stage29_quality_summary.csv` 和 `app/frontend/quality_report.html` 均由 `scripts/build_stage29_quality_report.py` 生成，避免手工复制指标造成不一致。
-- `/quality-report/data.json` 和 `/quality-report/export.csv` 已切换到阶段 29 summary；导出文件名为 `stage29_quality_summary.csv`。
-- 阶段 29 quality gate 不是强行 pass，而是 `review_required/medium`，原因是真实评测仍有 `p@5_misses=1` 和 `low_coverage=2`。
-- 只读报告继续保留筛选、风险队列和导出能力；不触发真实 API、不写数据库、不暴露密钥。
+- `/quality-report` 从指标表升级为评分 + 决策 + 风险队列。
+- 保留失败样例队列和推荐动作。
 
-## Phase 8 文档收尾发现
+## Phase 1 落地结论
 
-- `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD` 均已更新到阶段 29 人工核验前状态。
-- `docs/phase_reviews/phase-29.md` 当前是验收草稿，结论保持 `REVIEW_REQUIRED`，不抢先写 PASS。
-- Obsidian 按用户要求只补阶段 29 总页、Phase 汇报索引和总汇报，没有在开发过程中写入小 Phase 汇报。
-- 阶段 29 的文档口径统一为：真实 embedding 和评测已完成，但 `/quality-report` overall 仍为 `review_required/medium`，人工需要重点看 1 条 Top-5 未命中和 2 条低覆盖查询。
-- 浏览器冒烟发现 `quality_report.html` 内联 JSON 被 `html.escape()` 转成 `&quot;`，导致 `JSON.parse()` 失败后表格为空；已改为只转义 `</script>`，并补测试确认内联 JSON 可被 `json.loads()` 解析。
-- 最终全量测试为 `556 passed, 1 warning`；`/quality-report` 页面实际渲染 7 行 summary、3 行风险队列，控制台无 error。
-- 阶段 29 收尾仍必须保持不暂存、不提交、不打 tag、不推送。
+- 已将参考框架映射写入 `docs/stage30_rag_evaluation_scoring_system.md`。
+- 默认评分模式固定命名为 `deterministic_rule_based`，只允许使用阶段 29 CSV、阶段 30 权重 YAML 和 engineering health JSON。
+- 阶段 29 的 `coverage_ratio` 在阶段 30 中只能称为 `rule_based_coverage_ratio` 或 `rule_based_context_answer_quality`，不能改名为 faithfulness。
+- 可选语义评审模式固定命名为 `manual_llm_judge`，默认 dry-run；没有显式 `--execute` 不调用真实模型。
+
+## Claude 评审意见吸收
+
+Claude 对阶段 30 目标提出的四个坑全部采纳：
+
+1. **faithfulness / answer relevancy 不能伪造**：阶段 29 的 coverage_ratio 是字符串覆盖，不是语义判断。默认评分不得把它命名成 faithfulness。
+2. **权重必须可配置且有依据**：新增 `stage30_scoring_weights.yaml`，不在代码里写死 35/25/20/10/10。
+3. **等级门槛缺校准数据**：`stage30_quality_scores.csv` 设计成历史趋势表，当前 A/B/C 阈值只是初始启发式。
+4. **评分脚本不能跑 pytest**：engineering health 先产出 JSON，评分脚本只读取。
+
+## 阶段 30 核心决策
+
+### 决策 1：双模式评分
+
+默认模式：
+
+```text
+mode=deterministic_rule_based
+CI 可运行
+不调用真实 API
+只读取已有 CSV/YAML/JSON
+```
+
+可选模式：
+
+```text
+mode=manual_llm_judge
+手动触发
+可调用真实 MIMO judge
+输出单独 CSV
+不进入 CI
+```
+
+理由：既学习 Ragas/DeepEval 的语义评估思想，又不破坏项目离线约束。
+
+Phase 5 已新增 `scripts/judge_stage30_semantic_quality.py`，默认 dry-run 只生成 `stage30_llm_judge_results.csv` 计划表，不调用真实模型。当前手动模式支持 OpenAI-compatible/DeepSeek provider，但必须显式 `--execute` 且本地存在 `STAGE30_JUDGE_API_KEY`；语义 judge 结果不会混入默认评分。
+
+### 决策 2：默认 100 分维度
+
+初始建议：
+
+```text
+retrieval_quality: 35
+rule_based_context_answer_quality: 25
+safety_refusal: 20
+source_quality: 10
+engineering_health: 10
+```
+
+权重理由：
+
+- 检索质量最高，因为 RAG 的回答质量首先受 top-k 召回影响。
+- 上下文/答案覆盖第二，因为阶段 29 已暴露“命中但覆盖不足”的问题。
+- 安全拒答 20 分，因为工程签字、密钥、付费墙边界必须稳定。
+- 来源质量 10 分，用于避免过度依赖 metadata 或单一来源。
+- 工程健康 10 分，保证评分建立在可复现系统状态上。
+
+这些权重是初始启发式，必须配置化，并允许后续根据历史趋势调整。
+
+Phase 2 已将这些权重落盘到 `data/evaluation/stage30_scoring_weights.yaml`，并为每个维度保留机器可读 rationale。后续评分脚本只能读取该文件，不得把权重常量写死在评分公式里。
+
+### 决策 3：趋势表而不是一次性分数
+
+`stage30_quality_scores.csv` 应支持多次追加：
+
+```text
+run_id,run_at,scoring_version,overall_score,grade,release_decision,
+retrieval_score,context_answer_score,safety_score,source_score,engineering_score,
+baseline_run_id,score_delta,main_deductions,recommended_actions
+```
+
+这样阶段 31 以后可以回答：“这次比上次提升/下降了多少，主要原因是什么。”
+
+Phase 4 已生成初版趋势表 `data/evaluation/stage30_quality_scores.csv`，当前 `overall_score=83.17`、`grade=B`、`release_decision=review_required`。该分数的主要拉低因素是 retrieval top-1 较弱和两个低规则覆盖率样例，不是工程健康或拒答边界。
+
+Phase 6 已将 `/quality-report` 升级为阶段 30 评分报告。JSON/CSV 导出当前读取 `stage30_quality_summary.csv`，静态 HTML 内联展示评分总览、维度分、deductions 和 recommended actions；阶段 29 原始 CSV 与报告保持可追溯，不被覆盖。
+
+## Phase 7 验证结论
+
+- 聚焦测试：`17 passed`。
+- 全量测试：`567 passed, 1 warning`。
+- 接口冒烟：`/health`、`/quality-report`、`/quality-report/data.json`、`/quality-report/export.csv` 均为 200。
+- 浏览器冒烟：`overall=83.17`、`grade=B`、`release_decision=review_required`、summary rows 6、deduction rows 3、recommended actions 2、console errors 0。
+- `stage30_engineering_health.json` 已刷新为阶段 30 验证结果，评分趋势表追加 `stage30-final-validation`。
+
+## Phase 8 收尾结论
+
+- 普通文档已同步：`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD`。
+- 阶段验收草稿已新增：`docs/phase_reviews/phase-30.md`。
+- Obsidian 已补：阶段页、阶段汇报汇总、知识点和索引链接。
+- 当前必须停在人工核验前，不提交、不打 tag、不 push、不创建 PR。
+
+### 决策 4：Engineering Health 作为输入
+
+评分脚本不直接跑测试，而是读取：
+
+```text
+data/evaluation/stage30_engineering_health.json
+```
+
+建议结构：
+
+```json
+{
+  "full_tests_status": "556 passed, 1 warning",
+  "chunk_count": 12716,
+  "embedding_count": 25432,
+  "jina_embedding_count": 12716,
+  "deterministic_embedding_count": 12716,
+  "orphan_embeddings": 0,
+  "duplicate_provider_model_groups": 0,
+  "quality_report_smoke": "passed"
+}
+```
+
+Phase 3 已落地 `scripts/collect_stage30_engineering_health.py` 和 `data/evaluation/stage30_engineering_health.json`。采集器仅做只读统计，不跑 pytest、不重建 embedding、不写数据库、不调用真实 API；评分器后续只能读取该 JSON。
+
+## 风险与防线
+
+- 风险：总分好看但指标不真实。
+  - 防线：默认模式不使用 faithfulness / answer relevancy 命名。
+- 风险：权重被质疑主观。
+  - 防线：YAML 配置 + rationale + 历史趋势。
+- 风险：评分脚本变重。
+  - 防线：评分脚本只读输入，不跑 pytest、不调 API、不改 DB。
+- 风险：LLM-as-Judge 泄露供应商响应。
+  - 防线：可选模式单独输出脱敏结果，不保存 raw_response。
+- 风险：阶段 29 的质量报告被覆盖后失去溯源。
+  - 防线：保留 stage29 artifacts，stage30 输出新文件，不改写 stage29 原始结果。
+
+## 面试表达准备
+
+阶段 30 可以这样讲：
+
+> 阶段 29 已经能跑真实检索评测，但只有散指标。阶段 30 我参考 LlamaIndex、Ragas、DeepEval、TruLens 和 Phoenix，把评测拆成检索质量、规则覆盖质量、安全拒答、来源质量和工程健康五个维度，输出总分、等级、扣分原因和推荐动作。同时我明确区分规则评分和语义评分：CI 默认只跑 deterministic 的可复现指标，faithfulness 和 answer relevancy 只能通过手动 LLM-as-Judge 模式产生，避免用关键词匹配冒充语义判断。
+
+## 追加发现：DeepSeek 手动 judge 接入边界
+
+- `scripts/judge_stage30_semantic_quality.py` 已支持 OpenAI-compatible `/chat/completions` 调用，可用于 DeepSeek 手动 LLM-as-Judge。
+- 默认模式仍为 dry-run；缺少 `--execute` 时不会读取 key、不会联网、不会生成语义分数。
+- 即使传入 `--execute`，缺少 `STAGE30_JUDGE_API_KEY` 时也只写入 `missing_env:STAGE30_JUDGE_API_KEY`，不调用 provider。
+- judge prompt 只使用阶段 29 CSV 中的摘要字段和规则指标提示，不把 `coverage_ratio` 包装成 faithfulness。
+- 输出脱敏且不保存供应商原始响应或 `raw_response`，避免把手动 judge 支路变成敏感数据落盘点。

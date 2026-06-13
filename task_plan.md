@@ -1,323 +1,323 @@
-# 阶段 29 任务计划：真实 Embedding 重建 + 端到端质量闭环
+# 阶段 30 任务计划：RAG 质量评分体系与诚实决策门禁
 
 ## 目标
 
-在阶段 28「网页爬取 + 自动入库 + 语料清理 + Wikipedia/标准补充」已完成并合并到 `main` 的基础上，完成阶段 29：清理历史残留 embedding，用真实 Jina v3 为全部 12,716 条 chunk 统一重建语义向量索引，并跑一轮端到端检索质量评测，产出可展示的质量报告。阶段完成后停在用户人工核验前，不提交、不打 tag、不推送。
+在阶段 29「真实 Embedding 重建 + 端到端质量闭环」已完成、提交、打 `phase-29-complete` tag 并合并到 `main` 的基础上，完成阶段 30：参考 LlamaIndex、Ragas、DeepEval、TruLens、Phoenix 等主流 RAG 评测框架，构建本项目自己的轻量级质量评分与决策门禁系统。阶段 30 必须输出可解释、不夸大的总分、等级、扣分项、人工复核队列和下一步建议；语义级指标只能作为可选 LLM-as-Judge 模式，绝不用字符串匹配冒充。
+
+建议分支：`codex/phase-30-rag-evaluation-scoring-system`
 
 ## 背景
 
-阶段 28 用 `--provider deterministic`（哈希假向量）重建索引，新增的 170 篇文档（网页/Wikipedia/标准 PDF）在真实语义检索中是"隐形"的。同时 `chunk_embeddings=21,634` 大于 `chunks=12,716`，存在历史多批次残留（旧 Jina + 旧 deterministic 混杂）。本阶段的核心价值：让全部语料在真实检索中可用，并用真实指标量化检索效果。
+阶段 29 已产出真实 Jina 评测指标：
+
+```text
+precision_at_1=0.600
+precision_at_3=0.867
+precision_at_5=0.933
+avg_coverage_ratio=0.664
+refusal_accuracy=1.000
+source_type_distribution=institutional_access_pdf:17;metadata_record:6;open_access_pdf:5;standard_document:25;web_page:28;wikipedia:9
+quality_gate=review_required/medium
+```
+
+这些指标可以说明质量现状，但仍是散指标。阶段 30 要把它们升级为可复用的评分体系：
+
+```text
+stage29 metrics + engineering health
+-> scoring weights
+-> dimension scores
+-> overall_score / grade / release_decision
+-> deductions / recommended_actions
+-> quality report / export / trend history
+```
 
 ## 硬约束
 
-- 阶段 29 开发完成前后均不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR。
-- 不移动任何已有阶段 tag，尤其是 `phase-28-complete`。
-- 保留用户或其他 session 的已有改动，不重置 Git，不覆盖无关文件。
-- 不引入 `torch` / `sentence-transformers` 等重依赖。
-- 真实 Jina API 调用仅在脚本中执行，不让真实 API 成为 CI 或本地全量测试前提。
-- 不把 API key、Bearer token、供应商原始敏感响应写入 Git、CSV、文档、测试或 Obsidian。
-- 保证现有 API 端点不被破坏。
-- Jina 调用必须限速（delay ≥ 0.5s），遵守速率限额，支持断点续建。
+- 阶段 30 开发完成前后均不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR；等待用户人工核验和明确确认。
+- 不移动任何已有阶段 tag，尤其是 `phase-29-complete`。
+- 从阶段 29 完成并合并后的远端 `main` 出发；先确认 `phase-29-complete` 指向阶段 29 最终功能提交并已合并到 `main`。
+- 不引入 LlamaIndex、Ragas、DeepEval、TruLens、Phoenix 等重依赖，只借鉴指标思想。
+- 不引入 `torch` / `sentence-transformers`。
+- 默认评分链路必须 deterministic、离线、可单测，不依赖真实 Jina/MIMO API。
+- 可选 LLM-as-Judge 只能手动触发，不进 CI，不作为默认评分前提。
+- 不把 API key、Bearer token、Authorization header、供应商原始敏感响应、raw_response、受限全文写入 Git、CSV、文档、测试或 Obsidian。
+- 评分脚本保持纯读取：不内部跑 pytest、不重建 embedding、不主动改数据库、不调用真实 API。
+- 保证 `/search`、`/search/vector`、`/search/hybrid`、`/chat`、`/agent/query`、`/agent/query/stream`、`/quality-report` 不被破坏。
+
+## 核心设计原则
+
+1. 诚实命名：默认 CI 模式只叫 `rule_based_coverage`、`retrieval_hit`、`source_quality` 等可复现指标；不得把字符串覆盖率命名为 `faithfulness` 或 `answer_relevancy`。
+2. 双模式评分：默认 deterministic scoring 进入 CI；可选 LLM-as-Judge scoring 单独输出 judge 文件，并明确 `judge_provider`、`judge_model`、`manual_run=true`。
+3. 权重配置化：新增 `data/evaluation/stage30_scoring_weights.yaml`，权重不硬编码在业务逻辑中。
+4. 历史可追踪：`stage30_quality_scores.csv` 设计成可追加趋势表，每次评测一行，支持和上次结果比较。
+5. 评分器纯函数化：`scripts/score_stage30_quality.py` 只读取 CSV/YAML/JSON，输出评分 CSV/summary，不负责跑测试和采集健康信号。
 
 ## Phase 顺序
 
-### Phase 0：启动校准与文件计划
+### Phase 0：启动校准与计划落盘
 
 **状态：已完成**
 
-**解决的问题**：确认阶段 28 的最终状态、tag、main 起点和阶段 29 分支。
+**解决的问题**：确认阶段 29 已完成、tag/main 状态正确，创建阶段 30 分支，并校准三份规划文件。
 
-**RAG 链路位置**：阶段起点校准，不改运行链路。
-
-**为什么现在做**：阶段 29 依赖阶段 28 已合并到 `main`，必须先确认。
+**RAG 链路位置**：阶段启动与版本基线，不改运行链路。
 
 **任务**
 - 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-- 阅读阶段 28 设计文档、phase review，以及根目录 `task_plan.md`、`findings.md`、`progress.md`。
-- 核对 `phase-28-complete` tag 指向阶段 28 最终功能提交，且已合并到 main。
-- 从阶段 28 完成并合并后的 main 出发，创建或切换到 `codex/phase-29-real-embedding-quality-eval`。
-- 将根目录三份 Planning with Files 文件校准为阶段 29。
+- 阅读 `docs/stage29_quality_report.md`、`docs/stage29_real_embedding_quality_eval.md`、`docs/phase_reviews/phase-29.md`。
+- 阅读根目录 `task_plan.md`、`findings.md`、`progress.md`。
+- 运行 `git status -sb`、`git log --oneline -5`。
+- 核对 `phase-29-complete` 指向阶段 29 最终功能提交，且已并入 `main`。
+- 从阶段 29 合并后的 `main` 创建/切换 `codex/phase-30-rag-evaluation-scoring-system`。
 
 **验证方式**
-- `git status -sb`
-- `git log --oneline -5`
-- `git merge-base --is-ancestor phase-28-complete main`
+- `git merge-base --is-ancestor phase-29-complete main`
+- 当前分支正确，工作区无无关改动。
 
-**完成标准**
-- 当前分支为 `codex/phase-29-real-embedding-quality-eval`。
-- `phase-28-complete` 不移动，且已并入 `main`。
-- `task_plan.md`、`findings.md`、`progress.md` 已切换为阶段 29。
+**完成记录**
+- 已读取入口规则、项目 README、进度、架构、数据源、阶段 29 质量报告、阶段 29 设计和阶段 29 验收草稿。
+- 已核对 `phase-29-complete -> b62b1a5 Complete phase 29 real embedding quality eval`。
+- 已核对 `main -> cd32df6 Merge phase 29 real embedding quality eval`，且 `phase-29-complete` 是 `main` 的祖先。
+- 已从 `main` 创建并切换到 `codex/phase-30-rag-evaluation-scoring-system`。
+- 未移动任何已有阶段 tag；未执行 `git add`、`git commit`、`git tag`、`git push` 或 PR 操作。
 
-**实际完成记录**
-- 已按入口规则阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/phase_reviews/phase-28.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- `git log --oneline -5` 显示 `07dadf0 Merge phase 28 web crawl auto ingest` 位于当前 `main` 顶部，`b345cd8 Complete phase 28 web crawl auto ingest` 为阶段 28 最终功能提交。
-- `phase-28-complete` 当前指向 `b345cd8 Complete phase 28 web crawl auto ingest`，未移动 tag。
-- `git merge-base --is-ancestor phase-28-complete main` 通过，确认阶段 28 已并入本地 `main`。
-- 已从阶段 28 合并后的 `main` 创建并切换到 `codex/phase-29-real-embedding-quality-eval`。
-- 当前遵守阶段 29 提交边界：未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR。
-
-### Phase 1：阶段 29 设计文档
+### Phase 1：阶段 30 设计文档与开源评测框架映射
 
 **状态：已完成**
 
-**解决的问题**：固化 embedding 清理策略、Jina 重建方案、评测方法论和质量报告格式。
-
-**RAG 链路位置**：向量化层 + 评测层。
-
-**为什么现在做**：先设计再执行，确保清理和重建操作可控、可回滚。
+**解决的问题**：把 LlamaIndex/Ragas/DeepEval/TruLens/Phoenix 的可借鉴思想翻译成本项目可落地的轻量方案。
 
 **任务**
-- 新增 `docs/stage29_real_embedding_quality_eval.md`。
-- 说明 embedding 残留分析：为什么 21,634 > 12,716，哪些是过期的。
-- 说明清理策略：删除全部 chunk_embeddings，从零重建。
-- 说明 Jina 重建方案：`build_vector_index.py --provider jina`，限速、批次、断点续建、重试。
-- 说明 deterministic 索引保留策略：真实 Jina 重建后，再跑一遍 deterministic 保证 CI 测试可用。
-- 说明评测方案：复用 stage19/20 评测集 + 新增 stage29 覆盖新语料的查询。
-- 说明质量报告格式和完成标准。
+- 新增 `docs/stage30_rag_evaluation_scoring_system.md`。
+- 写清参考框架：
+  - LlamaIndex：RetrieverEvaluator、hit-rate、MRR、faithfulness/relevancy evaluator。
+  - Ragas：context precision/recall、faithfulness、answer relevancy。
+  - DeepEval：G-Eval、RAG metrics、带理由的评测。
+  - TruLens：RAG Triad，context relevance / groundedness / answer relevance。
+  - Phoenix：retrieval eval + response eval + observability。
+- 写清本项目采纳和不采纳的部分。
+- 明确默认规则评分与可选 LLM-as-Judge 的边界。
 
 **完成标准**
-- `docs/stage29_real_embedding_quality_eval.md` 已创建。
+- 文档明确说明“不用规则匹配冒充语义评分”。
 
-**实际完成记录**
-- 已新增 `docs/stage29_real_embedding_quality_eval.md`。
-- 设计文档已覆盖 embedding 残留原因、全量清理策略、Jina 重建限速与断点续建、deterministic 补建、评测集与指标、质量报告和安全边界。
-- 代码预检发现：当前 `create_embedding_provider()` 支持 OpenAI-compatible provider，但尚未支持用户指定命令中的 `--provider jina` 别名；后续实现阶段需要补 alias 与测试。
+**完成记录**
+- 已新增 `docs/stage30_rag_evaluation_scoring_system.md`。
+- 已记录 LlamaIndex、Ragas、DeepEval、TruLens、Phoenix 的参考点、采纳点和不采纳点。
+- 已明确默认 `deterministic_rule_based` 只使用可复现规则指标。
+- 已明确 `faithfulness`、`answer_relevancy`、`groundedness` 只能出现在可选 `manual_llm_judge` 模式，不进入 CI。
 
-### Phase 2：Embedding 残留清理
+### Phase 2：评分 schema 与权重配置
 
 **状态：已完成**
 
-**解决的问题**：chunk_embeddings 表存在 21,634 条混杂记录（旧 Jina 8918 条 + deterministic 12,716 条），部分旧 Jina embedding 关联的 chunk 已在阶段 28 清理中被级联删除。需要清理到干净起点。
-
-**RAG 链路位置**：向量索引层。
-
-**为什么现在做**：在重建前先清理，避免残留影响重建结果和检索质量。
+**解决的问题**：定义可解释总分、子分、等级、发布建议和扣分项的数据结构。
 
 **任务**
-- 新增 `scripts/cleanup_stale_embeddings.py`，清理 chunk_embeddings 表：
-  - 统计当前 provider 分布（deterministic / jina / 其他）。
-  - 找出关联 chunk 已不存在的孤立 embedding（如有）。
-  - 提供 `--dry-run` 预览和 `--execute` 实际删除。
-  - 支持按 provider 选择性删除或全部删除。
-- 执行清理，目标：chunk_embeddings = 0（干净起点）。
-- 补测试 `tests/test_cleanup_stale_embeddings.py`。
-
-**验证方式**
-- 清理后 `SELECT COUNT(*) FROM chunk_embeddings` = 0。
-- `SELECT COUNT(*) FROM chunks` 仍 = 12,716（chunks 不受影响）。
-- 测试通过。
+- 新增 `data/evaluation/stage30_scoring_weights.yaml`。
+- 定义默认维度：
+  - `retrieval_quality` 35 分。
+  - `rule_based_context_answer_quality` 25 分。
+  - `safety_refusal` 20 分。
+  - `source_quality` 10 分。
+  - `engineering_health` 10 分。
+- 在 YAML 中写每个权重的 rationale。
+- 定义等级边界：A/B/C/D/F 与 `pass/review_required/blocked`，并明确这些边界是初始启发式，后续可用历史趋势校准。
+- 新增/设计输出字段：`overall_score`、`grade`、`release_decision`、`dimension_scores`、`deductions`、`recommended_actions`、`scoring_mode`、`scoring_version`。
 
 **完成标准**
-- chunk_embeddings 表已清空。
-- chunks 表数量不变。
-- 清理脚本有 dry-run 和测试。
+- 权重不硬编码；测试能读取并校验权重总和为 100。
 
-**实际完成记录**
-- 已新增 `scripts/cleanup_stale_embeddings.py`，支持 `--dry-run`、`--execute` 和可选 `--provider` 过滤。
-- 已新增 `tests/test_cleanup_stale_embeddings.py`，覆盖 dry-run 不删除、execute 删除、provider 过滤和孤立 embedding 统计。
-- 聚焦测试通过：`4 passed`。
-- 真实数据库 dry-run：`chunks=12716`、`chunk_embeddings=21634`、`orphan_embeddings=0`；provider 分布为 deterministic 12716、openai-compatible/jina-embeddings-v3 8918。
-- 已执行清理：`chunk_embeddings 21634 -> 0`。
-- 清理后验证：`chunks=12716`，`chunk_embeddings=0`。
+**完成记录**
+- 已新增 `data/evaluation/stage30_scoring_weights.yaml`。
+- 已配置五个默认维度：`retrieval_quality=35`、`rule_based_context_answer_quality=25`、`safety_refusal=20`、`source_quality=10`、`engineering_health=10`。
+- 已写入每个维度的 machine-readable `rationale`。
+- 已定义 A/B/C/D/F 等级边界和 `pass/review_required/blocked` 初始决策规则。
+- 权重读取与总和校验将在 Phase 4 评分脚本和 Phase 7 测试中覆盖。
 
-### Phase 3：真实 Jina Embedding 重建
+### Phase 3：Engineering Health Artifact
 
 **状态：已完成**
 
-**解决的问题**：用真实 Jina v3 语义模型为全部 12,716 条 chunk 生成 embedding，让所有语料在语义检索中真正可用。
-
-**RAG 链路位置**：向量化层，是 VectorSearchService 和 HybridSearchService 的数据基础。
-
-**为什么现在做**：清理完成后立即重建，一步到位。
+**解决的问题**：让评分脚本读取工程健康信号，而不是自己跑 pytest 或扫数据库。
 
 **任务**
-- 确认本地 `.env` 中 Jina embedding 配置（provider、model_name、api_key、base_url）可用。
-- 运行 `scripts/build_vector_index.py --provider jina --batch-size 64 --sleep-seconds 1 --max-retries 3`。
-- 监控进度：记录总耗时、成功/失败/跳过数量。
-- 如果中途因速率限制中断，用同一命令续建（已有 embedding 的 chunk 应被跳过）。
-- 重建完成后验证：`chunk_embeddings` 数量应 = 12,716，provider 全部为 jina。
-
-**验证方式**
-- `SELECT COUNT(*) FROM chunk_embeddings WHERE provider='jina'` = 12,716。
-- `SELECT COUNT(DISTINCT chunk_id) FROM chunk_embeddings` = 12,716。
-- 运行 `scripts/benchmark_retrieval.py` 确认检索耗时正常。
+- 新增 `scripts/collect_stage30_engineering_health.py`。
+- 输出 `data/evaluation/stage30_engineering_health.json`。
+- health artifact 至少包含：
+  - `full_tests_status`
+  - `chunk_count`
+  - `embedding_count`
+  - `jina_embedding_count`
+  - `deterministic_embedding_count`
+  - `orphan_embeddings`
+  - `duplicate_provider_model_groups`
+  - `quality_report_smoke`
+  - `generated_at`
+- 脚本可读取数据库和已有验证输入，但不得运行 pytest。
 
 **完成标准**
-- 全部 12,716 条 chunk 均有 Jina embedding。
-- 无孤立或重复 embedding。
-- benchmark 检索耗时可接受。
+- health JSON 脱敏、可提交、可单测。
 
-**实际完成记录**
-- 已为 `create_embedding_provider()` 增加 `jina` provider 别名，复用 OpenAI-compatible embedding 请求逻辑，并将索引 provider 名保存为 `jina`。
-- 已补 `tests/test_embedding_provider.py` 中的 Jina alias 测试。
-- 聚焦测试通过：`tests/test_embedding_provider.py tests/test_cleanup_stale_embeddings.py` 共 `17 passed`。
-- 已确认本地 `.env` Jina embedding 配置完整，仅输出 key 是否存在，未打印密钥。
-- 已运行真实重建命令：`scripts/build_vector_index.py --provider jina --batch-size 64 --sleep-seconds 1 --max-retries 3`。
-- 重建结果：`total=12716`、`indexed=12716`、`updated=0`、`skipped=0`、`provider=jina`、`model=jina-embeddings-v3`、`dimension=1024`。
-- 数据库验证：`jina_embeddings=12716`、`distinct_jina_chunk_ids=12716`、`orphan_embeddings=0`、`duplicate_provider_model_groups=0`。
-- 已运行 `scripts/benchmark_retrieval.py --provider jina --runs 1`，两条默认 query 均完成；Jina query embedding 约 0.94-1.01 秒，vector search 约 1.04-3.04 秒，hybrid search 约 2.60-2.78 秒。
+**完成记录**
+- 已新增 `scripts/collect_stage30_engineering_health.py`。
+- 已生成 `data/evaluation/stage30_engineering_health.json`。
+- 当前 health artifact 记录：`chunk_count=12716`、`embedding_count=25432`、`jina_embedding_count=12716`、`deterministic_embedding_count=12716`、`orphan_embeddings=0`、`duplicate_provider_model_groups=0`。
+- 脚本只读数据库统计和外部传入状态；不运行 pytest、不重建 embedding、不写数据库、不调用真实 API。
 
-### Phase 4：Deterministic 索引补建（CI 保障）
+### Phase 4：默认 deterministic 评分脚本
 
 **状态：已完成**
 
-**解决的问题**：CI 和本地全量测试依赖 deterministic provider，需要在真实 Jina 之外保留一套 deterministic embedding。
-
-**RAG 链路位置**：测试基础设施。
-
-**为什么现在做**：Phase 3 只建了 Jina embedding，测试框架仍需 deterministic。
+**解决的问题**：基于阶段 29 评测结果和 health artifact 生成可解释评分。
 
 **任务**
-- 运行 `scripts/build_vector_index.py --provider deterministic --batch-size 64`。
-- 验证 deterministic embedding 数量也 = 12,716。
-- 全量测试确认通过。
-
-**验证方式**
-- `SELECT COUNT(*) FROM chunk_embeddings WHERE provider='deterministic'` = 12,716。
-- 总 chunk_embeddings = 25,432（12,716 Jina + 12,716 deterministic）。
-- `python -m pytest -q` 全量通过。
+- 新增 `scripts/score_stage30_quality.py`。
+- 输入：
+  - `data/evaluation/stage29_real_quality_results.csv`
+  - `data/evaluation/stage29_real_quality_summary.csv`
+  - `data/evaluation/stage30_scoring_weights.yaml`
+  - `data/evaluation/stage30_engineering_health.json`
+- 输出：
+  - `data/evaluation/stage30_quality_scores.csv`
+  - `data/evaluation/stage30_quality_summary.csv`
+  - `data/evaluation/stage30_quality_deductions.csv`
+- 计算 retrieval / rule_based_context_answer / safety / source / engineering 子分。
+- 对 `stage29_wiki_dam_applications`、`stage29_web_rfc_advantages` 等低分项生成扣分原因和 recommended_actions。
 
 **完成标准**
-- 双 provider embedding 完整。
-- 全量测试通过。
+- 评分可复现、无真实 API、测试覆盖关键公式和边界。
 
-**实际完成记录**
-- 已运行 `scripts/build_vector_index.py --provider deterministic --batch-size 64`。
-- 补建结果：`total=12716`、`indexed=12716`、`updated=0`、`skipped=0`、`provider=deterministic`、`model=hash-token-v1`、`dimension=64`。
-- 最终索引验证：`chunk_embeddings=25432`，其中 `jina/jina-embeddings-v3/dim=1024 = 12716`、`deterministic/hash-token-v1/dim=64 = 12716`。
-- 每个 provider 均覆盖 12716 个 distinct chunk；`orphan_embeddings=0`；`duplicate_provider_model_groups=0`。
-- 全量测试通过：`549 passed, 1 warning`。
+**完成记录**
+- 已新增 `scripts/score_stage30_quality.py`。
+- 已读取阶段 29 results/summary、阶段 30 weights YAML 和 engineering health JSON。
+- 已生成：
+  - `data/evaluation/stage30_quality_scores.csv`
+  - `data/evaluation/stage30_quality_summary.csv`
+  - `data/evaluation/stage30_quality_deductions.csv`
+- 初版结果：`overall_score=83.17`、`grade=B`、`release_decision=review_required`。
+- 扣分项覆盖 `stage29_wiki_dam_applications` Top-5 未命中与两个低 `rule_based coverage_ratio` 样例；未使用或伪造 `faithfulness`、`answer_relevancy`、`groundedness`。
 
-### Phase 5：评测数据集更新
+### Phase 5：可选 LLM-as-Judge 设计与手动模式
 
 **状态：已完成**
 
-**解决的问题**：现有评测集（stage19/20）针对旧语料设计，缺少对阶段 28 新增语料（网页、Wikipedia、标准 PDF）的覆盖。
-
-**RAG 链路位置**：评测层。
-
-**为什么现在做**：重建完成后，需要评测集能验证新旧语料的检索效果。
+**解决的问题**：为真正的 faithfulness / answer relevancy 留出诚实入口，但不让它进入 CI。
 
 **任务**
-- 复用 `data/evaluation/stage19_chinese_hard_queries.csv`（19 题）。
-- 复用 `data/evaluation/cn_fulltext_queries.csv`（阶段 18 验证集）。
-- 新增 `data/evaluation/stage29_new_corpus_queries.csv`，覆盖：
-  - Wikipedia 百科知识题（3-5 题）：检验百科语料是否在检索中被召回。
-  - 标准/规范相关题（3-5 题）：检验 FEMA/USBR 标准语料是否在检索中被召回。
-  - 高质量网页语料题（3-5 题）：检验清理后保留的网页文档是否有效。
-  - 拒答边界题（2-3 题）：确认 responsibility_gate 不退化。
-- 合并为统一评测集或在评测脚本中同时加载多个 CSV。
+- 新增可选脚本或文档化 CLI：`scripts/judge_stage30_semantic_quality.py`。
+- 默认 `--dry-run` 或 `--disabled`，没有显式 `--execute` 不调用真实模型。
+- 输出单独文件，如 `data/evaluation/stage30_llm_judge_results.csv`。
+- 字段必须包含：`judge_provider`、`judge_model`、`manual_run`、`faithfulness_score`、`answer_relevancy_score`、`groundedness_score`、`judge_reason`。
+- 任何真实模型错误必须脱敏。
 
 **完成标准**
-- 新增评测查询覆盖三类新语料 + 拒答边界。
-- 评测集格式与现有评测脚本兼容。
+- 默认测试不调用真实 API；文档明确该模式不参与 CI 门禁。
 
-**实际完成记录**
-- 已新增 `data/evaluation/stage29_new_corpus_queries.csv`，共 18 题。
-- 覆盖范围：Wikipedia 5 题、标准/指南 5 题、web_page 5 题、拒答边界 3 题。
-- 已新增 `tests/test_stage29_new_corpus_queries.py`，校验题量、类别覆盖、拒答题数量、字段完整性和 source_type 合法性。
-- 聚焦测试通过：`2 passed`。
+**完成记录**
+- 已新增 `scripts/judge_stage30_semantic_quality.py`。
+- 默认 dry-run 不调用真实模型，已生成 `data/evaluation/stage30_llm_judge_results.csv` 示例输出。
+- 输出字段包含 `judge_provider`、`judge_model`、`manual_run`、`faithfulness_score`、`answer_relevancy_score`、`groundedness_score`、`judge_reason`。
+- 当前手动模式支持 OpenAI-compatible/DeepSeek provider；只有显式 `--execute` 且本地存在 `STAGE30_JUDGE_API_KEY` 时才会调用真实 provider，输出继续脱敏。
 
-### Phase 6：端到端质量评测
+### Phase 6：质量报告与 `/quality-report` 升级
 
 **状态：已完成**
 
-**解决的问题**：用真实 Jina embedding 运行端到端检索+问答评测，量化系统的真实检索效果。
-
-**RAG 链路位置**：全链路评测（query embedding → vector search → hybrid search → rerank → agent answer）。
-
-**为什么现在做**：重建和评测集就绪后，产出真实质量数据。
+**解决的问题**：把阶段 29 的指标报告升级为评分与决策报告。
 
 **任务**
-- 新增 `scripts/evaluate_stage29_real_quality.py`：
-  - 使用真实 Jina embedding（query 也用 Jina 编码）。
-  - 对每道评测题：记录 top-k 检索结果、precision@1/3/5、source_type 分布、coverage_ratio。
-  - 对拒答题：记录 refusal 是否正确触发。
-  - 输出 `data/evaluation/stage29_real_quality_results.csv` 和 `stage29_real_quality_summary.csv`。
-- 与阶段 19/20 的 deterministic 基线对比，量化真实 Jina 的增益。
-- 运行基准脚本 `scripts/benchmark_retrieval.py` 记录性能数据。
-
-**验证方式**
-- 评测脚本运行无错误。
-- 产出 results CSV 和 summary CSV。
-- precision@1 和 coverage_ratio 有具体数值（不要求特定门槛，诚实记录）。
+- 新增 `docs/stage30_quality_score_report.md`。
+- 更新或新增 report builder，把总分、等级、子分、扣分项、推荐动作、历史趋势写入 HTML/CSV/JSON。
+- 更新 `/quality-report`、`/quality-report/data.json`、`/quality-report/export.csv`。
+- 保留只读、安全、可导出能力。
 
 **完成标准**
-- 评测结果 CSV 已生成。
-- 质量数据诚实记录，不伪造。
+- 页面清楚展示总分、等级、release decision、dimension scores 和人工复核队列。
 
-**实际完成记录**
-- 已新增 `scripts/evaluate_stage29_real_quality.py`，使用真实 Jina embedding provider 运行 hybrid 检索，并用 deterministic chat provider 检查拒答边界。
-- 脚本进程内强制 reranking 使用 deterministic provider，避免阶段 29 评测误触发真实 reranking API。
-- 已新增 `tests/test_evaluate_stage29_real_quality.py`，覆盖查询读取、hit/coverage 计算、source_type_distribution 和 summary。
-- 聚焦测试通过：`3 passed`。
-- 已运行 `scripts/evaluate_stage29_real_quality.py --provider jina --top-k 5`。
-- 已生成 `data/evaluation/stage29_real_quality_results.csv` 和 `data/evaluation/stage29_real_quality_summary.csv`。
-- 真实评测 summary：`total_queries=18`、`non_refusal_total=15`、`precision_at_1=0.600`、`precision_at_3=0.867`、`precision_at_5=0.933`、`avg_coverage_ratio=0.664`、`refusal_total=3`、`refusal_accuracy=1.000`。
-- 诚实记录的主要问题：`stage29_wiki_dam_applications` 未命中 expected source_type；`stage29_web_rfc_advantages` 命中正确网页但 coverage_ratio 仅 0.250；拒答边界 3/3 正确。
+**完成记录**
+- 已新增 `scripts/build_stage30_quality_report.py`。
+- 已新增 `docs/stage30_quality_score_report.md`。
+- 已更新 `app/frontend/quality_report.html` 为阶段 30 评分报告。
+- 已将 `/quality-report/data.json` 和 `/quality-report/export.csv` 的只读数据源切换为 `data/evaluation/stage30_quality_summary.csv`。
+- 页面展示 `overall_score=83.17`、`grade=B`、`release_decision=review_required`、维度分、扣分项、推荐动作和人工复核队列。
 
-### Phase 7：质量报告与 /quality-report 更新
+### Phase 7：测试与回归
 
 **状态：已完成**
 
-**解决的问题**：把评测结果整理成可展示的质量报告，更新 API 端点。
-
-**RAG 链路位置**：可观测层。
-
-**为什么现在做**：评测数据就绪后，产出面试可展示的报告。
+**解决的问题**：确保评分体系不破坏现有 API 和 deterministic 测试。
 
 **任务**
-- 新增 `docs/stage29_quality_report.md`，包含：
-  - 语料概况（635 文档、12,716 chunks、各 source_type 分布）。
-  - 真实 Jina embedding 检索质量（precision@k、coverage_ratio、refusal accuracy）。
-  - 与 deterministic 基线的对比。
-  - 性能基准（检索耗时）。
-  - 结论和下一步建议。
-- 更新 `GET /quality-report` 静态报告内容。
-
-**完成标准**
-- 质量报告文档已生成。
-- /quality-report 端点返回最新数据。
-
-**实际完成记录**
-- 已新增 `scripts/build_stage29_quality_report.py`，从阶段 29 results/summary 生成质量汇总 CSV、Markdown 和 HTML。
-- 已生成 `docs/stage29_quality_report.md`。
-- 已生成 `data/evaluation/stage29_quality_summary.csv`。
-- 已更新 `app/frontend/quality_report.html` 为阶段 29 只读质量报告。
-- 已更新 `app/api/frontend.py`，使 `/quality-report/data.json` 和 `/quality-report/export.csv` 读取/导出 `stage29_quality_summary.csv`。
-- 已新增 `tests/test_build_stage29_quality_report.py`，并更新 `tests/test_frontend_app.py` 的阶段 29 断言。
-- 聚焦测试通过：`tests/test_build_stage29_quality_report.py tests/test_frontend_app.py` 共 `7 passed`。
-- 报告质量门槛：`review_required/medium`；人工复核重点为 `stage29_wiki_dam_applications` 和 `stage29_web_rfc_advantages`。
-
-### Phase 8：回归验证 + 文档与 Obsidian 收尾
-
-**状态：已完成**
-
-**解决的问题**：确保阶段 29 改动不破坏现有功能，同步入口文档。
-
-**RAG 链路位置**：全链路回归。
-
-**为什么现在做**：阶段收尾必做。
-
-**任务**
-- 全量测试 `python -m pytest -q`。
-- 同步 `README.md`、`docs/progress.md`、`docs/architecture.md`、`AGENT.MD`。
-- 补 `docs/phase_reviews/phase-29.md` 验收草稿。
-- 补 Obsidian 阶段 29 汇报。
-- 给出面试表达。
+- 为权重读取、health artifact、评分计算、deductions、report builder、frontend API 补测试。
+- 运行聚焦测试。
+- 运行全量测试。
+- 浏览器检查 `/quality-report` 渲染、导出和 console errors。
 
 **完成标准**
 - 全量测试通过。
-- 入口文档已同步。
-- phase review 已生成。
-- 阶段停在人工核验前：未提交、未打 tag、未推送。
+- `/quality-report` 冒烟通过。
 
-**实际完成记录**
-- 已同步 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD`。
-- 已新增 `docs/phase_reviews/phase-29.md` 验收草稿。
-- 已补 Obsidian 阶段页、阶段 29 汇报索引和阶段 29 汇总草稿。
-- 最终全量测试通过：`556 passed, 1 warning`。
-- `/quality-report`、`/quality-report/data.json`、`/quality-report/export.csv` 冒烟检查通过。
-- 浏览器验证发现并修复 `quality_report.html` 中 JSON payload 被 HTML entity 转义导致表格不渲染的问题；已补 `tests/test_build_stage29_quality_report.py` 防回归。
-- 数据库最终核验：`chunks=12716`、`chunk_embeddings=25432`、Jina 12716、deterministic 12716、孤立 0、重复 0。
-- 阶段曾按要求停在人工核验前；用户现已明确授权提交阶段 29 整体开发工作并上传 merge 至 GitHub。
+**完成记录**
+- 已新增阶段 30 聚焦测试：
+  - `tests/test_stage30_scoring.py`
+  - `tests/test_stage30_engineering_health.py`
+  - `tests/test_stage30_semantic_judge.py`
+  - `tests/test_build_stage30_quality_report.py`
+- 已更新 `tests/test_frontend_app.py` 的阶段 30 `/quality-report` 断言。
+- 聚焦测试：`21 passed`。
+- 全量测试：`571 passed, 1 warning`。
+- 接口冒烟：`/health`、`/quality-report`、`/quality-report/data.json`、`/quality-report/export.csv` 均返回 200。
+- 浏览器冒烟：`overall=83.17`、`grade=B`、`release_decision=review_required`、summary rows 6、deduction rows 3、recommended actions 2、console errors 0。
+- 已刷新 `stage30_engineering_health.json`、追加 `stage30-final-validation` 评分记录并重建阶段 30 质量报告。
+
+### Phase 8：普通文档与 Obsidian 收尾
+
+**状态：已完成**
+
+**解决的问题**：把阶段 30 的设计、结果、边界、面试表达沉淀到项目入口文档和本地知识库。
+
+**任务**
+- 更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD`。
+- 新增 `docs/phase_reviews/phase-30.md`。
+- 补 Obsidian 阶段 30 阶段页、阶段汇报索引和总汇报；开发过程中不写小 Phase 汇报，收尾统一补齐。
+- 更新根目录 `task_plan.md`、`findings.md`、`progress.md`。
+
+**完成标准**
+- 阶段 30 开发、测试、普通文档和 Obsidian 草稿完成。
+- 停在用户人工核验前：不提交、不打 tag、不 push。
+
+**完成记录**
+- 已更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`AGENT.MD`。
+- 已新增 `docs/phase_reviews/phase-30.md`。
+- 已补 Obsidian 阶段页、阶段汇报汇总、知识点和索引链接。
+- 已更新根目录 `task_plan.md`、`findings.md`、`progress.md`。
+- 当前停在人工核验前：未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR。
+
+## 阶段 30 完成标准
+
+- `docs/stage30_rag_evaluation_scoring_system.md` 已生成。
+- `data/evaluation/stage30_scoring_weights.yaml` 已生成，权重合计 100，且有 rationale。
+- `data/evaluation/stage30_engineering_health.json` 已生成，评分脚本不内部跑 pytest。
+- `scripts/score_stage30_quality.py` 能生成总分、等级、决策、子分、扣分项和 recommended_actions。
+- `stage30_quality_scores.csv` 支持历史趋势追加。
+- 语义级指标只在可选 LLM-as-Judge 模式出现；默认报告不得把规则覆盖率叫做 faithfulness/answer relevancy。
+- `/quality-report` 展示阶段 30 评分报告。
+- 全量测试通过。
+- 不泄露 API key、Bearer token、供应商原始响应或受限全文。
+- 最终停在人工核验前，不提交、不创建 `phase-30-complete` tag、不推送。
+
+## 追加完成记录：DeepSeek 手动 judge 适配器
+
+- `scripts/judge_stage30_semantic_quality.py` 已支持 OpenAI-compatible 手动执行路径，默认 provider/model/base URL 为 `deepseek`、`deepseek-chat`、`https://api.deepseek.com`。
+- 默认 dry-run 不联网、不造语义分数；`--execute` 缺少 `STAGE30_JUDGE_API_KEY` 时只输出脱敏错误。
+- 新增测试覆盖 dry-run、缺 key 不调用客户端、假客户端执行、judge JSON 解析与敏感字段脱敏。
+- 已重新生成 `data/evaluation/stage30_llm_judge_results.csv`，当前默认输出仍为 `real_model_calls=0`。
+- 手动 judge 结果不进入 CI，不改变阶段 30 默认评分和发布建议。
+
+## 追加完成记录：人工复核工作台
+
+- 新增 `/quality-review` 人工复核小 UI 和 `/quality-review/data.json` 聚合接口。
+- UI 按风险排序展示 query、来源命中、规则覆盖、covered/missing points、DeepSeek judge 分数、judge reason、stage30 deductions 和建议人工结论标签。
+- 新增前端测试覆盖页面与 JSON 聚合接口。
+- 页面不写数据库、不触发真实 API；人工复核点击会落盘到 `data/evaluation/stage30_human_review.csv`，同一 query 可更新。

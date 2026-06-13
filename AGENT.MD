@@ -13,23 +13,26 @@
 
 本文件的作用不是一次性定死所有细节，而是给“从零搭建堆石混凝土问答 Agent”提供稳定方向。
 
-## 最新交接状态：阶段 29 已获用户授权提交合并
+## 最新交接状态：阶段 30 开发与验证完成，等待用户人工核验
 
-当前分支：`codex/phase-29-real-embedding-quality-eval`。
+当前分支：`codex/phase-30-rag-evaluation-scoring-system`。
 
-阶段 29 已从阶段 28 完成并合并后的 `main` 出发。已核对 `phase-28-complete -> b345cd8 Complete phase 28 web crawl auto ingest`，且该 tag 是 `main -> 07dadf0 Merge phase 28 web crawl auto ingest` 的祖先；未移动任何已有阶段 tag。
+阶段 30 已从阶段 29 完成并合并后的 `main` 出发。已核对 `phase-29-complete -> b62b1a5 Complete phase 29 real embedding quality eval`，且该 tag 是 `main -> cd32df6 Merge phase 29 real embedding quality eval` 的祖先；未移动任何已有阶段 tag。
 
-阶段 29 已完成：
+阶段 30 已完成：
 
-- `scripts/cleanup_stale_embeddings.py`：支持 `--dry-run` 与 `--execute`，已将历史 `chunk_embeddings 21634 -> 0`。
-- 真实 Jina v3 embedding 重建：`scripts/build_vector_index.py --provider jina --batch-size 64 --sleep-seconds 1 --max-retries 3`，为全部 `12716` 条 chunk 写入 `jina/jina-embeddings-v3/dim=1024`。
-- deterministic embedding 补建：`scripts/build_vector_index.py --provider deterministic --batch-size 64`，为全部 `12716` 条 chunk 写入 `deterministic/hash-token-v1/dim=64`。
-- 最终索引状态：`chunk_embeddings 25432`，无孤立 embedding，无重复 provider/model/chunk 组合。
-- 新增 `data/evaluation/stage29_new_corpus_queries.csv`、`scripts/evaluate_stage29_real_quality.py`、`scripts/build_stage29_quality_report.py`、`docs/stage29_quality_report.md`，并更新 `/quality-report`。
-- 真实评测结果：`precision_at_1=0.600`、`precision_at_3=0.867`、`precision_at_5=0.933`、`avg_coverage_ratio=0.664`、`refusal_accuracy=1.000`；整体质量门禁为 `review_required/medium`，已按用户要求保留人工复核队列。
-- 最终验证：`556 passed, 1 warning`；`/quality-report`、`/quality-report/data.json`、`/quality-report/export.csv` 冒烟通过；浏览器确认 summary 7 行、风险队列 3 行、console errors 0。
+- 新增 `docs/stage30_rag_evaluation_scoring_system.md`，参考 LlamaIndex、Ragas、DeepEval、TruLens、Phoenix，明确采纳点、不采纳点、默认规则评分和可选 LLM-as-Judge 边界。
+- 新增 `data/evaluation/stage30_scoring_weights.yaml`，配置 retrieval_quality 35、rule_based_context_answer_quality 25、safety_refusal 20、source_quality 10、engineering_health 10，并写入 rationale。
+- 新增 `scripts/collect_stage30_engineering_health.py` 与 `data/evaluation/stage30_engineering_health.json`；采集器只读，不跑 pytest、不重建 embedding、不写数据库、不调用真实 API。
+- 新增 `scripts/score_stage30_quality.py`，读取阶段 29 CSV、阶段 30 YAML 和 health JSON，输出 `stage30_quality_scores.csv`、`stage30_quality_summary.csv`、`stage30_quality_deductions.csv`。
+- 新增 `scripts/judge_stage30_semantic_quality.py`，作为可选 LLM-as-Judge 手动模式；默认 dry-run 不调用真实模型，显式 `--execute` 且本地存在 `STAGE30_JUDGE_API_KEY` 时才可调用 DeepSeek/OpenAI-compatible provider，语义结果不进入 CI。
+- 新增 `scripts/build_stage30_quality_report.py`、`docs/stage30_quality_score_report.md`，并将 `/quality-report` 升级为阶段 30 评分报告。
+- 当前评分结果：`overall_score=83.17`、`grade=B`、`release_decision=review_required`。主要扣分项来自 `stage29_wiki_dam_applications` 的 Top-5 未命中，以及 `stage29_wiki_dam_applications`、`stage29_web_rfc_advantages` 的低规则覆盖率。
+- 最终验证：聚焦测试 `21 passed`；全量测试 `571 passed, 1 warning`；`/health`、`/quality-report`、`/quality-report/data.json`、`/quality-report/export.csv`、`/quality-review`、`/quality-review/data.json` 均返回 200；浏览器确认 review cases 15、needs_review 4、critical 3、点击保存人工结论成功、console errors 0。
 
-用户已明确要求“提交阶段29的整体开发工作，并上传merge至github”。当前进入提交、创建 `phase-29-complete` tag、合并到 `main` 并推送 GitHub 流程。tag 必须指向阶段 29 最终功能提交，不得移动任何已有阶段 tag；`obsidian-vault/`、`.env`、SQLite 数据库、`data/raw/`、API key、Bearer token、供应商原始敏感响应和受限/原始全文不得提交。
+阶段 30 的核心边界：默认评分只使用 deterministic/rule-based 指标，不把字符串 `coverage_ratio` 冒充为 `faithfulness`、`answer_relevancy` 或 `groundedness`。这些语义级指标只能来自可选手动 LLM-as-Judge；默认 dry-run 不调用真实 provider，真实 judge 只能由人工显式 `--execute` 触发且必须使用本地环境变量提供 key。API key、Bearer token、Authorization header、供应商原始响应、raw_response 和受限全文不得写入 Git、CSV、文档、测试或 Obsidian。
+
+阶段 30 当前必须停在用户人工核验前：**不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR**。只有用户人工核验并明确授权后，才允许提交阶段 30；也不要创建 `phase-30-complete` tag。
 
 ## 协作与教学原则
 

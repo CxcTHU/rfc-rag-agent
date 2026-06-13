@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>阶段 30 人工复核工作台</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fb;
+        --panel: #ffffff;
+        --ink: #172033;
+        --muted: #647086;
+        --line: #d9dfeb;
+        --accent: #0f766e;
+        --warn: #b45309;
+        --danger: #b91c1c;
+        --ok: #166534;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, "Segoe UI", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        border-bottom: 1px solid var(--line);
+        background: rgba(247, 248, 251, 0.96);
+        backdrop-filter: blur(12px);
+      }
+
+      .topbar, main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 18px 22px;
+      }
+
+      main { padding-bottom: 48px; }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(120px, 1fr));
+        gap: 10px;
+      }
+
+      .metric, .case-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .metric { padding: 10px 12px; }
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .metric strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 20px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin: 2px 0 16px;
+      }
+
+      input, select, button, textarea {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+      }
+
+      input, select, button { min-height: 36px; }
+      input {
+        flex: 1 1 280px;
+        padding: 0 12px;
+      }
+      select, button { padding: 0 10px; }
+      button { cursor: pointer; }
+
+      textarea {
+        width: 100%;
+        min-height: 64px;
+        margin: 8px 0;
+        padding: 8px 10px;
+        resize: vertical;
+      }
+
+      .case-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .case-card { overflow: hidden; }
+
+      .case-head {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        background: #fbfcff;
+      }
+
+      .case-title { min-width: 0; }
+      .case-title h2 {
+        margin: 0 0 6px;
+        font-size: 17px;
+        letter-spacing: 0;
+      }
+      .case-title p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .badge-row, .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #eef2f7;
+        color: #334155;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .badge.critical { background: #fee2e2; color: var(--danger); }
+      .badge.needs_review { background: #fef3c7; color: var(--warn); }
+      .badge.judge_error { background: #fee2e2; color: var(--danger); }
+      .badge.ok { background: #dcfce7; color: var(--ok); }
+
+      .case-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+        gap: 16px;
+        padding: 16px;
+      }
+
+      .section { min-width: 0; }
+      .section h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: var(--muted);
+        letter-spacing: 0;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 6px 10px;
+        margin-bottom: 12px;
+        font-size: 14px;
+      }
+      .kv dt { color: var(--muted); }
+      .kv dd {
+        margin: 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .score-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .score {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px;
+        background: #fff;
+      }
+      .score span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .score strong { font-size: 18px; }
+
+      ul { margin: 0 0 12px; padding-left: 20px; }
+      li { margin: 4px 0; }
+
+      .reason, .deduction, .saved-review {
+        border-left: 3px solid var(--line);
+        padding: 8px 10px;
+        background: #fbfcff;
+        line-height: 1.55;
+      }
+      .deduction {
+        margin-bottom: 8px;
+        border-left-color: var(--warn);
+      }
+      .saved-review {
+        margin-bottom: 8px;
+        border-left-color: var(--accent);
+      }
+
+      .actions button { border-color: #b8c2d6; }
+      .actions button.is-selected {
+        border-color: var(--accent);
+        background: #ccfbf1;
+        color: #115e59;
+      }
+
+      .save-status {
+        min-height: 20px;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .save-status.error { color: var(--danger); }
+      .empty {
+        padding: 28px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      @media (max-width: 860px) {
+        .summary, .case-body, .score-grid { grid-template-columns: 1fr; }
+        .case-head { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="topbar">
+        <h1>阶段 30 人工复核工作台</h1>
+        <div class="summary" aria-label="复核汇总">
+          <div class="metric"><span>全部案例</span><strong id="case-count">-</strong></div>
+          <div class="metric"><span>需复核</span><strong id="needs-review">-</strong></div>
+          <div class="metric"><span>严重低分</span><strong id="critical-count">-</strong></div>
+          <div class="metric"><span>已人工复核</span><strong id="reviewed-count">-</strong></div>
+          <div class="metric"><span>保存位置</span><strong>本地 CSV</strong></div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="搜索案例 ID、问题、标题或缺失要点" />
+        <select id="status-filter" aria-label="状态筛选">
+          <option value="all">全部状态</option>
+          <option value="critical">严重低分</option>
+          <option value="needs_review">需复核</option>
+          <option value="ok">看起来可接受</option>
+        </select>
+        <select id="sort-mode" aria-label="排序">
+          <option value="risk">按风险排序</option>
+          <option value="semantic">按语义均分从低到高</option>
+          <option value="query">按案例 ID</option>
+        </select>
+        <button id="expand-all" type="button">展开全部</button>
+        <button id="collapse-all" type="button">折叠全部</button>
+      </div>
+      <section id="case-list" class="case-list" aria-live="polite"></section>
+    </main>
+
+    <script>
+      const state = { cases: [], expanded: new Set() };
+      const els = {
+        caseCount: document.querySelector("#case-count"),
+        needsReview: document.querySelector("#needs-review"),
+        criticalCount: document.querySelector("#critical-count"),
+        reviewedCount: document.querySelector("#reviewed-count"),
+        search: document.querySelector("#search"),
+        statusFilter: document.querySelector("#status-filter"),
+        sortMode: document.querySelector("#sort-mode"),
+        caseList: document.querySelector("#case-list"),
+        expandAll: document.querySelector("#expand-all"),
+        collapseAll: document.querySelector("#collapse-all"),
+      };
+
+      const statusLabel = {
+        critical: "严重低分",
+        needs_review: "需复核",
+        judge_error: "评审出错",
+        ok: "看起来可接受",
+      };
+
+      const decisionLabel = {
+        accept_judge_low_score: "接受低分判断",
+        override_judge_too_strict: "评审过严，人工改判",
+        needs_dataset_calibration: "题集或期望要点需校准",
+        needs_retrieval_tuning: "检索或来源标签需调优",
+      };
+
+      async function loadReviewData() {
+        const response = await fetch("/quality-review/data.json", { cache: "no-store" });
+        if (!response.ok) throw new Error(`加载失败：${response.status}`);
+        const payload = await response.json();
+        state.cases = payload.cases || [];
+        state.expanded = new Set(state.cases.slice(0, 5).map((item) => item.query_id));
+        updateSummary(payload.summary || {});
+        render();
+      }
+
+      function updateSummary(summary) {
+        els.caseCount.textContent = summary.case_count || String(state.cases.length);
+        els.needsReview.textContent = summary.needs_review_count || "0";
+        els.criticalCount.textContent = summary.blocking_count || "0";
+        els.reviewedCount.textContent = String(
+          state.cases.filter((item) => item.human_review?.review_decision).length,
+        );
+      }
+
+      function render() {
+        const query = els.search.value.trim().toLowerCase();
+        const status = els.statusFilter.value;
+        const sortMode = els.sortMode.value;
+        let cases = [...state.cases];
+        if (status !== "all") {
+          cases = cases.filter((item) => item.review_status === status);
+        }
+        if (query) {
+          cases = cases.filter((item) =>
+            [
+              item.query_id,
+              item.question,
+              item.top1_document_title,
+              ...(item.top_titles || []),
+              ...(item.missing_points || []),
+            ].join(" ").toLowerCase().includes(query),
+          );
+        }
+        cases.sort((a, b) => compareCases(a, b, sortMode));
+        if (!cases.length) {
+          els.caseList.innerHTML = '<div class="case-card empty">没有匹配的复核案例</div>';
+          return;
+        }
+        els.caseList.innerHTML = cases.map(renderCase).join("");
+      }
+
+      function compareCases(a, b, sortMode) {
+        if (sortMode === "query") return a.query_id.localeCompare(b.query_id);
+        if (sortMode === "semantic") {
+          return scoreValue(a.judge?.semantic_average) - scoreValue(b.judge?.semantic_average);
+        }
+        const rank = { critical: 0, needs_review: 1, judge_error: 2, ok: 3 };
+        return (
+          (rank[a.review_status] ?? 9) - (rank[b.review_status] ?? 9) ||
+          scoreValue(a.judge?.semantic_average) - scoreValue(b.judge?.semantic_average) ||
+          a.query_id.localeCompare(b.query_id)
+        );
+      }
+
+      function renderCase(item) {
+        const expanded = state.expanded.has(item.query_id);
+        const deductions = item.deductions || [];
+        return `
+          <article class="case-card" data-query-id="${escapeHtml(item.query_id)}">
+            <div class="case-head">
+              <div class="case-title">
+                <div class="badge-row">
+                  <span class="badge ${escapeHtml(item.review_status)}">${escapeHtml(statusLabel[item.review_status] || item.review_status)}</span>
+                  <span class="badge">案例 ${escapeHtml(item.query_id)}</span>
+                  <span class="badge">规则覆盖 ${escapeHtml(item.rule_based_coverage_ratio || "-")}</span>
+                  <span class="badge">语义均分 ${escapeHtml(item.judge?.semantic_average || "-")}</span>
+                  ${item.human_review?.review_decision ? '<span class="badge ok">已人工复核</span>' : ""}
+                </div>
+                <h2>${escapeHtml(item.question || "空问题")}</h2>
+                <p>${escapeHtml(item.top1_document_title || "无 Top-1 标题")}</p>
+              </div>
+              <div class="actions">
+                <button type="button" data-toggle="${escapeHtml(item.query_id)}">${expanded ? "折叠" : "展开"}</button>
+              </div>
+            </div>
+            ${expanded ? renderCaseBody(item, deductions) : ""}
+          </article>
+        `;
+      }
+
+      function renderCaseBody(item, deductions) {
+        return `
+          <div class="case-body">
+            <div class="section">
+              <h3>检索与规则证据</h3>
+              <dl class="kv">
+                <dt>期望来源类型</dt><dd>${escapeHtml(item.expected_source_type || "-")}</dd>
+                <dt>Top-1 来源类型</dt><dd>${escapeHtml(item.top1_source_type || "-")}</dd>
+                <dt>命中情况</dt><dd>@1 ${escapeHtml(item.precision_at_1 || "-")} · @3 ${escapeHtml(item.precision_at_3 || "-")} · @5 ${escapeHtml(item.precision_at_5 || "-")}</dd>
+                <dt>来源分布</dt><dd>${escapeHtml(item.source_type_distribution || "-")}</dd>
+              </dl>
+              <h3>召回标题</h3>
+              ${renderList(item.top_titles)}
+              <h3>已覆盖要点</h3>
+              ${renderList(item.covered_points)}
+              <h3>缺失要点</h3>
+              ${renderList(item.missing_points)}
+            </div>
+            <div class="section">
+              <h3>DeepSeek 语义评审</h3>
+              <div class="score-grid">
+                ${renderScore("忠实度", item.judge?.faithfulness_score)}
+                ${renderScore("回答相关性", item.judge?.answer_relevancy_score)}
+                ${renderScore("证据扎根性", item.judge?.groundedness_score)}
+                ${renderScore("语义均分", item.judge?.semantic_average)}
+              </div>
+              <div class="reason">${escapeHtml(item.judge?.reason || "无评审理由")}</div>
+              <h3>阶段 30 扣分项</h3>
+              ${renderDeductions(deductions)}
+              <h3>人工复核结论</h3>
+              ${renderSavedReview(item)}
+              <textarea data-review-note="${escapeHtml(item.query_id)}" placeholder="可选备注：写下为什么接受或改判，不要填写 API key、Bearer token 或供应商原始响应。">${escapeHtml(item.human_review?.reviewer_note || "")}</textarea>
+              <div class="actions">
+                ${renderDecisionButton(item, "accept_judge_low_score")}
+                ${renderDecisionButton(item, "override_judge_too_strict")}
+                ${renderDecisionButton(item, "needs_dataset_calibration")}
+                ${renderDecisionButton(item, "needs_retrieval_tuning")}
+              </div>
+              <div class="save-status" data-save-status="${escapeHtml(item.query_id)}"></div>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderScore(label, value) {
+        return `<div class="score"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || "-")}</strong></div>`;
+      }
+
+      function renderSavedReview(item) {
+        const decision = item.human_review?.review_decision;
+        if (!decision) return '<div class="saved-review">尚未保存人工结论。</div>';
+        return `
+          <div class="saved-review">
+            <strong>已复核：${escapeHtml(decisionLabel[decision] || decision)}</strong><br />
+            <span>时间：${escapeHtml(item.human_review?.reviewed_at || "-")}</span>
+          </div>
+        `;
+      }
+
+      function renderDecisionButton(item, decision) {
+        const selected = item.human_review?.review_decision === decision;
+        return `
+          <button type="button" class="${selected ? "is-selected" : ""}"
+            data-review-query="${escapeHtml(item.query_id)}"
+            data-review-decision="${escapeHtml(decision)}">${escapeHtml(decisionLabel[decision] || decision)}</button>
+        `;
+      }
+
+      function renderDeductions(deductions) {
+        if (!deductions.length) return '<div class="reason">没有阶段 30 扣分项。</div>';
+        return deductions.map((deduction) => `
+          <div class="deduction">
+            <strong>${escapeHtml(deduction.dimension || "-")} · ${escapeHtml(deduction.severity || "-")}</strong><br />
+            ${escapeHtml(deduction.deduction_reason || "")}<br />
+            <span>${escapeHtml(deduction.recommended_action || "")}</span>
+          </div>
+        `).join("");
+      }
+
+      function renderList(items) {
+        if (!items || !items.length) return '<div class="reason">无</div>';
+        return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+      }
+
+      function scoreValue(value) {
+        const parsed = Number.parseFloat(value || "1");
+        return Number.isFinite(parsed) ? parsed : 1;
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function cssEscape(value) {
+        if (window.CSS && typeof window.CSS.escape === "function") return window.CSS.escape(value);
+        return String(value).replaceAll('"', '\\"');
+      }
+
+      async function saveReview(queryId, decision) {
+        const statusEl = document.querySelector(`[data-save-status="${cssEscape(queryId)}"]`);
+        const noteEl = document.querySelector(`[data-review-note="${cssEscape(queryId)}"]`);
+        if (statusEl) {
+          statusEl.textContent = "正在保存...";
+          statusEl.classList.remove("error");
+        }
+        try {
+          const response = await fetch("/quality-review/reviews", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query_id: queryId,
+              review_decision: decision,
+              reviewer_note: noteEl?.value || "",
+            }),
+          });
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.detail || `保存失败：${response.status}`);
+          }
+          const payload = await response.json();
+          const item = state.cases.find((entry) => entry.query_id === queryId);
+          if (item) item.human_review = payload.review;
+          updateSummary({});
+          render();
+        } catch (error) {
+          if (statusEl) {
+            statusEl.textContent = error.message || "保存失败";
+            statusEl.classList.add("error");
+          }
+        }
+      }
+
+      els.search.addEventListener("input", render);
+      els.statusFilter.addEventListener("change", render);
+      els.sortMode.addEventListener("change", render);
+      els.expandAll.addEventListener("click", () => {
+        state.expanded = new Set(state.cases.map((item) => item.query_id));
+        render();
+      });
+      els.collapseAll.addEventListener("click", () => {
+        state.expanded.clear();
+        render();
+      });
+      els.caseList.addEventListener("click", (event) => {
+        const reviewButton = event.target.closest("[data-review-decision]");
+        if (reviewButton) {
+          saveReview(
+            reviewButton.getAttribute("data-review-query"),
+            reviewButton.getAttribute("data-review-decision"),
+          );
+          return;
+        }
+        const button = event.target.closest("[data-toggle]");
+        if (!button) return;
+        const queryId = button.getAttribute("data-toggle");
+        if (state.expanded.has(queryId)) state.expanded.delete(queryId);
+        else state.expanded.add(queryId);
+        render();
+      });
+
+      loadReviewData().catch((error) => {
+        els.caseList.innerHTML = `<div class="case-card empty">${escapeHtml(error.message)}</div>`;
+      });
+    </script>
+  </body>
+</html>

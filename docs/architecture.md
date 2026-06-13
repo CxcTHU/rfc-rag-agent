@@ -1,5 +1,32 @@
 # 架构说明
 
+## 阶段 30 架构增量：RAG 质量评分体系与诚实决策门禁
+
+阶段 30 不改默认 RAG 检索、问答、Agent 或 SSE 运行链路，而是在 evaluation/reporting 层新增一条只读评分链路。它把阶段 29 的真实评测产物、阶段 30 权重配置和工程健康 artifact 合成为可解释总分、等级、发布建议、扣分项和推荐动作。
+
+```text
+stage29_real_quality_results.csv
+stage29_real_quality_summary.csv
+-> stage30_scoring_weights.yaml
+-> stage30_engineering_health.json
+-> score_stage30_quality.py
+-> stage30_quality_scores.csv
+-> stage30_quality_summary.csv
+-> stage30_quality_deductions.csv
+-> build_stage30_quality_report.py
+-> docs/stage30_quality_score_report.md
+-> app/frontend/quality_report.html
+-> GET /quality-report
+```
+
+`scripts/score_stage30_quality.py` 是纯读取评分器：不运行 pytest、不重建 embedding、不写数据库、不调用真实 API。它读取 `data/evaluation/stage30_scoring_weights.yaml`，因此 retrieval_quality、rule_based_context_answer_quality、safety_refusal、source_quality 和 engineering_health 的权重不硬编码在业务逻辑中。
+
+`scripts/collect_stage30_engineering_health.py` 独立生成 `data/evaluation/stage30_engineering_health.json`，记录全量测试状态、chunk/embedding 计数、Jina/deterministic embedding 覆盖、孤立 embedding、重复 provider/model/chunk 组合和 `/quality-report` 冒烟结果。评分器只读取该 JSON，不自己采集重任务。
+
+`scripts/judge_stage30_semantic_quality.py` 是可选 LLM-as-Judge 手动支路，默认 dry-run，不调用真实模型；只有用户显式传入 `--execute`，并在本地环境变量提供 `STAGE30_JUDGE_API_KEY` 时，才会调用 DeepSeek/OpenAI-compatible provider。真正的 `faithfulness`、`answer_relevancy`、`groundedness` 只能从这类手动语义评审支路产生，不能由默认规则评分冒充。
+
+`GET /quality-report` 继续是静态只读报告入口。阶段 30 后 `/quality-report/data.json` 和 `/quality-report/export.csv` 读取 `stage30_quality_summary.csv`；页面内联展示最新评分、维度分、扣分项和推荐动作，不触发真实模型、不写库、不暴露密钥或供应商原始响应。
+
 ## 阶段 29 架构增量：真实 Embedding 重建与端到端质量闭环
 
 阶段 29 不新增外部资料采集入口，而是把阶段 28 已入库的新语料纳入真实语义检索质量闭环。核心变化在 Embedding 构建、评测脚本和质量报告展示三处：

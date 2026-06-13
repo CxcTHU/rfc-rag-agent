@@ -1,5 +1,74 @@
 # 项目进度
 
+## 最新状态：2026-06-13（阶段 30 开发与验证完成，等待用户人工核验）
+
+当前阶段：阶段 30。在 `codex/phase-30-rag-evaluation-scoring-system` 分支已完成 RAG 质量评分体系与诚实决策门禁开发、测试、普通文档和 Obsidian 草稿收尾。阶段 30 从阶段 29 完成并合并后的 `main` 出发，已核对 `phase-29-complete -> b62b1a5 Complete phase 29 real embedding quality eval`，且该 tag 是 `main -> cd32df6 Merge phase 29 real embedding quality eval` 的祖先；未移动任何已有阶段 tag。
+
+阶段 30 完成内容：
+
+- 新增 `docs/stage30_rag_evaluation_scoring_system.md`，说明 LlamaIndex、Ragas、DeepEval、TruLens、Phoenix 的参考点、采纳点和不采纳点。
+- 新增 `data/evaluation/stage30_scoring_weights.yaml`，配置 retrieval 35、rule-based context/answer 25、safety refusal 20、source quality 10、engineering health 10，并写入 rationale。
+- 新增 `scripts/collect_stage30_engineering_health.py` 和 `data/evaluation/stage30_engineering_health.json`，只读记录测试状态、索引完整性、孤立/重复 embedding 和 `/quality-report` 冒烟状态。
+- 新增 `scripts/score_stage30_quality.py`，读取阶段 29 评测 CSV、权重 YAML 和 health JSON，输出 `stage30_quality_scores.csv`、`stage30_quality_summary.csv`、`stage30_quality_deductions.csv`。
+- 新增 `scripts/judge_stage30_semantic_quality.py`，作为可选 LLM-as-Judge 手动模式；默认 dry-run 不调用真实模型，显式 `--execute` 且本地存在 `STAGE30_JUDGE_API_KEY` 时才可调用 DeepSeek/OpenAI-compatible provider，语义结果不进入 CI。
+- 新增 `scripts/build_stage30_quality_report.py` 和 `docs/stage30_quality_score_report.md`，并把 `/quality-report` 升级为阶段 30 评分报告。
+- 新增阶段 30 聚焦测试并更新 `/quality-report` 前端测试。
+
+阶段 30 当前评分：
+
+```text
+overall_score 83.17
+grade B
+release_decision review_required
+retrieval_quality 26.83 / 35
+rule_based_context_answer_quality 16.60 / 25
+safety_refusal 20.00 / 20
+source_quality 9.73 / 10
+engineering_health 10.00 / 10
+```
+
+主要扣分与人工复核队列：
+
+- `stage29_wiki_dam_applications`：Top-5 未命中预期 source type，且 rule-based coverage_ratio 为 0.250。
+- `stage29_web_rfc_advantages`：rule-based coverage_ratio 为 0.250。
+- 当前 `review_required` 是诚实门禁结论，不伪造成 `pass`。
+
+阶段 30 验证：
+
+```text
+聚焦测试：21 passed
+全量测试：571 passed, 1 warning
+
+GET /health 200
+GET /quality-report 200
+GET /quality-report/data.json 200
+GET /quality-report/export.csv 200
+
+Browser smoke:
+/quality-report overall=83.17
+grade=B
+release_decision=review_required
+summary rows=6
+deduction rows=3
+recommended actions=2
+console errors=0
+```
+
+安全与边界：
+
+- 默认评分只使用 deterministic / rule-based 指标，不把字符串覆盖率命名为 `faithfulness`、`answer_relevancy` 或 `groundedness`。
+- 评分脚本不内部跑 pytest、不重建 embedding、不主动调用数据库写入、不调用真实 API。
+- 可选 LLM-as-Judge 不进入 CI；默认 dry-run 不调用真实模型，真实执行必须人工显式 `--execute` 并使用本地环境变量提供 key。
+
+### 追加：阶段 30 人工复核工作台
+
+- 新增 `/quality-review` 只读页面，用于人工复核 DeepSeek judge 与阶段 30 扣分项。
+- 新增 `/quality-review/data.json`，聚合阶段 29 结果、阶段 30 deductions 和 `stage30_llm_judge_results.csv`。
+- 页面展示 15 条非拒答案例、4 条需复核、3 条严重低分，并支持搜索、状态筛选、排序和展开/折叠。
+- 该页面不写数据库、不调用真实模型；点击人工结论按钮会把复核结论保存到 `data/evaluation/stage30_human_review.csv`，便于用户直接完成核验。
+- 未写入 API key、Bearer token、Authorization header、供应商原始敏感响应、raw_response 或受限全文。
+- 阶段 30 当前停在用户人工核验前：尚未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR。
+
 ## 最新状态：2026-06-12（阶段 29 已获用户授权提交合并）
 
 当前阶段：阶段 29。在 `codex/phase-29-real-embedding-quality-eval` 分支已完成真实 Jina v3 embedding 全量清理重建、deterministic embedding 补建、新语料端到端评测、质量报告、`/quality-report` 更新和阶段收尾文档草稿。用户已明确要求“提交阶段29的整体开发工作，并上传merge至github”，当前进入提交、创建 `phase-29-complete` tag、合并到 `main` 并推送 GitHub 流程。

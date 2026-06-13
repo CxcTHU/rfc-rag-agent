@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import app.api.frontend as frontend_api
 from app.main import create_app
 
 
@@ -145,9 +146,12 @@ def test_quality_report_is_served_read_only() -> None:
     response = client.get("/quality-report")
 
     assert response.status_code == 200
-    assert "阶段 29 真实 Embedding 质量报告" in response.text
-    assert "只读质量报告" in response.text
-    # 阶段 29 报告保持只读筛选、风险队列与导出。
+    assert "阶段 30 RAG 质量评分与诚实门禁" in response.text
+    assert "只读质量评分报告" in response.text
+    assert 'id="overall-score"' in response.text
+    assert 'id="grade"' in response.text
+    assert 'id="release-decision"' in response.text
+    # 阶段 30 报告保持只读筛选、风险队列与导出。
     assert 'id="filter-section"' in response.text
     assert 'id="filter-risk"' in response.text
     assert 'id="risk-queue"' in response.text
@@ -164,12 +168,107 @@ def test_quality_report_data_json_is_read_only() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert isinstance(payload, list)
-    # 应包含阶段 29 质量门槛行，且不泄露敏感字段。
+    # 应包含阶段 30 质量评分汇总行，且不泄露敏感字段。
     if payload:
-        assert {"section", "metric", "status", "risk"}.issubset(payload[0].keys())
+        assert {"dimension", "weight", "score", "status"}.issubset(payload[0].keys())
         serialized = response.text.lower()
         assert "api_key" not in serialized
         assert "bearer" not in serialized
+        assert "raw_response" not in serialized
+
+
+def test_quality_review_workbench_is_served_read_only() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/quality-review")
+
+    assert response.status_code == 200
+    assert "阶段 30 人工复核工作台" in response.text
+    assert 'id="case-list"' in response.text
+    assert "/quality-review/data.json" in response.text
+    assert "/quality-review/reviews" in response.text
+    assert "接受低分判断" in response.text
+    assert "检索或来源标签需调优" in response.text
+
+
+def test_quality_review_data_json_merges_stage30_artifacts() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/quality-review/data.json")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "summary" in payload
+    assert "cases" in payload
+    assert int(payload["summary"]["case_count"]) >= 1
+    first_case = payload["cases"][0]
+    assert {"query_id", "question", "judge", "deductions", "review_status"}.issubset(
+        first_case.keys()
+    )
+    assert "semantic_average" in first_case["judge"]
+    assert "rule_based_coverage_ratio" in first_case
+    serialized = response.text.lower()
+    assert "api_key" not in serialized
+    assert "bearer" not in serialized
+    assert "authorization" not in serialized
+    assert "raw_response" not in serialized
+
+
+def test_quality_review_decision_can_be_saved_to_local_csv(tmp_path, monkeypatch) -> None:
+    review_path = tmp_path / "stage30_human_review.csv"
+    monkeypatch.setattr(frontend_api, "STAGE30_HUMAN_REVIEW_PATH", review_path)
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/quality-review/reviews",
+        json={
+            "query_id": "stage29_wiki_dam_applications",
+            "review_decision": "accept_judge_low_score",
+            "reviewer_note": "低分合理，Top-5 来源类型不匹配。",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "saved"
+    assert review_path.exists()
+
+    data_response = client.get("/quality-review/data.json")
+    reviewed = [
+        case
+        for case in data_response.json()["cases"]
+        if case["query_id"] == "stage29_wiki_dam_applications"
+    ][0]
+    assert reviewed["human_review"]["review_decision"] == "accept_judge_low_score"
+    assert "Top-5" in reviewed["human_review"]["reviewer_note"]
+
+    update_response = client.post(
+        "/quality-review/reviews",
+        json={
+            "query_id": "stage29_wiki_dam_applications",
+            "review_decision": "needs_retrieval_tuning",
+            "reviewer_note": "改判为检索调优。",
+        },
+    )
+    assert update_response.status_code == 200
+    rows = review_path.read_text(encoding="utf-8").splitlines()
+    assert len(rows) == 2
+    assert "needs_retrieval_tuning" in rows[1]
+
+
+def test_quality_review_rejects_sensitive_review_note(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(frontend_api, "STAGE30_HUMAN_REVIEW_PATH", tmp_path / "review.csv")
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/quality-review/reviews",
+        json={
+            "query_id": "stage29_wiki_dam_applications",
+            "review_decision": "accept_judge_low_score",
+            "reviewer_note": "raw_response should not be saved",
+        },
+    )
+
+    assert response.status_code == 400
 
 
 def test_quality_report_export_csv_download() -> None:
@@ -179,8 +278,8 @@ def test_quality_report_export_csv_download() -> None:
 
     assert response.status_code == 200
     assert "text/csv" in response.headers["content-type"]
-    assert "stage29_quality_summary.csv" in response.headers.get("content-disposition", "")
-    assert "section" in response.text
+    assert "stage30_quality_summary.csv" in response.headers.get("content-disposition", "")
+    assert "dimension" in response.text
 
 
 def test_favicon_request_does_not_404() -> None:

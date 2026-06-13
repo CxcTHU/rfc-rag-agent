@@ -19,6 +19,36 @@ URL:
 
 ## 当前状态
 
+阶段 30 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是 evaluation/reporting 层的评分配置、评分结果和报告产物：
+
+```text
+documents 635
+chunks 12716
+sources 673
+chunk_embeddings 25432
+jina_embeddings 12716
+deterministic_embeddings 12716
+orphan_embeddings 0
+duplicate_provider_model_groups 0
+```
+
+阶段 30 新增评测与报告文件：
+
+- `data/evaluation/stage30_scoring_weights.yaml`：评分权重与 rationale，权重合计 100。
+- `data/evaluation/stage30_engineering_health.json`：工程健康只读 artifact，记录测试、索引完整性和报告冒烟状态。
+- `data/evaluation/stage30_quality_scores.csv`：可追加历史趋势表，记录 run_id、run_at、overall_score、grade、release_decision、dimension_scores、score_delta、deductions 和 recommended_actions。
+- `data/evaluation/stage30_quality_summary.csv`：`/quality-report/data.json` 和 `/quality-report/export.csv` 使用的阶段 30 维度分汇总。
+- `data/evaluation/stage30_quality_deductions.csv`：扣分项、原因和推荐动作。
+- `data/evaluation/stage30_llm_judge_results.csv`：可选 LLM-as-Judge 输出；默认 dry-run 不含真实语义分数、不调用真实模型，只有人工显式 `--execute` 且本地设置 key 时才会调用 DeepSeek/OpenAI-compatible provider。
+- `docs/stage30_quality_score_report.md`：阶段 30 人工核验用评分报告。
+
+数据安全边界：
+
+- 阶段 30 的评分 CSV 和报告不是文献资料来源，只是阶段 29 评测结果的派生质量产物。
+- 默认评分只使用 deterministic/rule-based 指标，不把 `coverage_ratio` 冒充为 `faithfulness`、`answer_relevancy` 或 `groundedness`。
+- `scripts/score_stage30_quality.py` 不运行 pytest、不重建 embedding、不写数据库、不调用真实 API。
+- 可选 LLM-as-Judge 当前支持 DeepSeek/OpenAI-compatible 手动模式；默认 dry-run 不调用真实模型，真实执行必须显式 `--execute` 并使用本地环境变量注入 key。API key、Bearer token、Authorization header、供应商原始响应、raw_response 和受限全文不得写入 Git、CSV、文档、测试或 Obsidian。
+
 阶段 29 完成真实 Embedding 重建与质量闭环后，外部资料来源数量不变，新增的是由现有 chunks 派生出的索引和评测产物：
 
 ```text
