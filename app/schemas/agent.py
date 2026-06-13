@@ -105,3 +105,4 @@ class AgentQueryResponse(BaseModel):
     iteration_count: int = 0
     invalid_citations: list[int] = Field(default_factory=list)
     refusal_category: str | None = None
+    latency_trace: dict[str, object] = Field(default_factory=dict)

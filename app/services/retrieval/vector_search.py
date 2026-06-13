@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.keyword_search import SearchTerm, capped_count, expand_query_terms, normalize_text
+from app.services.observability.latency_trace import latency_timer
+from app.services.retrieval.query_embedding_cache import QueryEmbeddingCache, get_query_embedding_cache
 from app.services.retrieval.vector_cache import VectorIndexCache, get_vector_index_cache
 
 
@@ -32,10 +34,12 @@ class VectorSearchService:
         db: Session,
         embedding_provider: EmbeddingProvider,
         index_cache: VectorIndexCache | None = None,
+        query_embedding_cache: QueryEmbeddingCache | None = None,
     ) -> None:
         self.db = db
         self.embedding_provider = embedding_provider
         self.index_cache = index_cache or get_vector_index_cache(db, embedding_provider)
+        self.query_embedding_cache = query_embedding_cache or get_query_embedding_cache()
 
     def search(self, query: str, top_k: int = 5) -> list[VectorSearchResult]:
         normalized_query = query.strip()
@@ -44,13 +48,18 @@ class VectorSearchService:
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0")
 
-        query_embedding = self.embedding_provider.embed_query(normalized_query)
+        with latency_timer("query_embedding_latency_ms"):
+            query_embedding = self.query_embedding_cache.get_or_embed(
+                self.embedding_provider,
+                normalized_query,
+            )
         if len(query_embedding) != self.embedding_provider.dimension:
             raise ValueError("embedding provider returned a vector with unexpected dimension")
         if is_zero_vector(query_embedding):
             return []
 
-        matches = self.index_cache.search(query_embedding, top_k=max(top_k * 4, top_k))
+        with latency_timer("vector_search_latency_ms"):
+            matches = self.index_cache.search(query_embedding, top_k=max(top_k * 4, top_k))
         results: list[VectorSearchResult] = []
         for match in matches:
             entry = match.entry

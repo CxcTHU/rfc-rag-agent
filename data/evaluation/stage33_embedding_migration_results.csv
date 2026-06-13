@@ -1,0 +1,37 @@
+query_id,category,expected_refused,candidate,provider,model_name,dimension,top_k,precision_at_1,precision_at_3,precision_at_5,hit_at_5,coverage_ratio,source_type_distribution,top1_source_type,top1_document_title,latency_ms,status,error
+stage29_wiki_rcc_dam,wikipedia,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_wiki_arch_dam,wikipedia,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_wiki_hydraulic_engineering,wikipedia,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_wiki_concrete_cover,wikipedia,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_wiki_dam_applications,wikipedia,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_standard_eap,standard,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_standard_earthquake,standard,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_standard_living_with_dams,standard,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_standard_pocket_guide,standard,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_standard_inundation_mapping,standard,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_web_rfc_advantages,web,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_web_rfc_inventors,web,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_web_jin_feng_standards,web,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_web_aci_318_scope,web,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_web_aci_construction_testing,web,false,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_refusal_replace_engineer,refusal,true,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_refusal_private_key,refusal,true,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_refusal_paywalled_fulltext,refusal,true,jina_baseline,jina,jina-embeddings-v3,1024,5,false,false,false,false,0.000,,,,0.00,skipped,missing provider configuration
+stage29_wiki_rcc_dam,wikipedia,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,false,true,true,true,0.750,institutional_access_pdf:1;open_access_pdf:1;web_page:2;wikipedia:1,institutional_access_pdf,利用堆石混凝土替代浆砌石实施坝体施工的技术难点与应用前景分析,2473.67,completed,
+stage29_wiki_arch_dam,wikipedia,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,0.500,institutional_access_pdf:4;wikipedia:1,wikipedia,拱坝的分类,1346.80,completed,
+stage29_wiki_hydraulic_engineering,wikipedia,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,0.800,institutional_access_pdf:4;wikipedia:1,wikipedia,基本原理,1352.21,completed,
+stage29_wiki_concrete_cover,wikipedia,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,0.750,wikipedia:5,wikipedia,Purpose of provision of concrete cover,1713.64,completed,
+stage29_wiki_dam_applications,wikipedia,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,false,true,true,true,0.750,open_access_pdf:1;web_page:2;wikipedia:2,open_access_pdf,Seismic Behavior of Rock-Filled Concrete Dam Compared with Conventional Vibrating Concrete Dam Using Finite Element Method,1675.58,completed,
+stage29_standard_eap,standard,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,1.000,standard_document:5,standard_document,FEMA P-64 Emergency Action Planning for Dams,1719.76,completed,
+stage29_standard_earthquake,standard,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,0.500,standard_document:5,standard_document,FEMA Dam Safety Pocket Safety Guide for Dams and Impoundments,1731.39,completed,
+stage29_standard_living_with_dams,standard,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,0.750,standard_document:5,standard_document,FEMA Dam Safety Inundation Mapping and Flood Risks,1819.04,completed,
+stage29_standard_pocket_guide,standard,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,0.750,standard_document:5,standard_document,FEMA Dam Safety Pocket Safety Guide for Dams and Impoundments,1816.98,completed,
+stage29_standard_inundation_mapping,standard,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,0.750,standard_document:5,standard_document,FEMA Dam Safety Pocket Safety Guide for Dams and Impoundments,1643.75,completed,
+stage29_web_rfc_advantages,web,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,0.750,institutional_access_pdf:1;open_access_pdf:2;web_page:2,web_page,Filling the gaps in large concrete dams,2009.53,completed,
+stage29_web_rfc_inventors,web,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,false,false,false,false,0.000,institutional_access_pdf:1;web_page:4,institutional_access_pdf,利用堆石混凝土替代浆砌石实施坝体施工的技术难点与应用前景分析,1893.18,completed,
+stage29_web_jin_feng_standards,web,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,false,false,false,false,0.000,institutional_access_pdf:2;metadata_record:3,institutional_access_pdf,堆石混凝土系列技术在西部水电工程中的应用,1864.13,completed,
+stage29_web_aci_318_scope,web,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,true,true,true,true,1.000,metadata_record:1;web_page:4,web_page,Introduction,1664.31,completed,
+stage29_web_aci_construction_testing,web,false,glm_candidate,paratera,GLM-Embedding-3,2048,5,false,true,true,true,0.500,open_access_pdf:1;web_page:4,open_access_pdf,3D mesoscopic numerical investigation on the uniaxial compressive behavior of rock-filled concrete with different ITZ and aggregate properties,1735.51,completed,
+stage29_refusal_replace_engineer,refusal,true,glm_candidate,paratera,GLM-Embedding-3,2048,5,false,false,false,false,0.000,,,,0.07,completed,
+stage29_refusal_private_key,refusal,true,glm_candidate,paratera,GLM-Embedding-3,2048,5,false,false,false,false,0.000,,,,0.01,completed,
+stage29_refusal_paywalled_fulltext,refusal,true,glm_candidate,paratera,GLM-Embedding-3,2048,5,false,false,false,false,0.000,,,,0.00,completed,

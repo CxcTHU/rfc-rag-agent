@@ -14,6 +14,31 @@
 
 ## 当前阶段
 
+阶段 33（RAG 链路性能优化与 Embedding 迁移验证，开发与验证已完成，等待用户人工核验）：当前分支为 `codex/phase-33-rag-performance-embedding-validation`，从阶段 32 完成并合并后的 `main -> 608a6e9 Merge phase 32 react agent observability` 出发；已确认 `phase-32-complete -> f259f97 Complete phase 32 react agent observability` 是 `main` 的祖先，未移动任何已有阶段 tag。
+
+阶段 33 完成内容：
+
+- `VectorIndexCache` 在完整 FAISS `.index` 与 `_ids.json` 可用、provider/model/dimension 匹配且 ids 完整时，进入 `faiss_only` 加载模式，只加载必要 chunk/document metadata，不再构建无用 SQLite -> numpy matrix。
+- FAISS 缺失、损坏、provider/model/dimension 不匹配或 ids 不完整时，继续 fallback 到 SQLite/numpy，保持 deterministic、本地测试和回滚路径可用。
+- 新增 query embedding cache，cache key 包含 provider、model、dimension 和 normalized query text，并带 TTL 与容量上限；只缓存 query embedding，不缓存写入型 chunk embedding，不改变知识库索引。
+- 新增安全 latency trace，覆盖 query_embedding、FAISS/vector search、rerank、planner、answer、tool、time_to_first_token、time_to_final、iteration_count、tool_call_count 等耗时字段；不记录 hidden thought、reasoning_content、raw provider response、API key、Bearer token 或受限全文。
+- 新增 `scripts/evaluate_stage33_embedding_migration.py`，对 GLM-Embedding-3（2048 维）与 Jina（1024 维）做迁移验证；本机真实 GLM query 侧可运行，Jina baseline 因本地缺少真实 provider 配置被显式标记 skipped，未伪造成通过。
+- 新增 `scripts/benchmark_stage33_chat_providers.py`，只把 DeepSeek 作为 chat provider benchmark candidate；本机 MIMO baseline 可运行，DeepSeek 因未配置被显式 skipped，未替换默认 MIMO。
+- 新增 `docs/stage33_rag_performance_embedding_validation.md`、阶段 33 聚焦测试和评测 CSV，保留旧 Jina FAISS 索引作为回滚保险与质量对照，保留 GLM-Embedding-3 2048 维索引作为新链路。
+
+阶段 33 验证结果：
+
+```text
+阶段 33 聚焦测试：16 passed
+python -m pytest -q: 643 passed
+python scripts\score_stage30_quality.py: overall=83.17 grade=B release_decision=review_required
+
+browser smoke:
+desktop and 390x844 mobile: Agent 查询、折叠思考过程、最终答案均存在，horizontal overflow=false，console errors=0
+```
+
+阶段 33 当前停在用户人工核验前：**尚未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR，未创建 `phase-33-complete` tag**。
+
 阶段 32（ReAct Agent 决策升级 + 工具调用实时可视化，开发与验证已完成，等待用户人工核验）：当前分支为 `codex/phase-32-react-agent-tool-observability`，从阶段 31 完成并合并后的 `main -> 93ee058 Merge phase 31 faiss parent child retrieval` 出发；已确认 `phase-31-complete -> b03bb47 Complete phase 31 faiss parent child retrieval` 是 `main` 的祖先，未移动任何已有阶段 tag。
 
 阶段 32 完成内容：

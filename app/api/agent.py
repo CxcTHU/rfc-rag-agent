@@ -1,4 +1,5 @@
 import json
+import time
 from collections.abc import Iterator, Sequence
 from queue import Queue
 from threading import Thread
@@ -246,6 +247,7 @@ def stream_agent_query_events(
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
 ) -> Iterator[str]:
+    stream_started = time.perf_counter()
     try:
         chitchat = detect_chitchat(request.question)
         summarize = True
@@ -262,10 +264,12 @@ def stream_agent_query_events(
             )
             if streamed_token_count == 0:
                 for token in split_streaming_text(response.answer):
+                    mark_response_first_token(response, stream_started)
                     yield sse_event("token", {"text": token})
 
         if chitchat is not None:
             for token in split_streaming_text(response.answer):
+                mark_response_first_token(response, stream_started)
                 yield sse_event("token", {"text": token})
 
         persist_agent_conversation_messages(
@@ -457,6 +461,7 @@ def agent_response_from_chitchat(
         iteration_count=0,
         invalid_citations=[],
         refusal_category=None,
+        latency_trace={},
     )
 
 
@@ -528,6 +533,7 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
         iteration_count=result.iteration_count,
         invalid_citations=result.invalid_citations,
         refusal_category=refusal_category_from_agentic_result(result),
+        latency_trace={},
     )
 
 
@@ -598,6 +604,7 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
             refused=result.refused,
             refusal_reason=result.refusal_reason,
         ),
+        latency_trace=result.latency_trace,
     )
 
 
@@ -691,5 +698,17 @@ def assistant_metadata_from_response(response: AgentQueryResponse) -> dict[str, 
             "iteration_count",
             "invalid_citations",
             "refusal_category",
+            "latency_trace",
         ]
     }
+
+
+def mark_response_first_token(response: AgentQueryResponse, stream_started: float) -> None:
+    if not response.latency_trace:
+        response.latency_trace = {}
+    if response.latency_trace.get("time_to_first_token_ms") is not None:
+        return
+    response.latency_trace["time_to_first_token_ms"] = round(
+        (time.perf_counter() - stream_started) * 1000.0,
+        3,
+    )

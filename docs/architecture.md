@@ -1,5 +1,37 @@
 # 架构说明
 
+## 阶段 33 架构增量：RAG 链路性能优化与 Embedding 迁移验证
+
+阶段 33 不替换默认 `/chat`、`/agent/query` 或 `/agent/query/stream` 的外部契约，而是在检索执行层、query embedding 层和可观测层补齐性能与迁移验证能力。核心目标是让真实 RAG/ReAct 链路更快、更可诊断，并诚实验证 GLM-Embedding-3（2048 维）迁移后是否存在静默退化。
+
+```text
+用户问题
+-> VectorSearchService
+   -> QueryEmbeddingCache(provider, model, dimension, normalized_query)
+   -> embedding provider embed_query（cache miss 时）
+-> VectorIndexCache
+   -> complete FAISS index + complete ids + metadata match: faiss_only
+   -> otherwise: SQLite embeddings -> numpy_fallback
+-> HybridSearchService / rerank
+-> BrainService or ReActAgentService
+-> latency_trace metadata
+-> JSON response or SSE metadata
+```
+
+`VectorIndexCache` 新增 `load_mode`。当本地 `data/faiss/{provider}_{model}_dim{dimension}.index` 与 `_ids.json` metadata 可加载、`complete=true`、provider/model/dimension 匹配、ids 无重复且完整覆盖当前有效 chunk metadata 时，缓存只加载 chunk/document metadata 和 FAISS index，不再反序列化 SQLite 中每条 embedding JSON，也不再构建 `_normalized_matrix`。任何文件缺失、损坏、维度不一致、provider/model 不一致、ids 不完整或 ids 与当前 metadata 不一致都会回退到旧的 SQLite/numpy 路径。
+
+Query embedding cache 位于 `VectorSearchService` 内部，只缓存“问题 -> query 向量”的结果，不缓存文档写入型 embedding，也不修改 `chunk_embeddings` 或 FAISS 文件。cache key 包含 provider、model、dimension 和归一化后的 query text，并带 TTL 与 max size，避免同一请求或短时间重复查询反复调用真实 embedding provider。
+
+Latency trace 是请求级安全观测对象。`app/services/observability/latency_trace.py` 使用 request-local context 记录 query_embedding、vector_search、faiss_search、numpy_search、rerank、planner、answer、tool、time_to_first_token、time_to_final、iteration_count 和 tool_call_count 等字段。它只记录数值、计数和阶段名，不记录 hidden thought、reasoning_content、raw provider response、API key、Bearer token、Authorization header 或受限全文。
+
+阶段 33 的验证脚本保持“默认可离线、真实需显式”的边界：
+
+- `scripts/benchmark_stage33_rag_latency.py`：默认 deterministic，可显式切真实 provider，输出脱敏延迟 CSV。
+- `scripts/evaluate_stage33_embedding_migration.py`：对比 Jina 1024 维与 GLM-Embedding-3 2048 维；真实配置缺失时写 skipped，不伪造成成功。
+- `scripts/benchmark_stage33_chat_providers.py`：MIMO 是 baseline，DeepSeek 只是 candidate；缺少 DeepSeek 配置时写 skipped，不切默认 provider。
+
+阶段 33 保留旧 Jina FAISS 索引作为回滚保险和质量对照，也保留 GLM-Embedding-3 2048 维索引作为新链路验证目标；不删除旧向量、不直接切默认 MIMO/DeepSeek、不新增外部资料源、不做写入型 Agent 工具，也不让真实 API 成为 CI 或本地全量测试前提。
+
 ## 阶段 32 架构增量：ReAct Agent 决策升级与工具调用实时可视化
 
 阶段 32 改动的是 `/agent/query` 的 Agent 编排层和 `/agent/query/stream` 的可观测输出层，不改变 `/chat` 默认 RAG 问答链路。新的 `react_agent` 路径让模型在受控 action schema 中选择下一步，但真正的工具执行仍由后端 `AgentToolbox` 负责。

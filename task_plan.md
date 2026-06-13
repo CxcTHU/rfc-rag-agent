@@ -1,21 +1,44 @@
-# 阶段 32 任务计划：ReAct Agent 决策升级 + 工具调用实时可视化
+# 阶段 33 任务计划：RAG 链路性能优化与 Embedding 迁移验证
 
 ## 目标
 
-在阶段 31「FAISS 向量索引与父子块检索」已完成、提交、创建 `phase-31-complete` tag 并合并到 `main` 的基础上，进入阶段 32：把现有固定 agentic RAG 状态图升级为 LLM tool-calling 驱动的 ReAct 循环，并通过 SSE 在前端实时展示“正在判断、准备调用工具、工具返回结果、准备回答”等可审计步骤。
+在阶段 32「ReAct Agent 决策升级与工具调用实时可视化」已经完成、打 `phase-32-complete` tag 并合并到 `main` 的基础上，进入阶段 33：围绕真实暴露的 RAG 性能瓶颈做核心链路优化，并对 GLM-Embedding-3 迁移后的检索质量做诚实验证。
 
-建议分支：`codex/phase-32-react-agent-tool-observability`
+目标分支：`codex/phase-33-rag-performance-embedding-validation`
 
-本阶段只做只读 RAG Agent 能力增强，不新增爬虫、不新增外部资料来源、不做写入型工具、不做登录系统、不改变 `/chat` 默认链路。阶段完成后停在用户人工核验前，不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR。
+本阶段不是继续扩 Agent 花活，也不是直接替换默认模型。核心原则是：先量化慢在哪里，再优化确定浪费；保留旧 Jina 索引作为回滚和质量对照；DeepSeek 只作为 benchmark candidate，不直接替换默认 MIMO；真实 provider 只做显式 smoke 或 benchmark，不进入 CI 或本地全量测试前提。
 
 ## 背景
 
-阶段 31 已补齐 FAISS 与父子块，底层检索和回答上下文更稳。当前 Agent 主要有两套路径：
+阶段 31 引入 FAISS `IndexFlatIP` 与父子块检索，阶段 32 引入 `react_agent` 与实时 SSE 可观测。联调后发现真实 ReAct 查询约 33-44 秒，同时存在一个确定浪费点：
 
-1. default `AgentService`：由 `detect_intent()` 规则决定调用 `hybrid_search_knowledge`、`answer_with_citations`、`list_sources` 或 `get_source_detail`。
-2. agentic LangGraph：固定 `retrieve -> grade -> rewrite -> re_retrieve -> grade -> generate -> citation_check`，其中 `grade_router()` 用硬编码规则决定下一步。
+```text
+VectorIndexCache._ensure_loaded()
+-> 先从 SQLite 读取全部 chunk_embeddings
+-> 反序列化 12,731 x 2048 维向量
+-> 构建 numpy normalized matrix，约 208MB
+-> 再加载 FAISS index
+-> 搜索实际走 FAISS，numpy matrix 在主路径中未参与搜索
+```
 
-这说明系统已经有 Agent 工具、workflow steps、SSE token 流式输出和前端步骤展示基础，但还不是真正让 LLM 自主决定下一步。阶段 32 的核心是：让 LLM 在受控工具集合内选择 action，并把 action/observation 过程实时展示给用户。
+GLM-Embedding-3 维度为 2048，不是 2028。相比 Jina v3 的 1024 维，SQLite 反序列化、numpy matrix、FAISS index 体积和冷启动成本都会放大。因此阶段 33 应优先处理 FAISS 可用时的冗余 matrix 构建，并补上 GLM vs Jina 的迁移质量对照。
+
+## 当前基线
+
+```text
+main / origin/main -> 608a6e9 Merge phase 32 react agent observability
+phase-32-complete -> f259f97 Complete phase 32 react agent observability
+当前阶段分支 -> codex/phase-33-rag-performance-embedding-validation
+```
+
+阶段 32 验证基线：
+
+```text
+阶段 32 聚焦测试：106 passed
+全量 pytest：629 passed, 1 warning
+阶段 30 score：overall=83.17 grade=B release_decision=review_required
+Browser smoke：desktop 与 390x844 mobile 均通过，console errors=0
+```
 
 ## Phase 顺序
 
@@ -23,284 +46,275 @@
 
 状态：已完成。
 
-本 Phase 解决的问题：确认阶段 32 的正确起点，避免从阶段 31 未合并状态或旧文档描述继续开发。
+本 Phase 解决的问题：确认阶段 33 从阶段 32 已合并后的正确基线出发，避免沿用阶段 32 人工核验前的旧描述。
 
-RAG 链路位置：版本基线和协作边界，不改运行链路。
+RAG 链路位置：版本基线、协作边界与规划层，不改运行链路。
 
-为什么现在做：ReAct 会改 Agent 编排和前端流式协议，必须先确认阶段 31 tag、main 合并关系和工作区状态。
+为什么现在做：性能优化会碰到检索缓存、FAISS、provider benchmark 和评测脚本，必须先锁定基线、分支和不提交边界。
 
 - 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-- 阅读 `task_plan.md`、`findings.md`、`progress.md`。
+- 阅读根目录 `task_plan.md`、`findings.md`、`progress.md`。
 - 运行 `git status -sb`、`git log --oneline -5`。
-- 确认 `phase-31-complete` 存在，且是 `main` 的祖先。
-- 从阶段 31 合并后的 `main` 创建或切换到 `codex/phase-32-react-agent-tool-observability`。
-- 校准三份 planning 文件，记录分支、基线和提交边界。
-
-完成记录：
-
-- 已确认 `main -> 93ee058 Merge phase 31 faiss parent child retrieval`。
-- 已确认 `phase-31-complete -> b03bb47 Complete phase 31 faiss parent child retrieval`。
-- 已确认 `phase-31-complete` 是 `main` 的祖先，未移动任何已有阶段 tag。
-- 已从 `main` 创建并切换到 `codex/phase-32-react-agent-tool-observability`。
-- 已确认阶段 32 结束前不执行 `git add`、commit、tag、push 或 PR。
+- 确认 `phase-32-complete` 存在并指向阶段 32 功能提交。
+- 确认 `phase-32-complete` 已合并到 `main`，不移动任何已有阶段 tag。
+- 从最新 `main` 创建或切换到目标分支。
+- 将三份 planning 文件改写为阶段 33 规划。
 
 验证方式：
 
 ```text
 git status -sb
-git log --oneline -5
-git tag --list "phase-31-complete"
-git merge-base --is-ancestor phase-31-complete main
+git log --oneline -5 --decorate
+git merge-base --is-ancestor phase-32-complete main
 ```
 
-### Phase 1：阶段 32 设计文档
+### Phase 1：阶段 33 设计文档与性能观测口径
 
 状态：已完成。
 
-本 Phase 解决的问题：先固定 ReAct action 集合、工具权限、SSE 事件协议、前端展示边界和安全策略，避免实现时把 Agent 做成不可控黑盒。
+本 Phase 解决的问题：先定义本阶段优化目标、指标、边界和验收口径，避免“感觉变快”或“换模型试试”式开发。
 
-RAG 链路位置：Agent 编排层与前端观测层设计。
+RAG 链路位置：设计文档、性能观测与评测口径层。
 
-为什么现在做：ReAct 会增加模型决策和循环，必须先把“模型能做什么、不能做什么、前端展示什么”写清楚。
+为什么现在做：后续会改 VectorIndexCache、embedding cache、latency trace 和 benchmark，如果没有统一指标，就无法判断收益和退化。
 
-- 新增 `docs/stage32_react_agent_observability.md`。
-- 明确 ReAct 循环：Plan summary -> Action -> Observation -> Decide next action -> Final answer/refusal。
-- 明确只读 action 集合：`search_knowledge`、`rewrite_query`、`answer_with_citations`、`refuse`。
-- 明确不展示原始 hidden thought，只展示安全的 `reasoning_summary` / `step_summary`。
-- 明确循环上限、工具调用上限、token 上限、重复 query 处理和错误收敛策略。
-- 明确 `/agent/query/stream` 新增事件不破坏已有 `token` / `metadata` / `done` / `error`。
+- 新增 `docs/stage33_rag_performance_embedding_validation.md`。
+- 明确 P0-P4 范围：FAISS-only 冷启动、query embedding cache、latency trace、GLM vs Jina 质量验证、DeepSeek benchmark。
+- 明确不做事项：不删旧 Jina、不直接替换 MIMO、不新增外部数据源、不做写入型工具、不把真实 API 变成 CI 前提。
+- 固定 before/after 指标：cold_start_ms、first_query_ms、query_embedding_latency_ms、faiss_search_latency_ms、rerank_latency_ms、planner_latency_ms、answer_latency_ms、time_to_first_token_ms、time_to_final_ms、memory estimate。
+- 明确安全边界：不记录 hidden thought、reasoning_content、raw provider response、API key、Bearer token、受限全文。
+- 新增 `tests/test_stage33_design.py`，把 2048 维、FAISS-only/fallback、query latency trace、安全字段和 provider benchmark 边界固化为回归测试。
 
 验证方式：
 
 ```text
-python -m pytest tests\test_stage32_design.py -q
+python -m pytest tests\test_stage33_design.py -q
+2 passed
 ```
 
-完成记录：
-
-- 已新增 `docs/stage32_react_agent_observability.md`。
-- 已明确 ReAct action、工具权限、SSE 新事件、安全边界、循环控制、评测方式和完成标准。
-- 已新增 `tests/test_stage32_design.py`，锁定 action 集合、工具边界、SSE 事件和敏感信息边界。
-- 验证通过：`python -m pytest tests\test_stage32_design.py -q`，`2 passed`。
-
-### Phase 2：ReAct 工具调用契约与模型 action schema
+### Phase 2：FAISS 可用时跳过 numpy matrix 构建
 
 状态：已完成。
 
-本 Phase 解决的问题：为 LLM 自主选择工具建立稳定的数据结构，让真实模型和 deterministic 测试都能走同一套 action contract。
+本 Phase 解决的问题：消除阶段 31/32 后真实存在的冷启动冗余成本。
 
-RAG 链路位置：Agent 决策层与工具层之间。
+RAG 链路位置：`VectorIndexCache.search()` 的向量检索执行层，位于 `/search/vector`、hybrid search、Brain、`/chat`、`/agent/query` 和 `react_agent` 的共同底座。
 
-为什么现在做：没有结构化 action schema，就只能解析自然语言，容易不稳定、难测试。
+为什么现在做：这是确定存在、风险低、收益可量化的浪费点；它不改变 FAISS 排序语义，只改变加载路径。
 
-- 新增或扩展 `app/services/agent/react_actions.py`。
-- 定义 `ReActAction`、`ReActObservation`、`ReActStepRecord`、`ReActRunResult`。
-- 定义 action 类型：`search_knowledge`、`rewrite_query`、`answer_with_citations`、`refuse`、`final_answer`。
-- 为真实 OpenAI-compatible provider 设计 tool-calling 或结构化 JSON action 入口。
-- 为 deterministic provider 增加可测试的规则式 action planner，保证 CI 不依赖真实 API。
-- 保留 `AgentToolbox` 作为唯一工具执行边界，不绕过 Brain、citation、refusal 和 source 约束。
+- 调整 `app/services/retrieval/vector_cache.py`。
+- 如果完整 FAISS index 和 ids metadata 可用，优先只加载 FAISS index + ids 映射所需的 chunk metadata。
+- 跳过 SQLite -> embedding_json -> numpy matrix 的全量反序列化。
+- 如果 FAISS 缺失、损坏、provider/model/dimension 不匹配、ids 缺失或不完整，则 fallback 到 SQLite/numpy。
+- 保留纯 numpy fallback 与纯 Python cosine 对照测试。
+- 记录或暴露缓存加载模式：`faiss_only` / `numpy_fallback` / `empty`。
+- 新增 `scripts/benchmark_stage33_rag_latency.py`，默认支持 deterministic 离线 benchmark，显式配置后可测真实 GLM-Embedding-3 2048 维链路。
 
 验证方式：
 
 ```text
-python -m pytest tests\test_react_actions.py tests\test_agent_tools.py -q
+python -m pytest tests\test_vector_cache_faiss.py tests\test_hybrid_search.py tests\test_vector_search.py -q
+python -m pytest tests\test_vector_cache_faiss.py tests\test_vector_cache.py tests\test_vector_search.py -q
+13 passed
+
+python -m py_compile scripts\benchmark_stage33_rag_latency.py
+python scripts\benchmark_stage33_rag_latency.py --provider deterministic --dimension 64 --limit 1 --output data\evaluation\stage33_rag_latency_benchmark.csv
 ```
 
-完成记录：
-
-- 已新增 `app/services/agent/react_actions.py`。
-- 已定义 `ReActAction`、`ReActObservation`、`ReActStepRecord`、`ReActRunResult`。
-- 已固定 action 类型：`search_knowledge`、`rewrite_query`、`answer_with_citations`、`refuse`、`final_answer`。
-- 已新增 `DeterministicReActPlanner`，覆盖检索、改写、回答和拒答收敛路径。
-- 已新增 `tests/test_react_actions.py`。
-- 验证通过：`python -m pytest tests\test_react_actions.py tests\test_agent_tools.py -q`，`12 passed`。
-
-### Phase 3：ReAct Agent Service 实现
+### Phase 3：query embedding cache
 
 状态：已完成。
 
-本 Phase 解决的问题：用 LLM action 决策替代固定 `grade_router` 主导的下一步选择，让模型在受控范围内决定是否检索、改写、回答或拒答。
+本 Phase 解决的问题：避免同一问题在 ReAct、多次刷新、benchmark 或重复查询中反复调用真实 embedding provider。
 
-RAG 链路位置：`/agent/query` 的 agentic 编排层。
+RAG 链路位置：query embedding 层，位于 `VectorSearchService` 和 hybrid/vector search 入口。
 
-为什么现在做：阶段 31 后检索和 prompt 地基已稳，可以把上层决策从硬编码状态图升级为可解释的 ReAct 循环。
+为什么现在做：GLM-Embedding-3 是 2048 维且真实 provider 有网络延迟；query embedding cache 能降低重复查询延迟和供应商调用次数，但不改变文档索引。
 
-- 新增 `app/services/agent/react_service.py`。
-- 实现 `ReActAgentService.query()`：读取问题和 history，调用模型选择 action，执行工具，记录 observation，循环直到 final/refuse/上限。
-- 默认最大迭代建议 3，最大工具调用建议沿用 request `max_tool_calls`。
-- 对重复 query、工具异常、空结果、低证据结果做收敛处理。
-- 将最终结果转换为现有 `AgentQueryResponse` 字段，保留 `tool_calls`、`workflow_steps`、`iteration_count`、`citations`、`sources`。
-- 保留 default `AgentService` 和旧 agentic 路径作为回退或对照，不破坏显式 mode。
+- 为 query embedding 增加进程内缓存或轻量可清理缓存。
+- cache key 至少包含 provider、model、dimension、normalized query text。
+- 设置容量上限或 TTL，避免无限增长。
+- 只缓存 query embedding，不缓存文档写入型 embedding，不改变 `chunk_embeddings`。
+- 提供关闭或清理入口，便于测试和 benchmark。
+- 确认 deterministic 测试不依赖真实 API。
+- 新增 `app/services/retrieval/query_embedding_cache.py`，并在 `VectorSearchService` query embedding 层接入。
 
 验证方式：
 
 ```text
-python -m pytest tests\test_react_agent_service.py tests\test_agent_api.py -q
+python -m pytest tests\test_query_embedding_cache.py tests\test_embedding_provider.py tests\test_vector_search.py -q
+28 passed
 ```
 
-完成记录：
-
-- 已新增 `app/services/agent/react_service.py`。
-- 已实现 `ReActAgentService.query()`，支持受控 action loop、重复 query 防护、工具异常/空结果收敛、最大 3 轮硬上限。
-- 已将 `react_agent` 作为显式 `/agent/query` mode 接入，保留 default 和旧 `agentic` 路径。
-- 已扩展 `AgentQueryResult`，让 ReAct 路径返回 `workflow_steps`、`iteration_count` 和 `mode="react_agent"`。
-- 已新增 `tests/test_react_agent_service.py`，并更新 `tests/test_agent_api.py` 覆盖显式 `react_agent`。
-- 验证通过：`python -m pytest tests\test_react_agent_service.py tests\test_agent_api.py -q`，`24 passed`。
-
-### Phase 4：SSE 实时步骤事件协议
+### Phase 4：RAG/ReAct latency trace
 
 状态：已完成。
 
-本 Phase 解决的问题：让前端不再只显示“正在思考”，而是在模型准备调用工具和工具返回时实时显示当前步骤。
+本 Phase 解决的问题：把 33-44 秒端到端耗时拆开，判断慢在 embedding、FAISS、rerank、planner、answer generation 还是 SSE 首 token。
 
-RAG 链路位置：API 流式输出层。
+RAG 链路位置：检索、Agent 编排、回答生成和 SSE 输出的观测层。
 
-为什么现在做：ReAct 的价值不只在模型自主决策，也在过程可观测、可审计。
+为什么现在做：没有分段耗时就无法判断 MIMO 是否真是主因，也无法客观比较 DeepSeek。
 
-- 扩展 `/agent/query/stream`：新增 `agent_step`、`tool_call_start`、`tool_call_result` 事件。
-- 保留现有 `token`、`metadata`、`done`、`error` 事件兼容。
-- `tool_call_start` 展示工具名和脱敏输入摘要。
-- `tool_call_result` 展示结果数量、是否拒答、错误摘要，不展示 provider raw response。
-- 让非流式 `/agent/query` 仍返回完整 `workflow_steps`。
+- 为 `/agent/query` 和 `/agent/query/stream` 的 `react_agent` 路径增加安全 latency trace。
+- 尽量复用到 default / old agentic 路径，便于对照。
+- 至少记录：
+  - `query_embedding_latency_ms`
+  - `faiss_search_latency_ms` 或 `vector_search_latency_ms`
+  - `rerank_latency_ms`
+  - `planner_latency_ms`
+  - `answer_latency_ms`
+  - `tool_latency_ms`
+  - `time_to_first_token_ms`
+  - `time_to_final_ms`
+  - `iteration_count`
+  - `tool_call_count`
+- metadata 可携带摘要级 timing；前端可暂不新增复杂 UI。
+- 错误和 refusal 路径也要记录总耗时并安全收敛。
+- 新增 `app/services/observability/latency_trace.py`，通过 request-local trace 汇总检索、rerank、planner、tool、answer 和 SSE 首 token。
+- `AgentQueryResponse.latency_trace` 与会话 metadata 同步保留安全耗时字段。
 
 验证方式：
 
 ```text
-python -m pytest tests\test_agent_stream_api.py tests\test_react_stream_events.py -q
+python -m pytest tests\test_react_latency_trace.py tests\test_agent_api.py tests\test_react_stream_events.py -q
+python -m pytest tests\test_react_latency_trace.py tests\test_agent_api.py tests\test_react_stream_events.py tests\test_agent_stream_api.py -q
+31 passed
 ```
 
-完成记录：
-
-- 已把 `ReActAgentService` 的运行时事件接入 `/agent/query/stream`。
-- 已新增 `agent_step`、`tool_call_start`、`tool_call_result` SSE 事件。
-- 已保持 `token`、`metadata`、`done`、`error` 兼容。
-- 已新增 `tests/test_react_stream_events.py`。
-- 验证通过：`python -m pytest tests\test_agent_stream_api.py tests\test_react_stream_events.py -q`，`8 passed`。
-
-### Phase 5：前端实时步骤可视化
+### Phase 5：GLM-Embedding-3 vs Jina 检索质量迁移验证
 
 状态：已完成。
 
-本 Phase 解决的问题：把“正在思考”升级为实时步骤时间线，让用户看到 Agent 当前正在哪一步、准备调用什么工具、工具返回了什么摘要。
+本 Phase 解决的问题：确认从 Jina v3 1024 维迁移到 GLM-Embedding-3 2048 维后，检索质量没有静默退化。
 
-RAG 链路位置：前端交互和可观测展示层。
+RAG 链路位置：评测层与向量检索质量校准层。
 
-为什么现在做：后端已经能流式发送步骤事件后，前端必须把这些事件变成可理解界面，而不是只在最后展示 workflow steps。
+为什么现在做：阶段 30/29 的质量分数仍主要基于旧 Jina 缓存；迁移 provider 后必须诚实复核，而不是假设新模型更好。
 
-- 修改 `app/frontend/static/app.js`：消费 `agent_step`、`tool_call_start`、`tool_call_result`。
-- 修改 `appendAgentThinkingMessage()`，把静态“正在思考”改成动态状态行。
-- 新增 live step timeline，运行中逐条追加。
-- 最终 `metadata` 到达后，用正式 `workflow_steps` 校准展示。
-- 修改 `app/frontend/static/styles.css`，保证桌面和移动端不溢出、不遮挡答案。
-- 更新 `tests/test_frontend_app.py` 和必要的 JS/HTML 断言。
+- 不删除旧 Jina FAISS 文件：
+  - `data/faiss/jina_jina-embeddings-v3_dim1024.index`
+  - `data/faiss/jina_jina-embeddings-v3_dim1024_ids.json`
+- 保留 GLM FAISS 文件：
+  - `data/faiss/paratera_GLM-Embedding-3_dim2048.index`
+  - `data/faiss/paratera_GLM-Embedding-3_dim2048_ids.json`
+- 新增 `scripts/evaluate_stage33_embedding_migration.py`。
+- 复用阶段 29/30 题集或 fixture，对比 Jina 与 GLM：
+  - precision@k
+  - hit@k
+  - source/citation 覆盖
+  - unsupported/refusal 边界
+  - 查询耗时
+- 输出 CSV 与摘要文档。
+- 缺少真实 index 或 API 时，不伪造成通过；自动测试使用小型 fixture。
+- 新增 `scripts/evaluate_stage33_embedding_migration.py`，默认 dry-run，显式 `--execute-real` 才调用真实 provider。
+- 本地真实评测结果：GLM candidate completed；Jina baseline 因本地缺少 provider 配置 skipped。
 
 验证方式：
 
 ```text
-python -m pytest tests\test_frontend_app.py -q
+python -m pytest tests\test_stage33_embedding_validation.py -q
+2 passed
+
+python scripts\evaluate_stage33_embedding_migration.py
+dry_run_only
+
+python scripts\evaluate_stage33_embedding_migration.py --execute-real
+glm_candidate: status=completed p@5=0.867 coverage=0.637 latency=1469.98ms decision=review_for_silent_regression
+jina_baseline: status=skipped p@5=0.000 coverage=0.000 latency=0.00ms decision=skipped_missing_real_config
 ```
 
-完成记录：
-- 已扩展 `app/frontend/static/app.js`，消费 `agent_step`、`tool_call_start`、`tool_call_result` SSE 事件。
-- 已新增 live step timeline，运行中在同一条 Agent assistant 消息里展示步骤、工具准备和工具返回摘要。
-- 已扩展 `app/frontend/static/styles.css`，让 live steps 在桌面和移动端不横向溢出。
-- 已更新 `tests/test_frontend_app.py`，锁定前端实时事件消费、DOM 容器和样式。
-- 验证通过：`python -m pytest tests\test_frontend_app.py -q`，`10 passed`。
-
-### Phase 6：ReAct 评测与回归对照
+### Phase 6：MIMO baseline 与 DeepSeek chat provider benchmark
 
 状态：已完成。
 
-本 Phase 解决的问题：证明 ReAct 不只是“会跑”，还要证明它没有破坏引用、拒答、来源追踪和默认链路。
+本 Phase 解决的问题：用数据判断 DeepSeek 是否值得作为后续 chat provider 候选，而不是直接替换默认 MIMO。
 
-RAG 链路位置：评测与质量门禁层。
+RAG 链路位置：回答生成 provider benchmark 层，不改变默认业务链路。
 
-为什么现在做：LLM 自主决策会增加不确定性，必须用 deterministic fixture 和真实 provider smoke 分开验证。
+为什么现在做：当前 33-44 秒不一定全来自 MIMO；必须先把 provider 放进同一批问题和同一套指标比较。
 
-- 新增 `scripts/evaluate_stage32_react_agent.py`。
-- 复用阶段 29/30 关键问答样例，增加需要改写、需要再次检索、需要拒答的 ReAct 样例。
-- 输出 `data/evaluation/stage32_react_agent_results.csv` 与 summary。
-- 对照 default / old agentic / react_agent 三类模式。
-- 记录 tool_count、iteration_count、refusal_match、citation_valid、source_count、decision。
-- 默认 deterministic，不让真实 API 进入 CI。
+- 新增 `scripts/benchmark_stage33_chat_providers.py`。
+- MIMO 作为 baseline，DeepSeek chat 作为 candidate。
+- 可选 DeepSeek reasoner smoke，但必须防止 `reasoning_content` 泄露到前端、日志、CSV、文档。
+- 指标：
+  - `time_to_first_token`
+  - `time_to_final`
+  - `planner_latency`
+  - `answer_latency`
+  - `token_count`
+  - `tokens_per_second`
+  - citation 是否稳定
+  - refusal 是否一致
+  - 是否泄露 reasoning_content
+- 只输出 benchmark 结论和切换建议，不修改默认模型。
+- 新增 `scripts/benchmark_stage33_chat_providers.py`，默认 dry-run，显式 `--execute-real` 才调用真实 chat provider。
+- 本地真实 benchmark：MIMO baseline completed；DeepSeek candidate 因缺少本地配置 skipped。
 
 验证方式：
 
 ```text
-python scripts\evaluate_stage32_react_agent.py
-python -m pytest tests\test_stage32_react_eval.py -q
+python -m pytest tests\test_stage33_provider_benchmark.py -q
+2 passed
+
+python scripts\benchmark_stage33_chat_providers.py --dry-run
+python scripts\benchmark_stage33_chat_providers.py
+dry_run rows written
+
+python scripts\benchmark_stage33_chat_providers.py --execute-real
+mimo_baseline/citation_case: status=completed ttft=6265.58ms total=6952.99ms tokens_per_second=1.58 leak=false
+mimo_baseline/refusal_case: status=completed ttft=2909.34ms total=6800.78ms tokens_per_second=9.26 leak=false
+deepseek_candidate: skipped_missing_config
 ```
 
-完成记录：
-- 已新增 `scripts/evaluate_stage32_react_agent.py`，使用内存 SQLite、deterministic embedding/chat，并强制关闭真实 reranking provider。
-- 已输出 `data/evaluation/stage32_react_agent_results.csv` 和 `data/evaluation/stage32_react_agent_summary.csv`。
-- 已对照 `default`、`agentic_langgraph`、`react_agent` 三种模式，记录 tool_count、iteration_count、workflow_step_count、source_count、citation_valid 和 refusal_match。
-- 已新增 `tests/test_stage32_react_eval.py`，覆盖 fixture 类别、三模式输出、ReAct 工具/迭代追踪和敏感词边界。
-- 验证通过：`python -m pytest tests\test_stage32_react_eval.py -q`，`4 passed`。
-- 正式评测通过：`python scripts\evaluate_stage32_react_agent.py`，三模式 `errors=0`，`react_agent` refusal match `1/1`，decision `pass`。
-
-### Phase 7：全量验证、浏览器冒烟与真实 provider smoke
+### Phase 7：文档、Obsidian 与阶段验收准备
 
 状态：已完成。
 
-本 Phase 解决的问题：确认阶段 32 没有破坏核心 API、前端、SSE、质量报告和现有检索链路。
+本 Phase 解决的问题：把性能优化、迁移验证、benchmark 结论和边界沉淀为项目文档，停在用户人工核验前。
 
-RAG 链路位置：发布前质量门禁。
+RAG 链路位置：项目交接、知识沉淀与发布前核验层。
 
-为什么现在做：Agent 编排和 SSE 前端都属于用户可见主链路，必须跑全量验证。
-
-- 运行阶段 32 聚焦测试。
-- 运行全量 `python -m pytest -q`。
-- 重跑阶段 30 评分，确保 `overall >= 83.17`。
-- 浏览器检查 `/`：ReAct 流式步骤显示、工具调用卡片、最终答案、移动端布局、console errors。
-- API 冒烟：`/health`、`/quality-report`、`/agent/query`、`/agent/query/stream`、`/chat`、`/search/hybrid`。
-- 真实 provider 只做人工显式 smoke，不作为 CI 前提。
-
-完成记录：
-- 阶段 32 聚焦测试通过：`106 passed`。
-- 全量测试通过：`python -m pytest -q` -> `629 passed, 1 warning`。
-- 阶段 30 评分保持：`overall=83.17 grade=B release_decision=review_required`。
-- API smoke 通过：`/health 200`、`/quality-report 200`、`/chat 200`、`/agent/query 200`、`/agent/query/stream 200`、`/search/hybrid 200`。
-- 浏览器桌面 smoke 通过：折叠“查看思考过程”存在、实时工具卡片不可见、最终答案存在、横向溢出=false、console errors=0。
-- 浏览器移动端 390x844 smoke 通过：折叠“查看思考过程”存在、实时工具卡片不可见、最终答案存在、横向溢出=false、console errors=0。
-- 自动验证未依赖真实 provider；浏览器 smoke 使用 8012 deterministic 服务实例。
-
-### Phase 8：文档、Obsidian 与人工核验收尾
-
-状态：已完成。
-
-本 Phase 解决的问题：把阶段 32 的设计、验证、风险和面试表达沉淀到普通文档与本地 Obsidian。
-
-RAG 链路位置：项目交接与知识沉淀层。
-
-为什么现在做：ReAct、tool calling、SSE 可视化都是面试高价值能力，必须写清楚为什么这样设计和如何防失控。
+为什么现在做：阶段 33 的价值在于“有证据的性能优化和迁移判断”，必须把 before/after 与质量结论写清楚。
 
 - 更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-- 判断是否需要更新 `AGENT.MD`，若阶段 32 改变后续协作规则或下一步路线则更新。
-- 新增 `docs/phase_reviews/phase-32.md` 人工核验草稿。
-- 更新 Obsidian 阶段页、阶段汇报索引、Phase 0 到最终 Phase 小汇报。
-- 最终保持未提交状态，等待用户人工核验。
+- 按需更新 `AGENT.MD`，尤其是阶段 33 交接状态、性能规则、provider benchmark 边界。
+- 新增 `docs/phase_reviews/phase-33.md` 人工核验草稿。
+- 更新 Obsidian 阶段页、阶段汇报目录、阶段索引、相关知识点。
+- 运行阶段 33 聚焦测试、全量 pytest、`scripts/score_stage30_quality.py`。
+- 浏览器 smoke：Agent 查询、折叠思考过程、最终答案、无横向溢出、console errors=0。
+- 最终停在用户人工核验前，不执行 `git add`、commit、tag、push 或 PR。
 
-完成记录：
-- 已更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md` 和 `AGENT.MD`。
-- 已新增 `docs/phase_reviews/phase-32.md`。
-- 已新增 Obsidian 阶段页、阶段汇报索引、阶段汇总和 `ReAct Agent 可观测性` 知识点。
-- 已更新 Obsidian `阶段索引.md`、`阶段汇报索引.md` 和 `分类/Agent 工具调用.md`。
-- 仍保持人工核验前状态：未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR。
+验证方式：
+
+```text
+python -m pytest tests\test_stage33_design.py tests\test_vector_cache_faiss.py tests\test_query_embedding_cache.py tests\test_react_latency_trace.py tests\test_stage33_embedding_validation.py tests\test_stage33_provider_benchmark.py -q
+16 passed
+
+python -m pytest -q
+643 passed
+
+python scripts\score_stage30_quality.py
+stage30 quality score overall=83.17 grade=B release_decision=review_required
+
+browser smoke:
+desktop: Agent query final answer present, collapsible thought panel present, horizontal overflow=false, console errors=0
+390x844 mobile: Agent query final answer present, collapsible thought panel present, horizontal overflow=false, console errors=0
+```
 
 ## 完成标准
 
-- 新增阶段 32 设计文档，明确 ReAct action、工具权限、循环上限、SSE 事件和安全边界。
-- LLM 可通过 tool-calling 或结构化 action schema 自主选择检索、改写、回答、拒答。
-- deterministic provider 有稳定测试路径，不依赖真实 API。
-- ReAct 循环最多 3 轮或受 `max_tool_calls` 限制，不会无限循环。
-- 前端运行中能实时展示当前步骤、准备调用工具、工具结果摘要，不只显示“正在思考”。
-- `/agent/query/stream` 保持现有 token/metadata/done/error 兼容。
-- `tool_calls`、`workflow_steps`、`iteration_count`、`citations`、`sources` 继续可追踪。
-- 不展示原始 hidden thought，不写入 provider raw response。
-- 不新增写入型工具，不新增爬虫，不新增外部资料来源。
-- 核心 API 不破坏：`POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`POST /agent/query/stream`、`GET /quality-report`。
-- 阶段 30 评分不低于 83.17。
-- 全量测试通过，浏览器冒烟通过。
-- 文档和 Obsidian 草稿完成。
-- 未经用户人工核验，不 git add / commit / tag / push / PR。
+- FAISS 完整可用时，`VectorIndexCache` 不再构建无用 numpy matrix。
+- FAISS 不可用或不匹配时，SQLite/numpy fallback 仍正常。
+- 同一 query 的 embedding 可缓存，重复查询不会重复调用真实 embedding provider。
+- RAG/ReAct 链路能输出安全的 latency trace。
+- GLM-Embedding-3 vs Jina 检索质量有对比结果，确认是否存在静默退化。
+- DeepSeek 只作为 benchmark provider，有对比报告，不直接替换默认 MIMO。
+- `default`、`agentic`、`react_agent` 核心 API 不破坏。
+- `/chat` 默认链路不破坏。
+- `/agent/query/stream` 保持 `token`、`metadata`、`done`、`error` 兼容，并继续支持阶段 32 新事件。
+- 全量 pytest 通过。
+- 阶段 30 score 保持 `>= 83.17`。
+- 浏览器冒烟通过：Agent 查询、折叠思考过程、最终答案、无横向溢出、console errors=0。
+- 不写入 API key、Bearer token、供应商原始响应、`raw_response`、`reasoning_content` 或受限全文。
+- 最终停在用户人工核验前：不 `git add`、不 commit、不创建 `phase-33-complete` tag、不 push、不创建 PR。
