@@ -1,0 +1,13 @@
+query_id,category,expected_refused,mode,error,answer_like,refused,refusal_match,refusal_category,source_count,citation_valid,tool_count,iteration_count,workflow_step_count,notes
+stage32_filling_capacity,direct_retrieval,false,default,,true,false,true,,3,true,1,0,0,baseline retrieval and citation check
+stage32_filling_capacity,direct_retrieval,false,agentic_langgraph,,true,false,true,,3,true,4,0,4,baseline retrieval and citation check
+stage32_filling_capacity,direct_retrieval,false,react_agent,,true,false,true,,6,true,2,2,2,baseline retrieval and citation check
+stage32_rewrite_flowability,rewrite_then_retrieve,false,default,,true,false,true,,3,true,1,0,0,ReAct should be able to choose rewrite or retrieval under control
+stage32_rewrite_flowability,rewrite_then_retrieve,false,agentic_langgraph,,true,false,true,,3,true,4,0,4,ReAct should be able to choose rewrite or retrieval under control
+stage32_rewrite_flowability,rewrite_then_retrieve,false,react_agent,,true,false,true,,6,true,2,2,2,ReAct should be able to choose rewrite or retrieval under control
+stage32_multi_evidence,multi_evidence,false,default,,true,false,true,,3,true,1,0,0,multi-source answer stability
+stage32_multi_evidence,multi_evidence,false,agentic_langgraph,,true,false,true,,3,true,4,0,4,multi-source answer stability
+stage32_multi_evidence,multi_evidence,false,react_agent,,true,false,true,,6,true,2,2,2,multi-source answer stability
+stage32_refusal_off_topic,refusal,true,default,,false,true,true,,0,true,1,0,0,domain refusal boundary
+stage32_refusal_off_topic,refusal,true,agentic_langgraph,,false,true,true,,3,true,13,3,13,domain refusal boundary
+stage32_refusal_off_topic,refusal,true,react_agent,,false,true,true,,3,true,2,2,2,domain refusal boundary

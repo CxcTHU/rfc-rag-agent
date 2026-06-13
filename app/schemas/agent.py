@@ -40,8 +40,8 @@ class AgentQueryRequest(BaseModel):
         if value is None:
             return None
         normalized = value.strip().lower()
-        if normalized not in {"default", "agentic"}:
-            raise ValueError("mode must be 'default' or 'agentic'")
+        if normalized not in {"default", "agentic", "react_agent"}:
+            raise ValueError("mode must be 'default', 'agentic', or 'react_agent'")
         return normalized
 
 

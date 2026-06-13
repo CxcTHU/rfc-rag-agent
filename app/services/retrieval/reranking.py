@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Sequence
@@ -10,6 +11,10 @@ from typing import Any, Protocol
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+|[\u4e00-\u9fff]")
+
+# Transient HTTP statuses worth retrying. 4xx client errors (bad key, bad
+# request) are excluded because retrying them only wastes quota.
+RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,8 @@ class OpenAICompatibleReRankingProvider:
     base_url: str
     timeout_seconds: float = 30.0
     provider_name: str = "openai-compatible"
+    max_attempts: int = 3
+    retry_backoff_seconds: float = 0.5
 
     def __post_init__(self) -> None:
         if not self.model_name.strip():
@@ -73,6 +80,10 @@ class OpenAICompatibleReRankingProvider:
             raise ValueError("base_url must not be empty")
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be greater than 0")
+        if self.max_attempts <= 0:
+            raise ValueError("max_attempts must be greater than 0")
+        if self.retry_backoff_seconds < 0:
+            raise ValueError("retry_backoff_seconds must be greater than or equal to 0")
 
     def rerank(
         self,
@@ -99,18 +110,42 @@ class OpenAICompatibleReRankingProvider:
             },
             method="POST",
         )
-        try:
-            with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
-                response_data = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            error_body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"Reranking model request failed with HTTP {exc.code}: {sanitize_error(error_body)}"
-            ) from exc
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"Reranking model request failed: {exc.reason}") from exc
-
+        response_data = self._request_with_retry(request)
         return parse_openai_compatible_rerank_response(response_data, candidates, top_k)
+
+    def _request_with_retry(self, request: urllib.request.Request) -> dict[str, Any]:
+        """Send the request, retrying transient network failures.
+
+        Transient TLS/connection drops, timeouts, and 429/5xx responses are
+        retried with a short backoff. Other 4xx responses fail immediately
+        because retrying them cannot help.
+        """
+
+        for attempt in range(1, self.max_attempts + 1):
+            is_last_attempt = attempt >= self.max_attempts
+            try:
+                with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except TimeoutError as exc:
+                if is_last_attempt:
+                    raise RuntimeError("Reranking model request timed out") from exc
+            except urllib.error.HTTPError as exc:
+                if exc.code not in RETRYABLE_HTTP_STATUS or is_last_attempt:
+                    error_body = exc.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(
+                        f"Reranking model request failed with HTTP {exc.code}: {sanitize_error(error_body)}"
+                    ) from exc
+            except urllib.error.URLError as exc:
+                if is_last_attempt:
+                    raise RuntimeError(f"Reranking model request failed: {exc.reason}") from exc
+            self._sleep_before_retry(attempt)
+        # Defensive: the loop either returns or raises on the last attempt.
+        raise RuntimeError("Reranking model request failed after retries")
+
+    def _sleep_before_retry(self, attempt: int) -> None:
+        if self.retry_backoff_seconds <= 0:
+            return
+        time.sleep(self.retry_backoff_seconds * attempt)
 
     def _endpoint_url(self) -> str:
         normalized_base_url = self.base_url.rstrip("/")
@@ -134,7 +169,16 @@ def create_reranking_provider(
             model_name=(model_name or "keyword-overlap-reranker-v1").strip()
             or "keyword-overlap-reranker-v1"
         )
-    if provider in {"openai-compatible", "openai", "compatible", "domestic", "jina", "cohere"}:
+    if provider in {
+        "openai-compatible",
+        "openai",
+        "compatible",
+        "domestic",
+        "jina",
+        "cohere",
+        "siliconflow",
+        "paratera",
+    }:
         return OpenAICompatibleReRankingProvider(
             model_name=(model_name or "").strip(),
             api_key=(api_key or "").strip(),

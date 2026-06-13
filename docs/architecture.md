@@ -1,5 +1,47 @@
 # 架构说明
 
+## 阶段 32 架构增量：ReAct Agent 决策升级与工具调用实时可视化
+
+阶段 32 改动的是 `/agent/query` 的 Agent 编排层和 `/agent/query/stream` 的可观测输出层，不改变 `/chat` 默认 RAG 问答链路。新的 `react_agent` 路径让模型在受控 action schema 中选择下一步，但真正的工具执行仍由后端 `AgentToolbox` 负责。
+
+```text
+POST /agent/query or /agent/query/stream
+-> chitchat short-circuit
+-> mode == react_agent
+-> ReActAgentService
+   -> ReActAction schema validation
+   -> action: search_knowledge
+      -> AgentToolbox.hybrid_search_knowledge
+      -> HybridSearchService / VectorIndexCache / FAISS or numpy fallback
+      -> ParentChildSearchService / Brain context
+   -> action: rewrite_query
+      -> controlled query rewrite summary
+   -> action: answer_with_citations
+      -> AgentToolbox.answer_with_citations
+      -> BrainService / CitationAnswerService
+      -> citations, sources, evidence confidence, responsibility gate
+   -> action: refuse or final_answer
+-> AgentQueryResponse
+-> token / metadata / done plus agent_step / tool_call_start / tool_call_result
+```
+
+`app/services/agent/react_actions.py` 定义阶段 32 的 action contract：只允许 `search_knowledge`、`rewrite_query`、`answer_with_citations`、`refuse`、`final_answer`。它同时提供 deterministic planner、重复 query 标准化、防护函数和 observation 摘要结构。非法 action、缺失字段或循环异常不会直接执行工具，而是收敛到可记录的失败 observation 或 refusal。
+
+`app/services/agent/react_service.py` 实现 ReAct loop。硬上限为 3 轮；请求级 `max_tool_calls` 继续生效；重复 query 会被拦截；工具异常会记录为 observation，并在超过边界时收敛到拒答或已有证据答案。真实 provider 可通过结构化 JSON action 决策；自动测试默认使用 deterministic planner，不依赖真实 API。
+
+SSE 协议保持向后兼容：
+
+```text
+旧事件：token, metadata, done, error
+新增事件：agent_step, tool_call_start, tool_call_result
+```
+
+新增事件只包含安全摘要，例如 `step_summary`、`action`、`input_summary`、`observation_summary`、`decision_summary`，不展示模型 hidden thought、供应商原始响应、敏感凭据、授权头或受限全文。最终 `metadata` 仍携带 `workflow_steps`、`tool_calls`、`iteration_count`、`sources`、`citations`、`refusal_category` 等可追踪字段。
+
+前端仍使用原生 HTML/CSS/JS。Agent 面板默认提交 `mode: "react_agent"`，pending assistant 气泡中只显示简洁中文状态，避免把每个 function call 事件刷成卡片；最终 metadata 到达后，助手气泡内用可折叠“查看思考过程”面板展示由正式 `workflow_steps` 校准的步骤和工具摘要。显式 API mode `default` 和 `agentic` 保留，便于对照、回退和人工核验。
+
+阶段 32 评测新增 `scripts/evaluate_stage32_react_agent.py`。它使用 in-memory SQLite fixture、deterministic embedding/chat，并显式关闭 reranking provider，对照 `default`、`agentic_langgraph`、`react_agent`，输出 `stage32_react_agent_results.csv` 和 `stage32_react_agent_summary.csv`。该脚本不读取真实 API key，不调用真实 provider，不写业务数据库。
+
 ## 阶段 31 架构增量：FAISS 向量索引与父子块检索
 
 阶段 31 改动默认 RAG 检索链路的底层执行方式，但保持外部 API schema 不变。核心思想是：child chunk 仍负责精确召回和引用，parent chunk 负责给生成模型提供更完整上下文；向量检索优先使用本地 FAISS `IndexFlatIP`，索引不可用时继续 fallback 到阶段 26 的 numpy 矩阵搜索。
@@ -2316,7 +2358,7 @@ OpenAICompatibleEmbeddingProvider
   增加 Accept 和 User-Agent 请求头，兼容 Jina API 行为
 
 OpenAICompatibleChatModelProvider
-  同时发送 Authorization: Bearer 和 api-key
+  同时发送标准授权头和供应商兼容 key header
   保留 Accept、Content-Type 和 User-Agent
   兼容常规 OpenAI-compatible 服务和 MIMO Token Plan
 ```

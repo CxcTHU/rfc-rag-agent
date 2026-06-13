@@ -21,6 +21,8 @@ from app.schemas.agent import (
 )
 from app.services.agent.chitchat import ChitchatResult, detect_chitchat
 from app.services.agent.service import AgentQueryResult, AgentService
+from app.services.agent.react_service import ReActAgentService
+from app.services.agent.react_service import ReActRuntimeEvent
 from app.services.agent.routing import classify_query_complexity
 from app.services.agentic.graph import run_agentic_rag
 from app.services.agentic.state import AgenticResult
@@ -123,6 +125,38 @@ def query_agent(
                 detail="chat model provider is unavailable or timed out",
             ) from exc
         response = agent_response_from_agentic_result(agentic_result)
+        persist_agent_conversation_messages(
+            repository=conversation_repository,
+            conversation_id=request.conversation_id,
+            question=request.question,
+            response=response,
+            chat_model_provider=chat_model_provider,
+        )
+        return response
+
+    if effective_mode == "react_agent":
+        try:
+            result = ReActAgentService(
+                db=db,
+                chat_model_provider=chat_model_provider,
+                embedding_provider=embedding_provider,
+            ).query(
+                question=request.question,
+                top_k=request.top_k,
+                max_tool_calls=request.max_tool_calls,
+                history=conversation_history or request.history,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="chat model provider is unavailable or timed out",
+            ) from exc
+        response = agent_response_from_result(result)
         persist_agent_conversation_messages(
             repository=conversation_repository,
             conversation_id=request.conversation_id,
@@ -249,7 +283,7 @@ def stream_agent_query_events(
     except RuntimeError:
         yield sse_event(
             "error",
-            {"detail": "chat model provider is unavailable or timed out"},
+            {"detail": "model or retrieval provider is unavailable or timed out"},
         )
     except Exception:
         yield sse_event("error", {"detail": "agent stream failed"})
@@ -267,16 +301,19 @@ def stream_non_chitchat_agent_response(
 
     def produce_response() -> None:
         try:
-            streaming_chat_model_provider = QueueStreamingChatModelProvider(
-                base_provider=chat_model_provider,
-                queue=queue,
-            )
+            effective_chat_model_provider = chat_model_provider
+            if request.mode != "react_agent":
+                effective_chat_model_provider = QueueStreamingChatModelProvider(
+                    base_provider=chat_model_provider,
+                    queue=queue,
+                )
             response = build_agent_query_response(
                 request=request,
                 db=db,
                 conversation_history=conversation_history,
-                chat_model_provider=streaming_chat_model_provider,
+                chat_model_provider=effective_chat_model_provider,
                 embedding_provider=embedding_provider,
+                event_sink=lambda event: queue.put(("react_event", event)),
             )
         except Exception as exc:  # noqa: BLE001 - forwarded to SSE error mapping.
             queue.put(("error", exc))
@@ -292,6 +329,10 @@ def stream_non_chitchat_agent_response(
         if event_type == "token":
             streamed_token_count += 1
             yield sse_event("token", {"text": payload})
+            continue
+        if event_type == "react_event":
+            react_event: ReActRuntimeEvent = payload
+            yield sse_event(react_event.event, react_event.payload)
             continue
         if event_type == "response":
             producer.join()
@@ -311,6 +352,7 @@ def build_agent_query_response(
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
+    event_sink=None,
 ) -> AgentQueryResponse:
     effective_mode = request.mode
     if effective_mode is None:
@@ -326,6 +368,20 @@ def build_agent_query_response(
             history=conversation_history or request.history,
         )
         return agent_response_from_agentic_result(agentic_result)
+
+    if effective_mode == "react_agent":
+        result = ReActAgentService(
+            db=db,
+            chat_model_provider=chat_model_provider,
+            embedding_provider=embedding_provider,
+        ).query(
+            question=request.question,
+            top_k=request.top_k,
+            max_tool_calls=request.max_tool_calls,
+            history=conversation_history or request.history,
+            event_sink=event_sink,
+        )
+        return agent_response_from_result(result)
 
     result = AgentService(
         db=db,
@@ -526,7 +582,18 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
         refused=result.refused,
         refusal_reason=result.refusal_reason,
         reasoning_summary=result.reasoning_summary,
-        mode="default",
+        mode=result.mode,
+        workflow_steps=[
+            AgentWorkflowStepItem(
+                name=step.tool_name,
+                input_summary=step.input_summary,
+                output_summary=step.output_summary,
+                succeeded=step.succeeded,
+                error=step.error,
+            )
+            for step in result.workflow_steps
+        ],
+        iteration_count=result.iteration_count,
         refusal_category=refusal_category_from_refusal(
             refused=result.refused,
             refusal_reason=result.refusal_reason,
@@ -556,6 +623,12 @@ def refusal_category_from_refusal(
         return "responsibility_gate_triggered"
     if "off-topic" in normalized_reason or "no domain anchor" in normalized_reason:
         return "off_topic"
+    if (
+        "tool execution failed" in normalized_reason
+        or "request failed" in normalized_reason
+        or "request timed out" in normalized_reason
+    ):
+        return "service_error"
     return "evidence_insufficient"
 
 

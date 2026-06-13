@@ -19,6 +19,32 @@ URL:
 
 ## 当前状态
 
+阶段 32 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是 ReAct Agent 编排代码、SSE 运行事件协议、前端可视化，以及 deterministic 评测派生产物。
+
+```text
+documents 635
+chunks 19118
+sources 673
+chunk_embeddings 25432
+stage30_quality_overall 83.17
+stage32_eval_modes default / agentic_langgraph / react_agent
+```
+
+阶段 32 新增派生产物与脚本：
+
+- `docs/stage32_react_agent_observability.md`：阶段 32 ReAct action、工具权限、SSE 事件、安全边界和完成标准设计文档。
+- `scripts/evaluate_stage32_react_agent.py`：deterministic 三路对照评测脚本，使用 in-memory SQLite fixture，不读取真实 API key，不调用真实 provider，不写业务数据库。
+- `data/evaluation/stage32_react_agent_results.csv`：逐问题、逐模式评测结果，只保存 query_id、category、mode、错误、是否 answer-like、拒答匹配、来源数量、引用有效性、工具调用数、迭代数和 workflow step 数。
+- `data/evaluation/stage32_react_agent_summary.csv`：`default`、`agentic_langgraph`、`react_agent` 汇总指标，只保存错误率、回答数、拒答匹配、平均工具调用、平均迭代和 decision。
+- `/agent/query/stream` 新增运行事件 `agent_step`、`tool_call_start`、`tool_call_result`，这些事件是请求内即时传输的安全摘要，不是新的持久数据源。
+
+数据安全边界：
+
+- ReAct 工具仍只读，只能走 `search_knowledge`、`rewrite_query`、`answer_with_citations`、`refuse`、`final_answer`；不新增写入型工具。
+- ReAct 检索和回答必须复用 `AgentToolbox`、Brain、citation、sources、evidence confidence、responsibility_gate 和 refusal 链路。
+- SSE 和前端只展示 `step_summary`、`input_summary`、`observation_summary`、`decision_summary` 等安全摘要，不展示 hidden thought。
+- `stage32_react_agent_results.csv` 和 `stage32_react_agent_summary.csv` 不得包含敏感凭据、授权头、供应商原始响应或受限全文。
+
 阶段 31 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是由现有 `chunk_embeddings` 派生的本地 FAISS 索引能力，以及 `chunks.parent_chunk_id` 父子块关系字段。
 
 ```text

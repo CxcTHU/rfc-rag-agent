@@ -13,6 +13,39 @@
 
 本文件的作用不是一次性定死所有细节，而是给“从零搭建堆石混凝土问答 Agent”提供稳定方向。
 
+## 最新交接状态：阶段 32 开发与验证完成，等待用户人工核验
+
+当前分支：`codex/phase-32-react-agent-tool-observability`。
+
+阶段 32 已从阶段 31 完成并合并后的 `main` 出发。已核对 `main -> 93ee058 Merge phase 31 faiss parent child retrieval`；`phase-31-complete -> b03bb47 Complete phase 31 faiss parent child retrieval` 是 `main` 的祖先；未移动任何已有阶段 tag。
+
+阶段 32 已完成：
+
+- 新增 `docs/stage32_react_agent_observability.md`，说明 ReAct action schema、只读工具权限、SSE 事件、安全边界、循环控制、评测方式和完成标准。
+- 新增 `app/services/agent/react_actions.py`，定义 `search_knowledge`、`rewrite_query`、`answer_with_citations`、`refuse`、`final_answer` 五类受控 action，以及 observation、step record、deterministic planner 和重复 query 防护。
+- 新增 `app/services/agent/react_service.py`，实现 `ReActAgentService`；默认最多 3 轮，尊重 `max_tool_calls`，异常和重复 query 会收敛到拒答或已有证据答案。
+- `/agent/query` 支持显式 `mode="react_agent"`；default `AgentService` 与旧 `agentic` LangGraph 路径继续保留，`/chat` 默认链路不变。
+- `/agent/query/stream` 在保留 `token`、`metadata`、`done`、`error` 的基础上新增 `agent_step`、`tool_call_start`、`tool_call_result`。
+- 前端 Agent 面板默认提交 `mode: "react_agent"`，运行中只展示简洁中文状态（例如“正在思考”“正在调用：检索知识库”）；最终答案生成后用可折叠“查看思考过程”面板展示由 `workflow_steps` 校准的步骤和工具摘要。
+- 新增 `scripts/evaluate_stage32_react_agent.py` 与 `data/evaluation/stage32_react_agent_results.csv`、`data/evaluation/stage32_react_agent_summary.csv`，deterministic 对照 `default`、`agentic_langgraph`、`react_agent`，不依赖真实 provider。
+
+阶段 32 验证：
+
+```text
+python scripts\evaluate_stage32_react_agent.py
+default / agentic_langgraph / react_agent: errors=0, decision=pass
+
+阶段 32 聚焦测试：106 passed
+全量测试：629 passed, 1 warning
+阶段 30 评分：overall=83.17 grade=B release_decision=review_required
+API smoke：/health, /quality-report, /chat, /agent/query, /agent/query/stream, /search/hybrid 均 200
+Browser smoke：desktop 与 390x844 mobile 均确认折叠“查看思考过程”存在、实时工具卡片不可见、final answer present、horizontal overflow=false、console errors=0
+```
+
+阶段 32 核心边界：ReAct 只允许只读 action；工具执行必须复用 `AgentToolbox` 与 Brain，不得绕过 citation、source、evidence confidence、responsibility_gate 或 refusal；前端和日志只展示安全摘要，不展示 hidden thought 或供应商原始响应；真实 provider 只允许人工显式 smoke，不作为 CI 或本地全量测试前提；不得把敏感凭据、授权头或受限全文写入 Git、CSV、文档、测试或 Obsidian。
+
+阶段 32 当前必须停在用户人工核验前：**不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR，不要创建 `phase-32-complete` tag**。只有用户人工核验并明确授权后，才允许进入提交、tag 和 GitHub 推送流程。
+
 ## 最新交接状态：阶段 31 开发与验证完成，等待用户人工核验
 
 当前分支：`codex/phase-31-faiss-parent-child-retrieval`。
@@ -1835,7 +1868,7 @@ submit state: no git add, no commit, no tag, no push, no PR
 ```text
 Token Plan 的 MIMO key 是 tp- 前缀，必须配 token-plan-cn / token-plan-sgp / token-plan-ams 这类 Token Plan base URL。
 普通 sk- 前缀 key 应配普通 API base URL，两者不能混用。
-MIMO OpenAI-compatible 调用需要 api-key 请求头；项目同时保留 Authorization: Bearer 以兼容其他 provider。
+MIMO OpenAI-compatible 调用需要供应商兼容 key header；项目同时保留标准授权头以兼容其他 provider。
 真实模型评测要输出独立 CSV，不覆盖 deterministic baseline。
 ```
 

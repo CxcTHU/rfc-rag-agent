@@ -107,7 +107,7 @@ class AgentToolbox:
                 query=query,
                 top_k=top_k,
             )
-        except ValueError as exc:
+        except (RuntimeError, ValueError) as exc:
             return failed_tool_result(tool_name, query, exc)
 
         search_results = [search_item_from_result(result) for result in results]

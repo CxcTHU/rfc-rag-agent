@@ -34,6 +34,9 @@ class AgentQueryResult:
     refused: bool = False
     refusal_reason: str | None = None
     reasoning_summary: str = ""
+    mode: str = "default"
+    workflow_steps: list[AgentToolCallRecord] = field(default_factory=list)
+    iteration_count: int = 0
 
 
 class AgentService:

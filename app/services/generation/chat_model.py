@@ -12,6 +12,10 @@ ChatRole = Literal["system", "user", "assistant"]
 VALID_CHAT_ROLES = {"system", "user", "assistant"}
 SOURCE_MARKER_RE = re.compile(r"\[(\d+)\]")
 
+# Transient HTTP statuses worth retrying. 4xx client errors (bad key, bad
+# request) are excluded because retrying them only wastes quota.
+RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
+
 
 @dataclass(frozen=True)
 class ChatMessage:
@@ -88,6 +92,8 @@ class OpenAICompatibleChatModelProvider:
     temperature: float = 0.2
     timeout_seconds: float = 30.0
     provider_name: str = "openai-compatible"
+    max_attempts: int = 3
+    retry_backoff_seconds: float = 0.5
 
     def __post_init__(self) -> None:
         if not self.model_name.strip():
@@ -96,23 +102,17 @@ class OpenAICompatibleChatModelProvider:
             raise ValueError("api_key must not be empty")
         if not self.base_url.strip():
             raise ValueError("base_url must not be empty")
+        if self.max_attempts <= 0:
+            raise ValueError("max_attempts must be greater than 0")
+        if self.retry_backoff_seconds < 0:
+            raise ValueError("retry_backoff_seconds must be greater than or equal to 0")
 
     def generate(self, messages: Sequence[ChatMessage]) -> ChatModelResult:
         if not messages:
             raise ValueError("messages must not be empty")
 
         request = self._build_request(messages, stream=False)
-
-        try:
-            with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
-                response_data = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            error_body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"Chat model request failed with HTTP {exc.code}: {error_body}"
-            ) from exc
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"Chat model request failed: {exc.reason}") from exc
+        response_data = self._request_with_retry(request)
 
         answer = parse_openai_compatible_answer(response_data)
         return ChatModelResult(
@@ -127,16 +127,66 @@ class OpenAICompatibleChatModelProvider:
             raise ValueError("messages must not be empty")
 
         request = self._build_request(messages, stream=True)
-        try:
-            with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
-                yield from parse_openai_compatible_stream(response)
-        except urllib.error.HTTPError as exc:
-            error_body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"Chat model stream request failed with HTTP {exc.code}: {error_body}"
-            ) from exc
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"Chat model stream request failed: {exc.reason}") from exc
+        # Retry only covers connection establishment. Once tokens start
+        # streaming we cannot safely retry without duplicating output.
+        response = self._open_stream_with_retry(request)
+        with response:
+            yield from parse_openai_compatible_stream(response)
+
+    def _request_with_retry(self, request: urllib.request.Request) -> dict[str, Any]:
+        """Send the request, retrying transient network failures.
+
+        Transient TLS/connection drops (e.g. ``UNEXPECTED_EOF_WHILE_READING``),
+        timeouts, and 429/5xx responses are retried with a short backoff. Other
+        4xx responses fail immediately because retrying them cannot help.
+        """
+
+        for attempt in range(1, self.max_attempts + 1):
+            is_last_attempt = attempt >= self.max_attempts
+            try:
+                with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except TimeoutError as exc:
+                if is_last_attempt:
+                    raise RuntimeError("Chat model request timed out") from exc
+            except urllib.error.HTTPError as exc:
+                if exc.code not in RETRYABLE_HTTP_STATUS or is_last_attempt:
+                    error_body = exc.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(
+                        f"Chat model request failed with HTTP {exc.code}: {error_body}"
+                    ) from exc
+            except urllib.error.URLError as exc:
+                if is_last_attempt:
+                    raise RuntimeError(f"Chat model request failed: {exc.reason}") from exc
+            self._sleep_before_retry(attempt)
+        # Defensive: the loop either returns or raises on the last attempt.
+        raise RuntimeError("Chat model request failed after retries")
+
+    def _open_stream_with_retry(self, request: urllib.request.Request):
+        for attempt in range(1, self.max_attempts + 1):
+            is_last_attempt = attempt >= self.max_attempts
+            try:
+                return urlopen_without_proxy(request, timeout=self.timeout_seconds)
+            except TimeoutError as exc:
+                if is_last_attempt:
+                    raise RuntimeError("Chat model stream request timed out") from exc
+            except urllib.error.HTTPError as exc:
+                if exc.code not in RETRYABLE_HTTP_STATUS or is_last_attempt:
+                    error_body = exc.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(
+                        f"Chat model stream request failed with HTTP {exc.code}: {error_body}"
+                    ) from exc
+            except urllib.error.URLError as exc:
+                if is_last_attempt:
+                    raise RuntimeError(f"Chat model stream request failed: {exc.reason}") from exc
+            self._sleep_before_retry(attempt)
+        # Defensive: the loop either returns or raises on the last attempt.
+        raise RuntimeError("Chat model stream request failed after retries")
+
+    def _sleep_before_retry(self, attempt: int) -> None:
+        if self.retry_backoff_seconds <= 0:
+            return
+        time.sleep(self.retry_backoff_seconds * attempt)
 
     def _build_request(
         self,
@@ -156,12 +206,12 @@ class OpenAICompatibleChatModelProvider:
             payload["stream"] = True
         return urllib.request.Request(
             self._endpoint_url(),
-            data=json.dumps(payload).encode("utf-8"),
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "api-key": self.api_key,
                 "Accept": "text/event-stream" if stream else "application/json",
-                "Content-Type": "application/json",
+                "Content-Type": "application/json; charset=utf-8",
                 "User-Agent": "rfc-rag-agent/chat-model-provider",
             },
             method="POST",

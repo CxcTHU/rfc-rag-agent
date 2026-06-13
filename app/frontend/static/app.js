@@ -105,6 +105,7 @@ function formatRefusalCategory(category) {
     responsibility_gate_triggered: "责任边界",
     evidence_insufficient: "证据不足",
     off_topic: "离题",
+    service_error: "检索服务异常",
   };
   return labels[category] || compactText(category, "未分类");
 }
@@ -535,6 +536,8 @@ function appendAgentThinkingMessage() {
       <article class="chat-message chat-message--assistant chat-message--thinking" aria-live="polite">
         <div class="chat-message-bubble">
           <div class="chat-message-role">Agent</div>
+          <div class="agent-thinking-status" data-agent-thinking-status>正在思考<span aria-hidden="true">...</span></div>
+          <div class="agent-live-steps" data-agent-live-steps hidden aria-label="Agent live steps"></div>
           <div class="answer-text thinking-text">正在思考<span aria-hidden="true">...</span></div>
         </div>
       </article>
@@ -542,6 +545,141 @@ function appendAgentThinkingMessage() {
   );
   scrollAgentChatToBottom();
   return answerBox.lastElementChild;
+}
+
+function liveAgentEventView(eventName, payload = {}) {
+  if (eventName === "tool_call_start") {
+    return {
+      kind: "tool-call-start",
+      title: "Preparing tool",
+      summary: payload.input_summary || payload.step_summary || payload.tool_name || "",
+      meta: payload.tool_name || payload.action || "",
+    };
+  }
+  if (eventName === "tool_call_result") {
+    return {
+      kind: payload.succeeded === false ? "tool-call-result failed" : "tool-call-result",
+      title: "Tool result",
+      summary: payload.observation_summary || payload.output_summary || payload.step_summary || "",
+      meta: payload.tool_name || payload.action || "",
+    };
+  }
+  return {
+    kind: "agent-step",
+    title: "Agent step",
+    summary: payload.step_summary || payload.decision_summary || payload.action || "",
+    meta: payload.action || payload.phase || "",
+  };
+}
+
+function localizeAgentAction(action) {
+  const labels = {
+    search_knowledge: "检索知识库",
+    rewrite_query: "改写问题",
+    answer_with_citations: "结合证据回答",
+    refuse: "拒答",
+    final_answer: "完成回答",
+  };
+  return labels[action] || action || "处理";
+}
+
+function localizeAgentTool(toolName) {
+  const labels = {
+    search_knowledge: "检索知识库",
+    hybrid_search_knowledge: "混合检索知识库",
+    answer_with_citations: "生成带引用回答",
+    rewrite_query: "改写问题",
+    refuse: "拒答",
+    final_answer: "完成回答",
+  };
+  return labels[toolName] || toolName || "工具";
+}
+
+function agentLiveStatusText(eventName, payload = {}) {
+  if (eventName === "tool_call_start") {
+    return `正在调用：${localizeAgentTool(payload.tool_name || payload.action)}`;
+  }
+  if (eventName === "tool_call_result") {
+    return payload.succeeded === false
+      ? `${localizeAgentTool(payload.tool_name || payload.action)} 调用失败`
+      : `${localizeAgentTool(payload.tool_name || payload.action)} 已返回`;
+  }
+  return `正在${localizeAgentAction(payload.action)}`;
+}
+
+function appendAgentLiveStep(messageElement, eventName, payload = {}) {
+  if (!messageElement) {
+    return;
+  }
+  messageElement._agentThoughtEvents = messageElement._agentThoughtEvents || [];
+  messageElement._agentThoughtEvents.push({ eventName, payload });
+  const status = messageElement.querySelector("[data-agent-thinking-status]");
+  if (status) {
+    status.textContent = agentLiveStatusText(eventName, payload);
+  }
+  const list = messageElement.querySelector("[data-agent-live-steps]");
+  if (!list) {
+    return;
+  }
+  const view = liveAgentEventView(eventName, payload);
+  list.insertAdjacentHTML(
+    "beforeend",
+    `
+      <article class="agent-live-step agent-live-step--${escapeHtml(view.kind)}">
+        <div class="agent-live-step-heading">
+          <span class="agent-live-step-kind">${escapeHtml(view.title)}</span>
+          ${view.meta ? `<span class="pill neutral">${escapeHtml(view.meta)}</span>` : ""}
+        </div>
+        ${view.summary ? `<p class="agent-live-step-summary">${escapeHtml(view.summary)}</p>` : ""}
+      </article>
+    `,
+  );
+  scrollAgentChatToBottom();
+}
+
+function agentThoughtStepHtml(step, index) {
+  const action = localizeAgentAction(step.action || step.name || step.tool_name);
+  const succeeded = step.succeeded !== false;
+  const input = step.input_summary ? `<div class="agent-thought-line">输入：${escapeHtml(step.input_summary)}</div>` : "";
+  const output = step.output_summary ? `<div class="agent-thought-line">结果：${escapeHtml(step.output_summary)}</div>` : "";
+  const error = step.error ? `<div class="agent-thought-line agent-thought-line--error">错误：${escapeHtml(step.error)}</div>` : "";
+  return `
+    <li class="agent-thought-step">
+      <div class="agent-thought-step-title">
+        <span>${index + 1}. ${escapeHtml(action)}</span>
+        <span class="pill ${succeeded ? "neutral" : "warning"}">${escapeHtml(succeeded ? "完成" : "失败")}</span>
+      </div>
+      ${input}
+      ${output}
+      ${error}
+    </li>
+  `;
+}
+
+function agentThoughtHtml(result = {}) {
+  const workflowSteps = result.workflow_steps || [];
+  const toolCalls = result.tool_calls || [];
+  const steps = workflowSteps.length
+    ? workflowSteps
+    : toolCalls.map((call) => ({
+        action: call.tool_name,
+        name: call.tool_name,
+        input_summary: call.input_summary,
+        output_summary: call.output_summary,
+        succeeded: call.succeeded,
+        error: call.error,
+      }));
+  if (!steps.length) {
+    return "";
+  }
+  return `
+    <details class="agent-thought-panel">
+      <summary>查看思考过程</summary>
+      <ol class="agent-thought-list">
+        ${steps.map((step, index) => agentThoughtStepHtml(step, index)).join("")}
+      </ol>
+    </details>
+  `;
 }
 
 function appendTokenToAgentMessage(messageElement, token) {
@@ -556,6 +694,10 @@ function appendTokenToAgentMessage(messageElement, token) {
     messageElement.classList.remove("chat-message--thinking");
     answerText.classList.remove("thinking-text");
     answerText.textContent = "";
+    const status = messageElement.querySelector("[data-agent-thinking-status]");
+    if (status) {
+      status.textContent = "正在生成回答";
+    }
   }
   answerText.textContent += token;
   scrollAgentChatToBottom();
@@ -583,6 +725,9 @@ function finalizeAgentStreamingMessage(messageElement, result) {
     return;
   }
 
+  bubble.querySelector("[data-agent-thinking-status]")?.remove();
+  bubble.querySelector("[data-agent-live-steps]")?.remove();
+  answerText.insertAdjacentHTML("beforebegin", agentThoughtHtml(result));
   answerText.textContent = result.answer;
 
   if (result.refused) {
@@ -712,6 +857,7 @@ function agentAnswerHtml(result) {
     ? `<div class="refusal"><strong>拒答</strong>${refusalCategory}<p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`
     : "";
   return `
+    ${agentThoughtHtml(result)}
     ${refused}
     <div class="answer-text">${escapeHtml(result.answer)}</div>
     <div class="answer-meta">
@@ -896,6 +1042,7 @@ async function submitAgent() {
       question,
       top_k: topK,
       max_tool_calls: maxToolCalls,
+      mode: "react_agent",
     };
     if (!state.currentConversationId) {
       const conversation = await createAgentConversation();
@@ -926,6 +1073,15 @@ async function submitAgent() {
           } else {
             renderAgentToolCalls(metadata.tool_calls || []);
           }
+        },
+        onAgentStep: (payload) => {
+          appendAgentLiveStep(pendingThinkingMessage, "agent_step", payload);
+        },
+        onToolCallStart: (payload) => {
+          appendAgentLiveStep(pendingThinkingMessage, "tool_call_start", payload);
+        },
+        onToolCallResult: (payload) => {
+          appendAgentLiveStep(pendingThinkingMessage, "tool_call_result", payload);
         },
       });
     } catch (streamError) {
@@ -1026,6 +1182,12 @@ async function consumeSseBuffer(buffer, handlers = {}) {
     } else if (event.name === "metadata") {
       metadata = event.data;
       await handlers.onMetadata?.(event.data);
+    } else if (event.name === "agent_step") {
+      await handlers.onAgentStep?.(event.data);
+    } else if (event.name === "tool_call_start") {
+      await handlers.onToolCallStart?.(event.data);
+    } else if (event.name === "tool_call_result") {
+      await handlers.onToolCallResult?.(event.data);
     } else if (event.name === "error") {
       throw new Error(event.data.detail || "流式响应失败");
     }

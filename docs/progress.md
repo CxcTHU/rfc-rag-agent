@@ -1,5 +1,43 @@
 # 项目进度
 
+## 最新状态：2026-06-13（阶段 32 开发与验证完成，等待用户人工核验）
+
+当前阶段：阶段 32。在 `codex/phase-32-react-agent-tool-observability` 分支已完成 ReAct Agent 决策升级、工具调用 SSE 实时可视化、前端中文状态 + 可折叠“查看思考过程”、deterministic 三路评测、普通文档和 Obsidian 草稿收尾。阶段 32 从阶段 31 完成并合并后的 `main -> 93ee058 Merge phase 31 faiss parent child retrieval` 出发；已核对 `phase-31-complete -> b03bb47 Complete phase 31 faiss parent child retrieval` 是 `main` 的祖先，未移动任何已有阶段 tag。
+
+阶段 32 完成内容：
+
+- 新增 `docs/stage32_react_agent_observability.md`，说明 ReAct action、工具权限、SSE 事件、安全边界、循环控制、评测方式和完成标准。
+- 新增 `app/services/agent/react_actions.py` 和 `app/services/agent/react_service.py`，实现受控 ReAct action loop，默认最多 3 轮，并带重复 query 防护和异常收敛。
+- `/agent/query` 新增显式 `mode="react_agent"`；default AgentService 和旧 `agentic` LangGraph 路径保留，`/chat` 默认链路不变。
+- `/agent/query/stream` 新增 `agent_step`、`tool_call_start`、`tool_call_result`，同时保留 `token`、`metadata`、`done`、`error`。
+- 前端 Agent 面板默认使用 `react_agent`，运行中实时显示步骤、工具准备和工具返回摘要；最终 metadata 继续回填 `workflow_steps` 工具卡。
+- 新增 `scripts/evaluate_stage32_react_agent.py` 和 `tests/test_stage32_react_eval.py`，对照 `default`、`agentic_langgraph`、`react_agent`，默认 deterministic，不依赖真实 provider。
+
+阶段 32 验证：
+
+```text
+python scripts\evaluate_stage32_react_agent.py
+default / agentic_langgraph / react_agent: errors=0, decision=pass
+
+阶段 32 聚焦测试：106 passed
+python -m pytest -q
+629 passed, 1 warning
+
+python scripts\score_stage30_quality.py
+overall=83.17 grade=B release_decision=review_required
+
+API smoke: /health 200, /quality-report 200, /chat 200, /agent/query 200, /agent/query/stream 200, /search/hybrid 200
+Browser smoke: desktop and 390x844 mobile collapsible thought panel present, live tool cards hidden, final answer present, horizontal overflow=false, console errors=0
+```
+
+遗留风险与人工核验重点：
+
+- Agent 面板现在默认走 `react_agent`，但显式 `mode="default"` 和 `mode="agentic"` 仍可作为 API 对照/回退；人工核验重点检查是否符合预期产品默认策略。
+- ReAct 只展示安全摘要，不展示 hidden thought；人工核验重点检查前端、日志和 CSV 中没有供应商原始响应、敏感凭据、授权头或受限全文。
+- 自动验证使用 deterministic 服务实例；真实 provider smoke 只能由用户显式触发，不作为 CI 或本地全量测试前提。
+
+阶段 32 当前停在用户人工核验前：**尚未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR，未创建 `phase-32-complete` tag**。
+
 ## 最新状态：2026-06-13（阶段 31 开发与验证完成，等待用户人工核验）
 
 当前阶段：阶段 31。在 `codex/phase-31-faiss-parent-child-retrieval` 分支已完成 FAISS 向量索引、父子块检索链路、前端高级参数折叠、评测验证、普通文档和 Obsidian 草稿收尾。阶段 31 从阶段 30 完成并合并后的 `main -> e74ce78 Complete phase 30 rag evaluation scoring system` 出发；已核对 `phase-30-complete -> e74ce78` 与 `main` 指向同一提交，未移动任何已有阶段 tag。
@@ -1577,7 +1615,7 @@ full tests: 377 passed
 - 使用 Jina 重建真实向量索引：997 个 chunk，995 个新写入，2 个 smoke run 已存在并跳过。
 - 更新 vector/hybrid/chat/agent/brain workflow 评测脚本，让它们从 settings 读取完整 embedding provider 配置。
 - 根据 MIMO 官方文档校准 Token Plan 接入：订阅 key 使用 `tp-...`，中国集群 OpenAI-compatible base URL 使用 `https://token-plan-cn.xiaomimimo.com/v1`。
-- 为 `OpenAICompatibleChatModelProvider` 增加 `api-key`、`Accept` 和 `User-Agent` 请求头，同时保留 `Authorization: Bearer`，兼容 MIMO 和常规 OpenAI-compatible 服务。
+- 为 `OpenAICompatibleChatModelProvider` 增加供应商兼容 key header、`Accept` 和 `User-Agent` 请求头，同时保留标准授权头，兼容 MIMO 和常规 OpenAI-compatible 服务。
 - 使用真实 MIMO `mimo-v2.5-pro` 做 smoke test，返回 `MIMO_OK`。
 - 单独生成真实组合评测文件：`mimo_jina_chat_results.csv`、`mimo_jina_agent_results.csv`、`mimo_jina_brain_workflow_results.csv`。
 - 保持 deterministic provider 仍是自动测试默认路径；真实模型评测通过显式 `--chat-provider openai-compatible` 运行，避免 CI 或本地回归依赖真实密钥和余额。

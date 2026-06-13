@@ -1,0 +1,4 @@
+mode,total,errors,error_rate,answer_like_count,refusal_matches,refusal_total,avg_tool_count,avg_iteration_count,decision
+agentic_langgraph,4,0,0.000,3,1,1,6.25,0.75,pass
+default,4,0,0.000,3,1,1,1.00,0.00,pass
+react_agent,4,0,0.000,3,1,1,2.00,2.00,pass
