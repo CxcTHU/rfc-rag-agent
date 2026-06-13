@@ -1,5 +1,58 @@
 # 项目进度
 
+## 最新状态：2026-06-13（阶段 33 开发与验证完成，等待用户人工核验）
+
+当前阶段：阶段 33。在 `codex/phase-33-rag-performance-embedding-validation` 分支已完成 RAG 链路性能优化、GLM-Embedding-3 迁移验证、query embedding cache、RAG/ReAct latency trace、MIMO vs DeepSeek benchmark dry-run/真实可用性检查、普通文档和 Obsidian 草稿收尾。阶段 33 从阶段 32 完成并合并后的 `main -> 608a6e9 Merge phase 32 react agent observability` 出发；已核对 `phase-32-complete -> f259f97 Complete phase 32 react agent observability` 是 `main` 的祖先，未移动任何已有阶段 tag。
+
+阶段 33 完成内容：
+
+- 新增 `docs/stage33_rag_performance_embedding_validation.md`，固定性能指标、安全边界、FAISS-only 加载策略、fallback、query embedding cache、latency trace、embedding 迁移验证、provider benchmark 和完成标准。
+- 优化 `app/services/retrieval/vector_cache.py`：完整 FAISS index 与 ids metadata 可用时进入 `load_mode="faiss_only"`，只加载必要 chunk/document metadata，跳过 SQLite embedding JSON 反序列化与 numpy matrix 构建；FAISS 缺失、损坏、provider/model/dimension 不匹配、ids 不完整或 ids 与当前 metadata 不一致时 fallback `load_mode="numpy_fallback"`。
+- 新增 `app/services/retrieval/query_embedding_cache.py`，并在 `VectorSearchService` 中缓存 query embedding；cache key 包含 provider、model、dimension、normalized query text，具备 TTL 与容量上限，只缓存 query 侧 embedding。
+- 新增 `app/services/observability/latency_trace.py`，并接入 vector search、FAISS/numpy search、hybrid rerank、ReAct planner/tool/answer、同步与 SSE metadata，输出安全 latency trace。
+- 新增 `scripts/benchmark_stage33_rag_latency.py`、`scripts/evaluate_stage33_embedding_migration.py`、`scripts/benchmark_stage33_chat_providers.py`，分别覆盖 RAG 延迟、GLM-Embedding-3 vs Jina 迁移验证、MIMO baseline vs DeepSeek candidate benchmark。
+- 新增阶段 33 聚焦测试，覆盖 FAISS-only 加载、numpy fallback、query embedding cache、latency trace、stream metadata 兼容、embedding 迁移评测和 provider benchmark dry-run。
+
+阶段 33 当前评测观察：
+
+```text
+stage33_rag_latency_benchmark.csv:
+deterministic/hash-token-v1 dim=64 load_mode=numpy_fallback, query_embedding≈0.05ms, vector_search≈558.45ms, total≈558.51ms
+
+stage33_embedding_migration:
+glm_candidate paratera/GLM-Embedding-3 dim=2048 completed, precision@5=0.867, coverage=0.637, avg_latency≈1469.98ms, decision=review_for_silent_regression
+jina_baseline skipped_missing_real_config（本机缺少真实 Jina provider 配置，不能伪造成同环境对照通过）
+
+stage33_chat_provider_benchmark:
+mimo_baseline completed, ttft≈2909-6266ms, total≈6801-6953ms, reasoning_content_leak_risk=false
+deepseek_candidate skipped（本机未配置 DeepSeek，不替换默认 MIMO）
+```
+
+阶段 33 最终验证：
+
+```text
+阶段 33 聚焦测试：16 passed
+python -m pytest -q
+643 passed
+
+python scripts\score_stage30_quality.py
+overall=83.17 grade=B release_decision=review_required
+
+Browser smoke:
+desktop: Agent 查询 final answer present, collapsible thought panel present, horizontal overflow=false, console errors=0
+390x844 mobile: Agent 查询 final answer present, collapsible thought panel present, horizontal overflow=false, console errors=0
+```
+
+人工核验重点：
+
+- 抽样确认 FAISS 完整可用时 `VectorIndexCache.load_mode == "faiss_only"`，且没有反序列化全部 embedding JSON。
+- 抽样破坏 FAISS metadata 或 ids 后，确认 SQLite/numpy fallback 仍能返回结果。
+- 复查 `latency_trace` 是否只含安全耗时字段，不含 hidden thought、reasoning_content、raw provider response、API key、Bearer token 或受限全文。
+- 复查 GLM-Embedding-3 2048 维评测结果：当前只能确认 GLM query 侧可运行与无静默成功伪造；Jina 同环境真实 baseline 未配置，需要人工决定是否补跑 Jina。
+- 复查 DeepSeek 仍只是 benchmark candidate；当前未配置 DeepSeek，不能切默认 provider。
+
+阶段 33 当前停在用户人工核验前：**尚未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR，未创建 `phase-33-complete` tag**。只有用户人工核验并明确授权后，才允许提交阶段 33、创建 tag 和推送。
+
 ## 最新状态：2026-06-13（阶段 32 开发与验证完成，等待用户人工核验）
 
 当前阶段：阶段 32。在 `codex/phase-32-react-agent-tool-observability` 分支已完成 ReAct Agent 决策升级、工具调用 SSE 实时可视化、前端中文状态 + 可折叠“查看思考过程”、deterministic 三路评测、普通文档和 Obsidian 草稿收尾。阶段 32 从阶段 31 完成并合并后的 `main -> 93ee058 Merge phase 31 faiss parent child retrieval` 出发；已核对 `phase-31-complete -> b03bb47 Complete phase 31 faiss parent child retrieval` 是 `main` 的祖先，未移动任何已有阶段 tag。

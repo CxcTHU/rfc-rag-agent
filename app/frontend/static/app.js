@@ -1023,7 +1023,8 @@ async function submitAgent() {
     setApiStatus("Agent 正在运行，请等待当前请求完成");
     return;
   }
-  const question = document.querySelector("[data-agent-question]")?.value.trim();
+  const questionInput = document.querySelector("[data-agent-question]");
+  const question = questionInput?.value.trim();
   const topK = Number(document.querySelector("[data-agent-top-k]")?.value || 5);
   const maxToolCalls = Number(document.querySelector("[data-agent-max-tool-calls]")?.value || 2);
   const sourceId = document.querySelector("[data-agent-source-id]")?.value.trim();
@@ -1049,6 +1050,9 @@ async function submitAgent() {
       state.currentConversationId = conversation.id;
     }
     pendingUserMessage = appendAgentUserMessage(question);
+    if (questionInput) {
+      questionInput.value = "";
+    }
     pendingThinkingMessage = appendAgentThinkingMessage();
     body.conversation_id = state.currentConversationId;
     if (sourceId) {

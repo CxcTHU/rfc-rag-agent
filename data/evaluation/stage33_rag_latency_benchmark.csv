@@ -1,0 +1,2 @@
+query_id,provider,model_name,dimension,load_mode,query_embedding_latency_ms,vector_search_latency_ms,time_to_final_ms,result_count
+stage33_filling_capacity,deterministic,hash-token-v1,64,numpy_fallback,0.051,558.452,558.506,5

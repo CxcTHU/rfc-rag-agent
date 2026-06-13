@@ -6,6 +6,12 @@ from sqlalchemy.orm import sessionmaker
 
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.core.config import get_settings
+from app.services.observability.latency_trace import (
+    get_current_latency_trace,
+    latency_timer,
+    reset_current_latency_trace,
+    set_current_latency_trace,
+)
 from app.services.retrieval.keyword_search import KeywordSearchResult
 from app.services.retrieval.keyword_search import KeywordSearchService
 from app.services.retrieval.keyword_search import source_type_rank
@@ -124,12 +130,18 @@ class HybridSearchService:
             with ThreadSessionLocal() as db:
                 return KeywordSearchService(db).search(query, top_k=fetch_k)
 
+        trace = get_current_latency_trace()
+
         def run_vector() -> list[VectorSearchResult]:
+            token = set_current_latency_trace(trace)
             with ThreadSessionLocal() as db:
-                return VectorSearchService(db, self.embedding_provider).search(
-                    query,
-                    top_k=fetch_k,
-                )
+                try:
+                    return VectorSearchService(db, self.embedding_provider).search(
+                        query,
+                        top_k=fetch_k,
+                    )
+                finally:
+                    reset_current_latency_trace(token)
 
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="hybrid-search") as executor:
             keyword_future = executor.submit(run_keyword)
@@ -146,11 +158,12 @@ class HybridSearchService:
         if not self.reranking_enabled or self.reranking_provider is None or not results:
             return results[:top_k]
         try:
-            reranked = self.reranking_provider.rerank(
-                query=query,
-                candidates=[result.content for result in results],
-                top_k=top_k,
-            )
+            with latency_timer("rerank_latency_ms"):
+                reranked = self.reranking_provider.rerank(
+                    query=query,
+                    candidates=[result.content for result in results],
+                    top_k=top_k,
+                )
         except RuntimeError:
             # Reranking is a quality enhancement, not a hard requirement. If the
             # rerank service has a transient failure, fall back to the fusion

@@ -14,6 +14,7 @@ from app.db.repositories import deserialize_embedding
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.faiss_index import FaissVectorIndex, default_faiss_paths
 from app.services.retrieval.vector_index import calculate_text_hash
+from app.services.observability.latency_trace import latency_timer
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,7 @@ class VectorIndexMatch:
 
 
 class VectorIndexCache:
-    """In-process numpy matrix cache for chunk embeddings."""
+    """In-process vector cache with FAISS first and numpy fallback."""
 
     def __init__(self, db: Session, embedding_provider: EmbeddingProvider) -> None:
         self.db = db
@@ -50,6 +51,7 @@ class VectorIndexCache:
             dtype=np.float64,
         )
         self._faiss_index: FaissVectorIndex | None = None
+        self.load_mode = "empty"
 
     def bind_session(self, db: Session) -> None:
         with self._lock:
@@ -65,6 +67,7 @@ class VectorIndexCache:
                 dtype=np.float64,
             )
             self._faiss_index = None
+            self.load_mode = "empty"
 
     def search(
         self,
@@ -86,9 +89,11 @@ class VectorIndexCache:
 
         with self._lock:
             if self._faiss_index is not None:
-                return self._search_faiss(query_vector=query_vector, top_k=top_k)
+                with latency_timer("faiss_search_latency_ms"):
+                    return self._search_faiss(query_vector=query_vector, top_k=top_k)
 
-            scores = self._normalized_matrix @ query_vector
+            with latency_timer("numpy_search_latency_ms"):
+                scores = self._normalized_matrix @ query_vector
             if scores.size == 0:
                 return []
 
@@ -108,11 +113,26 @@ class VectorIndexCache:
         with self._lock:
             if self._loaded:
                 return
+            faiss_payload = self._load_faiss_entries_if_available()
+            if faiss_payload is not None:
+                entries, faiss_index = faiss_payload
+                self._entries = entries
+                self._entries_by_chunk_id = {entry.chunk_id: entry for entry in entries}
+                self._normalized_matrix = np.empty(
+                    (0, self.embedding_provider.dimension),
+                    dtype=np.float64,
+                )
+                self._faiss_index = faiss_index
+                self.load_mode = "faiss_only" if entries else "empty"
+                self._loaded = True
+                return
+
             entries, matrix = self._load_entries_and_matrix()
             self._entries = entries
             self._entries_by_chunk_id = {entry.chunk_id: entry for entry in entries}
             self._normalized_matrix = normalize_matrix(matrix)
-            self._faiss_index = self._load_faiss_index_if_available()
+            self._faiss_index = None
+            self.load_mode = "numpy_fallback" if entries else "empty"
             self._loaded = True
 
     def _search_faiss(
@@ -169,6 +189,52 @@ class VectorIndexCache:
             return entries, np.empty((0, self.embedding_provider.dimension), dtype=np.float64)
         return entries, np.asarray(embeddings, dtype=np.float64)
 
+    def _load_faiss_entries_if_available(self) -> tuple[list[VectorIndexEntry], FaissVectorIndex] | None:
+        faiss_index = self._load_faiss_index_if_available()
+        if faiss_index is None:
+            return None
+
+        faiss_chunk_ids = set(faiss_index.metadata.chunk_ids)
+        if len(faiss_chunk_ids) != len(faiss_index.metadata.chunk_ids):
+            return None
+
+        entries = self._load_entries_metadata_only()
+        entry_chunk_ids = {entry.chunk_id for entry in entries}
+        if entry_chunk_ids != faiss_chunk_ids:
+            return None
+        return entries, faiss_index
+
+    def _load_entries_metadata_only(self) -> list[VectorIndexEntry]:
+        statement = (
+            select(ChunkEmbedding, Chunk, Document)
+            .join(Chunk, ChunkEmbedding.chunk_id == Chunk.id)
+            .join(Document, Chunk.document_id == Document.id)
+            .where(
+                ChunkEmbedding.provider == self.embedding_provider.provider_name,
+                ChunkEmbedding.model_name == self.embedding_provider.model_name,
+                ChunkEmbedding.dimension == self.embedding_provider.dimension,
+            )
+            .order_by(ChunkEmbedding.id)
+        )
+        entries: list[VectorIndexEntry] = []
+        for chunk_embedding, chunk, document in self.db.execute(statement).all():
+            if chunk_embedding.content_hash != calculate_text_hash(chunk.content):
+                continue
+            entries.append(
+                VectorIndexEntry(
+                    document_id=document.id,
+                    document_title=document.title,
+                    source_type=document.source_type,
+                    source_path=document.source_path,
+                    file_name=document.file_name,
+                    chunk_id=chunk.id,
+                    chunk_index=chunk.chunk_index,
+                    content=chunk.content,
+                    heading_path=chunk.heading_path,
+                )
+            )
+        return entries
+
     def _load_faiss_index_if_available(self) -> FaissVectorIndex | None:
         index_path, metadata_path = default_faiss_paths(
             Path("data/faiss"),
@@ -189,8 +255,6 @@ class VectorIndexCache:
         if faiss_index.metadata.model_name != self.embedding_provider.model_name:
             return None
         if faiss_index.metadata.dimension != self.embedding_provider.dimension:
-            return None
-        if any(chunk_id not in self._entries_by_chunk_id for chunk_id in faiss_index.metadata.chunk_ids):
             return None
         return faiss_index
 

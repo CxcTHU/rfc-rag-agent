@@ -13,6 +13,44 @@
 
 本文件的作用不是一次性定死所有细节，而是给“从零搭建堆石混凝土问答 Agent”提供稳定方向。
 
+## 最新交接状态：阶段 33 开发与验证完成，等待用户人工核验
+
+当前分支：`codex/phase-33-rag-performance-embedding-validation`。
+
+阶段 33 已从阶段 32 完成并合并后的 `main` 出发。已核对 `main -> 608a6e9 Merge phase 32 react agent observability`；`phase-32-complete -> f259f97 Complete phase 32 react agent observability` 是 `main` 的祖先；未移动任何已有阶段 tag。
+
+阶段 33 已完成：
+
+- `VectorIndexCache` 支持 `load_mode="faiss_only"`：完整 FAISS index 与 ids metadata 可用且 provider/model/dimension/ids 均匹配时，只加载必要 chunk metadata，跳过 SQLite embedding JSON 反序列化和 numpy matrix 构建。
+- FAISS 缺失、损坏、provider/model/dimension 不匹配、ids 不完整或 ids 与当前 metadata 不一致时，继续 fallback 到 SQLite/numpy，保持旧链路可回退。
+- 新增 query embedding cache：cache key 至少包含 provider、model、dimension、normalized query text；具备 TTL 和容量上限；只缓存 query embedding，不缓存文档写入型 embedding。
+- 新增 RAG/ReAct latency trace：记录 query_embedding、FAISS/vector search、rerank、planner、answer、tool、time_to_first_token、time_to_final、iteration_count、tool_call_count 等安全字段，并通过同步响应和 SSE metadata 输出。
+- 新增 `scripts/benchmark_stage33_rag_latency.py`、`scripts/evaluate_stage33_embedding_migration.py`、`scripts/benchmark_stage33_chat_providers.py`，默认可 dry-run，真实 provider 必须显式启用。
+- 新增 `docs/stage33_rag_performance_embedding_validation.md`、阶段 33 聚焦测试、`docs/phase_reviews/phase-33.md` 和 Obsidian 阶段草稿。
+
+阶段 33 真实验证观察：
+
+```text
+GLM-Embedding-3 使用 2048 维，不是 2028 维。
+glm_candidate: completed, precision@5=0.867, coverage=0.637, avg_latency≈1469.98ms, decision=review_for_silent_regression
+jina_baseline: skipped_missing_real_config（不能伪造成同环境对照通过）
+mimo_baseline: completed, ttft≈2909-6266ms, total≈6801-6953ms, leak=false
+deepseek_candidate: skipped（未配置，不能替换默认 MIMO）
+```
+
+阶段 33 最终验证：
+
+```text
+阶段 33 聚焦测试：16 passed
+全量测试：643 passed
+阶段 30 评分：overall=83.17 grade=B release_decision=review_required
+Browser smoke：desktop 与 390x844 mobile 均确认 Agent 查询、折叠思考过程、最终答案存在，horizontal overflow=false，console errors=0
+```
+
+阶段 33 核心边界：不要删除旧 Jina FAISS index 或 ids 文件；不要直接替换默认 MIMO provider；不要新增外部数据源；不要做写入型 Agent 工具；不要让真实 API 成为 CI 或本地全量测试前提；不要把 API key、Bearer token、供应商原始响应、raw_response、reasoning_content 或受限全文写入 Git、CSV、文档、测试或 Obsidian。
+
+阶段 33 当前必须停在用户人工核验前：**不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR，不要创建 `phase-33-complete` tag**。只有用户人工核验并明确授权后，才允许进入提交、tag 和 GitHub 推送流程。
+
 ## 最新交接状态：阶段 32 开发与验证完成，等待用户人工核验
 
 当前分支：`codex/phase-32-react-agent-tool-observability`。

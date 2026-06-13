@@ -19,6 +19,35 @@ URL:
 
 ## 当前状态
 
+阶段 33 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是由现有 chunks、embedding 索引和评测集派生出的性能/迁移验证产物。阶段 33 同时明确保留旧 Jina 索引作为回滚保险和质量对照，保留 GLM-Embedding-3 2048 维索引作为新链路验证目标。
+
+```text
+documents 635
+chunks 19118
+sources 673
+legacy_jina_faiss data/faiss/jina_jina-embeddings-v3_dim1024.index
+legacy_jina_ids data/faiss/jina_jina-embeddings-v3_dim1024_ids.json
+glm_embedding_dimension 2048
+stage30_quality_overall 83.17
+```
+
+阶段 33 新增派生产物与脚本：
+
+- `docs/stage33_rag_performance_embedding_validation.md`：阶段 33 性能优化、迁移验证和安全边界设计文档。
+- `scripts/benchmark_stage33_rag_latency.py`：RAG 延迟基准脚本，默认 deterministic，不要求真实 API。
+- `scripts/evaluate_stage33_embedding_migration.py`：GLM-Embedding-3 2048 维与 Jina 1024 维检索质量对照脚本；真实配置缺失时显式 skipped。
+- `scripts/benchmark_stage33_chat_providers.py`：MIMO baseline 与 DeepSeek candidate 聊天 provider benchmark；DeepSeek 只作候选，不替换默认 MIMO。
+- `data/evaluation/stage33_rag_latency_benchmark.csv`：脱敏延迟指标，不保存供应商原始响应或受限全文。
+- `data/evaluation/stage33_embedding_migration_results.csv`、`stage33_embedding_migration_summary.csv`：precision@k、hit@k、source/citation coverage、unsupported/refusal 边界和耗时结果。
+- `data/evaluation/stage33_chat_provider_benchmark.csv`：time_to_first_token、time_to_final、token_count、tokens_per_second、citation/refusal 一致性和 reasoning_content 泄露风险标记。
+
+数据安全边界：
+
+- 阶段 33 的 CSV 只保存脱敏指标、provider/model 名称、维度、状态、错误摘要和延迟，不保存 API key、Bearer token、Authorization header、raw provider response、reasoning_content 或受限全文。
+- Query embedding cache 是进程内缓存，不写入 Git，不写数据库，不改变知识库索引。
+- Latency trace 只记录安全耗时和计数字段；SSE metadata 继续保持向后兼容。
+- 旧 Jina FAISS 与 GLM-Embedding-3 FAISS 均是可重建索引派生产物，`data/faiss/` 不进入 Git。
+
 阶段 32 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是 ReAct Agent 编排代码、SSE 运行事件协议、前端可视化，以及 deterministic 评测派生产物。
 
 ```text

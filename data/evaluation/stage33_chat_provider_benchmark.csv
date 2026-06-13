@@ -1,0 +1,5 @@
+case_id,candidate,provider,model_name,status,time_to_first_token_ms,time_to_final_ms,planner_latency_ms,answer_latency_ms,token_count,tokens_per_second,citation_stable,refusal_consistent,reasoning_content_leak_risk,error
+citation_case,mimo_baseline,openai-compatible,mimo-v2.5-pro,completed,6265.58,6952.99,0.00,6952.99,11,1.58,true,true,false,
+refusal_case,mimo_baseline,openai-compatible,mimo-v2.5-pro,completed,2909.34,6800.78,0.00,6800.78,63,9.26,true,true,false,
+citation_case,deepseek_candidate,openai-compatible,deepseek-chat,skipped,,,0.00,0.00,0,0.00,false,false,false,missing chat provider configuration
+refusal_case,deepseek_candidate,openai-compatible,deepseek-chat,skipped,,,0.00,0.00,0,0.00,false,false,false,missing chat provider configuration
