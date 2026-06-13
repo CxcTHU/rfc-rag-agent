@@ -107,9 +107,22 @@ class Chunk(Base):
     heading_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     start_char: Mapped[int | None] = mapped_column(Integer, nullable=True)
     end_char: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    parent_chunk_id: Mapped[int | None] = mapped_column(
+        ForeignKey("chunks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     document: Mapped[Document] = relationship(back_populates="chunks")
+    parent_chunk: Mapped["Chunk | None"] = relationship(
+        remote_side="Chunk.id",
+        back_populates="child_chunks",
+    )
+    child_chunks: Mapped[list["Chunk"]] = relationship(
+        back_populates="parent_chunk",
+        order_by="Chunk.chunk_index",
+    )
     embeddings: Mapped[list["ChunkEmbedding"]] = relationship(
         back_populates="chunk",
         cascade="all, delete-orphan",

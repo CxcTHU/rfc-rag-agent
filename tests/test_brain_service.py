@@ -133,6 +133,45 @@ def seed_responsibility_documents(db) -> None:
     )
 
 
+def seed_parent_child_documents(db) -> tuple[int, int]:
+    document = DocumentRepository(db).create_with_chunks(
+        DocumentCreate(
+            title="Parent child RFC context",
+            source_type="local_file",
+            source_path="parent-child-brain.md",
+            file_name="parent-child-brain.md",
+            file_extension=".md",
+            content_hash="brain-service-parent-child-hash",
+            raw_path="data/raw/parent-child-brain.md",
+        ),
+        [
+            ChunkCreate(
+                chunk_index=0,
+                content=(
+                    "Aggregate voids, placement sequence, and vibration-free "
+                    "self-compacting concrete provide the broader construction context."
+                ),
+                char_count=123,
+                heading_path="Filling",
+                start_char=0,
+                end_char=123,
+            ),
+            ChunkCreate(
+                chunk_index=1,
+                content="Filling capacity depends on flowability.",
+                char_count=39,
+                heading_path="Filling",
+                start_char=0,
+                end_char=39,
+            ),
+        ],
+    )
+    parent, child = DocumentRepository(db).list_chunks(document.id)
+    child.parent_chunk_id = parent.id
+    db.commit()
+    return parent.id, child.id
+
+
 def make_brain_service(db, embedding_provider=None, log_answers=True) -> BrainService:
     return BrainService(
         db=db,
@@ -324,6 +363,22 @@ def test_brain_service_supports_vector_retrieval(tmp_path) -> None:
     assert result.retrieval_mode == "vector"
     assert result.model_provider == "deterministic"
     assert result.model_name == "rule-based-chat-v1"
+
+
+def test_brain_service_uses_parent_context_for_child_retrieval_hit(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        _parent_id, child_id = seed_parent_child_documents(db)
+        result = make_brain_service(db).answer(
+            "filling capacity flowability",
+            config=RetrievalConfig(retrieval_mode="keyword", top_k=1),
+        )
+
+    assert not result.refused
+    assert result.sources[0].chunk_id == child_id
+    assert "aggregate voids" in result.sources[0].content.casefold()
+    assert "placement sequence" in result.sources[0].content.casefold()
 
 
 def test_brain_service_refuses_low_evidence_vector_results(tmp_path) -> None:

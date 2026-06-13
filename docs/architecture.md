@@ -1,5 +1,54 @@
 # 架构说明
 
+## 阶段 31 架构增量：FAISS 向量索引与父子块检索
+
+阶段 31 改动默认 RAG 检索链路的底层执行方式，但保持外部 API schema 不变。核心思想是：child chunk 仍负责精确召回和引用，parent chunk 负责给生成模型提供更完整上下文；向量检索优先使用本地 FAISS `IndexFlatIP`，索引不可用时继续 fallback 到阶段 26 的 numpy 矩阵搜索。
+
+```text
+chunk_embeddings
+-> scripts/build_faiss_index.py
+-> data/faiss/{provider}_{model}_dim{dimension}.index
+-> data/faiss/{provider}_{model}_dim{dimension}_ids.json
+-> VectorIndexCache.search()
+   -> complete FAISS index available: FAISS top-k
+   -> otherwise: numpy fallback
+-> VectorSearchService / HybridSearchService
+-> ParentChildSearchService
+   -> child.parent_chunk_id exists: parent.content as prompt context
+   -> parent_chunk_id is NULL: ContextExpansionService fallback
+-> BrainService prompt assembly
+-> /chat and /agent/query
+```
+
+`app/services/retrieval/faiss_index.py` 封装 FAISS `IndexFlatIP` 的构建、保存、加载和搜索。所有 embedding 会先转为 `float32` 并做 L2 归一化，因此内积排序等价于旧链路的余弦相似度排序。阶段 31 暂不使用 `IndexHNSWFlat`，因为当前约 12K 条向量更需要精确可解释和 numpy 一致性；以后语料扩大到十万级时，可以在该封装层切换近似索引。
+
+`scripts/build_faiss_index.py` 是只读构建脚本：它读取 SQLite 中 `chunk_embeddings` 与 `chunks.content_hash` 匹配的有效 embedding，不调用真实 API，不重建 embedding，不写数据库。生成的 `data/faiss/` 是可重建索引派生物，已加入 `.gitignore`。
+
+`VectorIndexCache` 新增运行时索引选择逻辑。只有 metadata 中 provider、model、dimension 匹配，`complete=true`，并且 FAISS metadata 中的 chunk_id 都能映射回当前缓存 entries 时，才会启用 FAISS。任何缺失、不完整、维度不一致或加载失败都会回退 numpy，保证 deterministic provider 和 CI 不依赖本地 `.index` 文件。
+
+`chunks.parent_chunk_id` 是阶段 31 的 schema 增量。它是 `chunks` 表的可空自引用字段：child chunk 指向 parent chunk，旧 chunk 保持 NULL。`scripts/migrate_parent_chunks.py` 负责幂等添加字段和索引；SQLite 对已有表无法在 `ALTER TABLE` 中补完整外键约束，因此当前阶段依赖 ORM relationship、应用层校验和测试覆盖。
+
+阶段 31 追加完成了历史数据非破坏性回填。`scripts/backfill_parent_chunks.py` 按每个 document 的既有 child `chunk_index` 顺序拼接文本，切出约 1,800 字符的 parent chunk，再用字符区间重叠把既有 child 的 `parent_chunk_id` 指向对应 parent。脚本支持 `--dry-run` 和幂等重跑；本地结果为 12,716 个既有 child 全部关联 parent，新增 6,402 个 parent，parent 不生成 embedding。
+
+父子块检索新增两层服务：
+
+- `app/services/ingestion/parent_chunker.py`：把文档文本先切成较大的 parent，再在 parent 内切较小的 child；设计上只对 child 生成 embedding，parent 不进入 FAISS。
+- `app/services/retrieval/parent_child_search.py`：把检索命中的 child 扩展为 parent 上下文；引用仍保留 child `chunk_id`，便于精确溯源。
+
+前端架构只做显示优先级调整。`app/frontend/index.html` 保留原有 Agent 请求字段，但把 `top_k`、`max_tool_calls`、`source_id` 放入 `<details>` 高级设置；后端接口没有删除这些参数，因此 `POST /agent/query` 的能力不变。
+
+阶段 31 验证基线：
+
+```text
+FAISS full index: vectors=12716
+stage30 score: overall=83.17 grade=B release_decision=review_required
+focused tests: 24 passed
+full tests: 589 passed
+real provider smoke: /health, /quality-report, /search, /search/vector, /search/hybrid, /chat, /agent/query all 200
+```
+
+阶段 31 同时修复了真实 provider HTTP 路径的本机卡顿问题。`OpenAICompatibleEmbeddingProvider`、`OpenAICompatibleReRankingProvider` 和 `OpenAICompatibleChatModelProvider` 现在通过 `ProxyHandler({})` 显式禁用系统代理探测；这不是降级，仍然调用真实供应商，只是避免 Python `urllib` 在当前 Windows 环境里卡在系统代理/TLS 路径。本地 `.env` 的 `EMBEDDING_PROVIDER` 已改为 `jina`，与数据库中的 `jina/jina-embeddings-v3/dim=1024` 和 FAISS 索引 metadata 对齐。
+
 ## 阶段 30 架构增量：RAG 质量评分体系与诚实决策门禁
 
 阶段 30 不改默认 RAG 检索、问答、Agent 或 SSE 运行链路，而是在 evaluation/reporting 层新增一条只读评分链路。它把阶段 29 的真实评测产物、阶段 30 权重配置和工程健康 artifact 合成为可解释总分、等级、发布建议、扣分项和推荐动作。

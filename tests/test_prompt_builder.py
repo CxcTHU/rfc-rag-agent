@@ -58,6 +58,19 @@ def test_build_rag_prompt_includes_engineering_disclaimer() -> None:
     assert "不能替代规范审查、工程设计和专家判断" in DEFAULT_SYSTEM_PROMPT
 
 
+def test_build_rag_prompt_includes_answer_quality_requirements() -> None:
+    prompt = build_rag_prompt("A 和 B 有什么区别？", [fake_result()])
+    system_message = prompt.messages[0].content
+    user_message = prompt.messages[1].content
+
+    assert "Start with the direct answer" in system_message
+    assert "each factual claim" in system_message
+    assert "comparison questions" in system_message
+    assert "Give the direct answer first" in user_message
+    assert "Cite every factual claim" in user_message
+    assert "explain the characteristics of both sides" in user_message
+
+
 def test_build_rag_prompt_rejects_empty_question() -> None:
     with pytest.raises(ValueError, match="question must not be empty"):
         build_rag_prompt("   ", [fake_result()])

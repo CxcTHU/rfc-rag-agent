@@ -23,6 +23,7 @@ from app.services.generation.prompt_builder import SearchResultLike, build_rag_p
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
 from app.services.retrieval.decompose import DecomposeRetrievalService, decompose_query
 from app.services.retrieval.hybrid_search import HybridSearchService
+from app.services.retrieval.parent_child_search import ParentChildSearchService
 from app.services.retrieval.keyword_search import KeywordSearchService
 from app.services.retrieval.vector_search import VectorSearchService
 
@@ -311,10 +312,13 @@ class BrainService:
                 workflow_steps=workflow_steps,
             )
 
+        context_results = ParentChildSearchService(self.db).expand_results(
+            retrieval_outcome.results,
+        )
         try:
             rag_prompt = build_rag_prompt(
                 question=retrieval_question,
-                search_results=retrieval_outcome.results,
+                search_results=context_results,
             )
         except ValueError as exc:
             workflow_steps.append(

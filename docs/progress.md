@@ -1,5 +1,68 @@
 # 项目进度
 
+## 最新状态：2026-06-13（阶段 31 开发与验证完成，等待用户人工核验）
+
+当前阶段：阶段 31。在 `codex/phase-31-faiss-parent-child-retrieval` 分支已完成 FAISS 向量索引、父子块检索链路、前端高级参数折叠、评测验证、普通文档和 Obsidian 草稿收尾。阶段 31 从阶段 30 完成并合并后的 `main -> e74ce78 Complete phase 30 rag evaluation scoring system` 出发；已核对 `phase-30-complete -> e74ce78` 与 `main` 指向同一提交，未移动任何已有阶段 tag。
+
+阶段 31 完成内容：
+
+- 新增 `docs/stage31_faiss_parent_child_retrieval.md`，说明 FAISS `IndexFlatIP` 选择、父子块 schema、child 召回到 parent 上下文、安全边界和完成标准。
+- 新增 `app/services/retrieval/faiss_index.py` 与 `scripts/build_faiss_index.py`，可从现有 `chunk_embeddings` 构建本地 FAISS `.index` 与 `_ids.json` metadata；`data/faiss/` 已加入 `.gitignore`。
+- `VectorIndexCache` 优先加载 provider/model/dimension 匹配且 `complete=true` 的 FAISS 索引；索引缺失、不完整、维度不匹配或 chunk_id 无法映射时 fallback 到 numpy。
+- `chunks` 表新增 `parent_chunk_id` 可空自引用字段；新增 `scripts/migrate_parent_chunks.py`，本地 SQLite 已执行迁移。
+- 新增 `app/services/ingestion/parent_chunker.py` 与 `app/services/retrieval/parent_child_search.py`，在 `BrainService` 组装 prompt 前把 child 命中的结果扩展为 parent 上下文；旧数据 `parent_chunk_id IS NULL` 时 fallback `ContextExpansionService`。
+- 新增 `scripts/backfill_parent_chunks.py`，支持 `--dry-run` 和幂等重跑；已对既有 12,716 个 child chunks 生成 6,402 个 parent chunks，并把全部 child 关联到 parent。既有 child 内容、id、chunk_index 和 embedding 保持不变，parent 不生成 embedding。
+- 强化 `app/services/generation/prompt_builder.py`：要求事实性陈述逐条附 `[N]` 引用、先直接回答再展开解释、对比类问题分别说明两侧特征，并保留错误前提先纠正规则。
+- 前端首页把 Agent 的 `top_k`、`max_tool_calls`、`source_id` 收入“高级设置”折叠区，默认主流程更精简。
+- 新增阶段 31 聚焦测试，覆盖 FAISS 封装、VectorIndexCache FAISS/fallback、父子块检索、迁移脚本和前端折叠区。
+
+阶段 31 验证：
+
+```text
+python scripts\build_faiss_index.py --provider jina --model-name jina-embeddings-v3 --dimension 1024
+FAISS full index: vectors=12716
+parent backfill: chunks=19118, parent_rows=6402, linked_children=12716, parent_embeddings=0
+
+python -m pytest tests\test_faiss_index.py tests\test_vector_cache_faiss.py tests\test_parent_child_retrieval.py tests\test_migrate_parent_chunks.py tests\test_frontend_app.py -q
+24 passed
+
+python -m pytest tests\test_backfill_parent_chunks.py tests\test_faiss_index.py tests\test_vector_index_service.py -q
+15 passed
+
+python -m pytest tests\test_prompt_builder.py tests\test_backfill_parent_chunks.py -q
+13 passed
+
+python scripts\score_stage30_quality.py
+overall=83.17 grade=B release_decision=review_required
+
+python -m pytest -q
+593 passed, 1 warning
+```
+
+浏览器与接口冒烟：
+
+```text
+Browser /: 高级设置默认收起，展开后 top_k / max_tool_calls / source_id 可用，console errors=0
+Browser /quality-report: overall=83.17, grade=B, release_decision=review_required, console errors=0
+
+real provider smoke:
+GET /health 200
+GET /quality-report 200
+POST /search 200
+POST /search/vector 200
+POST /search/hybrid 200
+POST /chat 200
+POST /agent/query 200
+```
+
+遗留风险与人工核验重点：
+
+- 既有 12,716 条 child 已完成非破坏性 parent backfill：新增 parent chunks 6,402 个，parent 不生成 embedding，FAISS 重建后仍为 12,716 vectors。后续人工核验重点从“是否回填”转为“抽样检查 parent 上下文是否过长、是否与 child 位置匹配”。
+- SQLite 通过 `ALTER TABLE` 添加 `parent_chunk_id` 字段和索引；SQLite 对已有表无法直接补强完整外键约束，应用层 ORM relationship 与迁移脚本已覆盖当前阶段需求。
+- 真实 provider 500 已修复：根因是 Python `urllib` 默认网络路径在本机真实 provider 调用中卡住；已让 embedding、rerank、chat 三类 OpenAI-compatible provider 显式禁用系统代理探测，并将本地 `.env` 的 `EMBEDDING_PROVIDER` 调整为 `jina` 以匹配已有 Jina embedding/FAISS 索引。8004 临时服务已验证真实 provider 下核心接口均为 200。
+
+阶段 31 当前停在用户人工核验前：**尚未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR，未创建 `phase-31-complete` tag**。
+
 ## 最新状态：2026-06-13（阶段 30 开发与验证完成，等待用户人工核验）
 
 当前阶段：阶段 30。在 `codex/phase-30-rag-evaluation-scoring-system` 分支已完成 RAG 质量评分体系与诚实决策门禁开发、测试、普通文档和 Obsidian 草稿收尾。阶段 30 从阶段 29 完成并合并后的 `main` 出发，已核对 `phase-29-complete -> b62b1a5 Complete phase 29 real embedding quality eval`，且该 tag 是 `main -> cd32df6 Merge phase 29 real embedding quality eval` 的祖先；未移动任何已有阶段 tag。

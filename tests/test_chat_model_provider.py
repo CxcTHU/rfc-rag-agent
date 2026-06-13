@@ -156,7 +156,7 @@ def test_openai_compatible_provider_posts_chat_request_headers(monkeypatch) -> N
         captured["payload"] = json.loads(request.data.decode("utf-8"))
         return FakeResponse()
 
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("app.services.generation.chat_model.urlopen_without_proxy", fake_urlopen)
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
         api_key="test-key",
@@ -208,7 +208,7 @@ def test_openai_compatible_provider_streams_delta_content(monkeypatch) -> None:
         captured["payload"] = json.loads(request.data.decode("utf-8"))
         return FakeStreamResponse()
 
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("app.services.generation.chat_model.urlopen_without_proxy", fake_urlopen)
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
         api_key="test-key",

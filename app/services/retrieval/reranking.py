@@ -100,7 +100,7 @@ class OpenAICompatibleReRankingProvider:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
                 response_data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")
@@ -194,6 +194,14 @@ def parse_openai_compatible_rerank_response(
             )
         )
     return sorted(parsed, key=lambda item: (-item.score, item.index))[:top_k]
+
+
+def urlopen_without_proxy(
+    request: urllib.request.Request,
+    timeout: float,
+):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return opener.open(request, timeout=timeout)
 
 
 def parse_result_index(item: dict[str, Any]) -> int:

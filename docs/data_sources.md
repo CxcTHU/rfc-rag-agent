@@ -19,6 +19,33 @@ URL:
 
 ## 当前状态
 
+阶段 31 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是由现有 `chunk_embeddings` 派生的本地 FAISS 索引能力，以及 `chunks.parent_chunk_id` 父子块关系字段。
+
+```text
+documents 635
+chunks 12716
+sources 673
+chunk_embeddings 25432
+jina_embeddings 12716
+deterministic_embeddings 12716
+faiss_index_vectors 12716
+stage30_quality_overall 83.17
+```
+
+阶段 31 新增派生产物与脚本：
+
+- `data/faiss/`：本地 FAISS `.index` 与 `_ids.json` metadata 输出目录，已加入 `.gitignore`，不提交到 Git。
+- `scripts/build_faiss_index.py`：只读读取当前 SQLite 的有效 `chunk_embeddings`，构建 FAISS `IndexFlatIP` 索引；不调用真实 API、不重建 embedding、不写数据库。
+- `scripts/migrate_parent_chunks.py`：幂等添加 `chunks.parent_chunk_id` 字段和索引；本地 SQLite 已执行迁移。
+- `docs/stage31_faiss_parent_child_retrieval.md`：阶段 31 设计、边界和完成标准文档。
+
+数据安全边界：
+
+- FAISS `.index` 和 `_ids.json` 是可重建索引派生物，不是新的外部资料来源，不进入 Git。
+- 父子块 parent 只用于回答上下文，设计上不生成 embedding；child 负责 embedding、FAISS 召回和引用溯源。
+- 阶段 31 不新增 Qdrant、Chroma、PGVector、torch、sentence-transformers，也不让真实 API 成为 CI 或本地全量测试前提。
+- API key、Bearer token、Authorization header、供应商原始响应、raw_response 和受限全文不得写入 Git、CSV、文档、测试或 Obsidian。
+
 阶段 30 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是 evaluation/reporting 层的评分配置、评分结果和报告产物：
 
 ```text

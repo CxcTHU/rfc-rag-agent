@@ -146,7 +146,7 @@ def test_openai_compatible_embedding_provider_posts_embeddings_request(monkeypat
         captured["payload"] = json.loads(request.data.decode("utf-8"))
         return FakeResponse()
 
-    monkeypatch.setattr("app.services.retrieval.embedding.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("app.services.retrieval.embedding.urlopen_without_proxy", fake_urlopen)
     provider = OpenAICompatibleEmbeddingProvider(
         model_name="text-embedding-test",
         api_key="test-key",
@@ -182,7 +182,7 @@ def test_openai_compatible_embedding_provider_rejects_dimension_mismatch(monkeyp
             return json.dumps({"data": [{"index": 0, "embedding": [1, 0]}]}).encode("utf-8")
 
     monkeypatch.setattr(
-        "app.services.retrieval.embedding.urllib.request.urlopen",
+        "app.services.retrieval.embedding.urlopen_without_proxy",
         lambda request, timeout: FakeResponse(),
     )
     provider = OpenAICompatibleEmbeddingProvider(
