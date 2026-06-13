@@ -14,6 +14,33 @@
 
 ## 当前阶段
 
+阶段 31（FAISS 向量索引与父子块检索，开发与验证已完成，等待用户人工核验）：当前分支为 `codex/phase-31-faiss-parent-child-retrieval`，从阶段 30 完成并合并后的 `main -> e74ce78 Complete phase 30 rag evaluation scoring system` 出发；`phase-30-complete` 指向同一提交，未移动任何已有阶段 tag。
+
+阶段 31 完成内容：
+
+- 新增 `docs/stage31_faiss_parent_child_retrieval.md`，说明 FAISS `IndexFlatIP` 选择、父子块 schema、child 召回 -> parent 上下文流程、安全边界和完成标准。
+- 新增 `app/services/retrieval/faiss_index.py` 与 `scripts/build_faiss_index.py`，可从现有 `chunk_embeddings` 构建本地 FAISS `.index` 与 ids metadata；`data/faiss/` 已加入 `.gitignore`。
+- `VectorIndexCache` 优先加载完整 FAISS 索引，索引缺失、不完整或不匹配时 fallback numpy。
+- `chunks` 表新增 `parent_chunk_id` 可空自引用字段；`scripts/migrate_parent_chunks.py` 已可执行，本地 SQLite 已完成迁移。
+- 新增 `app/services/ingestion/parent_chunker.py` 与 `app/services/retrieval/parent_child_search.py`，并在 `BrainService` 生成 prompt 前接入 parent context；旧数据为空时 fallback `ContextExpansionService`。
+- 新增 `scripts/backfill_parent_chunks.py`，已对既有 12,716 个 child chunks 批量生成 6,402 个 parent chunks，并把全部既有 child 关联到 parent；parent 不生成 embedding、不进入 FAISS。
+- `prompt_builder.py` 强化回答规则：事实性陈述逐条引用、先直接回答再解释、对比类问题必须分别说明两侧特征，同时保留错误前提先纠正规则。
+- 前端 Agent 主界面已精简，检索候选数、最大工具调用数、指定来源 ID 收入默认收起的“高级设置”折叠区。
+
+阶段 31 验证结果：
+
+```text
+FAISS full index: vectors=12716
+stage30 quality score: overall=83.17, grade=B, release_decision=review_required
+parent backfill: parent_rows=6402, linked_children=12716, parent_embeddings=0
+focused tests: 15 passed + prompt/backfill 13 passed
+full tests: 593 passed, 1 warning
+browser smoke: / advanced settings collapsed/expandable; /quality-report overall=83.17; console errors=0
+real provider API smoke: GET /health, GET /quality-report, POST /search, /search/vector, /search/hybrid, /chat, /agent/query all 200
+```
+
+当前必须停在用户人工核验前：**尚未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR，未创建 `phase-31-complete` tag**。
+
 阶段 30（RAG 质量评分体系与诚实决策门禁，开发与验证已完成，等待用户人工核验）：当前分支为 `codex/phase-30-rag-evaluation-scoring-system`。本阶段已从阶段 29 完成并合并后的 `main -> cd32df6 Merge phase 29 real embedding quality eval` 出发，确认 `phase-29-complete -> b62b1a5 Complete phase 29 real embedding quality eval` 是 `main` 的祖先，未移动任何已有阶段 tag。
 
 阶段 30 把阶段 29 的散指标升级为可解释评分体系：新增 `docs/stage30_rag_evaluation_scoring_system.md`、`data/evaluation/stage30_scoring_weights.yaml`、`scripts/collect_stage30_engineering_health.py`、`data/evaluation/stage30_engineering_health.json`、`scripts/score_stage30_quality.py`、`scripts/judge_stage30_semantic_quality.py`、`scripts/build_stage30_quality_report.py` 和 `docs/stage30_quality_score_report.md`。默认评分模式为 `deterministic_rule_based`，只读取阶段 29 CSV、阶段 30 YAML 和 engineering health JSON，不跑 pytest、不重建 embedding、不写数据库、不调用真实 API。

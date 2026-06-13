@@ -37,6 +37,7 @@ class ChunkCreate:
     heading_path: str | None
     start_char: int | None
     end_char: int | None
+    parent_chunk_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,7 @@ class DocumentRepository:
                     heading_path=chunk.heading_path,
                     start_char=chunk.start_char,
                     end_char=chunk.end_char,
+                    parent_chunk_id=chunk.parent_chunk_id,
                 )
                 for chunk in chunks_data
             ],

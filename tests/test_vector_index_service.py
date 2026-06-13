@@ -1,6 +1,6 @@
 from sqlalchemy.orm import sessionmaker
 
-from app.db.models import Base
+from app.db.models import Base, Chunk, Document
 from app.db.repositories import (
     ChunkCreate,
     ChunkEmbeddingRepository,
@@ -131,6 +131,75 @@ def test_vector_index_service_respects_limit(tmp_path) -> None:
 
     assert result.total_chunks == 1
     assert result.indexed_chunks == 1
+
+
+def test_vector_index_service_skips_parent_chunks_with_children(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        document = Document(
+            title="父子块向量索引资料",
+            source_type="local_file",
+            source_path="parent-child.md",
+            file_name="parent-child.md",
+            file_extension=".md",
+            content_hash="parent-child-vector-document-hash",
+            raw_path="data/raw/parent-child.md",
+        )
+        parent = Chunk(
+            document=document,
+            chunk_index=0,
+            content="父块只提供完整上下文，不应该生成 embedding。",
+            char_count=24,
+            heading_path="父块",
+            start_char=0,
+            end_char=24,
+        )
+        child = Chunk(
+            document=document,
+            chunk_index=1,
+            content="子块用于精准召回，需要生成 embedding。",
+            char_count=21,
+            heading_path="父块",
+            start_char=0,
+            end_char=21,
+            parent_chunk=parent,
+        )
+        standalone = Chunk(
+            document=document,
+            chunk_index=2,
+            content="旧普通块没有子块，也需要继续生成 embedding。",
+            char_count=23,
+            heading_path="旧数据",
+            start_char=25,
+            end_char=48,
+        )
+        db.add_all([document, parent, child, standalone])
+        db.commit()
+
+        provider = DeterministicEmbeddingProvider(dimension=8)
+        result = VectorIndexService(db, provider).build_index()
+        parent_embedding = ChunkEmbeddingRepository(db).get_embedding(
+            chunk_id=parent.id,
+            provider=provider.provider_name,
+            model_name=provider.model_name,
+        )
+        child_embedding = ChunkEmbeddingRepository(db).get_embedding(
+            chunk_id=child.id,
+            provider=provider.provider_name,
+            model_name=provider.model_name,
+        )
+        standalone_embedding = ChunkEmbeddingRepository(db).get_embedding(
+            chunk_id=standalone.id,
+            provider=provider.provider_name,
+            model_name=provider.model_name,
+        )
+
+    assert result.total_chunks == 2
+    assert result.indexed_chunks == 2
+    assert parent_embedding is None
+    assert child_embedding is not None
+    assert standalone_embedding is not None
 
 
 def test_vector_index_service_rejects_invalid_parameters(tmp_path) -> None:

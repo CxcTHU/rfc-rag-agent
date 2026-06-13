@@ -33,6 +33,12 @@ def test_frontend_index_is_served() -> None:
     assert 'data-chat-form' in response.text
     assert 'data-agent-form' in response.text
     assert 'data-agent-mode-status' in response.text
+    assert 'class="advanced-settings"' in response.text
+    assert "<summary>高级设置</summary>" in response.text
+    assert "检索候选数" in response.text
+    assert "最大工具调用数" in response.text
+    assert "指定来源 ID" in response.text
+    assert "source_id" not in response.text
     assert '<select data-agent-mode' not in response.text
     assert '<option value="agentic">agentic</option>' not in response.text
     assert 'data-agent-tools-list' in response.text
@@ -133,6 +139,9 @@ def test_frontend_static_assets_are_served() -> None:
     assert "hero-layout" in styles.text
     assert "demo-panel" in styles.text
     assert "view-section" in styles.text
+    assert "advanced-settings" in styles.text
+    assert "advanced-settings-grid" in styles.text
+    assert ".advanced-settings:not([open]) .advanced-settings-grid" in styles.text
     assert 'aria-current="page"' in styles.text
     assert "linear-gradient" in styles.text
     assert "chat-message--thinking" in styles.text

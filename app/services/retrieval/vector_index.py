@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TypeVar
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.db.models import Chunk
 from app.db.repositories import ChunkEmbeddingCreate, ChunkEmbeddingRepository
@@ -134,7 +134,9 @@ class VectorIndexService:
                 attempt += 1
 
     def _list_chunks(self, limit: int | None = None) -> list[Chunk]:
-        statement = select(Chunk).order_by(Chunk.id)
+        child_chunk = aliased(Chunk)
+        has_children = select(child_chunk.id).where(child_chunk.parent_chunk_id == Chunk.id).exists()
+        statement = select(Chunk).where(~has_children).order_by(Chunk.id)
         if limit is not None:
             statement = statement.limit(limit)
         return list(self.db.scalars(statement).all())

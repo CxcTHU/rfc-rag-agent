@@ -104,7 +104,7 @@ class OpenAICompatibleChatModelProvider:
         request = self._build_request(messages, stream=False)
 
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
                 response_data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")
@@ -128,7 +128,7 @@ class OpenAICompatibleChatModelProvider:
 
         request = self._build_request(messages, stream=True)
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
                 yield from parse_openai_compatible_stream(response)
         except urllib.error.HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")
@@ -220,6 +220,14 @@ def parse_openai_compatible_answer(response_data: dict[str, Any]) -> str:
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("Chat model response message content is empty")
     return content.strip()
+
+
+def urlopen_without_proxy(
+    request: urllib.request.Request,
+    timeout: float,
+):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return opener.open(request, timeout=timeout)
 
 
 def parse_openai_compatible_stream(response) -> Iterator[str]:

@@ -19,6 +19,7 @@ env/
 # Runtime data
 data/raw/
 data/processed/
+data/faiss/
 data/indexes/
 data/exports/
 data/fulltext/

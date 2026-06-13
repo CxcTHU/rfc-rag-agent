@@ -111,6 +111,53 @@ def test_chunk_embedding_can_be_persisted(tmp_path) -> None:
     assert saved_embedding.content_hash == "chunk-content-hash"
 
 
+def test_parent_child_chunks_can_be_persisted(tmp_path) -> None:
+    database_path = tmp_path / "test_parent_child.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    with TestingSessionLocal() as db:
+        document = Document(
+            title="父子块资料",
+            source_type="local_file",
+            source_path="parent-child.md",
+            file_name="parent-child.md",
+            file_extension=".md",
+            content_hash="parent-child-hash",
+            raw_path="data/raw/parent-child.md",
+            status="imported",
+        )
+        parent = Chunk(
+            chunk_index=0,
+            content="父块保存更完整的施工质量上下文。",
+            char_count=17,
+            heading_path="施工质量",
+            start_char=0,
+            end_char=17,
+        )
+        child = Chunk(
+            chunk_index=1,
+            content="子块用于精准召回。",
+            char_count=9,
+            heading_path="施工质量",
+            start_char=0,
+            end_char=9,
+            parent_chunk=parent,
+        )
+        document.chunks = [parent, child]
+        db.add(document)
+        db.commit()
+        child_id = child.id
+
+    with TestingSessionLocal() as db:
+        saved_child = db.get(Chunk, child_id)
+        assert saved_child is not None
+        assert saved_child.parent_chunk is not None
+        assert saved_child.parent_chunk.content.startswith("父块保存")
+        assert [chunk.content for chunk in saved_child.parent_chunk.child_chunks] == ["子块用于精准召回。"]
+
+
 def test_conversation_and_messages_can_be_persisted(tmp_path) -> None:
     database_path = tmp_path / "test_conversation.sqlite"
     engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")

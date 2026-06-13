@@ -112,19 +112,24 @@
                   <span>模式</span>
                   <output class="mode-indicator" data-agent-mode-status>系统自动</output>
                 </div>
-                <label>
-                  <span>召回数</span>
-                  <input type="number" min="1" max="50" value="5" data-agent-top-k />
-                </label>
-                <label>
-                  <span>工具步数</span>
-                  <input type="number" min="1" max="5" value="2" data-agent-max-tool-calls />
-                </label>
-                <label>
-                  <span>source_id</span>
-                  <input type="text" data-agent-source-id placeholder="可选" />
-                </label>
                 <button class="command-button" type="submit" data-agent-submit>运行</button>
+                <details class="advanced-settings">
+                  <summary>高级设置</summary>
+                  <div class="advanced-settings-grid">
+                    <label>
+                      <span>检索候选数</span>
+                      <input type="number" min="1" max="50" value="5" data-agent-top-k />
+                    </label>
+                    <label>
+                      <span>最大工具调用数</span>
+                      <input type="number" min="1" max="5" value="2" data-agent-max-tool-calls />
+                    </label>
+                    <label>
+                      <span>指定来源 ID</span>
+                      <input type="text" data-agent-source-id placeholder="可选" />
+                    </label>
+                  </div>
+                </details>
               </div>
             </form>
 

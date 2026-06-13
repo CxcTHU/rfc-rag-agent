@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from threading import RLock
 
 import numpy as np
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Chunk, ChunkEmbedding, Document
 from app.db.repositories import deserialize_embedding
 from app.services.retrieval.embedding import EmbeddingProvider
+from app.services.retrieval.faiss_index import FaissVectorIndex, default_faiss_paths
 from app.services.retrieval.vector_index import calculate_text_hash
 
 
@@ -42,10 +44,12 @@ class VectorIndexCache:
         self._lock = RLock()
         self._loaded = False
         self._entries: list[VectorIndexEntry] = []
+        self._entries_by_chunk_id: dict[int, VectorIndexEntry] = {}
         self._normalized_matrix: np.ndarray = np.empty(
             (0, embedding_provider.dimension),
             dtype=np.float64,
         )
+        self._faiss_index: FaissVectorIndex | None = None
 
     def bind_session(self, db: Session) -> None:
         with self._lock:
@@ -55,10 +59,12 @@ class VectorIndexCache:
         with self._lock:
             self._loaded = False
             self._entries = []
+            self._entries_by_chunk_id = {}
             self._normalized_matrix = np.empty(
                 (0, self.embedding_provider.dimension),
                 dtype=np.float64,
             )
+            self._faiss_index = None
 
     def search(
         self,
@@ -79,6 +85,9 @@ class VectorIndexCache:
             return []
 
         with self._lock:
+            if self._faiss_index is not None:
+                return self._search_faiss(query_vector=query_vector, top_k=top_k)
+
             scores = self._normalized_matrix @ query_vector
             if scores.size == 0:
                 return []
@@ -101,8 +110,25 @@ class VectorIndexCache:
                 return
             entries, matrix = self._load_entries_and_matrix()
             self._entries = entries
+            self._entries_by_chunk_id = {entry.chunk_id: entry for entry in entries}
             self._normalized_matrix = normalize_matrix(matrix)
+            self._faiss_index = self._load_faiss_index_if_available()
             self._loaded = True
+
+    def _search_faiss(
+        self,
+        query_vector: np.ndarray,
+        top_k: int,
+    ) -> list[VectorIndexMatch]:
+        if self._faiss_index is None:
+            return []
+        matches: list[VectorIndexMatch] = []
+        for faiss_match in self._faiss_index.search(query_vector, top_k=top_k):
+            entry = self._entries_by_chunk_id.get(faiss_match.chunk_id)
+            if entry is None:
+                continue
+            matches.append(VectorIndexMatch(entry=entry, score=faiss_match.score))
+        return matches
 
     def _load_entries_and_matrix(self) -> tuple[list[VectorIndexEntry], np.ndarray]:
         statement = (
@@ -142,6 +168,31 @@ class VectorIndexCache:
         if not embeddings:
             return entries, np.empty((0, self.embedding_provider.dimension), dtype=np.float64)
         return entries, np.asarray(embeddings, dtype=np.float64)
+
+    def _load_faiss_index_if_available(self) -> FaissVectorIndex | None:
+        index_path, metadata_path = default_faiss_paths(
+            Path("data/faiss"),
+            provider=self.embedding_provider.provider_name,
+            model_name=self.embedding_provider.model_name,
+            dimension=self.embedding_provider.dimension,
+        )
+        if not index_path.exists() or not metadata_path.exists():
+            return None
+        try:
+            faiss_index = FaissVectorIndex.load(index_path=index_path, metadata_path=metadata_path)
+        except (OSError, RuntimeError, ValueError):
+            return None
+        if not faiss_index.metadata.complete:
+            return None
+        if faiss_index.metadata.provider != self.embedding_provider.provider_name:
+            return None
+        if faiss_index.metadata.model_name != self.embedding_provider.model_name:
+            return None
+        if faiss_index.metadata.dimension != self.embedding_provider.dimension:
+            return None
+        if any(chunk_id not in self._entries_by_chunk_id for chunk_id in faiss_index.metadata.chunk_ids):
+            return None
+        return faiss_index
 
 
 def normalize_query_vector(vector: Sequence[float]) -> np.ndarray | None:

@@ -101,7 +101,7 @@ class OpenAICompatibleEmbeddingProvider:
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
                 response_data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")
@@ -170,6 +170,14 @@ def parse_openai_compatible_embeddings(response_data: dict[str, Any]) -> list[li
             embedding.append(float(value))
         embeddings.append(embedding)
     return embeddings
+
+
+def urlopen_without_proxy(
+    request: urllib.request.Request,
+    timeout: float,
+):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return opener.open(request, timeout=timeout)
 
 
 def create_embedding_provider(
