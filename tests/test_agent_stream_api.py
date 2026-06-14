@@ -72,6 +72,28 @@ def test_agent_stream_api_short_circuits_chitchat(tmp_path) -> None:
     assert "闲聊短路" in metadata["reasoning_summary"]
 
 
+def test_agent_stream_api_short_circuits_model_meta(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query/stream",
+            json={"question": "你用的什么大模型？", "top_k": 2},
+        )
+
+    assert response.status_code == 200
+    events = parse_sse_events(response.text)
+    event_names = [name for name, _payload in events]
+    assert event_names[0] == "token"
+    assert event_names[-2:] == ["metadata", "done"]
+    metadata = events[-2][1]
+    streamed_answer = "".join(payload["text"] for name, payload in events if name == "token")
+    assert metadata["answer"] == streamed_answer
+    assert metadata["tool_calls"] == []
+    assert metadata["sources"] == []
+    assert metadata["mode"] == "meta"
+    assert "deterministic / rule-based-chat-v1" in metadata["answer"]
+    assert "agent_meta" in metadata["reasoning_summary"]
+
+
 def test_agent_stream_api_persists_completed_conversation_messages(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         conversation = client.post("/conversations", json={"title": "流式"}).json()

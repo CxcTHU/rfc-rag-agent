@@ -10,7 +10,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.db.models import Message
 from app.db.repositories import ConversationRepository, MessageCreate
+from app.db.repositories import deserialize_metadata
 from app.db.session import get_db
 from app.schemas.agent import (
     AgentQueryRequest,
@@ -98,6 +100,7 @@ def query_agent(
     ),
 ) -> AgentQueryResponse:
     conversation_repository = ConversationRepository(db)
+    conversation_messages: list[Message] = []
     conversation_history: list[str] = []
     if request.conversation_id is not None:
         conversation = conversation_repository.get_conversation(request.conversation_id)
@@ -106,9 +109,48 @@ def query_agent(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="conversation not found",
             )
-        conversation_history = history_from_messages(
-            conversation_repository.list_messages(request.conversation_id)
+        conversation_messages = conversation_repository.list_messages(request.conversation_id)
+        conversation_history = history_from_messages(conversation_messages)
+
+    meta_response = build_agent_meta_response(
+        question=request.question,
+        chat_model_provider=chat_model_provider,
+        embedding_provider=embedding_provider,
+        planner_chat_provider=planner_chat_provider,
+        conversation_messages=conversation_messages,
+    )
+    if meta_response is not None:
+        persist_agent_conversation_messages(
+            repository=conversation_repository,
+            conversation_id=request.conversation_id,
+            question=request.question,
+            response=meta_response,
+            chat_model_provider=chat_model_provider,
+            summarize=False,
         )
+        return meta_response
+
+    try:
+        followup_response = build_followup_transform_response(
+            question=request.question,
+            conversation_messages=conversation_messages,
+            history=conversation_history or request.history,
+            chat_model_provider=chat_model_provider,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="chat model provider is unavailable or timed out",
+        ) from exc
+    if followup_response is not None:
+        persist_agent_conversation_messages(
+            repository=conversation_repository,
+            conversation_id=request.conversation_id,
+            question=request.question,
+            response=followup_response,
+            chat_model_provider=chat_model_provider,
+        )
+        return followup_response
 
     chitchat = detect_chitchat(request.question)
     if chitchat is not None:
@@ -236,6 +278,7 @@ def stream_query_agent(
     ),
 ) -> StreamingResponse:
     conversation_repository = ConversationRepository(db)
+    conversation_messages: list[Message] = []
     conversation_history: list[str] = []
     if request.conversation_id is not None:
         conversation = conversation_repository.get_conversation(request.conversation_id)
@@ -244,15 +287,15 @@ def stream_query_agent(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="conversation not found",
             )
-        conversation_history = history_from_messages(
-            conversation_repository.list_messages(request.conversation_id)
-        )
+        conversation_messages = conversation_repository.list_messages(request.conversation_id)
+        conversation_history = history_from_messages(conversation_messages)
 
     return StreamingResponse(
         stream_agent_query_events(
             request=request,
             db=db,
             conversation_repository=conversation_repository,
+            conversation_messages=conversation_messages,
             conversation_history=conversation_history,
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
@@ -271,6 +314,7 @@ def stream_agent_query_events(
     request: AgentQueryRequest,
     db: Session,
     conversation_repository: ConversationRepository,
+    conversation_messages: list[Message] | None = None,
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
@@ -278,26 +322,52 @@ def stream_agent_query_events(
 ) -> Iterator[str]:
     stream_started = time.perf_counter()
     try:
-        chitchat = detect_chitchat(request.question)
         summarize = True
-        if chitchat is not None:
-            response = agent_response_from_chitchat(request.question, chitchat)
+        chitchat: ChitchatResult | None = None
+        followup_response: AgentQueryResponse | None = None
+        meta_response = build_agent_meta_response(
+            question=request.question,
+            chat_model_provider=chat_model_provider,
+            embedding_provider=embedding_provider,
+            planner_chat_provider=planner_chat_provider,
+            conversation_messages=conversation_messages or [],
+        )
+        if meta_response is not None:
+            response = meta_response
             summarize = False
         else:
-            response, streamed_token_count = yield from stream_non_chitchat_agent_response(
-                request=request,
-                db=db,
-                conversation_history=conversation_history,
+            followup_response = build_followup_transform_response(
+                question=request.question,
+                conversation_messages=conversation_messages or [],
+                history=conversation_history or request.history,
                 chat_model_provider=chat_model_provider,
-                embedding_provider=embedding_provider,
-                planner_chat_provider=planner_chat_provider,
             )
-            if streamed_token_count == 0:
-                for token in split_streaming_text(response.answer):
-                    mark_response_first_token(response, stream_started)
-                    yield sse_event("token", {"text": token})
+            if followup_response is not None:
+                response = followup_response
+            else:
+                chitchat = detect_chitchat(request.question)
+                if chitchat is not None:
+                    response = agent_response_from_chitchat(request.question, chitchat)
+                    summarize = False
+                else:
+                    response, streamed_token_count = yield from stream_non_chitchat_agent_response(
+                        request=request,
+                        db=db,
+                        conversation_history=conversation_history,
+                        chat_model_provider=chat_model_provider,
+                        embedding_provider=embedding_provider,
+                        planner_chat_provider=planner_chat_provider,
+                    )
+                    if streamed_token_count == 0:
+                        for token in split_streaming_text(response.answer):
+                            mark_response_first_token(response, stream_started)
+                            yield sse_event("token", {"text": token})
 
-        if chitchat is not None:
+        if meta_response is not None or followup_response is not None:
+            for token in split_streaming_text(response.answer):
+                mark_response_first_token(response, stream_started)
+                yield sse_event("token", {"text": token})
+        elif chitchat is not None:
             for token in split_streaming_text(response.answer):
                 mark_response_first_token(response, stream_started)
                 yield sse_event("token", {"text": token})
@@ -379,6 +449,279 @@ def stream_non_chitchat_agent_response(
 
         producer.join()
         raise RuntimeError("unknown stream event")
+
+
+FOLLOWUP_TRANSFORM_TRIGGERS = (
+    "\u7528\u4e2d\u6587",
+    "\u4e2d\u6587\u56de\u7b54",
+    "\u7ffb\u8bd1\u6210\u4e2d\u6587",
+    "\u7ffb\u8bd1\u4e00\u4e0b",
+    "\u8f6c\u8ff0\u7ffb\u8bd1",
+    "\u8f6c\u6210\u4e2d\u6587",
+    "\u6362\u6210\u4e2d\u6587",
+    "\u91cd\u65b0\u7528\u4e2d\u6587",
+    "\u7b80\u77ed\u70b9",
+    "\u603b\u7ed3\u4e00\u4e0b",
+    "\u6574\u7406\u6210\u8868\u683c",
+    "\u6539\u6210\u8981\u70b9",
+    "translate that",
+    "translate it",
+    "in chinese",
+    "answer in chinese",
+    "say that in chinese",
+    "say it in chinese",
+    "summarize that",
+    "make it shorter",
+    "turn that into bullets",
+)
+
+FOLLOWUP_PRONOUNS = (
+    "that",
+    "it",
+    "\u521a\u624d",
+    "\u4e0a\u4e00",
+    "\u8fd9\u6bb5",
+    "\u8fd9\u4e2a",
+    "\u7b54\u6848",
+)
+
+MODEL_META_TRIGGERS = (
+    "\u4ec0\u4e48\u5927\u6a21\u578b",
+    "\u4ec0\u4e48\u6a21\u578b",
+    "\u4f60\u7528\u7684\u6a21\u578b",
+    "\u4f60\u7684\u6a21\u578b",
+    "\u54ea\u4e2a\u6a21\u578b",
+    "what model",
+    "which model",
+    "model are you using",
+)
+
+CAPABILITY_TRIGGERS = (
+    "\u4f60\u80fd\u505a\u4ec0\u4e48",
+    "\u600e\u4e48\u63d0\u95ee",
+    "\u652f\u6301\u54ea\u4e9b\u6a21\u5f0f",
+    "\u4f60\u662f\u4ec0\u4e48",
+    "what can you do",
+    "how should i ask",
+    "what modes",
+)
+
+REFUSAL_EXPLANATION_TRIGGERS = (
+    "\u4e3a\u4ec0\u4e48\u62d2\u7b54",
+    "\u4e3a\u4ec0\u4e48\u62d2\u7edd",
+    "\u521a\u624d\u4e3a\u4ec0\u4e48",
+    "\u62d2\u7b54\u539f\u56e0",
+    "why did you refuse",
+    "why refuse",
+)
+
+
+def build_agent_meta_response(
+    *,
+    question: str,
+    chat_model_provider: ChatModelProvider,
+    embedding_provider: EmbeddingProvider,
+    planner_chat_provider: ChatModelProvider | None,
+    conversation_messages: Sequence[Message],
+) -> AgentQueryResponse | None:
+    intent = classify_meta_intent(question)
+    if intent is None:
+        return None
+
+    normalized_question = question.strip()
+    if intent == "agent_meta":
+        planner_text = (
+            f"{planner_chat_provider.provider_name} / {planner_chat_provider.model_name}"
+            if planner_chat_provider is not None
+            else "not configured; the ReAct planner uses the deterministic fallback"
+        )
+        answer = (
+            "Runtime model configuration:\n"
+            f"- Chat: {chat_model_provider.provider_name} / {chat_model_provider.model_name}\n"
+            f"- Planner: {planner_text}\n"
+            f"- Embedding: {embedding_provider.provider_name} / {embedding_provider.model_name}\n"
+            "I do not expose API keys, bearer tokens, raw provider responses, hidden thoughts, "
+            "or restricted full text in chat answers."
+        )
+        summary = "agent_meta: answered model/runtime question without retrieval"
+    elif intent == "capability_help":
+        answer = (
+            "I can answer project-domain RAG questions with citations, inspect retrieved "
+            "sources and chunks, explain agent/runtime behavior, and transform my previous "
+            "answer when you ask for translation, summary, bullets, or a table. If I refuse, "
+            "the response includes a category and reason, such as off_topic, "
+            "responsibility_gate_triggered, evidence_insufficient, or service_error."
+        )
+        summary = "capability_help: answered capability question without retrieval"
+    else:
+        answer = previous_refusal_explanation(conversation_messages)
+        summary = "refusal_explanation: explained refusal category without retrieval"
+
+    return AgentQueryResponse.model_validate(
+        {
+            "question": normalized_question,
+            "answer": answer,
+            "tool_calls": [],
+            "search_results": [],
+            "sources": [],
+            "citations": [],
+            "refused": False,
+            "refusal_reason": None,
+            "reasoning_summary": summary,
+            "mode": "meta",
+            "workflow_steps": [],
+            "iteration_count": 0,
+            "invalid_citations": [],
+            "refusal_category": None,
+            "latency_trace": {},
+        }
+    )
+
+
+def classify_meta_intent(question: str) -> str | None:
+    normalized = question.casefold().strip()
+    if not normalized:
+        return None
+    if any(trigger in normalized for trigger in MODEL_META_TRIGGERS):
+        return "agent_meta"
+    if any(trigger in normalized for trigger in CAPABILITY_TRIGGERS):
+        return "capability_help"
+    if any(trigger in normalized for trigger in REFUSAL_EXPLANATION_TRIGGERS):
+        return "refusal_explanation"
+    return None
+
+
+def previous_refusal_explanation(conversation_messages: Sequence[Message]) -> str:
+    for message in reversed(conversation_messages):
+        if message.role != "assistant" or not message.content.strip():
+            continue
+        metadata = deserialize_metadata(message.metadata_json)
+        if metadata.get("refused") is not True:
+            continue
+        category = metadata.get("refusal_category") or "unknown"
+        reason = metadata.get("refusal_reason") or "no detailed reason was recorded"
+        return f"The previous answer was refused. Category: {category}. Reason: {reason}"
+
+    return (
+        "I do not see a recorded refusal in this conversation. Common refusal reasons are: "
+        "off_topic when the question has no project-domain anchor; "
+        "responsibility_gate_triggered when the question asks for prohibited responsibility "
+        "assignment; evidence_insufficient when retrieved evidence is too weak; and "
+        "service_error when a model or retrieval tool fails."
+    )
+
+
+def build_followup_transform_response(
+    *,
+    question: str,
+    conversation_messages: Sequence[Message],
+    history: Sequence[str],
+    chat_model_provider: ChatModelProvider,
+) -> AgentQueryResponse | None:
+    normalized_question = question.strip()
+    if not is_followup_transform_request(normalized_question):
+        return None
+
+    previous_answer, previous_metadata = previous_assistant_answer_context(
+        conversation_messages=conversation_messages,
+        history=history,
+    )
+    if not previous_answer:
+        return None
+
+    result = chat_model_provider.generate(
+        [
+            ChatMessage(
+                role="system",
+                content=(
+                    "You rewrite the immediately previous assistant answer according "
+                    "to the user's latest instruction. Do not retrieve new facts. "
+                    "Do not add claims. Preserve citation markers like [1] exactly "
+                    "when they appear in the previous answer. If the user asks for "
+                    "Chinese, answer in Chinese."
+                ),
+            ),
+            ChatMessage(
+                role="user",
+                content=(
+                    f"Latest user instruction:\n{normalized_question}\n\n"
+                    f"Previous assistant answer:\n{previous_answer}"
+                ),
+            ),
+        ]
+    )
+    return response_from_previous_answer_transform(
+        question=normalized_question,
+        answer=result.answer.strip(),
+        previous_metadata=previous_metadata,
+    )
+
+
+def is_followup_transform_request(question: str) -> bool:
+    normalized = question.casefold().strip()
+    if not normalized:
+        return False
+    if any(trigger in normalized for trigger in FOLLOWUP_TRANSFORM_TRIGGERS):
+        return len(normalized) <= 120 or any(
+            pronoun in normalized for pronoun in FOLLOWUP_PRONOUNS
+        )
+    return False
+
+
+def previous_assistant_answer_context(
+    *,
+    conversation_messages: Sequence[Message],
+    history: Sequence[str],
+) -> tuple[str | None, dict[str, object]]:
+    for message in reversed(conversation_messages):
+        if message.role != "assistant" or not message.content.strip():
+            continue
+        metadata = deserialize_metadata(message.metadata_json)
+        if metadata.get("refused") is True:
+            return None, {}
+        return message.content.strip(), metadata
+
+    for item in reversed(history):
+        content = strip_assistant_history_prefix(item)
+        if content:
+            return content, {}
+    return None, {}
+
+
+def strip_assistant_history_prefix(item: str) -> str | None:
+    stripped = item.strip()
+    prefixes = ("\u52a9\u624b\uff1a", "assistant:", "Assistant:")
+    for prefix in prefixes:
+        if stripped.startswith(prefix):
+            content = stripped[len(prefix):].strip()
+            return content or None
+    return None
+
+
+def response_from_previous_answer_transform(
+    *,
+    question: str,
+    answer: str,
+    previous_metadata: dict[str, object],
+) -> AgentQueryResponse:
+    payload = {
+        "question": question,
+        "answer": answer,
+        "tool_calls": previous_metadata.get("tool_calls", []),
+        "search_results": previous_metadata.get("search_results", []),
+        "sources": previous_metadata.get("sources", []),
+        "citations": previous_metadata.get("citations", []),
+        "refused": False,
+        "refusal_reason": None,
+        "reasoning_summary": "followup_transform: rewrote previous assistant answer without retrieval",
+        "mode": previous_metadata.get("mode", "default") or "default",
+        "workflow_steps": previous_metadata.get("workflow_steps", []),
+        "iteration_count": previous_metadata.get("iteration_count", 0),
+        "invalid_citations": previous_metadata.get("invalid_citations", []),
+        "refusal_category": None,
+        "latency_trace": {},
+    }
+    return AgentQueryResponse.model_validate(payload)
 
 
 def build_agent_query_response(

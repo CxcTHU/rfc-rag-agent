@@ -151,6 +151,21 @@ class AnswerThenFailSummaryProvider:
         raise RuntimeError("summary timeout with sensitive raw body")
 
 
+class FollowupTransformProvider(DeterministicChatModelProvider):
+    provider_name = "transform-test"
+    model_name = "transform-test-v1"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        latest = messages[-1].content
+        if "Previous assistant answer:" in latest:
+            return ChatModelResult(
+                answer="中文改写：填充能力取决于 SCC 流动性 [1].",
+                provider=self.provider_name,
+                model_name=self.model_name,
+            )
+        return super().generate(messages)
+
+
 def seed_agent_conversation_messages(conversation_id: int, count: int) -> None:
     override_get_db = app.dependency_overrides[get_db]
     db_generator = override_get_db()
@@ -166,6 +181,31 @@ def seed_agent_conversation_messages(conversation_id: int, count: int) -> None:
                     mode="default" if index % 2 else None,
                 )
             )
+    finally:
+        try:
+            next(db_generator)
+        except StopIteration:
+            pass
+
+
+def seed_refused_assistant_message(conversation_id: int) -> None:
+    override_get_db = app.dependency_overrides[get_db]
+    db_generator = override_get_db()
+    db = next(db_generator)
+    try:
+        ConversationRepository(db).add_message(
+            MessageCreate(
+                conversation_id=conversation_id,
+                role="assistant",
+                content="Refused.",
+                mode="agentic",
+                metadata={
+                    "refused": True,
+                    "refusal_category": "off_topic",
+                    "refusal_reason": "Question appears off-topic.",
+                },
+            )
+        )
     finally:
         try:
             next(db_generator)
@@ -195,11 +235,75 @@ def test_agent_api_answers_with_tool_calls_and_citations(tmp_path) -> None:
     assert "引用式问答" in payload["reasoning_summary"]
 
 
+def test_agent_api_answers_model_meta_without_retrieval(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post("/agent/query", json={"question": "你用的什么大模型？"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refused"] is False
+    assert payload["tool_calls"] == []
+    assert payload["sources"] == []
+    assert payload["mode"] == "meta"
+    assert "deterministic / rule-based-chat-v1" in payload["answer"]
+    assert "deterministic / hash-token-v1" in payload["answer"]
+    assert "agent_meta" in payload["reasoning_summary"]
+
+
+def test_agent_api_explains_previous_refusal_reason(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        conversation = client.post("/conversations", json={"title": "refusal"}).json()
+        seed_refused_assistant_message(conversation["id"])
+        response = client.post(
+            "/agent/query",
+            json={"question": "为什么拒答？", "conversation_id": conversation["id"]},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refused"] is False
+    assert payload["tool_calls"] == []
+    assert payload["mode"] == "meta"
+    assert "Category: off_topic" in payload["answer"]
+    assert "Question appears off-topic." in payload["answer"]
+    assert "refusal_explanation" in payload["reasoning_summary"]
+
+
+def test_agent_api_transforms_previous_answer_without_retrieval(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        conversation = client.post("/conversations", json={"title": "followup"}).json()
+        first = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity?",
+                "top_k": 2,
+                "conversation_id": conversation["id"],
+            },
+        )
+        app.dependency_overrides[get_agent_chat_model_provider] = (
+            lambda: FollowupTransformProvider()
+        )
+        second = client.post(
+            "/agent/query",
+            json={"question": "用中文回答我", "conversation_id": conversation["id"]},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    payload = second.json()
+    assert payload["refused"] is False
+    assert payload["answer"] == "中文改写：填充能力取决于 SCC 流动性 [1]."
+    assert payload["citations"] == [1]
+    assert payload["sources"]
+    assert payload["tool_calls"][0]["tool_name"] == "answer_with_citations"
+    assert "followup_transform" in payload["reasoning_summary"]
+
+
 def test_agent_api_handles_chitchat_without_refusal_or_tools(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         responses = [
             client.post("/agent/query", json={"question": question, "top_k": 2})
-            for question in ["你好", "谢谢", "再见", "好的", "你能做什么"]
+            for question in ["你好", "谢谢", "再见", "好的"]
         ]
 
     for response in responses:
