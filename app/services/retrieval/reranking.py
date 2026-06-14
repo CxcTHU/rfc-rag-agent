@@ -11,6 +11,38 @@ from typing import Any, Protocol
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+|[\u4e00-\u9fff]")
+ENGLISH_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "according",
+    "be",
+    "by",
+    "did",
+    "do",
+    "does",
+    "for",
+    "from",
+    "how",
+    "in",
+    "is",
+    "it",
+    "of",
+    "or",
+    "the",
+    "to",
+    "was",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "with",
+}
 
 # Transient HTTP statuses worth retrying. 4xx client errors (bad key, bad
 # request) are excluded because retrying them only wastes quota.
@@ -198,7 +230,8 @@ def validate_rerank_inputs(query: str, candidates: Sequence[str], top_k: int) ->
 
 
 def tokenize(text: str) -> list[str]:
-    return [match.group(0).casefold() for match in TOKEN_RE.finditer(text or "")]
+    tokens = [match.group(0).casefold() for match in TOKEN_RE.finditer(text or "")]
+    return [token for token in tokens if token not in ENGLISH_STOPWORDS]
 
 
 def deterministic_rerank_score(query_terms: Sequence[str], candidate: str) -> float:

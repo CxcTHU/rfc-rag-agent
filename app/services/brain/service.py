@@ -22,7 +22,7 @@ from app.services.generation.chat_model import ChatModelProvider
 from app.services.generation.prompt_builder import SearchResultLike, build_rag_prompt
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
 from app.services.retrieval.decompose import DecomposeRetrievalService, decompose_query
-from app.services.retrieval.hybrid_search import HybridSearchService
+from app.services.retrieval.hybrid_rrf_tail import HybridRrfTailSearchService
 from app.services.retrieval.parent_child_search import ParentChildSearchService
 from app.services.retrieval.keyword_search import KeywordSearchService
 from app.services.retrieval.vector_search import VectorSearchService
@@ -417,7 +417,7 @@ class BrainService:
                 min_score=min_score,
             )
 
-        raw_results = HybridSearchService(self.db, self.embedding_provider).search(
+        raw_results = HybridRrfTailSearchService(self.db, self.embedding_provider).search(
             query=question,
             top_k=top_k,
         )

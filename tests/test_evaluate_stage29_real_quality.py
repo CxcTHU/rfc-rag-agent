@@ -4,6 +4,7 @@ from app.services.retrieval.hybrid_search import HybridSearchResult
 from scripts.evaluate_stage29_real_quality import (
     Stage29Query,
     coverage_ratio,
+    create_stage29_embedding_provider,
     hit_at_k,
     load_queries,
     source_type_distribution,
@@ -117,9 +118,29 @@ def test_source_type_distribution_and_summary() -> None:
 
     assert source_type_distribution(results) == "web_page:2;wikipedia:1"
 
-    summary = summarize_results(rows, provider="jina", model_name="jina-embeddings-v3")
+    summary = summarize_results(rows, provider="jina", model_name="jina-embeddings-v3", retrieval_mode="bm25_rrf")
 
+    assert summary["retrieval_mode"] == "bm25_rrf"
     assert summary["precision_at_1"] == "1.000"
     assert summary["avg_coverage_ratio"] == "0.500"
     assert summary["refusal_accuracy"] == "1.000"
     assert summary["source_type_distribution"] == "standard_document:1;web_page:3;wikipedia:2"
+
+
+def test_stage29_provider_selection_uses_provider_specific_model(monkeypatch) -> None:
+    class Settings:
+        embedding_provider = "paratera"
+        embedding_model_name = "GLM-Embedding-3"
+        embedding_api_key = "local-key"
+        embedding_base_url = "https://example.invalid/v1"
+        embedding_dimension = 2048
+        embedding_timeout_seconds = 30
+
+    monkeypatch.setenv("JINA_API_KEY", "jina-key")
+    monkeypatch.setenv("JINA_BASE_URL", "https://jina.example.invalid/v1")
+
+    provider = create_stage29_embedding_provider("jina", Settings())
+
+    assert provider.provider_name == "jina"
+    assert provider.model_name == "jina-embeddings-v3"
+    assert provider.dimension == 1024

@@ -13,6 +13,39 @@
 
 本文件的作用不是一次性定死所有细节，而是给“从零搭建堆石混凝土问答 Agent”提供稳定方向。
 
+## 最新交接状态：阶段 35 开发、测试与文档草稿完成，等待用户人工核验
+
+当前分支：`codex/phase-35-retrieval-quality-calibration`。
+
+阶段 35 已从阶段 34 完成、打 `phase-34-complete -> 8028acb Complete phase 34 rag diagnosis embedding judge` 并合并后的 `main -> d9053a6 Merge phase 34 rag diagnosis embedding judge` 出发；未移动任何已有阶段 tag。
+
+阶段 35 已完成：
+
+- 新增 `docs/stage35_retrieval_quality_calibration.md` 与 `tests/test_stage35_design.py`，固定检索质量校准目标、五类扣分根因、双门验证和安全边界。
+- 新增 `scripts/analyze_stage35_deduction_causes.py` 与 `data/evaluation/stage35_deduction_root_causes.csv`，把 Stage 30 deductions 归因到 retrieval/context/prompt/answer/rule 五类。
+- 在 `app/services/retrieval/keyword_search.py` 补充 RCC dam development query expansion，修复 `stage29_wiki_dam_applications` Top-5 命中。
+- 修复 `scripts/evaluate_stage29_real_quality.py` 的 provider 专用模型/维度选择，避免 Jina/GLM 评测配置混用。
+- 强化 `app/services/generation/prompt_builder.py` 的逐句引用、不得错引、多要点覆盖和缺失证据说明规则。
+- 补强 `scripts/judge_stage34_generation_quality.py` 的 Judge payload，加入 question 与脱敏短 `evidence_snippet`。
+- 输出 `data/evaluation/stage35_llm_judge_results.csv`、`stage35_llm_judge_summary.csv`、`stage35_quality_summary.csv`，并新增 `docs/phase_reviews/phase-35.md` 验收草稿和 Obsidian 阶段草稿。
+
+阶段 35 当前结果：
+
+```text
+stage29_wiki_dam_applications: precision_at_5=true, coverage_ratio=0.750, Stage 30 deduction cleared
+stage29_web_rfc_advantages: coverage_ratio=0.750, Stage 30 deduction cleared
+stage30_overall_score=91.52
+stage30_grade=A
+stage30_release_decision=pass
+stage35_glm_judge_before_validator: answer_coverage=0.525, citation_support=0.750, safety_leak_check=0.700
+stage35_validator_drop_experiment: answer_coverage=0.410, citation_support=0.635, safety_leak_check=1.000
+stage35_final_judge_gate=FAIL; validator decoupled from production Brain path
+```
+
+阶段 35 核心边界：不替换默认 chat / embedding / rerank provider；不动 chat provider 拓扑；不引入外部数据源；不做写入型 Agent 工具；不做 tool-calling 协议迁移；不让真实 API 成为 CI 或本地全量测试前提；不要把 API key、Bearer token、供应商原始响应、raw_response、reasoning_content、hidden thought 或受限全文写入 Git、CSV、文档、测试或 Obsidian。
+
+阶段 35 当前必须停在用户人工核验前：**不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR，不要创建 `phase-35-complete` tag**。只有用户人工核验并明确授权后，才允许进入提交、tag 和 GitHub 推送流程。
+
 ## 最新交接状态：阶段 34 开发、测试与文档草稿完成，等待用户人工核验
 
 当前分支：`codex/phase-34-rag-diagnosis-embedding-judge`。
@@ -2180,3 +2213,30 @@ Agent 工具数量明显增多，手写编排开始难维护
 阶段 9 已经补齐真实模型 provider 边界。后续如果切换真实 chat 或 embedding 模型，必须保留 deterministic baseline，先按 provider/model/dimension 重建向量索引，再复跑 model config、vector、hybrid、chat、agent 和 brain workflow 评测，不能只凭单次回答效果判断质量。
 
 阶段 9.1 已证明真实 MIMO + Jina 可以运行，但失败项集中在 `vector_only/filling_capacity`、`default_hybrid/unsupported`、`vector_only/unsupported`。阶段 10 已通过 EvidenceConfidence 和 topic anchor rerank 修复主要边界。阶段 11 已扩大真实用户问题集、补充跨语言 query expansion 和人工审阅设计。阶段 12 已落地质量审阅并实现最小上下文补全。阶段 13 已实现规则式 Decompose、子 query 检索、证据合并、`chunk_id` 去重和可解释 rerank。阶段 14 已建立真实 embedding 对比、Answer Coverage 校准和 Decompose provenance 可读化表。阶段 15 已补齐真实配置复跑、Answer Coverage 复核表和只读质量报告。后续阶段如果继续提升质量，应优先处理报告暴露的 high/medium 风险和真实 decompose 稳定性，而不是继续盲目扩展模型 provider 或默认引入 HyDE。
+## Phase 35 Clean Remediation Update
+
+Current branch: `codex/phase-35-retrieval-quality-calibration`.
+
+Phase 35 is complete and user-approved for submission. The leaked RCC dam synonym rule copied literal expected answer points and has been removed. The previous `84.40 / B / review_required` intermediate result is retired and invalid for acceptance.
+
+Clean final result:
+
+```text
+stage29 provider=glm retrieval_mode=hybrid_rrf_tail
+p@1=0.933 p@3=0.933 p@5=1.000 coverage=0.731 refusal_accuracy=1.000
+
+stage30 overall=91.52 grade=A release_decision=pass
+stage30 deduction_rows=0
+```
+
+Retrieval changed through mechanism-level services, not scoring changes: `HybridRrfTailSearchService` preserves hybrid top-3 results and fills tail recall through BM25+vector RRF. Scoring weights, grade thresholds, release rules, default providers, provider topology, and external data sources were not changed.
+
+Real Judge remains failed:
+
+```text
+production GLM before validator: answer_coverage=0.525 citation_support=0.750 safety_leak_check=0.700
+validator drop experiment: answer_coverage=0.410 citation_support=0.635 safety_leak_check=1.000
+final conclusion: Judge gate FAIL; validator decoupled from production Brain path
+```
+
+Final verification: `python -m pytest -q` -> `694 passed`; `/quality-report` has been rebuilt to `91.52 / A / pass`, and `/agent/query mode=react_agent` returns a non-refused cited answer without validator markers. User has explicitly approved commit, push, and GitHub merge for Phase 35; do not create or move phase tags unless separately requested.

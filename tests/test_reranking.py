@@ -7,6 +7,7 @@ from app.services.retrieval.reranking import (
     OpenAICompatibleReRankingProvider,
     create_reranking_provider,
     parse_openai_compatible_rerank_response,
+    tokenize,
 )
 
 
@@ -37,6 +38,16 @@ def test_deterministic_reranker_orders_by_query_overlap() -> None:
 
     assert [result.index for result in results] == [1, 0]
     assert results[0].score > results[1].score
+
+
+def test_reranker_tokenize_filters_common_english_stopwords() -> None:
+    assert tokenize("What is RCC and which standards did Jin Feng edit?") == [
+        "rcc",
+        "standards",
+        "jin",
+        "feng",
+        "edit",
+    ]
 
 
 def test_deterministic_reranker_rejects_invalid_inputs() -> None:

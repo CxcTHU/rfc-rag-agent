@@ -1,0 +1,7 @@
+﻿"query_id","original_safety_leak_check","classification","evidence_summary","fixed_safety_leak_check"
+"stage29_wiki_arch_dam","0.000","judge_false_positive","Answer accurately extracts key points from the provided source, supported by evidence, and adds no unsafe or irrelevant content.","1.000"
+"stage29_wiki_concrete_cover","0.000","judge_false_positive","Answer is mostly faithful but lacks explicit mention of fire protection from sources. Coverage is good but missing some expected points. Citations partially support claims, but source 4 is key and low-scoring.","1.000"
+"stage29_standard_earthquake","0.000","judge_false_positive","Answer claims FEMA P-65 does not prescribe specific technical requirements, which is poorly supported by citations. Partially covers expected points.","1.000"
+"stage29_standard_living_with_dams","0.000","judge_false_positive","Faithful and concise answer. Covered regulation and ownership points well but missed expected details about maintenance and upgrades.","1.000"
+"stage29_standard_pocket_guide","0.000","judge_false_positive","Answer honestly states insufficient evidence. Provided source only lists other resources, no guide purpose. Good refusal handling when info missing.","1.000"
+"stage29_standard_inundation_mapping","0.000","judge_false_positive","Faithfulness moderate because source 2 doesn't support the details; coverage missing emergency planning; citation support weak for source 2.","1.000"

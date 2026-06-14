@@ -1,5 +1,33 @@
 # RFC-RAG-Agent
 
+## Phase 35 Clean Remediation Update
+
+Current branch: `codex/phase-35-retrieval-quality-calibration`.
+
+Phase 35 is complete and awaiting human verification. The unsafe test-set leakage synonym rule has been removed, and the retired `84.40 / B / review_required` intermediate result must not be used as acceptance evidence.
+
+Clean final retrieval and scoring results:
+
+```text
+python scripts/evaluate_stage29_real_quality.py --provider glm --retrieval-mode hybrid_rrf_tail
+p@1=0.933 p@3=0.933 p@5=1.000 coverage=0.731 refusal_accuracy=1.000
+
+python scripts/score_stage30_quality.py
+overall=91.52 grade=A release_decision=pass
+```
+
+The fix is retrieval-mechanism based: full source pages are preferred over metadata records, reranking filters common English stopwords, and `HybridRrfTailSearchService` preserves the stable hybrid top 3 while filling tail recall with BM25+vector RRF. Stage 30 scoring weights and release rules were not changed.
+
+Real Judge remains a review risk:
+
+```text
+production GLM before validator: answer_coverage=0.525 citation_support=0.750 safety_leak_check=0.700
+validator drop experiment: answer_coverage=0.410 citation_support=0.635 safety_leak_check=1.000
+final conclusion: Judge gate FAIL; validator decoupled from production Brain path
+```
+
+Final verification: `python -m pytest -q` -> `694 passed`; `/quality-report` shows `91.52 / A / pass` with console errors=0, and `/agent/query mode=react_agent` returns a non-refused cited answer without validator markers. No `git add`, commit, tag, push, or PR has been performed.
+
 面向水利工程堆石混凝土技术的文献检索与引用式问答 Agent。
 
 本项目目标是从零搭建一个垂直领域 RAG 系统，逐步实现：
@@ -13,6 +41,21 @@
 - 受控 Agent 工具调用与前端界面
 
 ## 当前阶段
+
+阶段 35（检索质量校准与 Stage 30 评分破局，开发、测试、普通文档与 Obsidian 草稿已完成，等待用户人工核验）：当前分支为 `codex/phase-35-retrieval-quality-calibration`，从阶段 34 完成、打 `phase-34-complete -> 8028acb` 并合并后的 `main -> d9053a6` 出发；未移动任何已有阶段 tag。
+
+阶段 35 完成内容：
+
+- 新增 `docs/stage35_retrieval_quality_calibration.md` 与 `tests/test_stage35_design.py`，固定五类扣分根因、修复边界、双门验证和安全约束。
+- 新增 `scripts/analyze_stage35_deduction_causes.py` 与 `data/evaluation/stage35_deduction_root_causes.csv`，把 Stage 30 deductions 归因到 `retrieval_miss`、`context_expansion_miss`、`prompt_citation_gap`、`answer_coverage_gap`、`rule_too_strict`。
+- 修复 `stage29_wiki_dam_applications` Top-5 命中与 `stage29_web_rfc_advantages` 规则覆盖核心扣分：二者重跑后均为 coverage=0.750，且不再出现在 Stage 30 deductions。
+- 强化 `keyword_search.py` 的 RCC dam development query expansion；修复 `evaluate_stage29_real_quality.py --provider jina` 的 provider 专用模型/维度选择。
+- 强化 `prompt_builder.py` 的逐句引用、不得错引、多要点覆盖、缺失证据说明规则；补强真实 Judge payload 的 question 与脱敏短 evidence snippet。
+- 新增 `data/evaluation/stage35_llm_judge_results.csv`、`stage35_llm_judge_summary.csv` 与 `stage35_quality_summary.csv`。
+
+阶段 35 当前结论：Stage 30 在默认 GLM + `hybrid_rrf_tail` 链路上达到 `91.52 / A / pass`；真实 Judge gate 仍诚实保留 FAIL。GLM validator 前为 `answer_coverage=0.525`、`citation_support=0.750`、`safety_leak_check=0.700`；validator drop 实验虽把 safety 修到 `1.000`，但 coverage/citation 降到 `0.410/0.635`，因此 validator 已从 Brain 生产路径解耦，仅保留为离线/Judge 实验工具。
+
+阶段 35 当前停在用户人工核验前：**尚未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR，未创建 `phase-35-complete` tag**。
 
 阶段 34（RAG 性能瓶颈诊断、Embedding 迁移决策与真实 Judge 质量复核，开发、测试、文档与用户人工核验已完成，进入提交合并收尾）：当前分支为 `codex/phase-34-rag-diagnosis-embedding-judge`，从阶段 33 完成并合并后的 `main / origin/main -> c06d0a3 Merge phase 33 rag performance embedding validation` 出发；已确认 `phase-33-complete -> 0bad9e1 Complete phase 33 rag performance embedding validation` 是 `main` 的祖先，未移动任何已有阶段 tag。
 

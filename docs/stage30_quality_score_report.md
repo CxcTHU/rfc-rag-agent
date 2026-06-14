@@ -4,37 +4,32 @@
 
 ## 总览
 
-- run_id：`stage30-clickable-human-review-validation`
+- run_id：`stage30-63b8d169d1e2`
 - scoring_version：`stage30-v1`
 - scoring_mode：`deterministic_rule_based`
-- overall_score：83.17
-- grade：B
-- release_decision：review_required
-- score_delta：-0.004
+- overall_score：91.52
+- grade：A
+- release_decision：pass
+- score_delta：0.002
 
 ## 维度分
 
 | Dimension | Weight | Score | Max | Normalized | Status | Evidence |
 | --- | ---: | ---: | ---: | ---: | --- | --- |
-| retrieval_quality | 35.00 | 26.83 | 35.00 | 0.767 | review_required | precision_at_1/3/5 from stage29_real_quality_summary.csv |
-| rule_based_context_answer_quality | 25.00 | 16.60 | 25.00 | 0.664 | weak | avg_coverage_ratio from stage29_real_quality_summary.csv |
+| retrieval_quality | 35.00 | 33.36 | 35.00 | 0.953 | strong | precision_at_1/3/5 from stage29_real_quality_summary.csv |
+| rule_based_context_answer_quality | 25.00 | 18.27 | 25.00 | 0.731 | review_required | avg_coverage_ratio from stage29_real_quality_summary.csv |
 | safety_refusal | 20.00 | 20.00 | 20.00 | 1.000 | strong | refusal_accuracy from stage29_real_quality_summary.csv |
-| source_quality | 10.00 | 9.73 | 10.00 | 0.973 | strong | source_type_distribution and expected source misses |
+| source_quality | 10.00 | 9.89 | 10.00 | 0.989 | strong | source_type_distribution and expected source misses |
 | engineering_health | 10.00 | 10.00 | 10.00 | 1.000 | strong | stage30_engineering_health.json |
-| overall | 100.00 | 83.17 | 100.00 | 0.832 | review_required | grade=B; scoring_mode=deterministic_rule_based |
+| overall | 100.00 | 91.52 | 100.00 | 0.915 | pass | grade=A; scoring_mode=deterministic_rule_based |
 
 ## 扣分项
 
-| Severity | Dimension | Query | Points | Reason | Recommended Action |
-| --- | --- | --- | ---: | --- | --- |
-| medium | retrieval_quality | stage29_wiki_dam_applications | 2.00 | Top-5 retrieval did not include the expected source type; this remains a manual review item from stage 29. | Review query design, expected source labeling, and top-k evidence before claiming release readiness. |
-| medium | rule_based_context_answer_quality | stage29_wiki_dam_applications | 2.00 | Rule-based coverage_ratio=0.250 is below 0.500; this is not a semantic faithfulness score. | Inspect missing answer points and decide whether retrieval, corpus labeling, or the expected points need calibration. |
-| medium | rule_based_context_answer_quality | stage29_web_rfc_advantages | 2.00 | Rule-based coverage_ratio=0.250 is below 0.500; this is not a semantic faithfulness score. | Inspect missing answer points and decide whether retrieval, corpus labeling, or the expected points need calibration. |
+- 当前无扣分项。
 
 ## 推荐动作
 
-- Inspect missing answer points and decide whether retrieval, corpus labeling, or the expected points need calibration.
-- Review query design, expected source labeling, and top-k evidence before claiming release readiness.
+- Continue human review of the stage 30 score report before commit/tag/push.
 
 ## Engineering Health
 
