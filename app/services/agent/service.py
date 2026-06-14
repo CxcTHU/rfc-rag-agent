@@ -1,5 +1,6 @@
 import re
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass, field, replace
 from collections.abc import Sequence
 from typing import Literal
 
@@ -12,6 +13,11 @@ from app.services.agent.tools import (
     AgentToolCallRecord,
 )
 from app.services.generation.chat_model import ChatModelProvider
+from app.services.observability.latency_trace import (
+    LatencyTrace,
+    reset_current_latency_trace,
+    set_current_latency_trace,
+)
 from app.services.retrieval.embedding import EmbeddingProvider
 
 
@@ -71,56 +77,86 @@ class AgentService:
         if max_tool_calls <= 0:
             raise ValueError("max_tool_calls must be greater than 0")
 
-        intent = detect_intent(normalized_question, source_id=source_id)
-        if intent == "get_source_detail":
-            resolved_source_id = source_id or extract_source_id(normalized_question)
-            if not resolved_source_id:
-                return AgentQueryResult(
-                    question=normalized_question,
-                    answer="请提供要查询的 source_id。",
-                    tool_calls=[],
-                    refused=True,
-                    refusal_reason="source_id is required for source detail queries.",
-                    reasoning_summary="识别为来源详情查询，但缺少 source_id，因此没有调用工具。",
+        latency_trace = LatencyTrace()
+        latency_token = set_current_latency_trace(latency_trace)
+        try:
+            intent = detect_intent(normalized_question, source_id=source_id)
+            if intent == "get_source_detail":
+                resolved_source_id = source_id or extract_source_id(normalized_question)
+                if not resolved_source_id:
+                    return with_latency_trace(
+                        AgentQueryResult(
+                            question=normalized_question,
+                            answer="请提供要查询的 source_id。",
+                            tool_calls=[],
+                            refused=True,
+                            refusal_reason="source_id is required for source detail queries.",
+                            reasoning_summary="识别为来源详情查询，但缺少 source_id，因此没有调用工具。",
+                        ),
+                        latency_trace,
+                    )
+                tool_started = time.perf_counter()
+                tool_result = self.toolbox.get_source_detail(resolved_source_id)
+                latency_trace.add_duration("tool_latency_ms", elapsed_ms(tool_started))
+                return with_latency_trace(
+                    result_from_tool(
+                        question=normalized_question,
+                        answer=source_detail_answer(tool_result.sources),
+                        tool_result=tool_result,
+                        reasoning_summary=f"识别为来源详情查询，调用 get_source_detail 查询 {resolved_source_id}。",
+                    ),
+                    latency_trace,
                 )
-            tool_result = self.toolbox.get_source_detail(resolved_source_id)
-            return result_from_tool(
-                question=normalized_question,
-                answer=source_detail_answer(tool_result.sources),
-                tool_result=tool_result,
-                reasoning_summary=f"识别为来源详情查询，调用 get_source_detail 查询 {resolved_source_id}。",
-            )
 
-        if intent == "list_sources":
-            tool_result = self.toolbox.list_sources(limit=top_k)
-            return result_from_tool(
-                question=normalized_question,
-                answer=f"找到 {len(tool_result.sources)} 条来源记录。",
-                tool_result=tool_result,
-                reasoning_summary="识别为来源列表查询，调用 list_sources 获取来源登记记录。",
-            )
+            if intent == "list_sources":
+                tool_started = time.perf_counter()
+                tool_result = self.toolbox.list_sources(limit=top_k)
+                latency_trace.add_duration("tool_latency_ms", elapsed_ms(tool_started))
+                return with_latency_trace(
+                    result_from_tool(
+                        question=normalized_question,
+                        answer=f"找到 {len(tool_result.sources)} 条来源记录。",
+                        tool_result=tool_result,
+                        reasoning_summary="识别为来源列表查询，调用 list_sources 获取来源登记记录。",
+                    ),
+                    latency_trace,
+                )
 
-        if intent == "search":
-            tool_result = self.toolbox.hybrid_search_knowledge(normalized_question, top_k=top_k)
-            return result_from_tool(
-                question=normalized_question,
-                answer=f"找到 {len(tool_result.search_results)} 条混合检索结果。",
-                tool_result=tool_result,
-                reasoning_summary="识别为资料检索意图，调用 hybrid_search_knowledge 复用阶段 6 的混合检索。",
-            )
+            if intent == "search":
+                tool_started = time.perf_counter()
+                tool_result = self.toolbox.hybrid_search_knowledge(normalized_question, top_k=top_k)
+                latency_trace.add_duration("tool_latency_ms", elapsed_ms(tool_started))
+                return with_latency_trace(
+                    result_from_tool(
+                        question=normalized_question,
+                        answer=f"找到 {len(tool_result.search_results)} 条混合检索结果。",
+                        tool_result=tool_result,
+                        reasoning_summary="识别为资料检索意图，调用 hybrid_search_knowledge 复用阶段 6 的混合检索。",
+                    ),
+                    latency_trace,
+                )
 
-        tool_result = self.toolbox.answer_with_citations(
-            normalized_question,
-            top_k=top_k,
-            retrieval_mode="hybrid",
-            history=history,
-        )
-        return result_from_tool(
-            question=normalized_question,
-            answer=tool_result.answer or "",
-            tool_result=tool_result,
-            reasoning_summary="识别为引用式问答意图，调用 answer_with_citations 复用现有问答、引用和拒答链路。",
-        )
+            tool_started = time.perf_counter()
+            tool_result = self.toolbox.answer_with_citations(
+                normalized_question,
+                top_k=top_k,
+                retrieval_mode="hybrid",
+                history=history,
+            )
+            answer_duration_ms = elapsed_ms(tool_started)
+            latency_trace.add_duration("tool_latency_ms", answer_duration_ms)
+            latency_trace.add_duration("answer_latency_ms", answer_duration_ms)
+            return with_latency_trace(
+                result_from_tool(
+                    question=normalized_question,
+                    answer=tool_result.answer or "",
+                    tool_result=tool_result,
+                    reasoning_summary="识别为引用式问答意图，调用 answer_with_citations 复用现有问答、引用和拒答链路。",
+                ),
+                latency_trace,
+            )
+        finally:
+            reset_current_latency_trace(latency_token)
 
 
 def detect_intent(question: str, source_id: str | None = None) -> AgentIntent:
@@ -173,3 +209,20 @@ def source_detail_answer(sources: list[AgentSourceReference]) -> str:
         return "没有找到对应来源。"
     source = sources[0]
     return f"来源 {source.source_id}: {source.title}"
+
+
+def elapsed_ms(started: float) -> float:
+    return (time.perf_counter() - started) * 1000.0
+
+
+def with_latency_trace(
+    result: AgentQueryResult,
+    latency_trace: LatencyTrace,
+) -> AgentQueryResult:
+    return replace(
+        result,
+        latency_trace=latency_trace.finalize(
+            iteration_count=result.iteration_count,
+            tool_call_count=len(result.tool_calls),
+        ),
+    )

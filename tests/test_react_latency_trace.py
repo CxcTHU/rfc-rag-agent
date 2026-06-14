@@ -53,6 +53,41 @@ def test_react_agent_response_includes_safe_latency_trace(tmp_path) -> None:
         assert forbidden not in serialized
 
 
+def test_default_agent_response_includes_safe_latency_trace(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 2,
+                "mode": "default",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    trace = payload["latency_trace"]
+
+    for field in LATENCY_FIELDS:
+        assert field in trace
+
+    assert trace["tool_call_count"] == len(payload["tool_calls"])
+    assert trace["time_to_final_ms"] >= 0
+    assert trace["answer_latency_ms"] >= 0
+    assert trace["tool_latency_ms"] >= 0
+
+    serialized = str(trace)
+    for forbidden in [
+        "hidden thought",
+        "reasoning_content",
+        "raw_response",
+        "Bearer",
+        "Authorization",
+        "api_key",
+    ]:
+        assert forbidden not in serialized
+
+
 def test_react_agent_stream_metadata_includes_time_to_first_token(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(

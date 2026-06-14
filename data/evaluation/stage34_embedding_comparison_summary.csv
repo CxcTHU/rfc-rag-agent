@@ -1,0 +1,3 @@
+candidate,provider,model_name,dimension,status,total_queries,completed_queries,precision_at_1,precision_at_3,precision_at_5,hit_at_5,avg_coverage_ratio,avg_latency_ms,decision,next_action
+glm_candidate,paratera,GLM-Embedding-3,2048,completed,18,18,0.667,0.867,0.867,0.867,0.637,1491.38,keep_glm,"Keep GLM-Embedding-3 as the default provider; Jina's small top-5/coverage edge does not offset quota sustainability risk, so keep Jina only as historical baseline and rollback reference."
+jina_baseline,jina,jina-embeddings-v3,1024,completed,18,18,0.667,0.800,0.933,0.933,0.670,1489.29,keep_glm,"Keep GLM-Embedding-3 as the default provider; Jina's small top-5/coverage edge does not offset quota sustainability risk, so keep Jina only as historical baseline and rollback reference."

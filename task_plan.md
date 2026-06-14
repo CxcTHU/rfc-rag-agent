@@ -1,320 +1,373 @@
-# 阶段 33 任务计划：RAG 链路性能优化与 Embedding 迁移验证
+# 阶段 34 任务计划：RAG 性能瓶颈诊断、Embedding 迁移决策与真实 Judge 质量复核
 
 ## 目标
 
-在阶段 32「ReAct Agent 决策升级与工具调用实时可视化」已经完成、打 `phase-32-complete` tag 并合并到 `main` 的基础上，进入阶段 33：围绕真实暴露的 RAG 性能瓶颈做核心链路优化，并对 GLM-Embedding-3 迁移后的检索质量做诚实验证。
+在阶段 33「RAG 链路性能优化与 Embedding 迁移验证」已经完成、打 `phase-33-complete` tag 并合并到 `main` 的基础上，进入阶段 34：真正使用阶段 33 新增的 `latency_trace` 找出真实 RAG/ReAct 慢查询瓶颈，补齐 GLM-Embedding-3 与 Jina 的同环境检索对照，并用可选真实 LLM Judge 对生成答案做语义质量复核。
 
-目标分支：`codex/phase-33-rag-performance-embedding-validation`
+目标分支建议：`codex/phase-34-rag-diagnosis-embedding-judge`
 
-本阶段不是继续扩 Agent 花活，也不是直接替换默认模型。核心原则是：先量化慢在哪里，再优化确定浪费；保留旧 Jina 索引作为回滚和质量对照；DeepSeek 只作为 benchmark candidate，不直接替换默认 MIMO；真实 provider 只做显式 smoke 或 benchmark，不进入 CI 或本地全量测试前提。
-
-## 背景
-
-阶段 31 引入 FAISS `IndexFlatIP` 与父子块检索，阶段 32 引入 `react_agent` 与实时 SSE 可观测。联调后发现真实 ReAct 查询约 33-44 秒，同时存在一个确定浪费点：
-
-```text
-VectorIndexCache._ensure_loaded()
--> 先从 SQLite 读取全部 chunk_embeddings
--> 反序列化 12,731 x 2048 维向量
--> 构建 numpy normalized matrix，约 208MB
--> 再加载 FAISS index
--> 搜索实际走 FAISS，numpy matrix 在主路径中未参与搜索
-```
-
-GLM-Embedding-3 维度为 2048，不是 2028。相比 Jina v3 的 1024 维，SQLite 反序列化、numpy matrix、FAISS index 体积和冷启动成本都会放大。因此阶段 33 应优先处理 FAISS 可用时的冗余 matrix 构建，并补上 GLM vs Jina 的迁移质量对照。
+本阶段不是继续扩 Agent 花活，也不是直接切默认模型。核心原则是：先用真实数据闭环阶段 33 留下的判断缺口，再决定后续是否优化 prompt、provider、rerank、ReAct 轮数或进入阶段 35 的真 LLM 自主 ReAct。
 
 ## 当前基线
 
 ```text
-main / origin/main -> 608a6e9 Merge phase 32 react agent observability
-phase-32-complete -> f259f97 Complete phase 32 react agent observability
-当前阶段分支 -> codex/phase-33-rag-performance-embedding-validation
+main / origin/main -> c06d0a3 Merge phase 33 rag performance embedding validation
+phase-33-complete -> 0bad9e1 Complete phase 33 rag performance embedding validation
+phase-33-complete 已合并到 main
+当前阶段 34 分支 -> codex/phase-34-rag-diagnosis-embedding-judge
 ```
 
-阶段 32 验证基线：
+阶段 33 完成但仍需阶段 34 继续闭环的观察：
 
 ```text
-阶段 32 聚焦测试：106 passed
-全量 pytest：629 passed, 1 warning
-阶段 30 score：overall=83.17 grade=B release_decision=review_required
-Browser smoke：desktop 与 390x844 mobile 均通过，console errors=0
+glm_candidate: completed, precision@5=0.867, coverage=0.637, decision=review_for_silent_regression
+jina_baseline: skipped_missing_real_config（阶段 34 已补本地 JINA_API_KEY/JINA_BASE_URL，可重跑）
+mimo_baseline: completed, ttft≈2909-6266ms, total≈6801-6953ms, leak=false
+deepseek_candidate: skipped
+latency_trace: 已接入，但尚未用 10-20 条真实 RAG/ReAct 请求做瓶颈归因
+真实 LLM Judge: 阶段 33 未覆盖生成答案语义评分
 ```
 
 ## Phase 顺序
 
-### Phase 0：启动校准与规划落盘
+### Phase 0：启动校准与阶段 34 规划落盘
 
 状态：已完成。
 
-本 Phase 解决的问题：确认阶段 33 从阶段 32 已合并后的正确基线出发，避免沿用阶段 32 人工核验前的旧描述。
+本 Phase 解决的问题：确认阶段 34 从阶段 33 已合并后的正确基线出发，避免沿用阶段 33 人工核验前的旧文档描述。
 
 RAG 链路位置：版本基线、协作边界与规划层，不改运行链路。
 
-为什么现在做：性能优化会碰到检索缓存、FAISS、provider benchmark 和评测脚本，必须先锁定基线、分支和不提交边界。
+为什么现在做：阶段 34 会调用真实 Jina、GLM、MIMO、可选 judge provider，并生成新的评测 CSV；必须先固定 tag/main/分支和数据安全边界。
+
+已完成：
 
 - 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-- 阅读根目录 `task_plan.md`、`findings.md`、`progress.md`。
-- 运行 `git status -sb`、`git log --oneline -5`。
-- 确认 `phase-32-complete` 存在并指向阶段 32 功能提交。
-- 确认 `phase-32-complete` 已合并到 `main`，不移动任何已有阶段 tag。
-- 从最新 `main` 创建或切换到目标分支。
-- 将三份 planning 文件改写为阶段 33 规划。
+- 阅读 `task_plan.md`、`findings.md`、`progress.md` 与 `obsidian-vault/模板/goal prompt.md`。
+- 运行 `git status -sb`、`git log --oneline -5 --decorate`。
+- 确认 `phase-33-complete -> 0bad9e1` 且已合并到 `main -> c06d0a3`。
+- 将三份 Planning with Files 文件改写为阶段 34 规划。
 
 验证方式：
 
 ```text
 git status -sb
 git log --oneline -5 --decorate
-git merge-base --is-ancestor phase-32-complete main
+git merge-base --is-ancestor phase-33-complete main
 ```
 
-### Phase 1：阶段 33 设计文档与性能观测口径
+### Phase 1：阶段 34 设计文档与评价口径
 
 状态：已完成。
 
-本 Phase 解决的问题：先定义本阶段优化目标、指标、边界和验收口径，避免“感觉变快”或“换模型试试”式开发。
+本 Phase 解决的问题：先定义性能诊断、embedding 决策和真实 Judge 的评价口径，避免后续把检索指标、生成指标和性能指标混在一起。
 
-RAG 链路位置：设计文档、性能观测与评测口径层。
+RAG 链路位置：evaluation/reporting 设计层。
 
-为什么现在做：后续会改 VectorIndexCache、embedding cache、latency trace 和 benchmark，如果没有统一指标，就无法判断收益和退化。
+为什么现在做：阶段 34 的价值是“用证据做决策”，必须先明确指标、样本、输出、边界和不做事项。
 
-- 新增 `docs/stage33_rag_performance_embedding_validation.md`。
-- 明确 P0-P4 范围：FAISS-only 冷启动、query embedding cache、latency trace、GLM vs Jina 质量验证、DeepSeek benchmark。
-- 明确不做事项：不删旧 Jina、不直接替换 MIMO、不新增外部数据源、不做写入型工具、不把真实 API 变成 CI 前提。
-- 固定 before/after 指标：cold_start_ms、first_query_ms、query_embedding_latency_ms、faiss_search_latency_ms、rerank_latency_ms、planner_latency_ms、answer_latency_ms、time_to_first_token_ms、time_to_final_ms、memory estimate。
-- 明确安全边界：不记录 hidden thought、reasoning_content、raw provider response、API key、Bearer token、受限全文。
-- 新增 `tests/test_stage33_design.py`，把 2048 维、FAISS-only/fallback、query latency trace、安全字段和 provider benchmark 边界固化为回归测试。
+计划任务：
+
+- 新增 `docs/stage34_rag_diagnosis_embedding_judge.md`。
+- 明确三条闭环：
+  - latency trace 性能瓶颈诊断。
+  - GLM-Embedding-3 2048 维 vs Jina 1024 维同环境检索对照。
+  - 真实 LLM Judge 生成质量复核。
+- 固定真实 Judge 指标：faithfulness、answer_coverage、citation_support、refusal_correctness、conciseness、safety_leak_check。
+- 固定安全边界：不保存 API key、Bearer token、raw provider response、reasoning_content、受限全文或完整 prompt。
+- 新增设计测试，检查文档包含同环境对照、latency trace、真实 judge dry-run、隐私边界和“不直接切默认 provider”。
+
+已完成：
+
+- 新增 `docs/stage34_rag_diagnosis_embedding_judge.md`，固定阶段 34 目标、输入、同环境 embedding 对照、latency trace、真实 Judge、决策报告、安全边界和完成标准。
+- 新增 `tests/test_stage34_design.py`，覆盖阶段 34 核心范围、指标、Judge rubric、dry-run/`--execute` 边界、安全字段和“不直接替换默认 provider”要求。
 
 验证方式：
 
 ```text
-python -m pytest tests\test_stage33_design.py -q
-2 passed
+python -m pytest tests\test_stage34_design.py -q
+4 passed
 ```
 
-### Phase 2：FAISS 可用时跳过 numpy matrix 构建
+### Phase 2：补齐 GLM-Embedding-3 vs Jina 同环境对照
 
 状态：已完成。
 
-本 Phase 解决的问题：消除阶段 31/32 后真实存在的冷启动冗余成本。
+本 Phase 解决的问题：阶段 33 中 Jina baseline skipped，导致无法确认 GLM 迁移是否存在静默退化。
 
-RAG 链路位置：`VectorIndexCache.search()` 的向量检索执行层，位于 `/search/vector`、hybrid search、Brain、`/chat`、`/agent/query` 和 `react_agent` 的共同底座。
+RAG 链路位置：向量检索评测层，位于 query embedding、VectorIndexCache/FAISS、hybrid search 之前的 provider 对照层。
 
-为什么现在做：这是确定存在、风险低、收益可量化的浪费点；它不改变 FAISS 排序语义，只改变加载路径。
+为什么现在做：旧 Jina 向量和 FAISS index 仍保留，且本地已补 `JINA_API_KEY/JINA_BASE_URL`；现在可以用同一批问题、公平比较 Jina 与 GLM。
 
-- 调整 `app/services/retrieval/vector_cache.py`。
-- 如果完整 FAISS index 和 ids metadata 可用，优先只加载 FAISS index + ids 映射所需的 chunk metadata。
-- 跳过 SQLite -> embedding_json -> numpy matrix 的全量反序列化。
-- 如果 FAISS 缺失、损坏、provider/model/dimension 不匹配、ids 缺失或不完整，则 fallback 到 SQLite/numpy。
-- 保留纯 numpy fallback 与纯 Python cosine 对照测试。
-- 记录或暴露缓存加载模式：`faiss_only` / `numpy_fallback` / `empty`。
-- 新增 `scripts/benchmark_stage33_rag_latency.py`，默认支持 deterministic 离线 benchmark，显式配置后可测真实 GLM-Embedding-3 2048 维链路。
+计划任务：
+
+- 复跑 `scripts/evaluate_stage33_embedding_migration.py --execute-real`。
+- 如脚本对 `.env` 读取不足，补最小兼容，不泄露 key。
+- 输出/更新阶段 34 专用 CSV：
+  - `data/evaluation/stage34_embedding_comparison_results.csv`
+  - `data/evaluation/stage34_embedding_comparison_summary.csv`
+- 指标至少包括 precision@1/3/5、hit@5、coverage、refusal boundary、latency、source_type_distribution。
+- 给出明确决策候选：keep_glm、rollback_jina、route_by_query_type、review_required；阶段 34 最终采用 `keep_glm`，不继续推进 Jina 分流。
+
+已完成：
+
+- 修复 `scripts/evaluate_stage33_embedding_migration.py` 对 `JINA_API_KEY` / `JINA_BASE_URL` / `PARATERA_API_KEY` / `PARATERA_EMBEDDING_BASE_URL` 的 `.env` 读取兜底，不打印、不保存密钥。
+- 新增 `tests/test_stage34_embedding_comparison.py`，覆盖 provider 专用 `.env` 读取和阶段 34 completed 对照决策候选。
+- 显式运行真实对照，输出阶段 34 专用 CSV。
+- 当前同环境对照结果：`jina_baseline` 与 `glm_candidate` 均 `completed`；Jina `precision@5=0.933`、`coverage=0.670`、平均延迟约 `1489.29ms`；GLM `precision@5=0.867`、`coverage=0.637`、平均延迟约 `1491.38ms`。Jina 在 precision@5 与 coverage 上略优，但优势不足以抵消额度即将耗尽带来的可持续性风险；最终决策为 `keep_glm`，保留 GLM-Embedding-3 默认，Jina 仅作历史对照和回滚参考。
 
 验证方式：
 
 ```text
-python -m pytest tests\test_vector_cache_faiss.py tests\test_hybrid_search.py tests\test_vector_search.py -q
-python -m pytest tests\test_vector_cache_faiss.py tests\test_vector_cache.py tests\test_vector_search.py -q
-13 passed
-
-python -m py_compile scripts\benchmark_stage33_rag_latency.py
-python scripts\benchmark_stage33_rag_latency.py --provider deterministic --dimension 64 --limit 1 --output data\evaluation\stage33_rag_latency_benchmark.csv
-```
-
-### Phase 3：query embedding cache
-
-状态：已完成。
-
-本 Phase 解决的问题：避免同一问题在 ReAct、多次刷新、benchmark 或重复查询中反复调用真实 embedding provider。
-
-RAG 链路位置：query embedding 层，位于 `VectorSearchService` 和 hybrid/vector search 入口。
-
-为什么现在做：GLM-Embedding-3 是 2048 维且真实 provider 有网络延迟；query embedding cache 能降低重复查询延迟和供应商调用次数，但不改变文档索引。
-
-- 为 query embedding 增加进程内缓存或轻量可清理缓存。
-- cache key 至少包含 provider、model、dimension、normalized query text。
-- 设置容量上限或 TTL，避免无限增长。
-- 只缓存 query embedding，不缓存文档写入型 embedding，不改变 `chunk_embeddings`。
-- 提供关闭或清理入口，便于测试和 benchmark。
-- 确认 deterministic 测试不依赖真实 API。
-- 新增 `app/services/retrieval/query_embedding_cache.py`，并在 `VectorSearchService` query embedding 层接入。
-
-验证方式：
-
-```text
-python -m pytest tests\test_query_embedding_cache.py tests\test_embedding_provider.py tests\test_vector_search.py -q
-28 passed
-```
-
-### Phase 4：RAG/ReAct latency trace
-
-状态：已完成。
-
-本 Phase 解决的问题：把 33-44 秒端到端耗时拆开，判断慢在 embedding、FAISS、rerank、planner、answer generation 还是 SSE 首 token。
-
-RAG 链路位置：检索、Agent 编排、回答生成和 SSE 输出的观测层。
-
-为什么现在做：没有分段耗时就无法判断 MIMO 是否真是主因，也无法客观比较 DeepSeek。
-
-- 为 `/agent/query` 和 `/agent/query/stream` 的 `react_agent` 路径增加安全 latency trace。
-- 尽量复用到 default / old agentic 路径，便于对照。
-- 至少记录：
-  - `query_embedding_latency_ms`
-  - `faiss_search_latency_ms` 或 `vector_search_latency_ms`
-  - `rerank_latency_ms`
-  - `planner_latency_ms`
-  - `answer_latency_ms`
-  - `tool_latency_ms`
-  - `time_to_first_token_ms`
-  - `time_to_final_ms`
-  - `iteration_count`
-  - `tool_call_count`
-- metadata 可携带摘要级 timing；前端可暂不新增复杂 UI。
-- 错误和 refusal 路径也要记录总耗时并安全收敛。
-- 新增 `app/services/observability/latency_trace.py`，通过 request-local trace 汇总检索、rerank、planner、tool、answer 和 SSE 首 token。
-- `AgentQueryResponse.latency_trace` 与会话 metadata 同步保留安全耗时字段。
-
-验证方式：
-
-```text
-python -m pytest tests\test_react_latency_trace.py tests\test_agent_api.py tests\test_react_stream_events.py -q
-python -m pytest tests\test_react_latency_trace.py tests\test_agent_api.py tests\test_react_stream_events.py tests\test_agent_stream_api.py -q
-31 passed
-```
-
-### Phase 5：GLM-Embedding-3 vs Jina 检索质量迁移验证
-
-状态：已完成。
-
-本 Phase 解决的问题：确认从 Jina v3 1024 维迁移到 GLM-Embedding-3 2048 维后，检索质量没有静默退化。
-
-RAG 链路位置：评测层与向量检索质量校准层。
-
-为什么现在做：阶段 30/29 的质量分数仍主要基于旧 Jina 缓存；迁移 provider 后必须诚实复核，而不是假设新模型更好。
-
-- 不删除旧 Jina FAISS 文件：
-  - `data/faiss/jina_jina-embeddings-v3_dim1024.index`
-  - `data/faiss/jina_jina-embeddings-v3_dim1024_ids.json`
-- 保留 GLM FAISS 文件：
-  - `data/faiss/paratera_GLM-Embedding-3_dim2048.index`
-  - `data/faiss/paratera_GLM-Embedding-3_dim2048_ids.json`
-- 新增 `scripts/evaluate_stage33_embedding_migration.py`。
-- 复用阶段 29/30 题集或 fixture，对比 Jina 与 GLM：
-  - precision@k
-  - hit@k
-  - source/citation 覆盖
-  - unsupported/refusal 边界
-  - 查询耗时
-- 输出 CSV 与摘要文档。
-- 缺少真实 index 或 API 时，不伪造成通过；自动测试使用小型 fixture。
-- 新增 `scripts/evaluate_stage33_embedding_migration.py`，默认 dry-run，显式 `--execute-real` 才调用真实 provider。
-- 本地真实评测结果：GLM candidate completed；Jina baseline 因本地缺少 provider 配置 skipped。
-
-验证方式：
-
-```text
+python scripts\evaluate_stage33_embedding_migration.py --execute-real --out-results data\evaluation\stage34_embedding_comparison_results.csv --out-summary data\evaluation\stage34_embedding_comparison_summary.csv
 python -m pytest tests\test_stage33_embedding_validation.py -q
-2 passed
-
-python scripts\evaluate_stage33_embedding_migration.py
-dry_run_only
-
-python scripts\evaluate_stage33_embedding_migration.py --execute-real
-glm_candidate: status=completed p@5=0.867 coverage=0.637 latency=1469.98ms decision=review_for_silent_regression
-jina_baseline: status=skipped p@5=0.000 coverage=0.000 latency=0.00ms decision=skipped_missing_real_config
+python -m pytest tests\test_stage34_embedding_comparison.py tests\test_stage33_embedding_validation.py -q
+4 passed
 ```
 
-### Phase 6：MIMO baseline 与 DeepSeek chat provider benchmark
+### Phase 3：采集真实 RAG/ReAct latency trace 数据集
 
 状态：已完成。
 
-本 Phase 解决的问题：用数据判断 DeepSeek 是否值得作为后续 chat provider 候选，而不是直接替换默认 MIMO。
+本 Phase 解决的问题：阶段 33 已有 trace 字段，但尚未采集足够真实请求来定位瓶颈。
 
-RAG 链路位置：回答生成 provider benchmark 层，不改变默认业务链路。
+RAG 链路位置：真实 `/chat`、`/agent/query`、`/agent/query/stream` 运行观测层。
 
-为什么现在做：当前 33-44 秒不一定全来自 MIMO；必须先把 provider 放进同一批问题和同一套指标比较。
+为什么现在做：没有分段耗时占比，就无法判断慢在 query embedding、FAISS、rerank、planner、tool、answer 还是 SSE 首 token。
 
-- 新增 `scripts/benchmark_stage33_chat_providers.py`。
-- MIMO 作为 baseline，DeepSeek chat 作为 candidate。
-- 可选 DeepSeek reasoner smoke，但必须防止 `reasoning_content` 泄露到前端、日志、CSV、文档。
-- 指标：
-  - `time_to_first_token`
-  - `time_to_final`
-  - `planner_latency`
-  - `answer_latency`
-  - `token_count`
-  - `tokens_per_second`
-  - citation 是否稳定
-  - refusal 是否一致
-  - 是否泄露 reasoning_content
-- 只输出 benchmark 结论和切换建议，不修改默认模型。
-- 新增 `scripts/benchmark_stage33_chat_providers.py`，默认 dry-run，显式 `--execute-real` 才调用真实 chat provider。
-- 本地真实 benchmark：MIMO baseline completed；DeepSeek candidate 因缺少本地配置 skipped。
+计划任务：
+
+- 新增 `scripts/collect_stage34_latency_traces.py` 或扩展阶段 33 benchmark。
+- 用 10-20 条代表性问题覆盖：
+  - 简单事实问答。
+  - 长答案问答。
+  - 拒答边界。
+  - ReAct 两轮工具调用。
+  - 中英文/中英混合问题。
+- 输出 `data/evaluation/stage34_latency_traces.csv`。
+- 字段至少包含 query_id、mode、provider/model、query_embedding、vector/faiss/numpy search、rerank、planner、tool、answer、time_to_first_token、time_to_final、iteration_count、tool_call_count、load_mode。
+- 不保存完整回答、raw provider response、hidden thought 或受限全文。
+
+已完成：
+
+- `AgentService` default 路径接入请求级 `LatencyTrace`，让 `/agent/query mode=default` 与 `react_agent` 都能输出安全 trace。
+- 新增 `scripts/collect_stage34_latency_traces.py`，默认 dry-run，显式 `--execute-real` 才使用真实 provider。
+- 新增 `tests/test_stage34_latency_collection.py`，覆盖瓶颈分类、空值脱敏和无内部 trace 时的 `endpoint_total_latency`。
+- 更新 `tests/test_react_latency_trace.py`，确认 default Agent 响应包含安全 latency trace。
+- 显式真实采集 `data/evaluation/stage34_latency_traces.csv`，10/10 completed；另保留 dry-run 结构验证输出 `data/evaluation/stage34_latency_traces_dry_run.csv`。
 
 验证方式：
 
 ```text
-python -m pytest tests\test_stage33_provider_benchmark.py -q
-2 passed
-
-python scripts\benchmark_stage33_chat_providers.py --dry-run
-python scripts\benchmark_stage33_chat_providers.py
-dry_run rows written
-
-python scripts\benchmark_stage33_chat_providers.py --execute-real
-mimo_baseline/citation_case: status=completed ttft=6265.58ms total=6952.99ms tokens_per_second=1.58 leak=false
-mimo_baseline/refusal_case: status=completed ttft=2909.34ms total=6800.78ms tokens_per_second=9.26 leak=false
-deepseek_candidate: skipped_missing_config
+python scripts\collect_stage34_latency_traces.py --execute-real --limit 20
+python -m pytest tests\test_react_latency_trace.py tests\test_agent_stream_api.py -q
+python -m pytest tests\test_stage34_latency_collection.py tests\test_react_latency_trace.py -q
+6 passed
 ```
 
-### Phase 7：文档、Obsidian 与阶段验收准备
+### Phase 4：瓶颈归因与优化决策报告
 
 状态：已完成。
 
-本 Phase 解决的问题：把性能优化、迁移验证、benchmark 结论和边界沉淀为项目文档，停在用户人工核验前。
+本 Phase 解决的问题：把 latency trace 从“记录字段”变成“可执行的工程判断”。
 
-RAG 链路位置：项目交接、知识沉淀与发布前核验层。
+RAG 链路位置：performance analysis/reporting 层。
 
-为什么现在做：阶段 33 的价值在于“有证据的性能优化和迁移判断”，必须把 before/after 与质量结论写清楚。
+为什么现在做：只有知道最慢段和占比，才能决定下一步是压 prompt、换 provider、调 rerank、预热 cache，还是减少 ReAct 轮数。
+
+计划任务：
+
+- 新增 `scripts/analyze_stage34_latency_bottlenecks.py`。
+- 读取 `stage34_latency_traces.csv`，计算 p50/p90、均值、最大值和各段占比。
+- 按瓶颈类型分类：
+  - embedding_provider_latency
+  - rerank_latency
+  - planner_latency
+  - answer_generation_latency
+  - tool_iteration_overhead
+  - cold_start_or_cache_miss
+- 输出 `data/evaluation/stage34_latency_bottleneck_summary.csv`。
+- 生成 `docs/stage34_latency_bottleneck_report.md`。
+- 暂不做大改，只允许少量低风险配置/脚本修正。
+
+已完成：
+
+- 新增 `scripts/analyze_stage34_latency_bottlenecks.py`，读取 `stage34_latency_traces.csv` 计算 p50/p90、均值、最大值、dominant bottleneck 和阶段平均占比。
+- 新增 `tests/test_stage34_latency_analysis.py`，覆盖 p90、stage share 和空/单样本 percentile。
+- 输出 `data/evaluation/stage34_latency_bottleneck_summary.csv` 与 `docs/stage34_latency_bottleneck_report.md`。
+- 当前真实 trace 结论：阶段 34 最终 `all` 组 p50≈`17739.698ms`、p90≈`52216.255ms`、max≈`56451.032ms`；主要瓶颈仍为 `tool_iteration_overhead`，平均最高占比字段为 `tool_latency_ms`；`react_agent` 在 `planner_chat_provider=None` 时保留确定性短路兼容路径，显式配置轻量 planner 时进入受控 LLM-driven planner 路径。
+
+验证方式：
+
+```text
+python scripts\analyze_stage34_latency_bottlenecks.py
+python -m pytest tests\test_stage34_latency_analysis.py -q
+3 passed
+```
+
+### Phase 5：真实 LLM Judge 生成质量复核
+
+状态：已完成。
+
+本 Phase 解决的问题：阶段 33 没有对最终生成答案做真实语义评分，无法判断答案是否真的忠实、覆盖充分、引用稳定。
+
+RAG 链路位置：answer evaluation/reporting 层，不进入默认回答链路。
+
+为什么现在做：Embedding 检索质量和 latency 只能解释“召回什么、慢在哪里”，不能单独证明“最终答案是否好”。
+
+计划任务：
+
+- 新增 `scripts/judge_stage34_generation_quality.py`。
+- 默认 dry-run，不调用真实 judge。
+- 显式 `--execute` 且本地有 judge 配置时才调用真实 LLM Judge。
+- 优先复用阶段 30 judge provider 或本地 DeepSeek/OpenAI-compatible 配置。
+- 输入使用阶段 34 代表问题、脱敏 answer 摘要、citation/source 摘要和 expected_answer_points。
+- 输出：
+  - `data/evaluation/stage34_llm_judge_results.csv`
+  - `data/evaluation/stage34_llm_judge_summary.csv`
+- 只保存分数、短理由、风险等级和 next_action，不保存 raw judge response、reasoning_content 或完整受限全文。
+
+已完成：
+
+- 新增 `scripts/judge_stage34_generation_quality.py`，默认 dry-run，显式 `--execute` 才生成真实答案样本并调用真实 Judge。
+- 新增 `tests/test_stage34_llm_judge.py`，覆盖 Judge JSON 解析、分数裁剪、敏感字段脱敏和 quality gate 汇总。
+- dry-run 已运行，确认不伪造分数。
+- 显式运行真实 Judge：`python scripts\judge_stage34_generation_quality.py --execute --limit 4`，输出 `data/evaluation/stage34_llm_judge_results.csv` 与 `stage34_llm_judge_summary.csv`。
+- 当前真实 Judge：4/4 completed，avg faithfulness=`0.925`、answer_coverage=`0.675`、citation_support=`0.613`、refusal_correctness=`1.000`、conciseness=`0.887`、safety_leak_check=`0.750`；high=0、medium=4、low=0，`judge_quality_gate=review_required`。
+
+验证方式：
+
+```text
+python scripts\judge_stage34_generation_quality.py --dry-run
+python scripts\judge_stage34_generation_quality.py --execute
+python -m pytest tests\test_stage34_llm_judge.py -q
+3 passed
+```
+
+### Phase 6：Embedding / Provider / 默认链路决策汇总
+
+状态：已完成。
+
+本 Phase 解决的问题：把检索对照、性能瓶颈和真实 Judge 结果合成为可执行决策，而不是只留下多份 CSV。
+
+RAG 链路位置：阶段 34 quality decision/reporting 层。
+
+为什么现在做：阶段 34 必须给阶段 35 是否上真 LLM 自主 ReAct、是否继续 GLM、是否优化 MIMO/DeepSeek 提供依据。
+
+计划任务：
+
+- 新增 `scripts/build_stage34_decision_report.py`。
+- 汇总 embedding comparison、latency bottleneck、LLM judge、stage30 score。
+- 输出 `data/evaluation/stage34_decision_summary.csv` 与 `docs/stage34_rag_diagnosis_decision_report.md`。
+- 决策项至少包括：
+  - embedding_decision
+  - latency_primary_bottleneck
+  - chat_provider_next_action
+  - judge_quality_gate
+  - phase35_recommendation
+- 不直接切默认 provider，不删除旧 Jina，不改默认 MIMO，不引入真 LLM 自主 ReAct。
+
+已完成：
+
+- 新增 `scripts/build_stage34_decision_report.py`，汇总 embedding comparison、latency bottleneck、LLM Judge 和 stage30 score。
+- 新增 `tests/test_stage34_decision_report.py`，覆盖混合 embedding 信号、tool latency 瓶颈和 Judge review_required 时延后真 LLM ReAct 的决策。
+- 输出 `data/evaluation/stage34_decision_summary.csv` 与 `docs/stage34_rag_diagnosis_decision_report.md`。
+- 当前决策：`embedding_decision=keep_glm`，`latency_primary_bottleneck=tool_iteration_overhead`，`chat_provider_next_action=keep_flash_planner_pro_answer_and_tune_answer_prompt_length_or_top_k`，`judge_quality_gate=review_required`；阶段 34 已落地受控分层 chat provider，后续再独立评估 tool-calling 单次往返架构。
+
+验证方式：
+
+```text
+python scripts\build_stage34_decision_report.py
+python -m pytest tests\test_stage34_decision_report.py -q
+1 passed
+```
+
+### Phase 7：文档、Obsidian 与阶段收尾验证
+
+状态：已完成。
+
+本 Phase 解决的问题：把阶段 34 的真实数据、决策和边界沉淀为项目文档，并停在用户人工核验前。
+
+RAG 链路位置：项目交接、知识沉淀与人工核验层。
+
+为什么现在做：阶段 34 的产物是“决策闭环”，必须让后续 Agent 和用户能复现判断依据。
+
+计划任务：
 
 - 更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-- 按需更新 `AGENT.MD`，尤其是阶段 33 交接状态、性能规则、provider benchmark 边界。
-- 新增 `docs/phase_reviews/phase-33.md` 人工核验草稿。
-- 更新 Obsidian 阶段页、阶段汇报目录、阶段索引、相关知识点。
-- 运行阶段 33 聚焦测试、全量 pytest、`scripts/score_stage30_quality.py`。
+- 按需更新 `AGENT.MD`。
+- 新增 `docs/phase_reviews/phase-34.md`。
+- 更新 Obsidian：
+  - `obsidian-vault/阶段/阶段 34 - RAG性能瓶颈诊断与Embedding Judge决策.md`
+  - `obsidian-vault/阶段汇报/阶段 34 - RAG性能瓶颈诊断与Embedding Judge决策/`
+  - 阶段 34 Phase 汇报索引与各 Phase 小汇报。
+- 运行阶段 34 聚焦测试、全量 pytest、`scripts/score_stage30_quality.py`。
 - 浏览器 smoke：Agent 查询、折叠思考过程、最终答案、无横向溢出、console errors=0。
-- 最终停在用户人工核验前，不执行 `git add`、commit、tag、push 或 PR。
 
 验证方式：
 
 ```text
-python -m pytest tests\test_stage33_design.py tests\test_vector_cache_faiss.py tests\test_query_embedding_cache.py tests\test_react_latency_trace.py tests\test_stage33_embedding_validation.py tests\test_stage33_provider_benchmark.py -q
-16 passed
-
+python -m pytest tests\test_react_llm_planner.py tests\test_react_agent_service.py tests\test_react_latency_trace.py tests\test_react_stream_events.py tests\test_stage34_design.py tests\test_stage34_embedding_comparison.py tests\test_stage34_latency_collection.py tests\test_stage34_latency_analysis.py tests\test_stage34_llm_judge.py tests\test_stage34_decision_report.py -q
+32 passed
 python -m pytest -q
-643 passed
-
+666 passed
 python scripts\score_stage30_quality.py
-stage30 quality score overall=83.17 grade=B release_decision=review_required
+overall=83.17 grade=B release_decision=review_required
+Browser smoke: desktop and 390x844 mobile Agent query passed, thought collapse and final answer present, horizontal overflow=false, console errors=0
+```
 
-browser smoke:
-desktop: Agent query final answer present, collapsible thought panel present, horizontal overflow=false, console errors=0
-390x844 mobile: Agent query final answer present, collapsible thought panel present, horizontal overflow=false, console errors=0
+### Phase 8（阶段中追加）：LLM-driven Planner + 分层 Chat Provider
+
+状态：已完成。
+
+本 Phase 解决的问题：把 Phase 4 暴露的「tool_iteration_overhead 主导延迟」转化为 chat provider 拓扑层的实际优化，而不是只写进报告。
+
+RAG 链路位置：ReAct 决策层 + chat provider 配置层。
+
+为什么现在做：Phase 5 已确认 Judge 暴露 4/4 medium，Phase 6 已生成决策报告。继续延后到阶段 35 才动 chat provider 拓扑会让阶段 34 停在「诊断」而不是「闭环」。本 Phase 以非破坏性方式扩展范围（新增 `planner_chat_provider`，缺省 None 时保留旧行为），不破坏现有 deterministic 测试与 agentic / default 路径兼容性。
+
+执行过程（三轮闭环）：
+
+1. 第一轮：去掉 elif 短路，让 MIMO 真当 planner → react_agent p90 +135%、1/4 timeout。复盘根因：MIMO 是 reasoning 模型，单次 planner 调用 30–70s。
+2. 第二轮：新增 `PLANNER_CHAT_*` 环境变量与 `ReActAgentService(planner_chat_provider=...)`，把 planner 切到 DeepSeek-V4-Flash、answer 切到 DeepSeek-V4-Pro，跑出 p50 8.2s 但出现 in-scope 误判 refuse 2 例。
+3. prompt 收紧：refuse 触发条件改为「仅在不安全 / 明显跨领域 / 工程判定题时第 1 轮直接 refuse」，其余默认先 search。
+4. 第三轮：重新跑 trace → in-scope 全部正确回答；refusal_boundary 由 LLM 第 1 轮即正确 refuse（3.5s）；react_agent p50 39.1s、p90 55.0s、10/10 完成。
+
+已完成：
+
+- `app/core/config.py` 新增 `planner_chat_model_*` 字段（缺省空字符串）。
+- `app/api/agent.py` 新增 `get_agent_planner_chat_model_provider()` 依赖；同步 + 流式 react_agent 入口注入 planner provider。
+- `app/services/agent/react_service.py`：`ReActAgentService.__init__(planner_chat_provider=None)`；主循环新增 `llm_driven` 条件分支，planner_provider 不为 None 时禁用 elif 短路；`_plan_action` 改用 `planner_chat_provider or chat_model_provider`，加 parse 失败兜底（有证据 → answer_with_citations，无证据 → refuse）。
+- `react_planner_messages` prompt 升级：refuse 触发条件收紧，default 必须 search，中文 / 英文 / 中英混合都视为 in-scope，强调 "When in doubt, prefer search_knowledge over refuse"。
+- 新增 `tests/test_react_llm_planner.py`（6 tests）：覆盖第 1 轮 LLM refuse、LLM 决定 search+answer、跨轮继续 search、解析失败兜底、缺省 planner_provider 保持旧行为。
+- `.env` 切到 Paratera DeepSeek-V4-Pro answer + DeepSeek-V4-Flash planner；旧 MIMO 配置注释保留作回滚参考；`.env` 在 `.gitignore` 内。
+- `scripts/collect_stage34_latency_traces.py` 接 planner provider 注入；真实 trace 重采集 10/10 完成。
+- `scripts/build_stage34_decision_report.py` 文案更新：`chat_provider_next_action` 与 `phase35_recommendation` 反映阶段 34 完成状态，不再写「rollback / defer」。
+- `tests/test_stage34_decision_report.py` 同步更新断言。
+- `docs/stage34_rag_diagnosis_decision_report.md`、`docs/phase_reviews/phase-34.md` 重写工程判断段。
+
+验证方式：
+
+```text
+python scripts\collect_stage34_latency_traces.py --execute-real
+stage34 latency traces: completed=10/10
+react_agent p50=39097ms, p90=55039ms, max=56451ms (Flash+Pro)
+react_agent vs MIMO baseline: p50 -55%, p90 -42%
+python -m pytest tests\test_react_llm_planner.py tests\test_react_agent_service.py -q
+11 passed
 ```
 
 ## 完成标准
 
-- FAISS 完整可用时，`VectorIndexCache` 不再构建无用 numpy matrix。
-- FAISS 不可用或不匹配时，SQLite/numpy fallback 仍正常。
-- 同一 query 的 embedding 可缓存，重复查询不会重复调用真实 embedding provider。
-- RAG/ReAct 链路能输出安全的 latency trace。
-- GLM-Embedding-3 vs Jina 检索质量有对比结果，确认是否存在静默退化。
-- DeepSeek 只作为 benchmark provider，有对比报告，不直接替换默认 MIMO。
-- `default`、`agentic`、`react_agent` 核心 API 不破坏。
-- `/chat` 默认链路不破坏。
-- `/agent/query/stream` 保持 `token`、`metadata`、`done`、`error` 兼容，并继续支持阶段 32 新事件。
-- 全量 pytest 通过。
-- 阶段 30 score 保持 `>= 83.17`。
-- 浏览器冒烟通过：Agent 查询、折叠思考过程、最终答案、无横向溢出、console errors=0。
-- 不写入 API key、Bearer token、供应商原始响应、`raw_response`、`reasoning_content` 或受限全文。
-- 最终停在用户人工核验前：不 `git add`、不 commit、不创建 `phase-33-complete` tag、不 push、不创建 PR。
+- `phase-33-complete` 已确认合并到 `main`，阶段 34 分支从正确基线创建。
+- Jina 与 GLM 在同环境、同题集、同指标下完成真实检索对照；如果仍失败，必须写清可复现原因，不能伪造成通过。
+- `latency_trace` 已在 10-20 条真实 RAG/ReAct 请求上采集，并输出瓶颈占比。
+- 有明确性能瓶颈结论：慢在 embedding、FAISS/vector search、rerank、planner、tool、answer generation、SSE 首 token 或冷启动。
+- 真实 LLM Judge 支路可 dry-run，显式 `--execute` 才调用真实 judge；结果只保存脱敏分数和短理由。
+- 形成阶段 34 决策报告：保留 GLM 默认、Jina 仅作历史对照和回滚参考、chat provider 拓扑结论、阶段 35 next action 建议。
+- chat provider 分层路由（planner / answer 解耦）已落地：`PLANNER_CHAT_*` 配置 + `ReActAgentService.planner_chat_provider`；缺省 None 时保留旧 elif 短路兼容路径。
+- 不删除旧 Jina，不新增外部资料源，不做写入型 Agent 工具，不做部署/运维。
+- 不把 API key、Bearer token、raw provider response、reasoning_content、hidden thought 或受限全文写入 Git、CSV、文档、测试或 Obsidian。
+- `default`、`agentic`、`react_agent`、`/chat`、`/agent/query/stream` 保持兼容。
+- 全量测试通过，阶段 30 score 不低于 `83.17`。
+- 最终停在用户人工核验前：不 `git add`、不 commit、不创建 `phase-34-complete` tag、不 push、不创建 PR。

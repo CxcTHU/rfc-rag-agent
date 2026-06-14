@@ -13,6 +13,41 @@
 
 本文件的作用不是一次性定死所有细节，而是给“从零搭建堆石混凝土问答 Agent”提供稳定方向。
 
+## 最新交接状态：阶段 34 开发、测试与文档草稿完成，等待用户人工核验
+
+当前分支：`codex/phase-34-rag-diagnosis-embedding-judge`。
+
+阶段 34 已从阶段 33 完成并合并后的 `main / origin/main -> c06d0a3 Merge phase 33 rag performance embedding validation` 出发。已核对 `phase-33-complete -> 0bad9e1 Complete phase 33 rag performance embedding validation` 是 `main` 的祖先；未移动任何已有阶段 tag。
+
+阶段 34 已完成：
+
+- 新增阶段 34 设计文档，固定 GLM/Jina 同环境对照、真实 latency trace、真实 LLM Judge、决策报告和安全边界。
+- 补齐 `scripts/evaluate_stage33_embedding_migration.py` 的 Jina/GLM 专用 `.env` 读取兜底，完成 Jina 1024 维与 GLM-Embedding-3 2048 维同环境真实对照。
+- 为 default `AgentService` 补齐安全 latency trace，并新增阶段 34 真实 trace 采集与瓶颈分析脚本。
+- 新增真实 LLM Judge 支路，默认 dry-run，显式 `--execute` 才调用真实 Judge；只保存脱敏分数、短理由、风险等级和 next_action。
+- 新增阶段 34 决策报告，汇总 embedding、latency、Judge 和阶段 30 分数。
+- 完成阶段 34 聚焦测试、全量 pytest、阶段 30 score 和桌面/移动浏览器 smoke。
+
+阶段 34 当前决策：
+
+```text
+embedding_decision=keep_glm
+embedding_decision_reason=Jina 在 precision@5 与 coverage 上略优，但优势不足以抵消额度可持续性风险；保留 GLM-Embedding-3 作为默认 embedding provider，Jina 仅作历史对照和回滚参考
+latency_primary_bottleneck=tool_iteration_overhead
+judge_quality_gate=review_required
+stage30_overall_score=83.17
+focused_tests=26 passed
+full_pytest=660 passed
+browser_smoke=desktop/mobile passed, console errors=0
+stage30_overall_score=83.17
+react_planner_decision=阶段 34 已回滚两次往返 LLM-driven planner 实验，保留检索后直接 answer_with_citations 的低延迟 ReAct 路径
+phase35_recommendation=defer_full_llm_react_until_keep_glm_default_and_use_jina_only_as_rollback_reference_and_optimize_prompt_provider_or_react_iterations_and_evaluate_tool_calling_architecture_migration_and_lightweight_planner_and_review_judge_medium_risk_answers
+```
+
+阶段 34 核心边界：不删除旧 Jina 索引；不直接替换默认 GLM/Jina/MIMO/DeepSeek；不新增外部数据源；不做写入型 Agent 工具；不做部署/运维；不让真实 API 成为 CI 或本地全量测试前提；不要把 API key、Bearer token、供应商原始响应、raw_response、reasoning_content、hidden thought 或受限全文写入 Git、CSV、文档、测试或 Obsidian。
+
+阶段 34 当前必须停在用户人工核验前：**不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR，不要创建 `phase-34-complete` tag**。只有用户人工核验并明确授权后，才允许进入提交、tag 和 GitHub 推送流程。
+
 ## 最新交接状态：阶段 33 开发与验证完成，等待用户人工核验
 
 当前分支：`codex/phase-33-rag-performance-embedding-validation`。

@@ -1,5 +1,38 @@
 # 架构说明
 
+## 阶段 34 架构增量：RAG 性能瓶颈诊断、Embedding 决策与真实 Judge 复核
+
+阶段 34 不替换默认 `/chat`、`/agent/query`、`/agent/query/stream` 或任何 provider，而是在 evaluation/reporting 层补齐三条决策链路：同环境 embedding 对照、真实 latency trace 归因和真实 LLM Judge 复核。
+
+```text
+stage33 latency trace / embedding migration results
+-> stage34 GLM-Embedding-3 vs Jina same-environment comparison
+-> stage34 real RAG/ReAct latency traces
+-> stage34 bottleneck summary and report
+-> stage34 optional real LLM Judge
+-> stage34 decision summary and decision report
+-> user manual review before commit/tag/push
+```
+
+阶段 34 对 `AgentService` default 路径补齐请求级 `LatencyTrace`。这是向后兼容增强：`AgentQueryResponse` 原本已有 `latency_trace` 字段，阶段 34 只是让 default Agent 与 `react_agent` 一样输出安全耗时数值。`/chat` schema 不新增 trace 字段，采集脚本只记录端到端耗时并标为 `endpoint_total_latency`，避免伪造内部瓶颈。
+
+阶段 34 新增脚本均位于 evaluation/reporting 层：
+
+- `scripts/collect_stage34_latency_traces.py`：默认 dry-run，显式 `--execute-real` 才使用真实 provider，输出脱敏 trace CSV。
+- `scripts/analyze_stage34_latency_bottlenecks.py`：读取 trace CSV，输出 p50/p90、最大值、阶段占比和主要瓶颈。
+- `scripts/judge_stage34_generation_quality.py`：默认 dry-run，显式 `--execute` 才调用真实 Judge，只保存分数、短理由、风险等级和 next_action。
+- `scripts/build_stage34_decision_report.py`：汇总 embedding、latency、Judge 和阶段 30 分数，生成阶段 34 决策。
+
+架构结论：阶段 34 的证据显示，当前慢点主要在 `tool_iteration_overhead`/answer/tool 链路，不在 FAISS/vector search；embedding 对照呈现 Jina top-5/coverage 更强、GLM top-3 更强的混合信号；Judge 分支为 `review_required`。
+
+阶段 34 内追加的 chat provider 分层路由架构：
+
+- 新增 `Settings.planner_chat_*` 配置组（与 `chat_model_*` 解耦），新增 `get_agent_planner_chat_model_provider()` 工厂依赖。
+- `ReActAgentService.__init__(planner_chat_provider=None)`：缺省 None 时保持原 elif 短路 + chat_model_provider 兼容路径（deterministic 测试、agentic、default 不受影响）；不为 None 时禁用 elif 短路，让 LLM 每轮自主决策。
+- 默认生产拓扑：`planner=Paratera DeepSeek-V4-Flash`、`answer=Paratera DeepSeek-V4-Pro`；MIMO 配置在 `.env` 中注释保留作回滚参考。
+- 真实 trace 实测：react_agent p50 从 MIMO 基线 87.9s 降到 39.1s（-55%），p90 95.2s → 55.0s（-42%），10/10 完成；refusal_boundary 由 LLM 第 1 轮即 refuse（3.5s）。
+- 协议层差距未消除：本项目 ReAct 协议「planner 决策 + answer 工具内 LLM 生成」每 run 仍比主流 tool-calling 多 1 次 LLM 调用。阶段 35 候选方向为 tool-calling 协议迁移，把 planner 决策和 answer 生成合并到同一次 LLM forward。
+
 ## 阶段 33 架构增量：RAG 链路性能优化与 Embedding 迁移验证
 
 阶段 33 不替换默认 `/chat`、`/agent/query` 或 `/agent/query/stream` 的外部契约，而是在检索执行层、query embedding 层和可观测层补齐性能与迁移验证能力。核心目标是让真实 RAG/ReAct 链路更快、更可诊断，并诚实验证 GLM-Embedding-3（2048 维）迁移后是否存在静默退化。

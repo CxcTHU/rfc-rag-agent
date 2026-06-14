@@ -1,5 +1,47 @@
 # 项目进度
 
+## 最新状态：2026-06-14（阶段 34 完成 + 阶段内追加 LLM-driven Planner / 分层 Chat Provider，已获用户人工核验确认）
+
+当前阶段：阶段 34。在 `codex/phase-34-rag-diagnosis-embedding-judge` 分支已完成 RAG 性能瓶颈诊断、Embedding 迁移决策、真实 Judge 质量复核，并在阶段中追加 LLM-driven planner 切换 + Paratera DeepSeek-V4-Flash (planner) / DeepSeek-V4-Pro (answer) 分层 chat provider 落地。阶段 34 从 `main / origin/main -> c06d0a3 Merge phase 33 rag performance embedding validation` 出发；已确认 `phase-33-complete -> 0bad9e1 Complete phase 33 rag performance embedding validation` 是 `main` 的祖先，未移动任何已有阶段 tag。
+
+react_agent 真实延迟相对 MIMO 基线：p50 87.9s → 39.1s（-55%），p90 95.2s → 55.0s（-42%），10/10 完成；refusal_boundary 由 LLM 第 1 轮即正确 refuse（3.5s）。chat provider 改动通过新增 `PLANNER_CHAT_*` 配置 + `ReActAgentService(planner_chat_provider=...)` 注入实现；planner_chat_provider=None 时保留 elif 短路 + chat_model_provider 旧行为，向后兼容 deterministic 测试与 agentic / default 路径。
+
+阶段 34 完成内容：
+
+- 新增 `docs/stage34_rag_diagnosis_embedding_judge.md`，说明目标、输入、指标、真实调用边界、安全边界、输出产物和完成标准。
+- 修复 `scripts/evaluate_stage33_embedding_migration.py` 的 Jina/GLM 专用 `.env` 读取兜底，并用同一题集、同一数据环境、同一评价脚本完成 Jina vs GLM 真实对照。
+- 新增 `scripts/collect_stage34_latency_traces.py`，采集 10 条真实 RAG/ReAct latency trace；default Agent 已补齐安全 `latency_trace`。
+- 新增 `scripts/analyze_stage34_latency_bottlenecks.py` 与 `docs/stage34_latency_bottleneck_report.md`，输出 p50/p90、最大值和阶段占比。
+- 新增 `scripts/judge_stage34_generation_quality.py`，默认 dry-run，显式 `--execute` 才调用真实 Judge；结果只保存脱敏分数、短理由、风险等级和 next_action。
+- 新增 `scripts/build_stage34_decision_report.py`、`data/evaluation/stage34_decision_summary.csv` 和 `docs/stage34_rag_diagnosis_decision_report.md`，汇总 embedding、latency、Judge 和阶段 30 分数。
+
+阶段 34 核心结果：
+
+```text
+embedding_decision=keep_glm
+jina_baseline: completed, p@1=0.667, p@3=0.800, p@5=0.933, coverage=0.670, avg_latency≈1489.29ms
+glm_candidate: completed, p@1=0.667, p@3=0.867, p@5=0.867, coverage=0.637, avg_latency≈1491.38ms
+embedding_decision_reason=Jina 在 precision@5 与 coverage 上略优，但优势不足以抵消额度即将耗尽带来的可持续性风险；保留 GLM-Embedding-3 默认，Jina 仅作历史对照和回滚参考
+latency_primary_bottleneck=tool_iteration_overhead
+latency all final: p50≈17739.698ms, p90≈52216.255ms, max≈56451.032ms, top_stage=tool_latency_ms share≈0.738
+react_planner_decision=阶段 34 已落地受控分层 chat provider；planner_chat_provider=None 时保留确定性短路兼容路径，显式配置 PLANNER_CHAT_* 时启用轻量 LLM planner；tool-calling 单次往返架构作为阶段 35 候选方向
+judge_quality_gate=review_required
+judge: completed=4, avg_faithfulness=0.925, avg_answer_coverage=0.675, avg_citation_support=0.613, high=0, medium=4
+stage30_overall_score=83.17
+phase35_recommendation=phase35_should_keep_glm_default_and_use_jina_only_as_rollback_reference_and_evaluate_tool_calling_protocol_migration_to_merge_planner_and_answer_into_one_llm_call_and_tune_answer_prompt_length_or_top_k_or_streaming_first_token_and_review_judge_medium_risk_answers
+```
+
+阶段 34 验证：
+
+```text
+阶段 34 + ReAct 聚焦测试：32 passed
+全量 pytest：666 passed
+python scripts\score_stage30_quality.py：overall=83.17 grade=B release_decision=review_required
+Browser smoke：桌面与 390x844 移动端 Agent 查询通过，均有折叠思考过程与最终答案，无横向溢出，console errors=0
+```
+
+阶段 34 已获用户人工核验确认，进入提交、打 tag、推送并合并到 GitHub 的收尾流程。用户人工核验重点已覆盖：确认保留 GLM-Embedding-3 默认且不推进 Jina 分流的建议、真实 latency 主要瓶颈、Judge medium 风险样例、阶段 35 是否优先评估 tool-calling 单次往返架构。
+
 ## 最新状态：2026-06-13（阶段 33 开发与验证完成，等待用户人工核验）
 
 当前阶段：阶段 33。在 `codex/phase-33-rag-performance-embedding-validation` 分支已完成 RAG 链路性能优化、GLM-Embedding-3 迁移验证、query embedding cache、RAG/ReAct latency trace、MIMO vs DeepSeek benchmark dry-run/真实可用性检查、普通文档和 Obsidian 草稿收尾。阶段 33 从阶段 32 完成并合并后的 `main -> 608a6e9 Merge phase 32 react agent observability` 出发；已核对 `phase-32-complete -> f259f97 Complete phase 32 react agent observability` 是 `main` 的祖先，未移动任何已有阶段 tag。
