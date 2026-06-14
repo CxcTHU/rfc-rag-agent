@@ -17,6 +17,19 @@ class Settings(BaseSettings):
     chat_model_temperature: float = 0.2
     chat_model_timeout_seconds: float = 30.0
 
+    # Optional dedicated planner provider for ReAct LLM-driven planning.
+    # When planner_chat_model_provider is empty the ReAct service falls back
+    # to the deterministic short-circuit + chat_model_provider behavior.
+    # When set, the ReAct service uses this provider for every planner
+    # decision and disables the deterministic short-circuit so the LLM
+    # truly drives action selection.
+    planner_chat_model_provider: str = ""
+    planner_chat_model_name: str = ""
+    planner_chat_model_api_key: str = ""
+    planner_chat_model_base_url: str = ""
+    planner_chat_model_temperature: float = 0.0
+    planner_chat_model_timeout_seconds: float = 30.0
+
     embedding_provider: str = ""
     embedding_model_name: str = ""
     embedding_api_key: str = ""

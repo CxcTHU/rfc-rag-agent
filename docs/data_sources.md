@@ -19,6 +19,23 @@ URL:
 
 ## 当前状态
 
+阶段 34 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是由现有问题集、现有 chunks、现有 embedding 索引、真实运行 trace 和真实 Judge 复核派生出的评测/报告产物。
+
+阶段 34 新增派生产物：
+
+- `docs/stage34_rag_diagnosis_embedding_judge.md`：阶段 34 设计、指标、真实调用边界和安全边界。
+- `data/evaluation/stage34_embedding_comparison_results.csv`、`stage34_embedding_comparison_summary.csv`：Jina 1024 维与 GLM-Embedding-3 2048 维同环境检索对照。
+- `data/evaluation/stage34_latency_traces.csv`、`stage34_latency_traces_dry_run.csv`：脱敏 latency trace，不保存完整答案、raw response 或受限全文。
+- `data/evaluation/stage34_latency_bottleneck_summary.csv`、`docs/stage34_latency_bottleneck_report.md`：性能瓶颈分析产物。
+- `data/evaluation/stage34_llm_judge_results.csv`、`stage34_llm_judge_summary.csv`：真实 Judge 脱敏分数、短理由、风险等级和 next_action。
+- `data/evaluation/stage34_decision_summary.csv`、`docs/stage34_rag_diagnosis_decision_report.md`：阶段 34 决策摘要和报告。
+
+数据安全边界：
+
+- 真实 API key、Bearer token、Authorization header、供应商原始响应、raw_response、`reasoning_content`、hidden thought 和受限全文不得写入 Git、CSV、文档、测试或 Obsidian。
+- 真实调用必须显式执行；dry-run 不伪造成成功，真实失败必须写 `skipped` 或 `error`。
+- 旧 Jina FAISS 与 GLM-Embedding-3 FAISS 均继续作为可重建索引派生产物保留，`data/faiss/` 不进入 Git。
+
 阶段 33 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是由现有 chunks、embedding 索引和评测集派生出的性能/迁移验证产物。阶段 33 同时明确保留旧 Jina 索引作为回滚保险和质量对照，保留 GLM-Embedding-3 2048 维索引作为新链路验证目标。
 
 ```text

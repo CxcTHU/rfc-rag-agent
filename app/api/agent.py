@@ -55,6 +55,26 @@ def get_agent_chat_model_provider() -> ChatModelProvider:
     )
 
 
+def get_agent_planner_chat_model_provider() -> ChatModelProvider | None:
+    """Optional lightweight planner provider for ReAct LLM-driven planning.
+
+    Returns None when no dedicated planner is configured, in which case
+    ReActAgentService falls back to the deterministic short-circuit plus the
+    main chat model provider.
+    """
+    settings = get_settings()
+    if not settings.planner_chat_model_provider.strip():
+        return None
+    return create_chat_model_provider(
+        provider_name=settings.planner_chat_model_provider,
+        model_name=settings.planner_chat_model_name,
+        api_key=settings.planner_chat_model_api_key,
+        base_url=settings.planner_chat_model_base_url,
+        temperature=settings.planner_chat_model_temperature,
+        timeout_seconds=settings.planner_chat_model_timeout_seconds,
+    )
+
+
 def get_agent_embedding_provider() -> EmbeddingProvider:
     settings = get_settings()
     return create_embedding_provider(
@@ -73,6 +93,9 @@ def query_agent(
     db: Session = Depends(get_db),
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
+    planner_chat_provider: ChatModelProvider | None = Depends(
+        get_agent_planner_chat_model_provider
+    ),
 ) -> AgentQueryResponse:
     conversation_repository = ConversationRepository(db)
     conversation_history: list[str] = []
@@ -141,6 +164,7 @@ def query_agent(
                 db=db,
                 chat_model_provider=chat_model_provider,
                 embedding_provider=embedding_provider,
+                planner_chat_provider=planner_chat_provider,
             ).query(
                 question=request.question,
                 top_k=request.top_k,
@@ -207,6 +231,9 @@ def stream_query_agent(
     db: Session = Depends(get_db),
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
+    planner_chat_provider: ChatModelProvider | None = Depends(
+        get_agent_planner_chat_model_provider
+    ),
 ) -> StreamingResponse:
     conversation_repository = ConversationRepository(db)
     conversation_history: list[str] = []
@@ -229,6 +256,7 @@ def stream_query_agent(
             conversation_history=conversation_history,
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
+            planner_chat_provider=planner_chat_provider,
         ),
         media_type="text/event-stream",
         headers={
@@ -246,6 +274,7 @@ def stream_agent_query_events(
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
+    planner_chat_provider: ChatModelProvider | None = None,
 ) -> Iterator[str]:
     stream_started = time.perf_counter()
     try:
@@ -261,6 +290,7 @@ def stream_agent_query_events(
                 conversation_history=conversation_history,
                 chat_model_provider=chat_model_provider,
                 embedding_provider=embedding_provider,
+                planner_chat_provider=planner_chat_provider,
             )
             if streamed_token_count == 0:
                 for token in split_streaming_text(response.answer):
@@ -300,6 +330,7 @@ def stream_non_chitchat_agent_response(
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
+    planner_chat_provider: ChatModelProvider | None = None,
 ) -> Iterator[str | tuple[AgentQueryResponse, int]]:
     queue: Queue[tuple[str, Any]] = Queue()
 
@@ -317,6 +348,7 @@ def stream_non_chitchat_agent_response(
                 conversation_history=conversation_history,
                 chat_model_provider=effective_chat_model_provider,
                 embedding_provider=embedding_provider,
+                planner_chat_provider=planner_chat_provider,
                 event_sink=lambda event: queue.put(("react_event", event)),
             )
         except Exception as exc:  # noqa: BLE001 - forwarded to SSE error mapping.
@@ -356,6 +388,7 @@ def build_agent_query_response(
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
+    planner_chat_provider: ChatModelProvider | None = None,
     event_sink=None,
 ) -> AgentQueryResponse:
     effective_mode = request.mode
@@ -378,6 +411,7 @@ def build_agent_query_response(
             db=db,
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
+            planner_chat_provider=planner_chat_provider,
         ).query(
             question=request.question,
             top_k=request.top_k,

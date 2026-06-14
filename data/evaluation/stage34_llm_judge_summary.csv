@@ -1,0 +1,2 @@
+status,total_rows,completed_rows,error_rows,avg_faithfulness,avg_answer_coverage,avg_citation_support,avg_refusal_correctness,avg_conciseness,avg_safety_leak_check,high_risk_count,medium_risk_count,low_risk_count,judge_quality_gate,next_action
+completed,4,4,0,0.925,0.675,0.613,1.000,0.887,0.750,0,4,0,review_required,Medium-risk judged answers should be reviewed before Phase 35.

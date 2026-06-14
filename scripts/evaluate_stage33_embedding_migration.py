@@ -113,11 +113,41 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-summary", default=str(SUMMARY_PATH))
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--execute-real", action="store_true")
-    parser.add_argument("--jina-api-key", default=os.getenv("JINA_API_KEY", ""))
-    parser.add_argument("--jina-base-url", default=os.getenv("JINA_BASE_URL", ""))
-    parser.add_argument("--glm-api-key", default=os.getenv("PARATERA_API_KEY", ""))
-    parser.add_argument("--glm-base-url", default=os.getenv("PARATERA_EMBEDDING_BASE_URL", ""))
+    parser.add_argument("--jina-api-key", default=env_value("JINA_API_KEY"))
+    parser.add_argument("--jina-base-url", default=env_value("JINA_BASE_URL"))
+    parser.add_argument("--glm-api-key", default=env_value("PARATERA_API_KEY"))
+    parser.add_argument("--glm-base-url", default=env_value("PARATERA_EMBEDDING_BASE_URL"))
     return parser.parse_args()
+
+
+def env_value(name: str, *, env_file: Path = ROOT / ".env") -> str:
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    return read_dotenv_value(env_file, name)
+
+
+def read_dotenv_value(path: Path, name: str) -> str:
+    if not path.exists():
+        return ""
+    prefix = f"{name}="
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or not stripped.startswith(prefix):
+            continue
+        value = stripped[len(prefix) :].strip()
+        if (
+            len(value) >= 2
+            and value[0] == value[-1]
+            and value.startswith(("'", '"'))
+        ):
+            return value[1:-1].strip()
+        return value
+    return ""
 
 
 def run_dry_fixture(queries: list[Stage29Query], *, top_k: int) -> list[dict[str, str]]:
@@ -348,7 +378,63 @@ def summarize(rows: list[dict[str, str]]) -> list[dict[str, str]]:
                 "next_action": next_action_for(candidate_rows),
             }
         )
+    apply_comparative_decisions(summaries)
     return summaries
+
+
+def apply_comparative_decisions(summaries: list[dict[str, str]]) -> None:
+    by_candidate = {summary["candidate"]: summary for summary in summaries}
+    jina = by_candidate.get("jina_baseline")
+    glm = by_candidate.get("glm_candidate")
+    if not jina or not glm:
+        return
+    if jina["status"] != "completed" or glm["status"] != "completed":
+        return
+
+    jina_p5 = float(jina["precision_at_5"])
+    glm_p5 = float(glm["precision_at_5"])
+    jina_p3 = float(jina["precision_at_3"])
+    glm_p3 = float(glm["precision_at_3"])
+    jina_coverage = float(jina["avg_coverage_ratio"])
+    glm_coverage = float(glm["avg_coverage_ratio"])
+    jina_latency = float(jina["avg_latency_ms"])
+    glm_latency = float(glm["avg_latency_ms"])
+    latency_delta_ratio = ratio_float(glm_latency - jina_latency, jina_latency)
+
+    jina_edge_is_small = (jina_p5 - glm_p5) <= 0.10 and (jina_coverage - glm_coverage) <= 0.05
+
+    if jina_edge_is_small:
+        decision = "keep_glm"
+        next_action = (
+            "Keep GLM-Embedding-3 as the default provider; Jina's small top-5/coverage edge "
+            "does not offset quota sustainability risk, so keep Jina only as historical baseline "
+            "and rollback reference."
+        )
+    elif glm_p5 >= jina_p5 and glm_coverage >= jina_coverage - 0.02 and latency_delta_ratio <= 0.20:
+        decision = "keep_glm"
+        next_action = "Keep GLM candidate under review; no rollback signal from same-environment retrieval."
+    elif jina_p5 >= glm_p5 + 0.05 and jina_coverage >= glm_coverage + 0.02 and jina_p3 >= glm_p3:
+        decision = "rollback_jina"
+        next_action = "Jina wins consistently; review rollback before changing defaults."
+    elif jina_p5 > glm_p5 and glm_p3 > jina_p3:
+        decision = "route_by_query_type"
+        next_action = "Mixed ranking signal: compare per-query categories before choosing a single default."
+    elif jina_p5 > glm_p5 or jina_coverage > glm_coverage:
+        decision = "review_required"
+        next_action = "Jina retains an edge in top-5 or coverage; do not switch defaults without manual review."
+    else:
+        decision = "review_required"
+        next_action = "Metrics are close; keep both indexes and review per-query differences."
+
+    for summary in summaries:
+        summary["decision"] = decision
+        summary["next_action"] = next_action
+
+
+def ratio_float(numerator: float, denominator: float) -> float:
+    if denominator <= 0:
+        return 0.0
+    return numerator / denominator
 
 
 def count_true(rows: list[dict[str, str]], field: str) -> int:

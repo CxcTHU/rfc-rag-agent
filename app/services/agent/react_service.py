@@ -54,8 +54,10 @@ class ReActAgentService:
         embedding_provider: EmbeddingProvider,
         chat_model_provider: ChatModelProvider,
         log_answers: bool = True,
+        planner_chat_provider: ChatModelProvider | None = None,
     ) -> None:
         self.chat_model_provider = chat_model_provider
+        self.planner_chat_provider = planner_chat_provider
         self.toolbox = AgentToolbox(
             db=db,
             embedding_provider=embedding_provider,
@@ -92,6 +94,7 @@ class ReActAgentService:
         latency_token = set_current_latency_trace(latency_trace)
 
         try:
+            llm_driven = self.planner_chat_provider is not None
             for iteration in range(1, max_iterations + 1):
                 planner_started = time.perf_counter()
                 if observations and observations[-1].error:
@@ -101,7 +104,8 @@ class ReActAgentService:
                         reasoning_summary="Tool error requires safe refusal.",
                     )
                 elif (
-                    observations
+                    not llm_driven
+                    and observations
                     and observations[-1].action == "search_knowledge"
                     and observations[-1].search_result_count > 0
                 ):
@@ -116,6 +120,8 @@ class ReActAgentService:
                         observations=observations,
                         previous_queries=previous_queries,
                         history=history,
+                        iteration=iteration,
+                        max_iterations=max_iterations,
                     )
                 latency_trace.add_duration(
                     "planner_latency_ms",
@@ -294,8 +300,11 @@ class ReActAgentService:
         observations: list[ReActObservation],
         previous_queries: set[str],
         history: Sequence[str] | None,
+        iteration: int = 1,
+        max_iterations: int = REACT_HARD_MAX_ITERATIONS,
     ) -> ReActAction:
-        if self.chat_model_provider.provider_name == "deterministic":
+        planner_provider = self.planner_chat_provider or self.chat_model_provider
+        if planner_provider.provider_name == "deterministic":
             return self.deterministic_planner.plan(
                 question=question,
                 observations=observations,
@@ -306,9 +315,27 @@ class ReActAgentService:
             question=question,
             observations=observations,
             history=history,
+            iteration=iteration,
+            max_iterations=max_iterations,
         )
-        result = self.chat_model_provider.generate(messages)
-        return parse_react_action_json(result.answer, default_query=question)
+        result = planner_provider.generate(messages)
+        try:
+            return parse_react_action_json(result.answer, default_query=question)
+        except ValueError:
+            if observations and any(
+                obs.action == "search_knowledge" and obs.search_result_count > 0
+                for obs in observations
+            ):
+                return ReActAction(
+                    action="answer_with_citations",
+                    question=question,
+                    reasoning_summary="Planner output was unparseable; answer with already retrieved evidence.",
+                )
+            return ReActAction(
+                action="refuse",
+                refusal_reason="Planner output was unparseable; refusing safely.",
+                reasoning_summary="Planner output was unparseable; refuse safely.",
+            )
 
     def _emit(
         self,
@@ -359,10 +386,13 @@ def react_planner_messages(
     question: str,
     observations: list[ReActObservation],
     history: Sequence[str] | None,
+    iteration: int = 1,
+    max_iterations: int = 3,
 ) -> list[ChatMessage]:
     observation_lines = [
         f"{idx}. action={obs.action}; query={obs.query or ''}; "
-        f"succeeded={obs.succeeded}; summary={obs.observation_summary}"
+        f"succeeded={obs.succeeded}; result_count={obs.search_result_count}; "
+        f"summary={obs.observation_summary}"
         for idx, obs in enumerate(observations, start=1)
     ]
     history_summary = "\n".join(history or []) or "(none)"
@@ -371,15 +401,37 @@ def react_planner_messages(
         ChatMessage(
             role="system",
             content=(
-                "You are a controlled ReAct planner. Return only one JSON object. "
+                "You are a controlled ReAct planner for a rock-filled concrete (RFC) "
+                "and hydraulic engineering knowledge base. Return only one JSON object. "
                 "Allowed actions: search_knowledge, rewrite_query, "
-                "answer_with_citations, refuse, final_answer. "
-                "If there are no observations, choose search_knowledge with the user's "
-                "question as query. If search results are available, choose "
-                "answer_with_citations. Choose refuse only for unsafe requests, empty "
-                "questions, repeated failed searches, or when observations show reliable "
-                "evidence is unavailable. Do not include hidden thought. Use "
-                "reasoning_summary as a short safe summary."
+                "answer_with_citations, refuse, final_answer.\n\n"
+                "Decision policy:\n"
+                "- DEFAULT: if there are no observations, choose search_knowledge with "
+                "  a precise query. Always search first when the topic could plausibly "
+                "  appear in concrete/dam/hydraulic engineering material (any mention of "
+                "  filling, flowability, self-compacting, rock-filled, RCC, RFC, dam, "
+                "  concrete, mix design, thermal control, hydration, durability, etc. — "
+                "  in Chinese OR English OR mixed — IS in scope).\n"
+                "- Choose refuse on iteration 1 ONLY in these narrow cases: the question "
+                "  is unsafe (asks for harmful, illegal, or credential info); the question "
+                "  is clearly unrelated to civil/hydraulic engineering (e.g., cooking, "
+                "  sports, personal advice); or the question explicitly requests a "
+                "  binding engineering judgment, code-compliance ruling, or design "
+                "  approval that only a licensed engineer should give.\n"
+                "- If the latest search_knowledge returned results (result_count > 0), "
+                "  you SHOULD choose answer_with_citations now. Only choose another "
+                "  search_knowledge if existing evidence is clearly insufficient AND the "
+                "  new query is materially different from previous queries.\n"
+                "- If the latest search_knowledge returned 0 results, choose "
+                "  rewrite_query once with a more specific query, then search again. "
+                "  After a repeated empty search, choose refuse.\n"
+                "- Never choose final_answer without going through "
+                "  answer_with_citations first; the project requires cited answers.\n"
+                "- Do not include hidden thought, raw provider response, or any private "
+                "  reasoning content. Use reasoning_summary for a short safe summary "
+                "  (one sentence).\n\n"
+                "When in doubt, prefer search_knowledge over refuse. Iteration budget "
+                "is limited; prefer the fewest necessary tool calls."
             ),
         ),
         ChatMessage(
@@ -387,7 +439,8 @@ def react_planner_messages(
             content=(
                 f"Question: {question}\n\n"
                 f"History:\n{history_summary}\n\n"
-                f"Observations:\n{observation_summary}"
+                f"Observations:\n{observation_summary}\n\n"
+                f"Current iteration: {iteration} / {max_iterations}"
             ),
         ),
     ]

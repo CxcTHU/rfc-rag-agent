@@ -14,6 +14,20 @@
 
 ## 当前阶段
 
+阶段 34（RAG 性能瓶颈诊断、Embedding 迁移决策与真实 Judge 质量复核，开发、测试、文档与用户人工核验已完成，进入提交合并收尾）：当前分支为 `codex/phase-34-rag-diagnosis-embedding-judge`，从阶段 33 完成并合并后的 `main / origin/main -> c06d0a3 Merge phase 33 rag performance embedding validation` 出发；已确认 `phase-33-complete -> 0bad9e1 Complete phase 33 rag performance embedding validation` 是 `main` 的祖先，未移动任何已有阶段 tag。
+
+阶段 34 完成内容：
+
+- 新增 `docs/stage34_rag_diagnosis_embedding_judge.md`，固定同环境 embedding 对照、真实 latency trace、真实 LLM Judge、决策报告和安全边界。
+- 补齐 Jina 1024 维与 GLM-Embedding-3 2048 维同环境真实对照，输出 `stage34_embedding_comparison_results.csv` 与 `stage34_embedding_comparison_summary.csv`；Jina 在 precision@5 与 coverage 上略优，但优势不足以抵消额度即将耗尽带来的可持续性风险，当前最终建议为 `keep_glm`。
+- 新增真实 latency trace 采集与瓶颈归因，输出 `stage34_latency_traces.csv`、`stage34_latency_bottleneck_summary.csv` 和 `docs/stage34_latency_bottleneck_report.md`；当前主要瓶颈为 `tool_iteration_overhead`。
+- 新增阶段 34 真实 LLM Judge 支路，默认 dry-run，显式 `--execute` 才调用真实 judge；结果只保存脱敏分数、短理由、风险等级和 next_action。
+- 新增 `docs/stage34_rag_diagnosis_decision_report.md` 与 `data/evaluation/stage34_decision_summary.csv`；当前建议保留 GLM-Embedding-3 作为默认 embedding provider，不继续推进 Jina 分流，Jina 结果仅作为历史对照和回滚参考；阶段 34 已落地受控的分层 chat provider，缺省配置继续保留确定性短路兼容路径，显式配置 `PLANNER_CHAT_*` 时使用轻量 planner + V4-Pro answer，阶段 35 再评估 tool-calling 单次往返架构迁移。
+
+阶段 34 最终验证：阶段 34 + ReAct 聚焦测试 `32 passed`；全量 pytest `666 passed`；`python scripts\score_stage30_quality.py` 保持 `overall=83.17 grade=B release_decision=review_required`；浏览器桌面与 `390x844` 移动端 Agent 查询通过，均展示折叠思考过程和最终答案，无横向溢出，console errors=0。
+
+阶段 34 已获用户人工核验确认，进入提交、打 tag、推送并合并到 GitHub 的收尾流程。
+
 阶段 33（RAG 链路性能优化与 Embedding 迁移验证，开发与验证已完成，等待用户人工核验）：当前分支为 `codex/phase-33-rag-performance-embedding-validation`，从阶段 32 完成并合并后的 `main -> 608a6e9 Merge phase 32 react agent observability` 出发；已确认 `phase-32-complete -> f259f97 Complete phase 32 react agent observability` 是 `main` 的祖先，未移动任何已有阶段 tag。
 
 阶段 33 完成内容：
