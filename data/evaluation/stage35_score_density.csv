@@ -1,0 +1,2 @@
+scope,query_id,dimension,deduction_points,deduction_count,share_of_total_deductions,current_overall_score,target_overall_score,points_needed_to_target,enough_if_fully_recovered,recommended_priority
+overall_gap,all,all,0.00,0,0.000,91.52,88.00,0.00,true,already_at_target

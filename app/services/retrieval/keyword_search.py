@@ -104,6 +104,7 @@ DOMAIN_GENERIC_TERMS = {
 SYNONYM_RULES = [
     (["堆石混凝土"], [("rock-filled concrete", 1.2), ("rock filled concrete", 1.2), ("rock-fill concrete", 1.2), ("rfc", 0.8)]),
     (["rock-filled concrete", "rock filled concrete", "rock-fill concrete"], [("堆石混凝土", 1.2), ("rfc", 0.8)]),
+    (["rcc", "roller-compacted concrete", "rolled concrete"], [("roller-compacted concrete", 2.0), ("rolled concrete", 1.6), ("rollcrete", 1.4)]),
     (["自密实"], [("self-compacting", 1.3), ("self compacting", 1.3), ("self-consolidating", 1.0), ("scc", 0.8)]),
     (["self-compacting", "self compacting", "self-consolidating"], [("自密实", 1.3), ("scc", 0.8)]),
     (["填充能力", "充填", "填充"], [("filling capacity", 1.8), ("filling performance", 1.4), ("compactness", 1.1), ("prepacked rock", 1.1)]),
@@ -265,9 +266,12 @@ def source_type_rank(source_type: str) -> int:
         "local_file": 0,
         "institutional_access_pdf": 1,
         "open_access_pdf": 2,
-        "metadata_record": 3,
+        "web_page": 3,
+        "wikipedia": 3,
+        "standard_document": 3,
+        "metadata_record": 4,
     }
-    return ranks.get(source_type, 4)
+    return ranks.get(source_type, 5)
 
 
 def diversify_results(

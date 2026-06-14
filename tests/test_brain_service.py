@@ -194,6 +194,16 @@ class ConstantEmbeddingProvider:
         return [1.0, 0.0]
 
 
+class UnsupportedSentenceChatProvider(DeterministicChatModelProvider):
+    def generate(self, messages):
+        result = super().generate(messages)
+        return type(result)(
+            answer="Thermal control reduces hydration heat [1]. Unsupported design claim.",
+            model_name=result.model_name,
+            provider=result.provider,
+        )
+
+
 def test_brain_service_runs_default_workflow_with_keyword_retrieval(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -428,3 +438,24 @@ def test_brain_service_does_not_over_refuse_learning_question(tmp_path) -> None:
         )
 
     assert not result.refused
+
+
+def test_brain_service_keeps_model_answer_without_validator_repair(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_brain_documents(db)
+        service = BrainService(
+            db=db,
+            chat_model_provider=UnsupportedSentenceChatProvider(),
+            embedding_provider=DeterministicEmbeddingProvider(dimension=32),
+            log_answers=False,
+        )
+        result = service.answer(
+            "thermal control",
+            config=RetrievalConfig(retrieval_mode="keyword", top_k=1),
+        )
+
+    assert result.answer == "Thermal control reduces hydration heat [1]. Unsupported design claim."
+    assert result.citations == [1]
+    assert "未匹配引用" not in result.answer

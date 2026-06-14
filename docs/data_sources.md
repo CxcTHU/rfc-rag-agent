@@ -19,6 +19,23 @@ URL:
 
 ## 当前状态
 
+阶段 35 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是由现有 Stage 29/30 评测集、现有 chunks、现有 provider 配置和真实 Judge 复跑派生出的扣分归因、质量校准和评分对比产物。
+
+阶段 35 新增派生产物：
+
+- `docs/stage35_retrieval_quality_calibration.md`：阶段 35 设计、五类根因、修复边界、双门验证和安全边界。
+- `scripts/analyze_stage35_deduction_causes.py`：Stage 30 deductions 根因归因脚本。
+- `data/evaluation/stage35_deduction_root_causes.csv`：每条扣分的根因分类、证据摘要和修复建议。
+- `data/evaluation/stage35_llm_judge_results.csv`、`stage35_llm_judge_summary.csv`：真实 Judge 10 条脱敏复跑结果。
+- `data/evaluation/stage35_quality_summary.csv`：阶段 34/35 Stage 30 分数、目标样例和 Judge 指标对比。
+- `docs/phase_reviews/phase-35.md`：阶段 35 人工核验前验收草稿。
+
+数据安全边界：
+
+- Stage 35 CSV 与文档不得保存 API key、Bearer token、Authorization header、供应商原始响应、raw provider response、`reasoning_content`、hidden thought 或受限全文。
+- Judge payload 的 `evidence_snippet` 仅为脱敏短片段，用于判断 citation_support；不保存大段全文，不作为新语料来源。
+- 真实 API 只在显式命令中调用，不进入 CI；本地全量 pytest 不依赖真实 provider。
+
 阶段 34 不新增外部资料来源、不新增爬虫、不写入新的受限全文；新增的是由现有问题集、现有 chunks、现有 embedding 索引、真实运行 trace 和真实 Judge 复核派生出的评测/报告产物。
 
 阶段 34 新增派生产物：

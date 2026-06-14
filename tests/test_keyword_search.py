@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.models import Base
 from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository
 from app.db.session import create_sqlite_engine
-from app.services.retrieval.keyword_search import KeywordSearchService
+from app.services.retrieval.keyword_search import KeywordSearchService, source_type_rank
 
 
 def make_session(tmp_path):
@@ -249,3 +249,42 @@ def test_keyword_search_expands_stage_11_shear_key_terms(tmp_path) -> None:
 
     assert results
     assert "rock shear keys" in results[0].document_title
+
+
+def test_keyword_search_expands_rcc_abbreviation_without_answer_point_leakage(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        DocumentRepository(db).create_with_chunks(
+            DocumentCreate(
+                title="Roller-compacted concrete overview",
+                source_type="wikipedia",
+                source_path="wiki.md",
+                file_name="wiki.md",
+                file_extension=".md",
+                content_hash="rcc-overview-hash",
+                raw_path="data/raw/wikipedia/wiki.md",
+            ),
+            [
+                ChunkCreate(
+                    chunk_index=0,
+                    content="Roller-compacted concrete is also called rolled concrete or rollcrete.",
+                    char_count=75,
+                    heading_path="Overview",
+                    start_char=0,
+                    end_char=75,
+                ),
+            ],
+        )
+
+        results = KeywordSearchService(db).search("RCC material overview", top_k=5)
+
+    assert results
+    assert results[0].source_type == "wikipedia"
+    assert results[0].heading_path == "Overview"
+
+
+def test_source_type_rank_prefers_full_web_sources_before_metadata() -> None:
+    assert source_type_rank("web_page") < source_type_rank("metadata_record")
+    assert source_type_rank("wikipedia") < source_type_rank("metadata_record")
+    assert source_type_rank("standard_document") < source_type_rank("metadata_record")

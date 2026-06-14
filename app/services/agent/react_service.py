@@ -36,6 +36,33 @@ from app.services.retrieval.embedding import EmbeddingProvider
 
 REACT_DEFAULT_MAX_ITERATIONS = 3
 REACT_HARD_MAX_ITERATIONS = 3
+REACT_SEARCH_FALLBACK_TERMS = (
+    "rock-filled",
+    "rock filled",
+    "rockfill",
+    "rfc",
+    "rcc",
+    "concrete",
+    "dam",
+    "hydraulic",
+    "filling",
+    "flowability",
+    "self-compacting",
+    "thermal",
+    "hydration",
+    "durability",
+    "mix design",
+    "堆石",
+    "混凝土",
+    "大坝",
+    "水工",
+    "填充",
+    "充填",
+    "自密实",
+    "水化热",
+    "温控",
+    "耐久",
+)
 
 
 @dataclass(frozen=True)
@@ -331,6 +358,12 @@ class ReActAgentService:
                     question=question,
                     reasoning_summary="Planner output was unparseable; answer with already retrieved evidence.",
                 )
+            if not observations and should_search_after_unparseable_planner(question):
+                return ReActAction(
+                    action="search_knowledge",
+                    query=question,
+                    reasoning_summary="Planner output was unparseable; search first for in-scope evidence.",
+                )
             return ReActAction(
                 action="refuse",
                 refusal_reason="Planner output was unparseable; refusing safely.",
@@ -506,6 +539,11 @@ def result_from_react_tool(
 
 def refusal_answer(reason: str | None) -> str:
     return reason or "当前资料库中没有找到足够可靠的依据。"
+
+
+def should_search_after_unparseable_planner(question: str) -> bool:
+    normalized = question.casefold()
+    return any(term in normalized for term in REACT_SEARCH_FALLBACK_TERMS)
 
 
 def merge_search_results(

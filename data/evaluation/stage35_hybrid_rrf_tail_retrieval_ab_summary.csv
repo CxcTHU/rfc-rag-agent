@@ -1,0 +1,2 @@
+provider,model_name,retrieval_mode,real_config_status,total_queries,non_refusal_total,precision_at_1,precision_at_3,precision_at_5,avg_coverage_ratio,refusal_total,refusal_accuracy,source_type_distribution,decision,next_action
+jina,jina-embeddings-v3,hybrid_rrf_tail,completed,18,15,0.867,0.933,1.000,0.731,3,1.000,institutional_access_pdf:19;metadata_record:4;open_access_pdf:3;standard_document:25;web_page:29;wikipedia:10,completed,Review low coverage and missed source_type cases before human approval

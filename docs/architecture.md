@@ -1,5 +1,30 @@
 # 架构说明
 
+## 阶段 35 架构增量：检索质量校准与 Stage 30 评分破局
+
+阶段 35 不替换默认 chat / embedding / rerank provider，不改变 `/chat`、`/agent/query`、`/agent/query/stream`、`/search/*` 或 `/quality-report` 的外部契约，而是在 evaluation -> retrieval -> generation -> quality gate 链路上做最小质量校准。
+
+```text
+stage34 decision report / stage30 deductions / real Judge
+-> stage35 deduction root-cause analysis
+-> leakage removal from keyword query expansion
+-> HybridRrfTailSearchService for clean tail recall
+-> provider-specific Stage 29 evaluation factory
+-> prompt citation and coverage constraints
+-> real Judge rerun with question + sanitized evidence snippets
+-> Stage 30 score rerun and honest release_decision
+```
+
+新增 `scripts/analyze_stage35_deduction_causes.py` 作为评分归因层：它读取 `stage30_quality_deductions.csv`、`stage29_real_quality_results.csv` 与 `stage29_new_corpus_queries.csv`，把每条扣分映射到 `retrieval_miss`、`context_expansion_miss`、`prompt_citation_gap`、`answer_coverage_gap` 或 `rule_too_strict`。这层不参与线上请求，只把质量门失败转换为可执行修复任务。
+
+检索层只做可解释 query expansion：阶段 35 已撤回把 `Alpe Gera Dam`、`road paving`、`vibratory rollers` 等评测答案词写入 `SYNONYM_RULES` 的泄漏规则；当前保留的是 RCC / roller-compacted concrete 等通用领域缩写与机制级排序修正，不重建索引、不新增外部数据、不替换 embedding。`evaluate_stage29_real_quality.py` 新增 provider 专用工厂，保证 Jina 使用 `jina-embeddings-v3 / dim=1024`，GLM 使用 `GLM-Embedding-3 / dim=2048`，避免评测污染。
+
+生成层只强化 prompt 约束：`prompt_builder.py` 要求事实句逐句引用、引用贴近对应句子、不得引用不支持该句的 source、多要点问题覆盖上下文支持的各方面，缺失证据必须明说。既有 `extract_citations()` 与 `citation_check_node()` 继续过滤 / 检查无效 `[N]`，不改变 response schema。
+
+Judge 层补齐评审输入完整性：`judge_stage34_generation_quality.py` 在 Stage 35 复用时加入 question 与每个 source 的脱敏短 `evidence_snippet`。输出仍只保存分数、短理由、风险等级、next_action 和安全摘要，不保存 API key、Bearer token、raw provider response、reasoning_content、hidden thought 或受限全文。
+
+阶段 35 的 Stage 30 门禁已干净通过：在默认 GLM provider 与 `hybrid_rrf_tail` 检索链路上得到 `91.52 / A / pass`，且不改变评分权重、等级阈值、release decision 规则、provider 拓扑或外部数据源。真实 Judge 生成质量门仍诚实保留 FAIL：GLM 重跑在 validator 前为 `answer_coverage=0.525`、`citation_support=0.750`、`safety_leak_check=0.700`；validator drop 实验虽把 safety 修到 `1.000`，但 coverage/citation 降到 `0.410/0.635`，因此已从生产 Brain 路径解耦，仅保留为离线评测工具。
+
 ## 阶段 34 架构增量：RAG 性能瓶颈诊断、Embedding 决策与真实 Judge 复核
 
 阶段 34 不替换默认 `/chat`、`/agent/query`、`/agent/query/stream` 或任何 provider，而是在 evaluation/reporting 层补齐三条决策链路：同环境 embedding 对照、真实 latency trace 归因和真实 LLM Judge 复核。
@@ -3597,3 +3622,20 @@ and refusal_accuracy >= baseline_refusal_accuracy
 阶段 20 保证 `POST /search`、`POST /search/vector`、`POST /search/hybrid`、`POST /chat`、`POST /agent/query`、`GET /quality-report` 不被破坏。聚焦回归 61 passed + 67 passed，全量测试 424 passed。
 
 架构结论：阶段 20 把阶段 19 的“候选重权可能有用”升级为“经过答案级判定与真实 query 端校验后仍不足以切默认链路”的可复核结论。真正进入默认运行链路的是 `responsibility_gate`，因为它闭环的是安全责任边界，而不是检索排序偏好；`source_type_reweight` 继续保持候选/评测开关。
+## Phase 35 Clean Architecture Update
+
+Phase 35's accepted architecture change is retrieval-strategy isolation, not score tuning. The clean final chain is:
+
+```text
+Stage 30 deductions / Stage 34 Judge evidence
+-> leakage removal
+-> score density analysis
+-> HybridRrfTailSearchService
+-> Stage 29 clean retrieval rerun
+-> Stage 30 score rerun
+-> human verification
+```
+
+`HybridRrfTailSearchService` lives in `app/services/retrieval/hybrid_rrf_tail.py`. It keeps the existing hybrid top 3 as the trusted head and uses BM25+vector Reciprocal Rank Fusion only to fill tail recall slots. This keeps retrieval strategy separate from scoring and policy.
+
+No Stage 30 scoring weights, grade thresholds, release rules, default providers, provider topology, or external data sources were changed. The clean final Stage 30 result under the default GLM embedding provider is `91.52 / A / pass`. Real Judge remains a separate generation-quality review risk: production GLM before validator was `answer_coverage=0.525`, `citation_support=0.750`, `safety_leak_check=0.700`; the final documented conclusion is Judge gate FAIL with no production validator regression retained.

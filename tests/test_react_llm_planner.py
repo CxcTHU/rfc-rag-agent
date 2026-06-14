@@ -11,8 +11,9 @@ Behaviors covered (stage 34 LLM-driven planner change):
   a hard rule; planner is called every iteration.
 - LLM may continue searching across multiple iterations if it decides
   evidence is insufficient.
-- Invalid planner JSON falls back to a safe action (answer when prior
-  evidence exists, otherwise refuse) instead of crashing.
+- Invalid planner JSON falls back to a safe action (search first for clearly
+  in-scope questions, answer when prior evidence exists, otherwise refuse)
+  instead of crashing.
 - When `planner_chat_provider` is NOT passed, the existing elif short-circuit
   stays in effect — backward compatibility guard.
 """
@@ -204,7 +205,31 @@ def test_llm_planner_can_continue_searching_across_multiple_iterations(tmp_path)
     assert planner.calls == 3
 
 
-def test_llm_planner_invalid_json_falls_back_to_refuse_without_evidence(tmp_path) -> None:
+def test_llm_planner_invalid_json_searches_first_for_in_scope_question(tmp_path) -> None:
+    planner = ScriptedPlannerProvider(
+        planner_outputs=[
+            "this is not json at all",
+            "still not json after retrieval",
+        ],
+    )
+
+    with make_session(tmp_path)() as db:
+        seed_documents(db)
+        result = make_service(db, planner_chat_provider=planner).query(
+            "What affects filling capacity in rock-filled concrete?",
+            top_k=2,
+            max_tool_calls=3,
+        )
+
+    assert not result.refused
+    assert result.iteration_count == 2
+    assert [call.tool_name for call in result.tool_calls] == [
+        "hybrid_search_knowledge",
+        "answer_with_citations",
+    ]
+
+
+def test_llm_planner_invalid_json_refuses_out_of_scope_without_evidence(tmp_path) -> None:
     planner = ScriptedPlannerProvider(
         planner_outputs=["this is not json at all"],
     )
@@ -212,7 +237,7 @@ def test_llm_planner_invalid_json_falls_back_to_refuse_without_evidence(tmp_path
     with make_session(tmp_path)() as db:
         seed_documents(db)
         result = make_service(db, planner_chat_provider=planner).query(
-            "What affects filling capacity in rock-filled concrete?",
+            "How do I bake a cake?",
             top_k=2,
             max_tool_calls=3,
         )

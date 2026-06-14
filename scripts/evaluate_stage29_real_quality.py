@@ -18,8 +18,10 @@ from app.db.session import SessionLocal, init_db  # noqa: E402
 from app.services.brain.config import RetrievalConfig  # noqa: E402
 from app.services.brain.service import BrainService  # noqa: E402
 from app.services.generation.chat_model import DeterministicChatModelProvider  # noqa: E402
+from app.services.retrieval.embedding import create_embedding_provider  # noqa: E402
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService  # noqa: E402
-from scripts.evaluate_vector_search import create_embedding_provider_from_settings  # noqa: E402
+from app.services.retrieval.hybrid_rrf_tail import HybridRrfTailSearchService  # noqa: E402
+from app.services.retrieval.rrf_fusion import RRFHybridSearchResult, RRFHybridSearchService  # noqa: E402
 
 
 QUERY_PATH = ROOT / "data" / "evaluation" / "stage29_new_corpus_queries.csv"
@@ -34,6 +36,7 @@ RESULT_FIELDS = [
     "expected_refused",
     "provider",
     "model_name",
+    "retrieval_mode",
     "top_k",
     "precision_at_1",
     "precision_at_3",
@@ -55,6 +58,7 @@ RESULT_FIELDS = [
 SUMMARY_FIELDS = [
     "provider",
     "model_name",
+    "retrieval_mode",
     "real_config_status",
     "total_queries",
     "non_refusal_total",
@@ -90,12 +94,18 @@ class CoverageResult:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate stage 29 real Jina retrieval quality on new corpus queries."
+        description="Evaluate stage 29 real retrieval quality on new corpus queries."
     )
     parser.add_argument("--queries", default=str(QUERY_PATH))
     parser.add_argument("--out-results", default=str(RESULTS_PATH))
     parser.add_argument("--out-summary", default=str(SUMMARY_PATH))
-    parser.add_argument("--provider", default="jina")
+    parser.add_argument("--provider", default="glm")
+    parser.add_argument(
+        "--retrieval-mode",
+        choices=["hybrid", "bm25_rrf", "hybrid_rrf_tail"],
+        default="hybrid",
+        help="Retrieval strategy used for non-refusal evidence collection.",
+    )
     parser.add_argument("--top-k", type=int, default=5)
     return parser.parse_args()
 
@@ -142,7 +152,10 @@ def normalize_for_match(text: str) -> str:
     return re.sub(r"\s+", "", (text or "").casefold())
 
 
-def result_evidence(result: HybridSearchResult) -> str:
+SearchResult = HybridSearchResult | RRFHybridSearchResult
+
+
+def result_evidence(result: SearchResult) -> str:
     return " ".join(
         part
         for part in [
@@ -154,18 +167,18 @@ def result_evidence(result: HybridSearchResult) -> str:
     )
 
 
-def result_matches_query(result: HybridSearchResult, query: Stage29Query) -> bool:
+def result_matches_query(result: SearchResult, query: Stage29Query) -> bool:
     if query.expected_source_type != "any" and result.source_type != query.expected_source_type:
         return False
     evidence = normalize_for_match(result_evidence(result))
     return any(normalize_for_match(point) in evidence for point in query.expected_answer_points)
 
 
-def hit_at_k(results: list[HybridSearchResult], query: Stage29Query, k: int) -> bool:
+def hit_at_k(results: list[SearchResult], query: Stage29Query, k: int) -> bool:
     return any(result_matches_query(result, query) for result in results[:k])
 
 
-def coverage_ratio(results: list[HybridSearchResult], query: Stage29Query) -> CoverageResult:
+def coverage_ratio(results: list[SearchResult], query: Stage29Query) -> CoverageResult:
     if not query.expected_answer_points:
         return CoverageResult(0.0, (), ())
     evidence = normalize_for_match(" ".join(result_evidence(result) for result in results))
@@ -183,7 +196,7 @@ def coverage_ratio(results: list[HybridSearchResult], query: Stage29Query) -> Co
     )
 
 
-def source_type_distribution(results: list[HybridSearchResult]) -> str:
+def source_type_distribution(results: list[SearchResult]) -> str:
     counts = Counter(result.source_type for result in results)
     return ";".join(f"{source_type}:{count}" for source_type, count in sorted(counts.items()))
 
@@ -191,15 +204,16 @@ def source_type_distribution(results: list[HybridSearchResult]) -> str:
 def evaluate_query(
     query: Stage29Query,
     *,
-    hybrid_service: HybridSearchService,
+    search_service: HybridSearchService | RRFHybridSearchService,
     brain_service: BrainService,
     provider: str,
     model_name: str,
+    retrieval_mode: str,
     top_k: int,
 ) -> dict[str, str]:
     started = time.perf_counter()
     try:
-        results = hybrid_service.search(query.question, top_k=top_k)
+        results = search_service.search(query.question, top_k=top_k)
         coverage = coverage_ratio(results, query)
         refused = ""
         refusal_matched = ""
@@ -222,6 +236,7 @@ def evaluate_query(
             "expected_refused": str(query.expected_refused).lower(),
             "provider": provider,
             "model_name": model_name,
+            "retrieval_mode": retrieval_mode,
             "top_k": str(top_k),
             "precision_at_1": str(hit_at_k(results, query, 1)).lower(),
             "precision_at_3": str(hit_at_k(results, query, min(3, top_k))).lower(),
@@ -249,6 +264,7 @@ def evaluate_query(
             "expected_refused": str(query.expected_refused).lower(),
             "provider": provider,
             "model_name": model_name,
+            "retrieval_mode": retrieval_mode,
             "top_k": str(top_k),
             "precision_at_1": "false",
             "precision_at_3": "false",
@@ -268,7 +284,7 @@ def evaluate_query(
         }
 
 
-def summarize_results(rows: list[dict[str, str]], provider: str, model_name: str) -> dict[str, str]:
+def summarize_results(rows: list[dict[str, str]], provider: str, model_name: str, retrieval_mode: str = "hybrid") -> dict[str, str]:
     non_refusal = [row for row in rows if row["expected_refused"] == "false"]
     refusal = [row for row in rows if row["expected_refused"] == "true"]
     source_counts: Counter[str] = Counter()
@@ -294,6 +310,7 @@ def summarize_results(rows: list[dict[str, str]], provider: str, model_name: str
     return {
         "provider": provider,
         "model_name": model_name,
+        "retrieval_mode": retrieval_mode,
         "real_config_status": "error" if errors else "completed",
         "total_queries": str(len(rows)),
         "non_refusal_total": str(len(non_refusal)),
@@ -353,6 +370,93 @@ def force_deterministic_reranking() -> None:
     get_settings.cache_clear()
 
 
+def read_dotenv_value(path: Path, name: str) -> str:
+    if not path.exists():
+        return ""
+    prefix = f"{name}="
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or not stripped.startswith(prefix):
+            continue
+        value = stripped[len(prefix) :].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value.startswith(("'", '"')):
+            return value[1:-1].strip()
+        return value
+    return ""
+
+
+def env_value(name: str) -> str:
+    return os.getenv(name, "").strip() or read_dotenv_value(ROOT / ".env", name)
+
+
+def provider_setting(
+    *,
+    explicit: str,
+    settings_value: str,
+    settings_provider: str,
+    expected_provider: str,
+) -> str:
+    if explicit.strip():
+        return explicit.strip()
+    if settings_provider.strip().casefold() == expected_provider:
+        return settings_value.strip()
+    return ""
+
+
+def create_stage29_embedding_provider(provider_name: str, settings):
+    normalized = (provider_name or settings.embedding_provider or "deterministic").strip().casefold()
+    if normalized == "jina":
+        return create_embedding_provider(
+            provider_name="jina",
+            model_name="jina-embeddings-v3",
+            api_key=provider_setting(
+                explicit=env_value("JINA_API_KEY"),
+                settings_value=settings.embedding_api_key,
+                settings_provider=settings.embedding_provider,
+                expected_provider="jina",
+            ),
+            base_url=provider_setting(
+                explicit=env_value("JINA_BASE_URL"),
+                settings_value=settings.embedding_base_url,
+                settings_provider=settings.embedding_provider,
+                expected_provider="jina",
+            ),
+            dimension=1024,
+            timeout_seconds=settings.embedding_timeout_seconds,
+        )
+    if normalized in {"paratera", "glm"}:
+        return create_embedding_provider(
+            provider_name="paratera",
+            model_name="GLM-Embedding-3",
+            api_key=provider_setting(
+                explicit=env_value("PARATERA_API_KEY"),
+                settings_value=settings.embedding_api_key,
+                settings_provider=settings.embedding_provider,
+                expected_provider="paratera",
+            ),
+            base_url=provider_setting(
+                explicit=env_value("PARATERA_EMBEDDING_BASE_URL"),
+                settings_value=settings.embedding_base_url,
+                settings_provider=settings.embedding_provider,
+                expected_provider="paratera",
+            ),
+            dimension=2048,
+            timeout_seconds=settings.embedding_timeout_seconds,
+        )
+    return create_embedding_provider(
+        provider_name=normalized,
+        model_name=settings.embedding_model_name,
+        api_key=settings.embedding_api_key,
+        base_url=settings.embedding_base_url,
+        dimension=settings.embedding_dimension or None,
+        timeout_seconds=settings.embedding_timeout_seconds,
+    )
+
+
 def main() -> None:
     args = parse_args()
     if args.top_k <= 0:
@@ -360,16 +464,24 @@ def main() -> None:
 
     force_deterministic_reranking()
     settings = get_settings()
-    provider = create_embedding_provider_from_settings(args.provider, settings)
+    provider = create_stage29_embedding_provider(args.provider, settings)
     queries = load_queries(Path(args.queries))
 
     init_db()
     with SessionLocal() as db:
-        hybrid_service = HybridSearchService(
-            db=db,
-            embedding_provider=provider,
-            reranking_enabled=True,
-        )
+        if args.retrieval_mode == "bm25_rrf":
+            search_service = RRFHybridSearchService(db=db, embedding_provider=provider)
+        elif args.retrieval_mode == "hybrid_rrf_tail":
+            search_service = HybridRrfTailSearchService(
+                db=db,
+                embedding_provider=provider,
+            )
+        else:
+            search_service = HybridSearchService(
+                db=db,
+                embedding_provider=provider,
+                reranking_enabled=True,
+            )
         brain_service = BrainService(
             db=db,
             embedding_provider=provider,
@@ -379,22 +491,24 @@ def main() -> None:
         rows = [
             evaluate_query(
                 query,
-                hybrid_service=hybrid_service,
+                search_service=search_service,
                 brain_service=brain_service,
                 provider=provider.provider_name,
                 model_name=provider.model_name,
+                retrieval_mode=args.retrieval_mode,
                 top_k=args.top_k,
             )
             for query in queries
         ]
 
-    summary = summarize_results(rows, provider.provider_name, provider.model_name)
+    summary = summarize_results(rows, provider.provider_name, provider.model_name, args.retrieval_mode)
     write_csv(Path(args.out_results), RESULT_FIELDS, rows)
     write_csv(Path(args.out_summary), SUMMARY_FIELDS, [summary])
 
     print(
         "stage29 real quality "
         f"provider={provider.provider_name} model={provider.model_name} "
+        f"retrieval_mode={args.retrieval_mode} "
         f"p@1={summary['precision_at_1']} p@3={summary['precision_at_3']} "
         f"p@5={summary['precision_at_5']} coverage={summary['avg_coverage_ratio']} "
         f"refusal_accuracy={summary['refusal_accuracy']}"

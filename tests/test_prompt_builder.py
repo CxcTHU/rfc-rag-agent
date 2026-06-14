@@ -4,6 +4,7 @@ import pytest
 
 from app.services.generation.prompt_builder import (
     DEFAULT_SYSTEM_PROMPT,
+    STRICT_CITATION_SYSTEM_PROMPT,
     build_rag_prompt,
     format_source,
     truncate_text,
@@ -64,11 +65,30 @@ def test_build_rag_prompt_includes_answer_quality_requirements() -> None:
     user_message = prompt.messages[1].content
 
     assert "Start with the direct answer" in system_message
-    assert "each factual claim" in system_message
     assert "comparison questions" in system_message
     assert "Give the direct answer first" in user_message
-    assert "Cite every factual claim" in user_message
+    assert "Use source markers like [1]" in user_message
     assert "explain the characteristics of both sides" in user_message
+
+
+def test_build_rag_prompt_supports_prompt_profile_ab_test(monkeypatch) -> None:
+    monkeypatch.setenv("RAG_PROMPT_PROFILE", "coverage_first")
+
+    prompt = build_rag_prompt("What is RFC?", [fake_result()])
+
+    assert "list all supported answer points first" in prompt.messages[0].content
+    assert "enumerate the supported answer points first" in prompt.messages[1].content
+    assert "Cite every factual claim" in prompt.messages[1].content
+
+
+def test_build_rag_prompt_supports_explicit_strict_citation_profile(monkeypatch) -> None:
+    monkeypatch.setenv("RAG_PROMPT_PROFILE", "strict_citation")
+
+    prompt = build_rag_prompt("What is RFC?", [fake_result()])
+
+    assert prompt.messages[0].content == STRICT_CITATION_SYSTEM_PROMPT
+    assert "Give the direct answer first" in prompt.messages[1].content
+    assert "Cite every factual claim" in prompt.messages[1].content
 
 
 def test_build_rag_prompt_rejects_empty_question() -> None:

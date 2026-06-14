@@ -1,0 +1,28 @@
+metric,phase34_baseline,phase35_current,delta,status,evidence,leakage_status
+overall_score,83.17,91.52,8.35,pass,data/evaluation/stage30_quality_scores.csv,clean_final
+grade,B,A,1,pass,data/evaluation/stage30_quality_scores.csv,clean_final
+release_decision,review_required,pass,1,pass,data/evaluation/stage30_quality_scores.csv,clean_final
+retrieval_quality,26.83,33.36,6.53,improved,data/evaluation/stage30_quality_summary.csv,clean_final
+rule_based_context_answer_quality,16.60,18.28,1.68,improved,data/evaluation/stage30_quality_summary.csv,clean_final
+safety_refusal,20.00,20.00,0.00,strong,data/evaluation/stage30_quality_summary.csv,clean_final
+source_quality,9.73,9.89,0.16,strong,data/evaluation/stage30_quality_summary.csv,clean_final
+engineering_health,10.00,10.00,0.00,strong,data/evaluation/stage30_quality_summary.csv,clean_final
+stage29_retrieval_mode,hybrid,hybrid_rrf_tail,changed,mechanism_fix,data/evaluation/stage29_real_quality_summary.csv,clean_final
+stage29_precision_at_1,0.667,0.933,0.266,improved,data/evaluation/stage29_real_quality_summary.csv,clean_final
+stage29_precision_at_3,0.800,0.933,0.133,improved,data/evaluation/stage29_real_quality_summary.csv,clean_final
+stage29_precision_at_5,0.933,1.000,0.067,improved,data/evaluation/stage29_real_quality_summary.csv,clean_final
+stage29_avg_coverage_ratio,0.670,0.731,0.061,improved,data/evaluation/stage29_real_quality_summary.csv,clean_final
+stage29_wiki_dam_applications,Top-5 false and coverage 0.250,Top-3 true and coverage 0.750,improved,cleared,data/evaluation/stage29_real_quality_results.csv,clean_final
+stage29_web_rfc_advantages,coverage 0.250,coverage 0.750,improved,cleared,data/evaluation/stage29_real_quality_results.csv,clean_final
+remaining_deductions,"wiki_dam_applications; web_rfc_advantages",none,cleared,pass,data/evaluation/stage35_deduction_root_causes.csv,clean_final
+llm_judge_citation_support,0.613,0.455,-0.158,below_target,data/evaluation/stage35_llm_judge_summary.csv,clean_final
+llm_judge_answer_coverage,0.675,0.605,-0.070,below_target,data/evaluation/stage35_llm_judge_summary.csv,clean_final
+llm_judge_high_risk_count,0,0,0,pass,data/evaluation/stage35_llm_judge_summary.csv,clean_final
+glm_llm_judge_before_validator_answer_coverage,not_available,0.525,not_applicable,below_target,data/evaluation/stage35_glm_llm_judge_summary_before_validator.csv,clean_final
+glm_llm_judge_before_validator_citation_support,not_available,0.750,not_applicable,below_target,data/evaluation/stage35_glm_llm_judge_summary_before_validator.csv,clean_final
+glm_llm_judge_before_validator_safety_leak_check,not_available,0.700,not_applicable,regression,data/evaluation/stage35_glm_llm_judge_summary_before_validator.csv,clean_final
+glm_llm_judge_after_validator_answer_coverage,not_available,0.410,not_applicable,below_target,data/evaluation/stage35_glm_llm_judge_summary.csv,clean_final
+glm_llm_judge_after_validator_citation_support,not_available,0.635,not_applicable,below_target,data/evaluation/stage35_glm_llm_judge_summary.csv,clean_final
+glm_llm_judge_after_validator_safety_leak_check,not_available,1.000,not_applicable,repaired,data/evaluation/stage35_glm_llm_judge_summary.csv,clean_final
+leaked_synonym_rule_present,not_applicable,false,removed,pass,app/services/retrieval/keyword_search.py,clean_final
+leaked_intermediate_score,not_applicable,84.40,retired,invalid_for_acceptance,data/evaluation/stage30_quality_scores.csv,leaked_retired

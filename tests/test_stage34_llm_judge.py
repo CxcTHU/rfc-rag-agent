@@ -1,6 +1,7 @@
 from scripts.judge_stage34_generation_quality import (
     parse_judge_payload,
     sanitize_text,
+    source_summary,
     summarize,
 )
 
@@ -59,3 +60,21 @@ def test_stage34_llm_judge_sanitize_text_removes_sensitive_markers() -> None:
     assert "Bearer" not in sanitized
     assert "reasoning_content" not in sanitized
     assert "raw_response" not in sanitized
+
+
+def test_stage34_llm_judge_source_summary_includes_short_sanitized_evidence() -> None:
+    class FakeSource:
+        source_id = 1
+        title = "A" * 200
+        source_type = "wikipedia"
+        score = 0.9
+        content = "useful evidence " + "x" * 300 + " raw_response Bearer secret"
+
+    summary = source_summary(FakeSource())
+
+    assert summary["source_id"] == 1
+    assert summary["source_type"] == "wikipedia"
+    assert len(str(summary["title"])) <= 120
+    assert len(str(summary["evidence_snippet"])) <= 220
+    assert "raw_response" not in str(summary["evidence_snippet"])
+    assert "Bearer" not in str(summary["evidence_snippet"])
