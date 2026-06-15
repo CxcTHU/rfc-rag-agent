@@ -1,0 +1,17 @@
+run_type,query_id,category,mode,status,refused,refusal_reason_summary,llm_call_count,tool_call_count,iteration_count,time_to_first_token_ms,time_to_final_ms,citation_count,source_count,same_refusal_as_react,same_top_source_as_react,repeated_query_count,near_duplicate_query_count,executed_tool_call_count,skipped_tool_call_count,citation_repair_count,error_summary,decision_candidate
+real_provider,stage37_single_hop_definition,single_hop_definition,react_agent,ok,false,,0,2,2,,33904.012,3,6,true,true,0,0,0,0,0,,baseline
+real_provider,stage37_single_hop_definition,single_hop_definition,tool_calling_agent,ok,false,,3,2,3,,19395.717,3,8,true,true,0,0,1,1,0,,parallel_candidate
+real_provider,stage37_comparison,comparison,react_agent,ok,false,,0,2,2,,39498.470,3,6,true,true,0,0,0,0,0,,baseline
+real_provider,stage37_comparison,comparison,tool_calling_agent,ok,false,,3,3,4,,17341.670,4,8,true,true,0,0,1,2,0,,parallel_candidate
+real_provider,stage37_multi_dimensional,multi_dimensional,react_agent,ok,false,,0,2,2,,19984.564,2,6,true,true,0,0,0,0,0,,baseline
+real_provider,stage37_multi_dimensional,multi_dimensional,tool_calling_agent,ok,false,,3,2,3,,18940.244,2,8,true,true,0,0,1,1,0,,parallel_candidate
+real_provider,stage37_bilingual_terms,bilingual_terminology,react_agent,ok,false,,0,2,2,,34017.572,2,6,true,true,0,0,0,0,0,,baseline
+real_provider,stage37_bilingual_terms,bilingual_terminology,tool_calling_agent,ok,false,,3,2,3,,11980.403,2,5,true,true,1,1,1,1,0,,parallel_candidate
+real_provider,stage37_followup,followup,react_agent,ok,false,,0,2,2,,23075.801,2,6,true,true,0,0,0,0,0,,baseline
+real_provider,stage37_followup,followup,tool_calling_agent,ok,false,,3,2,3,,10082.579,2,5,true,false,0,0,1,1,0,,review_mismatch
+real_provider,stage37_evidence_insufficient,evidence_insufficient,react_agent,ok,false,,0,2,2,,29187.648,3,6,true,true,0,0,0,0,0,,baseline
+real_provider,stage37_evidence_insufficient,evidence_insufficient,tool_calling_agent,ok,false,,3,2,3,,11095.385,5,5,true,true,0,0,1,1,0,,parallel_candidate
+real_provider,stage37_off_topic_refusal,off_topic_refusal,react_agent,ok,true,refused,0,0,1,,1997.476,0,0,true,true,0,0,0,0,0,,baseline
+real_provider,stage37_off_topic_refusal,off_topic_refusal,tool_calling_agent,ok,true,off_topic,0,0,1,,0.034,0,0,true,true,0,0,0,0,0,,parallel_candidate
+real_provider,stage37_multi_hop_retrieval,multi_hop_retrieval,react_agent,ok,false,,0,2,2,,42534.555,3,6,true,true,0,0,0,0,0,,baseline
+real_provider,stage37_multi_hop_retrieval,multi_hop_retrieval,tool_calling_agent,ok,false,,3,2,3,,19277.011,2,5,true,true,0,0,1,1,0,,parallel_candidate

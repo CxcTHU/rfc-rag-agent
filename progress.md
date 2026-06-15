@@ -1,3 +1,18 @@
+# Phase 37 Submission Progress
+
+Phase 37 is complete and user-authorized for submission/merge.
+
+Current verification:
+
+```text
+python -m pytest -q -> 758 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/evaluate_stage37_tool_calling_vs_react.py -> deterministic comparison refreshed
+python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:8000 --timeout-seconds 120 -> rows=9 execute=true failed=0
+```
+
+Current decision: keep tool_calling_agent parallel, with no default switch in Phase 37.
+
 # 阶段 36 进度日志：生成可靠性与多轮体验稳定化
 
 ## 当前状态

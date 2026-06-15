@@ -136,6 +136,18 @@ def smoke_cases() -> list[SmokeCase]:
             required_fields=("answer", "refused", "citations", "sources", "mode"),
         ),
         SmokeCase(
+            case_id="agent_query_tool_calling",
+            method="POST",
+            endpoint="/agent/query",
+            payload={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 5,
+                "max_tool_calls": 3,
+                "mode": "tool_calling_agent",
+            },
+            required_fields=("answer", "refused", "citations", "sources", "mode"),
+        ),
+        SmokeCase(
             case_id="agent_query_multiturn_transform",
             method="POST",
             endpoint="/agent/query",
@@ -164,6 +176,19 @@ def smoke_cases() -> list[SmokeCase]:
                 "top_k": 5,
                 "max_tool_calls": 3,
                 "mode": "react_agent",
+            },
+            required_fields=("metadata", "done"),
+            stream=True,
+        ),
+        SmokeCase(
+            case_id="agent_query_tool_calling_stream",
+            method="POST",
+            endpoint="/agent/query/stream",
+            payload={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 5,
+                "max_tool_calls": 3,
+                "mode": "tool_calling_agent",
             },
             required_fields=("metadata", "done"),
             stream=True,

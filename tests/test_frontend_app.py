@@ -141,7 +141,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "[data-agent-mode-status]" in response.text
     assert "[data-agent-mode]" not in response.text
     assert 'body.mode = "agentic"' not in response.text
-    assert 'mode: "react_agent"' in response.text
+    assert 'mode: "tool_calling_agent"' in response.text
     assert 'updateAgentModeStatus("auto")' in response.text
     assert "reindexSource" in response.text
     assert "bindEnterToSubmit" in response.text

@@ -1,5 +1,30 @@
 # 架构说明
 
+## 阶段 37 架构增量：Tool Calling Loop 并行迁移
+
+阶段 37 新增并行 `tool_calling_agent`，把 ReAct 自定义 JSON action loop 的一部分能力迁移到 OpenAI-compatible `tools/tool_calls` 协议上。关键点是：tool-calling 只是模型表达工具请求的协议，真正的 Agent 能力来自外层 loop。
+
+```text
+/agent/query mode="tool_calling_agent"
+-> ToolCallingAgentService
+-> chat_model.generate_with_tools(messages, tools)
+-> tool_calls: 执行只读 search_knowledge / hybrid_search_knowledge
+-> role="tool" 脱敏回灌 messages
+-> 继续 loop，直到 content / 拒答 / max_iterations
+```
+
+新增 provider 协议结构位于 `app/services/generation/chat_model.py`：`ChatToolFunction`、`ChatToolDefinition`、`ChatToolCall`、`ToolCallingChatModelResult` 与 `generate_with_tools()`。旧 `generate()` / `stream_generate()` 行为保持兼容，现有 `/chat`、默认 Agent 与 `react_agent` 不被替换。
+
+`app/services/agent/tool_calling_service.py` 是新并行 service。它只暴露只读检索工具，进入 loop 前执行责任边界与主题门，loop 内执行重复 query 防护、工具错误收敛、tool result 脱敏截断、引用校验和 latency trace 记录。tool result 回灌只包含 source title、source_type、chunk_id、chunk_index、score 和短 snippet，不回灌完整 chunk 全文、raw provider response、`reasoning_content` 或 hidden thought。
+
+该架构与阶段 34 的 tiered provider 设计存在取舍：`react_agent` 可以使用 Flash planner + V4-Pro answer，而 `tool_calling_agent` 的 `LLM(messages, tools)` 同时承担工具决策和最终回答，因此第一版只能选择一个 tools-capable chat provider。选择 Flash 可能降低最终回答质量；选择 V4-Pro 可能让每次工具迭代都变慢，削弱 latency 收益。
+
+引用边界也更严格：`tool_calling_agent` 要求最终 content 带有来自 tool result / sources 的有效 `[N]` 引用；如果真实模型给出有价值内容但漏写 citation marker，会安全拒答。阶段 37 评估脚本用 `refusal_reason_summary=missing_tool_backed_citations` 跟踪这种风险。
+
+API 层在 `app/api/agent.py` 中为 `/agent/query` 和 `/agent/query/stream` 新增 `mode="tool_calling_agent"` 分支。SSE 事件通道泛化为安全 runtime event，可转发 `agent_step`、`tool_call_start` 和 `tool_call_result`，不暴露模型隐藏推理。
+
+阶段 37 不引入 LangGraph，不做 checkpoint、human-in-the-loop 或复杂状态机编排；这些留到后续阶段根据评估结果再决定。
+
 ## 阶段 36 架构增量：生成可靠性与多轮体验稳定化
 
 阶段 36 不改变默认 RAG 生产主链路，不替换 chat / embedding / rerank provider，不新增外部数据源，也不把 `citation_validator` 或其他 deterministic 后处理接回生产 Brain。增量集中在输出解释、生产 smoke、离线 Judge 实验和意图路由模块化。
@@ -3659,3 +3684,9 @@ Stage 30 deductions / Stage 34 Judge evidence
 `HybridRrfTailSearchService` lives in `app/services/retrieval/hybrid_rrf_tail.py`. It keeps the existing hybrid top 3 as the trusted head and uses BM25+vector Reciprocal Rank Fusion only to fill tail recall slots. This keeps retrieval strategy separate from scoring and policy.
 
 No Stage 30 scoring weights, grade thresholds, release rules, default providers, provider topology, or external data sources were changed. The clean final Stage 30 result under the default GLM embedding provider is `91.52 / A / pass`. Real Judge remains a separate generation-quality review risk: production GLM before validator was `answer_coverage=0.525`, `citation_support=0.750`, `safety_leak_check=0.700`; the final documented conclusion is Judge gate FAIL with no production validator regression retained.
+
+## Stage 37 tool runtime refinement
+
+`ToolCallingAgentService` now behaves as a lightweight tool runtime, not only a provider wrapper. It enforces one executed read-only RAG search per model turn, returns safe skipped `role="tool"` messages for skipped `tool_call_id`s, blocks near-duplicate search queries, converges from existing sanitized sources when the model keeps asking for tools, and performs one bounded citation repair turn when a source-backed draft misses `[N]` markers.
+
+This keeps Phase 37 inside the existing provider topology: no LangGraph, no checkpointing framework, no write tools, no default provider replacement, and no default routing switch. The tiered-provider tradeoff remains: `react_agent` can use Flash planner + V4-Pro answer, while the first `tool_calling_agent` path uses one tools-capable model for planning and final answering unless a later phase explicitly designs a tiered tool-calling variant.

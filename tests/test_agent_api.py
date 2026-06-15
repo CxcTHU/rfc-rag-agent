@@ -520,7 +520,7 @@ def test_agent_api_agentic_mode_exposes_observability_fields(tmp_path) -> None:
     assert payload["refusal_category"] is None
 
 
-def test_agent_api_auto_routes_complex_query_to_agentic(tmp_path) -> None:
+def test_agent_api_auto_routes_complex_query_to_tool_calling(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query",
@@ -535,9 +535,7 @@ def test_agent_api_auto_routes_complex_query_to_agentic(tmp_path) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["mode"] == "agentic"
-    assert payload["workflow_steps"]
-    assert payload["tool_calls"][0]["tool_name"] == payload["workflow_steps"][0]["name"]
+    assert payload["mode"] == "tool_calling_agent"
 
 
 def test_agent_api_explicit_default_overrides_auto_complex_route(tmp_path) -> None:
@@ -601,6 +599,39 @@ def test_agent_api_explicit_react_agent_mode_uses_react_service(tmp_path) -> Non
     assert payload["workflow_steps"]
     assert payload["iteration_count"] >= 2
     assert "react_agent" in payload["reasoning_summary"]
+
+
+def test_agent_api_explicit_tool_calling_agent_mode_uses_tool_loop(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 2,
+                "max_tool_calls": 3,
+                "mode": "tool_calling_agent",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "tool_calling_agent"
+    assert payload["refused"] is False
+    assert payload["citations"] == [1]
+    assert [call["tool_name"] for call in payload["tool_calls"]] == [
+        "hybrid_search_knowledge",
+    ]
+    assert [step["name"] for step in payload["workflow_steps"]] == [
+        "hybrid_search_knowledge",
+        "final_answer",
+    ]
+    assert payload["iteration_count"] == 2
+    assert payload["latency_trace"]["llm_call_count"] == 2
+    assert payload["latency_trace"]["repeated_query_count"] == 0
+    assert "tool_calling_agent" in payload["reasoning_summary"]
+    serialized = response.text.casefold()
+    assert "raw_response" not in serialized
+    assert "reasoning_content" not in serialized
 
 
 def test_agent_api_agentic_refusal_category_marks_responsibility_gate(tmp_path) -> None:

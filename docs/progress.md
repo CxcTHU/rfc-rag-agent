@@ -1,5 +1,23 @@
 # 项目进度
 
+## Latest Status: 2026-06-15 Phase 37 Tool Calling Loop Migration Complete
+
+Current branch: `codex/phase-37-tool-calling-loop-migration`.
+
+Phase 37 adds a parallel `mode="tool_calling_agent"` with OpenAI-compatible `tools/tool_calls` and a lightweight loop. It keeps `react_agent` and default routing unchanged, does not introduce LangGraph, and does not change Stage 30 rules, providers, provider topology, or data sources.
+
+Verification:
+
+```text
+python -m pytest -q -> 758 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/evaluate_stage37_tool_calling_vs_react.py -> react_agent errors=0; tool_calling_agent errors=0; same_refusal=8/8; same_top_source=6/8
+python scripts/evaluate_stage37_tool_calling_vs_react.py --execute --limit 8 -> react_agent errors=0, same_refusal=8/8, same_top_source=8/8; tool_calling_agent errors=0, same_refusal=8/8, same_top_source=7/8
+python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:8000 --timeout-seconds 120 -> rows=9 execute=true failed=0
+```
+
+Decision: keep `tool_calling_agent` as a parallel review candidate. It is faster in the 8-query real-provider run, but one top-source mismatch plus the tiered-provider tradeoff means Phase 37 should not switch defaults automatically.
+
 ## 最新状态：2026-06-15（阶段 36 生成可靠性与多轮体验稳定化，已获用户授权提交合并）
 
 当前分支：`codex/phase-36-generation-reliability-and-conversation-stability`。

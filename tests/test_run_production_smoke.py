@@ -10,6 +10,7 @@ from scripts.run_production_smoke import (
     parse_sse_events,
     required_fields_present,
     run_smoke,
+    smoke_cases,
     write_csv,
 )
 
@@ -22,11 +23,24 @@ def test_stage36_production_smoke_dry_run_rows_are_safe() -> None:
         urlopen_func=lambda *args, **kwargs: None,
     )
 
-    assert len(rows) == 7
+    assert len(rows) == 9
     assert {row["status"] for row in rows} == {"dry_run"}
     assert all(row["execute_requested"] == "false" for row in rows)
     assert all(set(row) == set(SMOKE_FIELDS) for row in rows)
     assert all("Bearer" not in row["error_summary"] for row in rows)
+    assert "agent_query_tool_calling" in {row["case_id"] for row in rows}
+    assert "agent_query_tool_calling_stream" in {row["case_id"] for row in rows}
+
+
+def test_stage37_production_smoke_covers_tool_calling_agent() -> None:
+    cases = {case.case_id: case for case in smoke_cases()}
+
+    assert cases["agent_query_tool_calling"].payload["mode"] == "tool_calling_agent"
+    assert (
+        cases["agent_query_tool_calling_stream"].payload["mode"]
+        == "tool_calling_agent"
+    )
+    assert cases["agent_query_tool_calling_stream"].stream is True
 
 
 def test_stage36_production_smoke_evaluates_agent_payload_without_body_leak() -> None:

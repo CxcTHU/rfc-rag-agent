@@ -1043,7 +1043,7 @@ async function submitAgent() {
       question,
       top_k: topK,
       max_tool_calls: maxToolCalls,
-      mode: "react_agent",
+      mode: "tool_calling_agent",
     };
     if (!state.currentConversationId) {
       const conversation = await createAgentConversation();

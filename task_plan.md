@@ -1,3 +1,18 @@
+# Phase 37 Submission Update
+
+Status: Phase 37 development, tests, docs, evaluation artifacts, and smoke verification are complete. User has now authorized staging, commit, tag, push, and GitHub merge.
+
+Final verification:
+
+```text
+python -m pytest -q -> 758 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/evaluate_stage37_tool_calling_vs_react.py -> deterministic comparison refreshed
+python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:8000 --timeout-seconds 120 -> rows=9 execute=true failed=0
+```
+
+Real-provider comparison: tool_calling_agent errors=0, same_refusal=8/8, same_top_source=7/8, avg final latency 13.5s; react_agent errors=0, same_refusal=8/8, same_top_source=8/8, avg final latency 28.0s. Keep tool_calling_agent as a parallel review candidate; do not switch defaults automatically in Phase 37.
+
 # 阶段 36 任务计划：生成可靠性与多轮体验稳定化
 
 ## 目标

@@ -114,7 +114,7 @@ def test_agent_stream_api_persists_completed_conversation_messages(tmp_path) -> 
     assert messages[1]["metadata"]["citations"] == [1]
 
 
-def test_agent_stream_api_supports_agentic_mode(tmp_path) -> None:
+def test_agent_stream_api_auto_routes_complex_to_tool_calling(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query/stream",
@@ -130,9 +130,38 @@ def test_agent_stream_api_supports_agentic_mode(tmp_path) -> None:
     assert response.status_code == 200
     events = parse_sse_events(response.text)
     metadata = next(payload for name, payload in events if name == "metadata")
-    assert metadata["mode"] == "agentic"
-    assert metadata["workflow_steps"]
+    assert metadata["mode"] == "tool_calling_agent"
     assert events[-1][0] == "done"
+
+
+def test_agent_stream_api_supports_tool_calling_agent_mode(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query/stream",
+            json={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 2,
+                "max_tool_calls": 3,
+                "mode": "tool_calling_agent",
+            },
+        )
+
+    assert response.status_code == 200
+    events = parse_sse_events(response.text)
+    event_names = [name for name, _payload in events]
+    assert "agent_step" in event_names
+    assert "tool_call_start" in event_names
+    assert "tool_call_result" in event_names
+    assert event_names[-2:] == ["metadata", "done"]
+    metadata = next(payload for name, payload in events if name == "metadata")
+    assert metadata["mode"] == "tool_calling_agent"
+    assert metadata["citations"] == [1]
+    assert metadata["tool_calls"][0]["tool_name"] == "hybrid_search_knowledge"
+    assert metadata["latency_trace"]["llm_call_count"] == 2
+    serialized = response.text.casefold()
+    assert "raw_response" not in serialized
+    assert "reasoning_content" not in serialized
+    assert "bearer" not in serialized
 
 
 def test_agent_stream_api_returns_404_for_missing_conversation_id(tmp_path) -> None:
