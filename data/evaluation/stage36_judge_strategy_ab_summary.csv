@@ -1,0 +1,4 @@
+strategy,status,total_rows,completed_rows,avg_answer_coverage,avg_citation_support,avg_safety_leak_check,high_risk_count,medium_risk_count,judge_gate,decision
+baseline,completed,20,20,0.655,0.640,1.000,0,12,review_required,do_not_package_as_pass; document_root_cause
+outline_first,completed,20,20,0.703,0.685,1.000,0,8,review_required,do_not_package_as_pass; document_root_cause
+answer_provider_ab,completed,20,20,0.772,0.820,0.950,0,14,review_required,do_not_package_as_pass; document_root_cause

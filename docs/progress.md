@@ -1,5 +1,51 @@
 # 项目进度
 
+## 最新状态：2026-06-15（阶段 36 生成可靠性与多轮体验稳定化，已获用户授权提交合并）
+
+当前分支：`codex/phase-36-generation-reliability-and-conversation-stability`。
+
+阶段 36 从 `main -> dc751fb` 出发，已确认 `phase-35-complete -> 7877308` 是 `main` 的祖先；多轮意图路由补充 `0af4a87` 已作为已合并基线纳入。本阶段未移动任何已有阶段 tag。
+
+阶段 36 已完成：
+
+- 新增 `docs/stage36_generation_reliability_and_conversation_stability.md` 与 `tests/test_stage36_design.py`，固定拒答可解释性、production smoke、Judge 离线攻坚、多轮路由回归和安全边界。
+- 新增 `app/services/agent/refusal_explainer.py`，在不修改 `/agent/query` schema 的前提下，把 `off_topic` 改写建议和 `evidence_insufficient` 脱敏检索摘要追加到 `reasoning_summary`。
+- 新增 `scripts/run_production_smoke.py` 与 `tests/test_run_production_smoke.py`，默认 dry-run，显式 `--execute` 才访问真实服务。
+- 新增 `app/services/generation/outline_first_strategy.py`、`scripts/judge_stage36_strategy_ab.py`、`tests/test_stage36_judge_strategy_ab.py` 和 `docs/stage36_judge_strategy_decision.md`，完成 `baseline` / `outline_first` / `answer_provider_ab` 离线 A/B 基础设施。
+- 新增 `app/services/agent/intent_router.py` 与 `tests/test_intent_router.py`，覆盖上一轮翻译、追问、问来源、问模型、问为什么拒答、闲聊、off-topic、正常领域问答 8 类意图。
+- 提交前微调：前端聊天框改为 Enter 发送、Shift+Enter 换行；模型信息、能力说明、拒答原因等 meta/非 RAG 路由回复默认中文。
+
+阶段 36 当前验证：
+
+```text
+tests/test_stage36_design.py -> 5 passed
+tests/test_refusal_explainer.py + agent focused tests -> 42 passed
+tests/test_run_production_smoke.py -> 6 passed
+python scripts/run_production_smoke.py --execute -> rows=7 execute=true failed=0
+tests/test_stage36_judge_strategy_ab.py -> 6 passed
+python scripts/judge_stage36_strategy_ab.py -> rows=60 queries=20 execute=false
+python scripts/judge_stage36_strategy_ab.py --execute --limit 20 --timeout-seconds 180 -> completed_rows=60; all strategies review_required
+tests/test_intent_router.py tests/test_agent_api.py -> 30 passed
+python -m pytest -q -> 724 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+browser smoke desktop -> no horizontal overflow, console errors=0
+browser smoke 390x844 -> no horizontal overflow, console errors=0
+```
+
+Judge 攻坚诚实结论：
+
+```text
+--execute --limit 20 -> 60 skipped, error=Chat model request timed out
+--execute --limit 20 --timeout-seconds 180 -> outer command timed out after 40 minutes
+baseline: cov=0.655 / cit=0.640 / safety=1.000 -> review_required
+outline_first: cov=0.703 / cit=0.685 / safety=1.000 -> review_required
+answer_provider_ab: cov=0.772 / cit=0.820 / safety=0.950 -> review_required
+```
+
+因此阶段 36 不声明 Judge gate 通过，不接入 `outline_first` 或 `answer_provider_ab` 到生产 Brain，`citation_validator` 仍不接生产链路。
+
+当前提交边界：用户已明确授权执行 `git add`、commit、`phase-36-complete` tag、push 与 GitHub merge。
+
 ## 最新状态：2026-06-14（阶段 35 检索质量校准完成，等待用户人工核验）
 
 当前阶段：阶段 35。在 `codex/phase-35-retrieval-quality-calibration` 分支已完成检索质量校准、扣分根因归因、prompt 引用约束强化、真实 Judge 10 条复跑和 Stage 30 评分重跑。阶段 35 从 `main -> d9053a6 Merge phase 34 rag diagnosis embedding judge` 出发；已确认 `phase-34-complete -> 8028acb Complete phase 34 rag diagnosis embedding judge` 是 `main` 的祖先，未移动任何已有阶段 tag。

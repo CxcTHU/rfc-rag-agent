@@ -20,7 +20,7 @@ def test_frontend_index_is_served() -> None:
     assert "混合检索" in response.text
     assert "流式回答" in response.text
     assert "结构化分块" in response.text
-    assert "/static/app.js" in response.text
+    assert "/static/app.js?v=phase36-enter-send" in response.text
     assert 'class="hero-layout"' in response.text
     assert 'class="demo-panel"' in response.text
     assert 'id="agent-panel"' in response.text
@@ -144,6 +144,13 @@ def test_frontend_static_assets_are_served() -> None:
     assert 'mode: "react_agent"' in response.text
     assert 'updateAgentModeStatus("auto")' in response.text
     assert "reindexSource" in response.text
+    assert "bindEnterToSubmit" in response.text
+    assert "textarea[data-agent-question], textarea[data-chat-question]" in response.text
+    assert 'textarea.closest("form")' in response.text
+    assert 'event.key !== "Enter"' in response.text
+    assert "event.shiftKey" in response.text
+    assert "event.isComposing" in response.text
+    assert "form.requestSubmit()" in response.text
 
     styles = client.get("/static/styles.css")
     assert styles.status_code == 200

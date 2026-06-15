@@ -23,6 +23,8 @@ from app.schemas.agent import (
     AgentWorkflowStepItem,
 )
 from app.services.agent.chitchat import ChitchatResult, detect_chitchat
+from app.services.agent import intent_router
+from app.services.agent.refusal_explainer import build_refusal_explanation
 from app.services.agent.service import AgentQueryResult, AgentService
 from app.services.agent.react_service import ReActAgentService
 from app.services.agent.react_service import ReActRuntimeEvent
@@ -524,7 +526,7 @@ def build_agent_meta_response(
     planner_chat_provider: ChatModelProvider | None,
     conversation_messages: Sequence[Message],
 ) -> AgentQueryResponse | None:
-    intent = classify_meta_intent(question)
+    intent = intent_router.classify_meta_intent(question)
     if intent is None:
         return None
 
@@ -533,24 +535,22 @@ def build_agent_meta_response(
         planner_text = (
             f"{planner_chat_provider.provider_name} / {planner_chat_provider.model_name}"
             if planner_chat_provider is not None
-            else "not configured; the ReAct planner uses the deterministic fallback"
+            else "未单独配置；ReAct planner 使用确定性兜底逻辑"
         )
         answer = (
-            "Runtime model configuration:\n"
-            f"- Chat: {chat_model_provider.provider_name} / {chat_model_provider.model_name}\n"
-            f"- Planner: {planner_text}\n"
-            f"- Embedding: {embedding_provider.provider_name} / {embedding_provider.model_name}\n"
-            "I do not expose API keys, bearer tokens, raw provider responses, hidden thoughts, "
-            "or restricted full text in chat answers."
+            "当前运行模型配置：\n"
+            f"- 对话模型：{chat_model_provider.provider_name} / {chat_model_provider.model_name}\n"
+            f"- 规划模型：{planner_text}\n"
+            f"- 向量模型：{embedding_provider.provider_name} / {embedding_provider.model_name}\n"
+            "我不会在聊天回答中暴露 API key、授权令牌、供应商原始响应、隐藏推理或受限全文。"
         )
         summary = "agent_meta: answered model/runtime question without retrieval"
     elif intent == "capability_help":
         answer = (
-            "I can answer project-domain RAG questions with citations, inspect retrieved "
-            "sources and chunks, explain agent/runtime behavior, and transform my previous "
-            "answer when you ask for translation, summary, bullets, or a table. If I refuse, "
-            "the response includes a category and reason, such as off_topic, "
-            "responsibility_gate_triggered, evidence_insufficient, or service_error."
+            "我可以围绕本项目资料库回答堆石混凝土、混凝土材料、水利工程和 RAG 链路相关问题，"
+            "并尽量给出引用来源。也可以查看检索到的来源与 chunk，解释 Agent 的运行模式，"
+            "或把上一轮回答改写成中文、摘要、要点或表格。若问题不适合回答，我会给出拒答分类"
+            "和原因，例如 off_topic、responsibility_gate_triggered、evidence_insufficient 或 service_error。"
         )
         summary = "capability_help: answered capability question without retrieval"
     else:
@@ -599,15 +599,15 @@ def previous_refusal_explanation(conversation_messages: Sequence[Message]) -> st
         if metadata.get("refused") is not True:
             continue
         category = metadata.get("refusal_category") or "unknown"
-        reason = metadata.get("refusal_reason") or "no detailed reason was recorded"
-        return f"The previous answer was refused. Category: {category}. Reason: {reason}"
+        reason = metadata.get("refusal_reason") or "未记录详细原因"
+        return f"上一轮回答被拒答。拒答分类：{category}。原始原因：{reason}"
 
     return (
-        "I do not see a recorded refusal in this conversation. Common refusal reasons are: "
-        "off_topic when the question has no project-domain anchor; "
-        "responsibility_gate_triggered when the question asks for prohibited responsibility "
-        "assignment; evidence_insufficient when retrieved evidence is too weak; and "
-        "service_error when a model or retrieval tool fails."
+        "我没有在当前会话中找到已记录的拒答。常见拒答原因包括："
+        "off_topic 表示问题缺少项目领域锚点；"
+        "responsibility_gate_triggered 表示问题要求系统做不允许的责任认定；"
+        "evidence_insufficient 表示检索证据太弱，不能可靠支撑回答；"
+        "service_error 表示模型或检索工具调用失败。"
     )
 
 
@@ -619,7 +619,7 @@ def build_followup_transform_response(
     chat_model_provider: ChatModelProvider,
 ) -> AgentQueryResponse | None:
     normalized_question = question.strip()
-    if not is_followup_transform_request(normalized_question):
+    if not intent_router.is_followup_transform_request(normalized_question):
         return None
 
     previous_answer, previous_metadata = previous_assistant_answer_context(
@@ -682,7 +682,7 @@ def previous_assistant_answer_context(
         return message.content.strip(), metadata
 
     for item in reversed(history):
-        content = strip_assistant_history_prefix(item)
+        content = intent_router.strip_assistant_history_prefix(item)
         if content:
             return content, {}
     return None, {}
@@ -881,7 +881,7 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
         )
         for step in result.workflow_steps
     ]
-    return AgentQueryResponse(
+    response = AgentQueryResponse(
         question=result.question,
         answer=result.answer,
         tool_calls=tool_calls,
@@ -912,10 +912,15 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
         refusal_category=refusal_category_from_agentic_result(result),
         latency_trace={},
     )
+    return with_refusal_explanation(response)
 
 
 def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
-    return AgentQueryResponse(
+    refusal_category = refusal_category_from_refusal(
+        refused=result.refused,
+        refusal_reason=result.refusal_reason,
+    )
+    response = AgentQueryResponse(
         question=result.question,
         answer=result.answer,
         tool_calls=[
@@ -977,11 +982,29 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
             for step in result.workflow_steps
         ],
         iteration_count=result.iteration_count,
-        refusal_category=refusal_category_from_refusal(
-            refused=result.refused,
-            refusal_reason=result.refusal_reason,
-        ),
+        refusal_category=refusal_category,
         latency_trace=result.latency_trace,
+    )
+    return with_refusal_explanation(response)
+
+
+def with_refusal_explanation(response: AgentQueryResponse) -> AgentQueryResponse:
+    if not response.refused:
+        return response
+    explanation = build_refusal_explanation(
+        category=response.refusal_category,
+        refusal_reason=response.refusal_reason,
+        sources=response.sources,
+    )
+    if not explanation:
+        return response
+    if explanation in response.reasoning_summary:
+        return response
+    separator = " | " if response.reasoning_summary else ""
+    return response.model_copy(
+        update={
+            "reasoning_summary": f"{response.reasoning_summary}{separator}{explanation}",
+        }
     )
 
 

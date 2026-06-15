@@ -2,6 +2,31 @@
 
 本文件用于记录后续采集的堆石混凝土相关资料来源。
 
+## 阶段 36 数据说明
+
+阶段 36 不新增外部资料来源、不爬新网页、不下载新 PDF、不写入新的受限全文。新增内容均为现有代码、现有问题集、现有检索结果和真实/离线评测流程派生的工程与评测产物。
+
+阶段 36 新增派生产物：
+
+- `docs/stage36_generation_reliability_and_conversation_stability.md`
+- `app/services/agent/refusal_explainer.py`
+- `scripts/run_production_smoke.py`
+- `data/evaluation/stage36_production_smoke_results.csv`
+- `app/services/generation/outline_first_strategy.py`
+- `scripts/judge_stage36_strategy_ab.py`
+- `data/evaluation/stage36_judge_strategy_ab_results.csv`
+- `data/evaluation/stage36_judge_strategy_ab_summary.csv`
+- `docs/stage36_judge_strategy_decision.md`
+- `app/services/agent/intent_router.py`
+- `docs/phase_reviews/phase-36.md`
+
+数据安全边界：
+
+- 任何阶段 36 CSV、文档、测试和 Obsidian 草稿不得保存 API key、Bearer token、Authorization header、raw provider response、`reasoning_content`、hidden thought、完整 chunk 全文或受限全文。
+- 拒答解释中的检索摘要只允许使用 source title、source_type 和短内容片段，单条摘要不超过 200 字符。
+- production smoke CSV 不保存 response body，只保存状态、耗时、关键字段、refused、citation_count、validator_marker、sensitive_field_detected 和 error_summary。
+- Judge A/B 当前真实执行受 provider timeout 阻断，completed rows 为 0；不得把 dry-run 或 skipped 结果冒充真实 Judge 通过。
+
 ## 登记模板
 
 ```text

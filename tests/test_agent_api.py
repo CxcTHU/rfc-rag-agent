@@ -245,9 +245,29 @@ def test_agent_api_answers_model_meta_without_retrieval(tmp_path) -> None:
     assert payload["tool_calls"] == []
     assert payload["sources"] == []
     assert payload["mode"] == "meta"
+    assert "当前运行模型配置" in payload["answer"]
+    assert "对话模型" in payload["answer"]
+    assert "向量模型" in payload["answer"]
     assert "deterministic / rule-based-chat-v1" in payload["answer"]
     assert "deterministic / hash-token-v1" in payload["answer"]
+    assert "Runtime model configuration" not in payload["answer"]
     assert "agent_meta" in payload["reasoning_summary"]
+
+
+def test_agent_api_answers_capability_help_in_chinese_by_default(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post("/agent/query", json={"question": "What can you do?"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refused"] is False
+    assert payload["tool_calls"] == []
+    assert payload["sources"] == []
+    assert payload["mode"] == "meta"
+    assert "我可以围绕本项目资料库回答" in payload["answer"]
+    assert "拒答分类" in payload["answer"]
+    assert "I can answer" not in payload["answer"]
+    assert "capability_help" in payload["reasoning_summary"]
 
 
 def test_agent_api_explains_previous_refusal_reason(tmp_path) -> None:
@@ -264,8 +284,10 @@ def test_agent_api_explains_previous_refusal_reason(tmp_path) -> None:
     assert payload["refused"] is False
     assert payload["tool_calls"] == []
     assert payload["mode"] == "meta"
-    assert "Category: off_topic" in payload["answer"]
-    assert "Question appears off-topic." in payload["answer"]
+    assert "上一轮回答被拒答" in payload["answer"]
+    assert "拒答分类：off_topic" in payload["answer"]
+    assert "原始原因：Question appears off-topic." in payload["answer"]
+    assert "The previous answer was refused" not in payload["answer"]
     assert "refusal_explanation" in payload["reasoning_summary"]
 
 
@@ -620,6 +642,49 @@ def test_refusal_category_marks_tool_service_error() -> None:
         )
         == "evidence_insufficient"
     )
+
+
+def test_agent_api_off_topic_refusal_includes_safe_rewrite_suggestion(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={"question": "How should I cook pasta for dinner?", "mode": "default"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refused"] is True
+    assert payload["refusal_category"] == "off_topic"
+    assert "refusal_explanation" in payload["reasoning_summary"]
+    assert "可以改写为" in payload["reasoning_summary"]
+    assert "CORE_DOMAIN_TERMS" not in payload["reasoning_summary"]
+    assert "prompt" not in payload["reasoning_summary"].casefold()
+
+
+def test_agent_api_evidence_insufficient_includes_sanitized_retrieval_summary(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": (
+                    "filling capacity alpha beta gamma delta epsilon zeta eta theta iota kappa"
+                ),
+                "mode": "default",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refused"] is True
+    assert payload["refusal_category"] == "evidence_insufficient"
+    assert "refusal_explanation" in payload["reasoning_summary"]
+    assert "Agent API filling source" in payload["reasoning_summary"]
+    assert "Filling capacity depends on self-compacting concrete flowability" in payload[
+        "reasoning_summary"
+    ]
+    assert len(payload["reasoning_summary"]) < 1000
+    assert "API key" not in payload["reasoning_summary"]
+    assert "Bearer token" not in payload["reasoning_summary"]
 
 
 def test_agent_api_search_query_returns_hybrid_results(tmp_path) -> None:
