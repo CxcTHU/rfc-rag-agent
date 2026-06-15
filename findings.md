@@ -1,3 +1,14 @@
+# Phase 37 Submission Findings
+
+Phase 37 real-provider comparison is now usable and no longer blocked by provider rate limits:
+
+```text
+react_agent: errors=0, refused=1/8, avg_time_to_final=28.0s, same_refusal=8/8, same_top_source=8/8
+tool_calling_agent: errors=0, refused=1/8, avg_time_to_final=13.5s, same_refusal=8/8, same_top_source=7/8
+```
+
+Decision finding: tool calling is a viable parallel candidate and follows mainstream agent-runtime practice after the execution budget, skip-as-tool-result, near-duplicate guard, evidence convergence, and citation repair refinements. It should not become the default automatically because source ordering still differs in 1/8 real-provider rows and the tiered-provider tradeoff remains unresolved.
+
 # 阶段 36 发现与关键决策
 
 ## 当前 Git 基线

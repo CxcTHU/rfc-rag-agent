@@ -1,15 +1,18 @@
 import json
+import os
 import re
+import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterator, Literal, Protocol
 
 
-ChatRole = Literal["system", "user", "assistant"]
-VALID_CHAT_ROLES = {"system", "user", "assistant"}
+ChatRole = Literal["system", "user", "assistant", "tool"]
+VALID_CHAT_ROLES = {"system", "user", "assistant", "tool"}
 SOURCE_MARKER_RE = re.compile(r"\[(\d+)\]")
 
 # Transient HTTP statuses worth retrying. 4xx client errors (bad key, bad
@@ -17,16 +20,58 @@ SOURCE_MARKER_RE = re.compile(r"\[(\d+)\]")
 RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
+class TransientHTTPStatusError(RuntimeError):
+    def __init__(self, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
 @dataclass(frozen=True)
 class ChatMessage:
     role: ChatRole
     content: str
+    tool_call_id: str | None = None
+    assistant_tool_calls: "tuple[ChatToolCall, ...] | None" = None
 
     def __post_init__(self) -> None:
         if self.role not in VALID_CHAT_ROLES:
             raise ValueError(f"Unsupported chat role: {self.role}")
-        if not self.content.strip():
+        if not self.content.strip() and not self.assistant_tool_calls:
             raise ValueError("chat message content must not be empty")
+        if self.role == "tool" and not (self.tool_call_id or "").strip():
+            raise ValueError("tool messages must include tool_call_id")
+
+
+@dataclass(frozen=True)
+class ChatToolFunction:
+    name: str
+    description: str
+    parameters: dict[str, Any]
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("tool function name must not be empty")
+        if not self.description.strip():
+            raise ValueError("tool function description must not be empty")
+
+
+@dataclass(frozen=True)
+class ChatToolDefinition:
+    function: ChatToolFunction
+    type: Literal["function"] = "function"
+
+
+@dataclass(frozen=True)
+class ChatToolCall:
+    id: str
+    name: str
+    arguments: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("tool call id must not be empty")
+        if not self.name.strip():
+            raise ValueError("tool call name must not be empty")
 
 
 @dataclass(frozen=True)
@@ -35,6 +80,15 @@ class ChatModelResult:
     provider: str
     model_name: str
     raw_response: dict[str, Any] | None = None
+    tool_calls: list[ChatToolCall] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ToolCallingChatModelResult:
+    content: str
+    tool_calls: list[ChatToolCall]
+    provider: str
+    model_name: str
 
 
 class ChatModelProvider(Protocol):
@@ -47,6 +101,13 @@ class ChatModelProvider(Protocol):
     def stream_generate(self, messages: Sequence[ChatMessage]) -> Iterator[str]:
         """Yield answer text fragments from ordered chat messages."""
 
+    def generate_with_tools(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ChatToolDefinition],
+    ) -> ToolCallingChatModelResult:
+        """Generate content or structured tool calls from ordered chat messages."""
+
 
 @dataclass(frozen=True)
 class DeterministicChatModelProvider:
@@ -54,6 +115,7 @@ class DeterministicChatModelProvider:
 
     model_name: str = "rule-based-chat-v1"
     provider_name: str = "deterministic"
+    tool_call_rounds: tuple[tuple[ChatToolCall, ...], ...] = ()
 
     def generate(self, messages: Sequence[ChatMessage]) -> ChatModelResult:
         if not messages:
@@ -82,6 +144,63 @@ class DeterministicChatModelProvider:
         for chunk in split_streaming_text(answer):
             yield chunk
             time.sleep(0.02)
+
+    def generate_with_tools(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ChatToolDefinition],
+    ) -> ToolCallingChatModelResult:
+        if not messages:
+            raise ValueError("messages must not be empty")
+        if not tools:
+            result = self.generate(messages)
+            return ToolCallingChatModelResult(
+                content=result.answer,
+                tool_calls=[],
+                provider=result.provider,
+                model_name=result.model_name,
+            )
+
+        tool_result_count = sum(1 for message in messages if message.role == "tool")
+        if tool_result_count < len(self.tool_call_rounds):
+            return ToolCallingChatModelResult(
+                content="",
+                tool_calls=list(self.tool_call_rounds[tool_result_count]),
+                provider=self.provider_name,
+                model_name=self.model_name,
+            )
+
+        if tool_result_count == 0:
+            question = extract_question(latest_user_message(messages))
+            preferred_tool = next(
+                (
+                    tool.function.name
+                    for tool in tools
+                    if tool.function.name == "hybrid_search_knowledge"
+                ),
+                tools[0].function.name,
+            )
+            return ToolCallingChatModelResult(
+                content="",
+                tool_calls=[
+                    ChatToolCall(
+                        id="deterministic-tool-call-1",
+                        name=preferred_tool,
+                        arguments={"query": question, "top_k": 5},
+                    )
+                ],
+                provider=self.provider_name,
+                model_name=self.model_name,
+            )
+
+        source_ids = extract_source_ids(messages)
+        source_marker = f"[{source_ids[0]}]" if source_ids else "[1]"
+        return ToolCallingChatModelResult(
+            content=f"Deterministic tool-calling answer based on source {source_marker}.",
+            tool_calls=[],
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
 
 
 @dataclass(frozen=True)
@@ -133,6 +252,32 @@ class OpenAICompatibleChatModelProvider:
         with response:
             yield from parse_openai_compatible_stream(response)
 
+    def generate_with_tools(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ChatToolDefinition],
+    ) -> ToolCallingChatModelResult:
+        if not messages:
+            raise ValueError("messages must not be empty")
+        if not tools:
+            result = self.generate(messages)
+            return ToolCallingChatModelResult(
+                content=result.answer,
+                tool_calls=[],
+                provider=result.provider,
+                model_name=result.model_name,
+            )
+
+        request = self._build_request(messages, stream=False, tools=tools)
+        response_data = self._request_with_retry(request)
+        content, tool_calls = parse_openai_compatible_tool_response(response_data)
+        return ToolCallingChatModelResult(
+            content=content,
+            tool_calls=tool_calls,
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
     def _request_with_retry(self, request: urllib.request.Request) -> dict[str, Any]:
         """Send the request, retrying transient network failures.
 
@@ -144,11 +289,19 @@ class OpenAICompatibleChatModelProvider:
         for attempt in range(1, self.max_attempts + 1):
             is_last_attempt = attempt >= self.max_attempts
             try:
+                if is_deepseek_endpoint(self.base_url):
+                    return request_deepseek_with_curl(
+                        request,
+                        timeout_seconds=self.timeout_seconds,
+                    )
                 with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
                     return json.loads(response.read().decode("utf-8"))
             except TimeoutError as exc:
                 if is_last_attempt:
                     raise RuntimeError("Chat model request timed out") from exc
+            except TransientHTTPStatusError as exc:
+                if is_last_attempt:
+                    raise RuntimeError(str(exc)) from exc
             except urllib.error.HTTPError as exc:
                 if exc.code not in RETRYABLE_HTTP_STATUS or is_last_attempt:
                     error_body = exc.read().decode("utf-8", errors="replace")
@@ -193,15 +346,16 @@ class OpenAICompatibleChatModelProvider:
         messages: Sequence[ChatMessage],
         *,
         stream: bool,
+        tools: Sequence[ChatToolDefinition] | None = None,
     ) -> urllib.request.Request:
         payload = {
             "model": self.model_name,
-            "messages": [
-                {"role": message.role, "content": message.content}
-                for message in messages
-            ],
+            "messages": [message_to_openai_payload(message) for message in messages],
             "temperature": self.temperature,
         }
+        if tools:
+            payload["tools"] = [tool_definition_to_payload(tool) for tool in tools]
+            payload["tool_choice"] = "auto"
         if stream:
             payload["stream"] = True
         return urllib.request.Request(
@@ -222,6 +376,85 @@ class OpenAICompatibleChatModelProvider:
         if normalized_base_url.endswith("/chat/completions"):
             return normalized_base_url
         return f"{normalized_base_url}/chat/completions"
+
+
+def is_deepseek_endpoint(base_url: str) -> bool:
+    return "api.deepseek.com" in base_url.casefold()
+
+
+def request_deepseek_with_curl(
+    request: urllib.request.Request,
+    *,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    data_path = ""
+    try:
+        with tempfile.NamedTemporaryFile("wb", delete=False) as data_file:
+            data_file.write(request.data or b"{}")
+            data_path = data_file.name
+
+        headers = dict(request.header_items())
+        auth_header = headers.get("Authorization") or headers.get("authorization") or ""
+        content_type = (
+            headers.get("Content-type")
+            or headers.get("Content-Type")
+            or "application/json; charset=utf-8"
+        )
+        curl_args = [
+            "curl.exe",
+            "-sS",
+            "-m",
+            str(max(1, int(timeout_seconds))),
+            "-w",
+            "\nHTTP_STATUS:%{http_code}\n",
+            "-H",
+            f"Content-Type: {content_type}",
+            "--data-binary",
+            f"@{data_path}",
+            request.full_url,
+        ]
+        if auth_header:
+            curl_args[1:1] = ["-H", f"Authorization: {auth_header}"]
+        completed = subprocess.run(
+            curl_args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=max(5, int(timeout_seconds) + 5),
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise TimeoutError(completed.stderr.strip() or "DeepSeek curl request failed")
+        body, status_code = split_curl_response(completed.stdout)
+        if status_code in RETRYABLE_HTTP_STATUS:
+            raise TransientHTTPStatusError(
+                status_code,
+                f"Chat model request failed with HTTP {status_code}: {body[:500]}",
+            )
+        if status_code >= 400:
+            raise RuntimeError(
+                f"Chat model request failed with HTTP {status_code}: {body[:500]}"
+            )
+        return json.loads(body)
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError("DeepSeek curl request timed out") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Chat model response was not valid JSON") from exc
+    finally:
+        if data_path:
+            try:
+                os.remove(data_path)
+            except OSError:
+                pass
+
+
+def split_curl_response(output: str) -> tuple[str, int]:
+    marker = "\nHTTP_STATUS:"
+    if marker not in output:
+        raise RuntimeError("DeepSeek curl response did not include HTTP status")
+    body, status_text = output.rsplit(marker, 1)
+    status_line = status_text.strip().splitlines()[0]
+    return body.strip(), int(status_line)
 
 
 def latest_user_message(messages: Sequence[ChatMessage]) -> str:
@@ -270,6 +503,101 @@ def parse_openai_compatible_answer(response_data: dict[str, Any]) -> str:
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("Chat model response message content is empty")
     return content.strip()
+
+
+def parse_openai_compatible_tool_response(
+    response_data: dict[str, Any],
+) -> tuple[str, list[ChatToolCall]]:
+    choices = response_data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError("Chat model response did not include choices")
+
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        raise RuntimeError("Chat model response choice is not an object")
+
+    message = first_choice.get("message")
+    if not isinstance(message, dict):
+        raise RuntimeError("Chat model response choice did not include a message")
+
+    content_value = message.get("content")
+    content = content_value.strip() if isinstance(content_value, str) else ""
+    tool_calls = parse_openai_tool_calls(message.get("tool_calls"))
+    if not content and not tool_calls:
+        raise RuntimeError("Chat model response included neither content nor tool_calls")
+    return content, tool_calls
+
+
+def parse_openai_tool_calls(value: Any) -> list[ChatToolCall]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise RuntimeError("Chat model response tool_calls is not a list")
+
+    parsed: list[ChatToolCall] = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            raise RuntimeError("Chat model response tool_call is not an object")
+        function = item.get("function")
+        if not isinstance(function, dict):
+            raise RuntimeError("Chat model response tool_call did not include function")
+        name = function.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise RuntimeError("Chat model response tool_call function name is empty")
+        arguments = parse_tool_call_arguments(function.get("arguments"))
+        tool_call_id = item.get("id")
+        if not isinstance(tool_call_id, str) or not tool_call_id.strip():
+            tool_call_id = f"tool-call-{index}"
+        parsed.append(
+            ChatToolCall(id=tool_call_id, name=name.strip(), arguments=arguments)
+        )
+    return parsed
+
+
+def parse_tool_call_arguments(value: Any) -> dict[str, Any]:
+    if value is None or value == "":
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Chat model response tool_call arguments is invalid JSON") from exc
+        if not isinstance(parsed, dict):
+            raise RuntimeError("Chat model response tool_call arguments is not an object")
+        return parsed
+    raise RuntimeError("Chat model response tool_call arguments has unsupported type")
+
+
+def message_to_openai_payload(message: ChatMessage) -> dict[str, Any]:
+    payload: dict[str, Any] = {"role": message.role, "content": message.content or None}
+    if message.role == "tool":
+        payload["tool_call_id"] = message.tool_call_id or ""
+    if message.assistant_tool_calls:
+        payload["tool_calls"] = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.name,
+                    "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                },
+            }
+            for tc in message.assistant_tool_calls
+        ]
+    return payload
+
+
+def tool_definition_to_payload(tool: ChatToolDefinition) -> dict[str, Any]:
+    return {
+        "type": tool.type,
+        "function": {
+            "name": tool.function.name,
+            "description": tool.function.description,
+            "parameters": tool.function.parameters,
+        },
+    }
 
 
 def urlopen_without_proxy(

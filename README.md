@@ -1,5 +1,15 @@
 # RFC-RAG-Agent
 
+## Phase 37 Tool Calling Loop Migration Update
+
+Current branch: `codex/phase-37-tool-calling-loop-migration`.
+
+Phase 37 is complete and user-authorized for submission. It adds a parallel `mode="tool_calling_agent"` using OpenAI-compatible `tools/tool_calls` plus a lightweight runtime loop. It keeps `react_agent` and default routing unchanged, does not introduce LangGraph, and does not change Stage 30 rules, providers, provider topology, or data sources.
+
+Verification: `python -m pytest -q` -> `758 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; `python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:8000 --timeout-seconds 120` -> `rows=9 execute=true failed=0`.
+
+Comparison: deterministic `tool_calling_agent` has `errors=0`, `same_refusal_as_react=8/8`, and `same_top_source_as_react=6/8`. Real-provider `--execute --limit 8` has `react_agent` errors=0, same_refusal=8/8, same_top_source=8/8; `tool_calling_agent` errors=0, same_refusal=8/8, same_top_source=7/8, avg final latency 13.5s vs ReAct 28.0s. Recommendation remains: keep `tool_calling_agent` as a parallel review mode; do not switch defaults automatically.
+
 ## Phase 36 Generation Reliability Update
 
 Current branch: `codex/phase-36-generation-reliability-and-conversation-stability`.

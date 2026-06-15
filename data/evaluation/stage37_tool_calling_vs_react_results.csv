@@ -1,0 +1,17 @@
+run_type,query_id,category,mode,status,refused,refusal_reason_summary,llm_call_count,tool_call_count,iteration_count,time_to_first_token_ms,time_to_final_ms,citation_count,source_count,same_refusal_as_react,same_top_source_as_react,repeated_query_count,near_duplicate_query_count,executed_tool_call_count,skipped_tool_call_count,citation_repair_count,error_summary,decision_candidate
+deterministic,stage37_single_hop_definition,single_hop_definition,react_agent,ok,false,,0,2,2,,248.097,1,6,true,true,0,0,0,0,0,,baseline
+deterministic,stage37_single_hop_definition,single_hop_definition,tool_calling_agent,ok,false,,2,1,2,,1.970,1,3,true,true,0,0,1,0,0,,parallel_candidate
+deterministic,stage37_comparison,comparison,react_agent,ok,false,,0,2,2,,212.286,1,6,true,true,0,0,0,0,0,,baseline
+deterministic,stage37_comparison,comparison,tool_calling_agent,ok,false,,2,1,2,,1.532,1,3,true,true,0,0,1,0,0,,parallel_candidate
+deterministic,stage37_multi_dimensional,multi_dimensional,react_agent,ok,false,,0,2,2,,5.972,1,6,true,true,0,0,0,0,0,,baseline
+deterministic,stage37_multi_dimensional,multi_dimensional,tool_calling_agent,ok,false,,2,1,2,,1.330,1,3,true,true,0,0,1,0,0,,parallel_candidate
+deterministic,stage37_bilingual_terms,bilingual_terminology,react_agent,ok,false,,0,2,2,,235.855,1,6,true,true,0,0,0,0,0,,baseline
+deterministic,stage37_bilingual_terms,bilingual_terminology,tool_calling_agent,ok,false,,2,1,2,,1.486,1,3,true,true,0,0,1,0,0,,parallel_candidate
+deterministic,stage37_followup,followup,react_agent,ok,false,,0,2,2,,129.166,1,2,true,true,0,0,0,0,0,,baseline
+deterministic,stage37_followup,followup,tool_calling_agent,ok,false,,2,1,2,,1.504,1,3,true,true,0,0,1,0,0,,parallel_candidate
+deterministic,stage37_evidence_insufficient,evidence_insufficient,react_agent,ok,false,,0,2,2,,3095.652,1,6,true,true,0,0,0,0,0,,baseline
+deterministic,stage37_evidence_insufficient,evidence_insufficient,tool_calling_agent,ok,false,,2,1,2,,1.492,1,3,true,true,0,0,1,0,0,,parallel_candidate
+deterministic,stage37_off_topic_refusal,off_topic_refusal,react_agent,ok,true,off_topic,0,2,2,,276.749,0,3,true,true,0,0,0,0,0,,baseline
+deterministic,stage37_off_topic_refusal,off_topic_refusal,tool_calling_agent,ok,true,off_topic,0,0,1,,0.023,0,0,true,false,0,0,0,0,0,,parallel_candidate
+deterministic,stage37_multi_hop_retrieval,multi_hop_retrieval,react_agent,ok,false,,0,2,2,,142.429,1,6,true,true,0,0,0,0,0,,baseline
+deterministic,stage37_multi_hop_retrieval,multi_hop_retrieval,tool_calling_agent,ok,false,,3,2,3,,1.441,1,3,true,false,0,0,1,1,0,,review_mismatch

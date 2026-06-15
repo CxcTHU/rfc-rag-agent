@@ -27,7 +27,7 @@ from app.services.agent import intent_router
 from app.services.agent.refusal_explainer import build_refusal_explanation
 from app.services.agent.service import AgentQueryResult, AgentService
 from app.services.agent.react_service import ReActAgentService
-from app.services.agent.react_service import ReActRuntimeEvent
+from app.services.agent.tool_calling_service import ToolCallingAgentService
 from app.services.agent.routing import classify_query_complexity
 from app.services.agentic.graph import run_agentic_rag
 from app.services.agentic.state import AgenticResult
@@ -170,7 +170,7 @@ def query_agent(
     effective_mode = request.mode
     if effective_mode is None:
         routing = classify_query_complexity(request.question)
-        effective_mode = "agentic" if routing.complexity == "complex" else "default"
+        effective_mode = "tool_calling_agent" if routing.complexity == "complex" else "default"
 
     response: AgentQueryResponse
     if effective_mode == "agentic":
@@ -209,6 +209,38 @@ def query_agent(
                 chat_model_provider=chat_model_provider,
                 embedding_provider=embedding_provider,
                 planner_chat_provider=planner_chat_provider,
+            ).query(
+                question=request.question,
+                top_k=request.top_k,
+                max_tool_calls=request.max_tool_calls,
+                history=conversation_history or request.history,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="chat model provider is unavailable or timed out",
+            ) from exc
+        response = agent_response_from_result(result)
+        persist_agent_conversation_messages(
+            repository=conversation_repository,
+            conversation_id=request.conversation_id,
+            question=request.question,
+            response=response,
+            chat_model_provider=chat_model_provider,
+        )
+        return response
+
+    if effective_mode == "tool_calling_agent":
+        try:
+            result = ToolCallingAgentService(
+                db=db,
+                chat_model_provider=chat_model_provider,
+                embedding_provider=embedding_provider,
             ).query(
                 question=request.question,
                 top_k=request.top_k,
@@ -408,8 +440,12 @@ def stream_non_chitchat_agent_response(
 
     def produce_response() -> None:
         try:
+            resolved_mode = request.mode
+            if resolved_mode is None:
+                routing = classify_query_complexity(request.question)
+                resolved_mode = "tool_calling_agent" if routing.complexity == "complex" else "default"
             effective_chat_model_provider = chat_model_provider
-            if request.mode != "react_agent":
+            if resolved_mode not in {"react_agent", "tool_calling_agent"}:
                 effective_chat_model_provider = QueueStreamingChatModelProvider(
                     base_provider=chat_model_provider,
                     queue=queue,
@@ -421,7 +457,7 @@ def stream_non_chitchat_agent_response(
                 chat_model_provider=effective_chat_model_provider,
                 embedding_provider=embedding_provider,
                 planner_chat_provider=planner_chat_provider,
-                event_sink=lambda event: queue.put(("react_event", event)),
+                event_sink=lambda event: queue.put(("agent_event", event)),
             )
         except Exception as exc:  # noqa: BLE001 - forwarded to SSE error mapping.
             queue.put(("error", exc))
@@ -438,9 +474,8 @@ def stream_non_chitchat_agent_response(
             streamed_token_count += 1
             yield sse_event("token", {"text": payload})
             continue
-        if event_type == "react_event":
-            react_event: ReActRuntimeEvent = payload
-            yield sse_event(react_event.event, react_event.payload)
+        if event_type == "agent_event":
+            yield sse_event(payload.event, payload.payload)
             continue
         if event_type == "response":
             producer.join()
@@ -737,7 +772,7 @@ def build_agent_query_response(
     effective_mode = request.mode
     if effective_mode is None:
         routing = classify_query_complexity(request.question)
-        effective_mode = "agentic" if routing.complexity == "complex" else "default"
+        effective_mode = "tool_calling_agent" if routing.complexity == "complex" else "default"
 
     if effective_mode == "agentic":
         agentic_result = run_agentic_rag(
@@ -755,6 +790,20 @@ def build_agent_query_response(
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
             planner_chat_provider=planner_chat_provider,
+        ).query(
+            question=request.question,
+            top_k=request.top_k,
+            max_tool_calls=request.max_tool_calls,
+            history=conversation_history or request.history,
+            event_sink=event_sink,
+        )
+        return agent_response_from_result(result)
+
+    if effective_mode == "tool_calling_agent":
+        result = ToolCallingAgentService(
+            db=db,
+            chat_model_provider=chat_model_provider,
+            embedding_provider=embedding_provider,
         ).query(
             question=request.question,
             top_k=request.top_k,

@@ -6,6 +6,9 @@ import pytest
 
 from app.services.generation.chat_model import (
     ChatMessage,
+    ChatToolCall,
+    ChatToolDefinition,
+    ChatToolFunction,
     DeterministicChatModelProvider,
     OpenAICompatibleChatModelProvider,
     create_chat_model_provider,
@@ -14,6 +17,7 @@ from app.services.generation.chat_model import (
     latest_user_message,
     parse_openai_compatible_answer,
     parse_openai_compatible_stream,
+    parse_openai_compatible_tool_response,
     split_streaming_text,
 )
 
@@ -33,7 +37,23 @@ class _ChatFakeResponse:
 
 def test_chat_message_rejects_unsupported_role() -> None:
     with pytest.raises(ValueError, match="Unsupported chat role"):
-        ChatMessage(role="tool", content="hello")  # type: ignore[arg-type]
+        ChatMessage(role="developer", content="hello")  # type: ignore[arg-type]
+
+
+def test_chat_message_supports_tool_role_with_tool_call_id() -> None:
+    message = ChatMessage(
+        role="tool",
+        content='{"sources":[{"source_id":"chunk:1"}]}',
+        tool_call_id="call_1",
+    )
+
+    assert message.role == "tool"
+    assert message.tool_call_id == "call_1"
+
+
+def test_chat_message_rejects_tool_role_without_tool_call_id() -> None:
+    with pytest.raises(ValueError, match="tool_call_id"):
+        ChatMessage(role="tool", content="hello")
 
 
 def test_chat_message_rejects_empty_content() -> None:
@@ -81,6 +101,101 @@ def test_deterministic_chat_provider_stream_matches_generate() -> None:
     streamed = "".join(provider.stream_generate(messages))
 
     assert streamed == provider.generate(messages).answer
+
+
+def test_deterministic_chat_provider_can_simulate_tool_call_then_answer() -> None:
+    provider = DeterministicChatModelProvider()
+    tools = [
+        ChatToolDefinition(
+            function=ChatToolFunction(
+                name="hybrid_search_knowledge",
+                description="Search the local knowledge base.",
+                parameters={"type": "object", "properties": {}},
+            )
+        )
+    ]
+    messages = [ChatMessage(role="user", content="什么是堆石混凝土？")]
+
+    first = provider.generate_with_tools(messages, tools)
+
+    assert first.content == ""
+    assert [call.name for call in first.tool_calls] == ["hybrid_search_knowledge"]
+    assert first.tool_calls[0].arguments["query"] == "什么是堆石混凝土？"
+
+    second = provider.generate_with_tools(
+        [
+            *messages,
+            ChatMessage(
+                role="tool",
+                content='{"sources":[{"source_id":"chunk:1","snippet":"context [1]"}]}',
+                tool_call_id=first.tool_calls[0].id,
+            ),
+        ],
+        tools,
+    )
+
+    assert second.tool_calls == []
+    assert "source [1]" in second.content
+
+
+def test_deterministic_chat_provider_can_simulate_multi_round_tool_calls() -> None:
+    provider = DeterministicChatModelProvider(
+        tool_call_rounds=(
+            (
+                ChatToolCall(
+                    id="call_1",
+                    name="hybrid_search_knowledge",
+                    arguments={"query": "first", "top_k": 3},
+                ),
+            ),
+            (
+                ChatToolCall(
+                    id="call_2",
+                    name="search_knowledge",
+                    arguments={"query": "second", "top_k": 3},
+                ),
+            ),
+        )
+    )
+    tools = [
+        ChatToolDefinition(
+            function=ChatToolFunction(
+                name="hybrid_search_knowledge",
+                description="Hybrid search.",
+                parameters={"type": "object", "properties": {}},
+            )
+        ),
+        ChatToolDefinition(
+            function=ChatToolFunction(
+                name="search_knowledge",
+                description="Keyword search.",
+                parameters={"type": "object", "properties": {}},
+            )
+        ),
+    ]
+    user_message = ChatMessage(role="user", content="compare two topics")
+
+    first = provider.generate_with_tools([user_message], tools)
+    second = provider.generate_with_tools(
+        [
+            user_message,
+            ChatMessage(role="tool", content="result [1]", tool_call_id="call_1"),
+        ],
+        tools,
+    )
+    final = provider.generate_with_tools(
+        [
+            user_message,
+            ChatMessage(role="tool", content="result [1]", tool_call_id="call_1"),
+            ChatMessage(role="tool", content="result [2]", tool_call_id="call_2"),
+        ],
+        tools,
+    )
+
+    assert [call.name for call in first.tool_calls] == ["hybrid_search_knowledge"]
+    assert [call.name for call in second.tool_calls] == ["search_knowledge"]
+    assert final.tool_calls == []
+    assert "Deterministic tool-calling answer" in final.content
 
 
 def test_split_streaming_text_splits_chinese_without_losing_text() -> None:
@@ -247,6 +362,157 @@ def test_openai_compatible_provider_streams_delta_content(monkeypatch) -> None:
     assert captured["payload"]["stream"] is True
 
 
+def test_openai_compatible_provider_posts_tools_and_parses_tool_calls(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": "call_1",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "hybrid_search_knowledge",
+                                            "arguments": "{\"query\":\"RFC\",\"top_k\":3}",
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr("app.services.generation.chat_model.urlopen_without_proxy", fake_urlopen)
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="mimo-v2.5-pro",
+        api_key="test-key",
+        base_url="https://api.xiaomimimo.com/v1",
+        timeout_seconds=9,
+    )
+    tools = [
+        ChatToolDefinition(
+            function=ChatToolFunction(
+                name="hybrid_search_knowledge",
+                description="Hybrid search.",
+                parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+            )
+        )
+    ]
+
+    result = provider.generate_with_tools(
+        [ChatMessage(role="user", content="What is RFC?")],
+        tools,
+    )
+
+    payload = captured["payload"]
+    assert payload["tools"][0]["function"]["name"] == "hybrid_search_knowledge"
+    assert payload["tool_choice"] == "auto"
+    assert result.content == ""
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].name == "hybrid_search_knowledge"
+    assert result.tool_calls[0].arguments == {"query": "RFC", "top_k": 3}
+
+
+def test_openai_compatible_provider_sends_tool_messages(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {"choices": [{"message": {"content": "Answer with [1]."}}]}
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setattr("app.services.generation.chat_model.urlopen_without_proxy", fake_urlopen)
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="mimo-v2.5-pro",
+        api_key="test-key",
+        base_url="https://api.xiaomimimo.com/v1",
+    )
+
+    result = provider.generate_with_tools(
+        [
+            ChatMessage(role="user", content="What is RFC?"),
+            ChatMessage(role="tool", content='{"sources":[]}', tool_call_id="call_1"),
+        ],
+        [
+            ChatToolDefinition(
+                function=ChatToolFunction(
+                    name="hybrid_search_knowledge",
+                    description="Hybrid search.",
+                    parameters={"type": "object", "properties": {}},
+                )
+            )
+        ],
+    )
+
+    tool_message = captured["payload"]["messages"][1]
+    assert tool_message["role"] == "tool"
+    assert tool_message["tool_call_id"] == "call_1"
+    assert result.content == "Answer with [1]."
+    assert result.tool_calls == []
+
+
+def test_openai_compatible_provider_uses_curl_for_deepseek_endpoint(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_deepseek_curl(request, timeout_seconds):
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return {"choices": [{"message": {"content": "Answer with [1]."}}]}
+
+    monkeypatch.setattr(
+        "app.services.generation.chat_model.request_deepseek_with_curl",
+        fake_deepseek_curl,
+    )
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="deepseek-v4-flash",
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+    )
+
+    provider.generate_with_tools(
+        [ChatMessage(role="user", content="What is RFC?")],
+        [
+            ChatToolDefinition(
+                function=ChatToolFunction(
+                    name="hybrid_search_knowledge",
+                    description="Hybrid search.",
+                    parameters={"type": "object", "properties": {}},
+                )
+            )
+        ],
+    )
+
+    assert "thinking" not in captured["payload"]
+    assert captured["payload"]["model"] == "deepseek-v4-flash"
+
+
 def test_chat_provider_retries_transient_ssl_error(monkeypatch) -> None:
     attempts = {"count": 0}
 
@@ -404,3 +670,35 @@ def test_parse_openai_compatible_answer() -> None:
 def test_parse_openai_compatible_answer_rejects_invalid_response() -> None:
     with pytest.raises(RuntimeError, match="did not include choices"):
         parse_openai_compatible_answer({})
+
+
+def test_parse_openai_compatible_tool_response_parses_content_and_tool_calls() -> None:
+    content, tool_calls = parse_openai_compatible_tool_response(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": "Need search.",
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "function": {
+                                    "name": "search_knowledge",
+                                    "arguments": {"query": "RFC", "top_k": 2},
+                                },
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+    )
+
+    assert content == "Need search."
+    assert tool_calls == [
+        ChatToolCall(
+            id="call_1",
+            name="search_knowledge",
+            arguments={"query": "RFC", "top_k": 2},
+        )
+    ]

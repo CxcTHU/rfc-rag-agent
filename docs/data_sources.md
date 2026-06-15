@@ -2,6 +2,30 @@
 
 本文件用于记录后续采集的堆石混凝土相关资料来源。
 
+## 阶段 37 数据说明
+
+阶段 37 不新增外部资料来源、不爬新网页、不下载新 PDF、不写入新的受限全文，也不重切语料。新增内容均为协议迁移、Agent loop、API/SSE 接入、deterministic 本地评估 fixture、production smoke 和文档草稿。
+
+阶段 37 新增派生产物：
+
+- `docs/stage37_tool_calling_loop_migration.md`
+- `app/services/agent/tool_calling_service.py`
+- `scripts/evaluate_stage37_tool_calling_vs_react.py`
+- `data/evaluation/stage37_tool_calling_vs_react_results.csv`
+- `data/evaluation/stage37_tool_calling_vs_react_summary.csv`
+- `data/evaluation/stage37_tool_calling_vs_react_real_results.csv`
+- `data/evaluation/stage37_tool_calling_vs_react_real_summary.csv`
+- `data/evaluation/stage36_production_smoke_results.csv`（扩展为 9 个 smoke case，含 `tool_calling_agent`）
+- `docs/stage37_tool_calling_vs_react_decision.md`
+- `docs/phase_reviews/phase-37.md`
+
+数据安全边界：
+
+- tool result 回灌只保存脱敏、截断后的短摘要，不保存完整 chunk 全文。
+- 对照评估 CSV 只保存指标、状态、错误摘要和裁定候选，不保存答案全文、raw provider response、`reasoning_content`、hidden thought、API key、Bearer token 或 Authorization header。
+- real-provider 对照 CSV 当前记录 `provider_rate_limit` 等安全错误标签，不保存 provider 原始 JSON 错误体。
+- production smoke CSV 不保存 response body，只保存 endpoint、状态、耗时、关键字段、refused、citation_count、validator_marker、sensitive_field_detected 和 error_summary。
+
 ## 阶段 36 数据说明
 
 阶段 36 不新增外部资料来源、不爬新网页、不下载新 PDF、不写入新的受限全文。新增内容均为现有代码、现有问题集、现有检索结果和真实/离线评测流程派生的工程与评测产物。
@@ -1226,3 +1250,7 @@ chunk_embeddings（deterministic 与已有 Jina 索引）
 - `/quality-report` 当前读取阶段 20 脱敏 summary 与静态 HTML，不触发真实 API、不写库、不重新索引。
 - HyDE 仍只作为离线实验建议，不进入默认链路或自动回归。
 - 阶段 20 当前停在用户人工核验前状态，尚未提交、尚未创建 `phase-20-complete` tag、尚未推送。
+
+## Stage 37 refinement data note
+
+No new external data source was added for the Phase 37 runtime refinement. The new tool-calling controls operate only on existing local RAG search results from `search_knowledge` and `hybrid_search_knowledge`. Evaluation outputs were refreshed under `data/evaluation/`, including real-provider CSVs, but no source corpus expansion, recrawling, PDF download, or rechunking was performed.
