@@ -151,6 +151,11 @@ class AgentToolbox:
             return failed_tool_result(tool_name, question, exc)
 
         sources = [source_reference_from_context_source(source) for source in answer.sources]
+        if answer.refused and not sources:
+            sources = self._safe_refusal_search_sources(
+                question=question,
+                top_k=min(top_k, 3),
+            )
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -164,6 +169,23 @@ class AgentToolbox:
             citations=answer.citations,
             refused=answer.refused,
             refusal_reason=answer.refusal_reason,
+        )
+
+    def _safe_refusal_search_sources(
+        self,
+        *,
+        question: str,
+        top_k: int,
+    ) -> list[AgentSourceReference]:
+        try:
+            results = HybridSearchService(self.db, self.embedding_provider).search(
+                query=question,
+                top_k=top_k,
+            )
+        except (RuntimeError, ValueError):
+            return []
+        return sources_from_search_results(
+            [search_item_from_result(result) for result in results[:top_k]]
         )
 
     def list_sources(

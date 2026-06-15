@@ -1258,6 +1258,29 @@ function bindSourceFilters() {
   });
 }
 
+function bindEnterToSubmit() {
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      const textarea = event.target?.closest?.("textarea[data-agent-question], textarea[data-chat-question]");
+      if (!textarea || event.key !== "Enter" || event.shiftKey || event.isComposing) {
+        return;
+      }
+      const form = textarea.closest("form");
+      if (!form) {
+        return;
+      }
+      event.preventDefault();
+      if (typeof form.requestSubmit === "function") {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      }
+    },
+    true,
+  );
+}
+
 function bindCommands() {
   document.querySelector("[data-refresh-all]")?.addEventListener("click", () => {
     loadWorkspaceData().catch((error) => {
@@ -1298,6 +1321,7 @@ function bindCommands() {
       setApiStatus(`删除会话失败：${error.message}`);
     });
   });
+  bindEnterToSubmit();
   document.querySelector("[data-conversation-list]")?.addEventListener("change", (event) => {
     loadConversationMessages(event.target.value).catch((error) => {
       setApiStatus(`切换会话失败：${error.message}`);

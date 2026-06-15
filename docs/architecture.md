@@ -1,5 +1,25 @@
 # 架构说明
 
+## 阶段 36 架构增量：生成可靠性与多轮体验稳定化
+
+阶段 36 不改变默认 RAG 生产主链路，不替换 chat / embedding / rerank provider，不新增外部数据源，也不把 `citation_validator` 或其他 deterministic 后处理接回生产 Brain。增量集中在输出解释、生产 smoke、离线 Judge 实验和意图路由模块化。
+
+```text
+/agent/query
+-> intent_router（meta / followup / refusal explanation / normal RAG）
+-> AgentService / ReActAgentService / Agentic RAG
+-> refusal_explainer（仅 refused=True 时追加安全解释到 reasoning_summary）
+-> AgentQueryResponse（schema 不变）
+```
+
+`app/services/agent/refusal_explainer.py` 是输出层解释器：`off_topic` 给安全改写建议；`evidence_insufficient` 使用真实 source title / source_type / 短内容摘要生成检索摘要。它不调用 LLM、不读取内部规则原文、不输出完整 chunk。
+
+`scripts/run_production_smoke.py` 是生产端点 smoke 脚本：默认 dry-run，显式 `--execute` 才访问 `/health`、`/quality-report`、`/quality-report/data.json`、`/agent/query` 和 `/agent/query/stream`。CSV 只记录安全字段，不保存 response body。
+
+`app/services/generation/outline_first_strategy.py` 与 `scripts/judge_stage36_strategy_ab.py` 是离线 Judge A/B 基础设施。三组策略是 `baseline`、`outline_first`、`answer_provider_ab`。当前真实执行已完成 20 题 x 3 策略，结果分别为 baseline `0.655/0.640/1.000`、outline_first `0.703/0.685/1.000`、answer_provider_ab `0.772/0.820/0.950`，三组均为 `review_required`，因此不允许接生产或声明通过。
+
+`app/services/agent/intent_router.py` 抽取多轮意图纯函数，覆盖上一轮翻译、追问、问来源、问模型、拒答原因、闲聊、off-topic 和正常领域问答回归。API 层继续负责会话读写和响应组装。
+
 ## 阶段 35 架构增量：检索质量校准与 Stage 30 评分破局
 
 阶段 35 不替换默认 chat / embedding / rerank provider，不改变 `/chat`、`/agent/query`、`/agent/query/stream`、`/search/*` 或 `/quality-report` 的外部契约，而是在 evaluation -> retrieval -> generation -> quality gate 链路上做最小质量校准。

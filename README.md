@@ -1,5 +1,25 @@
 # RFC-RAG-Agent
 
+## Phase 36 Generation Reliability Update
+
+Current branch: `codex/phase-36-generation-reliability-and-conversation-stability`.
+
+Phase 36 has completed human verification and is authorized for submission and GitHub merge. It keeps Stage 30 at `91.52 / A / pass` and does not change scoring rules, default providers, provider topology, or external data sources.
+
+Completed in this phase:
+
+- Added `docs/stage36_generation_reliability_and_conversation_stability.md` and `tests/test_stage36_design.py`.
+- Added refusal explainability in the Agent output layer: `off_topic` refusals now include safe rewrite suggestions, and `evidence_insufficient` refusals include sanitized retrieval summaries when safe sources are available.
+- Added `scripts/run_production_smoke.py` and `tests/test_run_production_smoke.py`; final `--execute` smoke writes `data/evaluation/stage36_production_smoke_results.csv` and currently passes 7/7 checks.
+- Added offline Judge A/B infrastructure for `baseline`, `outline_first`, and `answer_provider_ab`; real execution completed 20 judged queries per strategy, but all three remain `review_required`, so Judge gate is **not** passed and no strategy is connected to production.
+- Extracted conversation intent routing helpers into `app/services/agent/intent_router.py` and added an 8-intent regression set.
+- Adjusted the frontend chat input so Enter submits and Shift+Enter inserts a newline.
+- Adjusted non-RAG/meta route answers so model info, capability help, and refusal explanations default to Chinese.
+
+Submission boundary: user has authorized Phase 36 staging, commit, `phase-36-complete` tag, push, and GitHub merge on 2026-06-15.
+
+Final Phase 36 verification: `python -m pytest -q` -> `724 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; `python scripts/run_production_smoke.py --execute` -> `rows=7 execute=true failed=0`; browser smoke desktop and 390x844 mobile both have no horizontal overflow and console errors=0.
+
 ## Phase 35 Clean Remediation Update
 
 Current branch: `codex/phase-35-retrieval-quality-calibration`.
