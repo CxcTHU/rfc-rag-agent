@@ -20,7 +20,8 @@ def test_frontend_index_is_served() -> None:
     assert "混合检索" in response.text
     assert "流式回答" in response.text
     assert "结构化分块" in response.text
-    assert "/static/app.js?v=phase36-enter-send" in response.text
+    assert "/static/app.js?v=phase39-experience-markdown-citations" in response.text
+    assert "/static/styles.css?v=phase39-citation-thought-compact" in response.text
     assert 'class="hero-layout"' in response.text
     assert 'class="demo-panel"' in response.text
     assert 'id="agent-panel"' in response.text
@@ -87,6 +88,10 @@ def test_frontend_static_assets_are_served() -> None:
     assert "agent_step" in response.text
     assert "tool_call_start" in response.text
     assert "tool_call_result" in response.text
+    assert "已跳过重复调用" in response.text
+    assert "分析问题并选择检索工具" in response.text
+    assert "userFacingAgentSummary" in response.text
+    assert "isSkippedAgentStep" in response.text
     assert "onAgentStep" in response.text
     assert "onToolCallStart" in response.text
     assert "onToolCallResult" in response.text
@@ -151,6 +156,19 @@ def test_frontend_static_assets_are_served() -> None:
     assert "event.shiftKey" in response.text
     assert "event.isComposing" in response.text
     assert "form.requestSubmit()" in response.text
+    assert "conversationTitleFromQuestion" in response.text
+    assert "userFriendlyErrorMessage" in response.text
+    assert "citationReferenceHtml" in response.text
+    assert "normalizeCitationDisplay" in response.text
+    assert "citation_source_map" in response.text
+    assert "citationNumbersInAnswer" in response.text
+    assert "renderAnswerWithCitationLinks" in response.text
+    assert "renderInlineMarkdown" in response.text
+    assert "<strong>" in response.text
+    assert "data-citation-ref" in response.text
+    assert "citation-popover" in response.text
+    assert "loading-spinner" in response.text
+    assert "请求失败，请稍后重试；如持续失败，请检查服务日志。" in response.text
 
     styles = client.get("/static/styles.css")
     assert styles.status_code == 200
@@ -172,6 +190,16 @@ def test_frontend_static_assets_are_served() -> None:
     assert "agent-thinking-status" in styles.text
     assert "agent-thought-panel" in styles.text
     assert "overflow-wrap: anywhere" in styles.text
+    assert "@keyframes loading-spin" in styles.text
+    assert "loading-spinner" in styles.text
+    assert "citation-ref" in styles.text
+    assert "citation-popover" in styles.text
+    assert ".citation-ref:hover .citation-popover" in styles.text
+    assert "vertical-align: super" in styles.text
+    assert "font-size: 11px" in styles.text
+    assert "white-space: nowrap" in styles.text
+    assert "height: 1.3em" in styles.text
+    assert "agent-live-step--tool-call-result.skipped" in styles.text
 
 
 def test_quality_report_is_served_read_only() -> None:

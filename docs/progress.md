@@ -1,5 +1,36 @@
 # 项目进度
 
+## Latest Status: 2026-06-16 Phase 39 Production Deployment And End-to-End Experience Complete Before Human Verification
+
+Current branch: `codex/phase-39-production-deployment`.
+
+Phase 39 starts from `main / origin/main -> 33b63e0 Merge phase 38 tool calling generation quality`. It does not change retrieval strategy, prompt strategy, Stage 30 scoring rules, provider topology, or data sources. The work focuses on FastAPI Docker deployment, structured JSON logging, frontend loading/error/citation experience, deployment documentation, and final regression.
+
+Completed:
+
+```text
+Dockerfile -> multi-stage FastAPI runtime, CMD uvicorn app.main:app --host 0.0.0.0 --port 8000
+docker-compose.yml -> image rfc-rag-agent:phase39-production-deployment, APP_ENV=production, /health healthcheck
+app/core/structured_logging.py -> standard logging JSON formatter, request_id, redaction, safe summaries
+app/main.py -> request middleware logs request_completed/request_failed
+app/api/agent.py and tool_calling_service.py -> query_received/tool_call_executed/answer_generated/refusal_triggered
+frontend -> loading spinner, Chinese friendly errors, clickable/hover [N] source references, first-question conversation title
+docs/deployment_guide.md + README Docker Quick Start + .env.example
+```
+
+Verification:
+
+```text
+python -m pytest tests/test_stage39_design.py tests/test_stage39_docker.py tests/test_docker_assets.py tests/test_stage39_logging.py tests/test_frontend_app.py tests/test_stage39_deployment_docs.py -q -> 33 passed
+python -m pytest -q -> 804 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:8010 --timeout-seconds 120 -> rows=11 execute=true failed=0
+browser desktop/mobile readonly smoke -> Agent page present, citation buttons present from stored answer, horizontal overflow=false, console errors=0
+docker build -t rfc-rag-agent:phase39-production-deployment . -> succeeded after Docker Desktop server 29.5.3 became available
+```
+
+Current boundary: do not run `git add`, commit, tag, push, or create a PR before user human verification and explicit approval.
+
 ## Latest Status: 2026-06-15 Phase 38 Tool Calling Generation Quality Complete Before Human Verification
 
 Current branch: `codex/phase-38-tool-calling-generation-quality`.

@@ -1,5 +1,30 @@
 # 架构说明
 
+## 阶段 39 架构增量：生产部署与端到端体验
+
+阶段 39 不修改默认 RAG / Agent 质量链路，不替换 provider，不改 Stage 30 评分规则，也不新增外部数据源。架构增量集中在运行时外壳和可观测体验：
+
+```text
+Docker / Compose
+-> uvicorn app.main:app
+-> FastAPI request middleware
+-> structured JSON request logs
+-> Agent safe event logs
+-> frontend loading/error/citation UX
+```
+
+Dockerfile 已从旧 Chainlit CMD 切换为当前 FastAPI 入口：
+
+```text
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+构建采用 builder/runtime 两阶段：builder 通过 `pyproject.toml` 构建 wheel，runtime 安装 wheel 并复制 `app/`。`docker-compose.yml` 负责注入 `APP_ENV=production`、挂载 `./data:/app/data`，并通过 Python 标准库访问 `GET /health` 做 healthcheck。
+
+结构化日志位于 `app/core/structured_logging.py`。请求日志由 `app/main.py` middleware 写入 `request_completed` / `request_failed`，Agent 日志由 `app/api/agent.py` 和 `app/services/agent/tool_calling_service.py` 写入 `query_received`、`tool_call_executed`、`answer_generated`、`refusal_triggered`。日志只记录 request_id、method、path、status_code、latency、mode、计数和截断摘要，不记录 API key、Bearer token、Authorization header、raw provider response、`reasoning_content`、完整问题或完整 chunk。
+
+前端仍是原生静态资源，不引入新框架。`app/frontend/static/app.js` 新增会话标题生成、中文友好错误、`[N]` 引用按钮和 hover 来源卡片；`styles.css` 新增加载 spinner 和引用浮层样式。它只改变展示体验，不改变 `tool_calling_agent` 默认链路、prompt、检索或评分。
+
 ## 阶段 38 架构增量：默认 Tool Calling 链路生成质量攻坚
 
 阶段 38 不引入新外部数据源、不替换 provider 拓扑、不修改 Stage 30 评分规则，也不把 deterministic citation-validator 接入生产链路。增量集中在默认 `tool_calling_agent` 的最终答案生成约束、扩展评测、真实 Judge A/B 和默认入口稳定性回归。

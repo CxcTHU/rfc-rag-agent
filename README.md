@@ -1,5 +1,15 @@
 # RFC-RAG-Agent
 
+## Phase 39 Production Deployment And End-to-End Experience Update
+
+Current branch: `codex/phase-39-production-deployment`.
+
+Phase 39 starts from `main / origin/main -> 33b63e0 Merge phase 38 tool calling generation quality` and keeps the Phase 38 default `tool_calling_agent` chain unchanged. The phase updates deployment and operations surfaces: FastAPI Docker runtime, structured JSON logging, frontend loading/error/citation experience, and deployment documentation.
+
+Main changes so far: Docker now starts `uvicorn app.main:app --host 0.0.0.0 --port 8000`; `docker-compose.yml` uses `rfc-rag-agent:phase39-production-deployment` with `/health` healthcheck; standard logging JSON covers request middleware and Agent events; frontend answers render `[N]` citations as hover/click source references; `.env.example` and `docs/deployment_guide.md` are updated.
+
+Verification: focused Phase 39 tests `33 passed`; full `python -m pytest -q` -> `804 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; production smoke on `http://127.0.0.1:8010` -> `rows=11 execute=true failed=0`; browser desktop/mobile smoke -> no console errors and no horizontal overflow; `docker build -t rfc-rag-agent:phase39-production-deployment .` -> succeeded after Docker Desktop server `29.5.3` became available.
+
 ## Phase 38 Tool Calling Generation Quality Update
 
 Current branch: `codex/phase-38-tool-calling-generation-quality`.
@@ -593,6 +603,36 @@ python -m pip install -e ".[dev]"
 python -m uvicorn app.main:app --reload
 ```
 
+## Docker Quick Start
+
+阶段 39 起，Docker 默认入口是 FastAPI + uvicorn：
+
+```text
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+复制环境变量模板，并只在本地 `.env` 中填写真实 key：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+构建镜像：
+
+```powershell
+docker build -t rfc-rag-agent:phase39-production-deployment .
+```
+
+使用 Docker Compose 启动 FastAPI 容器：
+
+```powershell
+docker compose up --build
+```
+
+容器默认读取本地 `.env` 作为运行配置，并把 `./data` 挂载到 `/app/data`。Compose healthcheck 访问 `GET /health`，不会触发真实 provider。镜像构建上下文通过 `.dockerignore` 排除 `.env`、测试、评测派生产物、SQLite 数据库、原始全文、Obsidian 知识库和缓存文件。
+
+部署细节见 `docs/deployment_guide.md`。
+
 启动 Chainlit 对话界面：
 
 ```powershell
@@ -604,14 +644,6 @@ chainlit run chainlit_app.py --host 127.0.0.1 --port 8000 --headless
 ```powershell
 .\.venv\Scripts\chainlit.exe run chainlit_app.py --host 127.0.0.1 --port 8000 --headless
 ```
-
-使用 Docker Compose 启动 Chainlit 容器：
-
-```powershell
-docker compose up --build
-```
-
-容器默认读取本地 `.env` 作为运行配置，并把 `./data` 挂载到 `/app/data`。镜像构建上下文通过 `.dockerignore` 排除 `.env`、SQLite 数据库、原始全文、Obsidian 知识库和缓存文件。
 
 访问健康检查：
 

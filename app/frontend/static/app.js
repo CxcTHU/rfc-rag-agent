@@ -100,6 +100,137 @@ function compactText(value, fallback = "-") {
   return text || fallback;
 }
 
+function conversationTitleFromQuestion(question) {
+  const normalized = compactText(question, "新对话").replace(/\s+/g, " ");
+  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
+}
+
+function userFriendlyErrorMessage(error) {
+  const message = String(error?.message || "").trim();
+  if (message.includes("请求超时") || error?.name === "AbortError") {
+    return "请求超时：模型或检索服务暂时没有返回，请稍后重试。";
+  }
+  if (message.includes("chat model provider") || message.includes("provider")) {
+    return "模型服务暂时不可用，请检查本地配置后重试。";
+  }
+  if (message.includes("HTTP 503")) {
+    return "后端服务暂时不可用，请稍后重试。";
+  }
+  if (message.includes("Failed to fetch") || message.includes("NetworkError")) {
+    return "网络连接失败，请确认后端服务正在运行。";
+  }
+  return "请求失败，请稍后重试；如持续失败，请检查服务日志。";
+}
+
+function sourceForCitation(sources, citation, sourceCitation = citation) {
+  const index = Number(sourceCitation) - 1;
+  if (!Number.isInteger(index) || index < 0) {
+    return null;
+  }
+  return sources?.[index] || null;
+}
+
+function sourceTitle(source) {
+  return compactText(source?.title || source?.document_title, "未知来源");
+}
+
+function sourceSummary(source) {
+  return compactText(source?.content || source?.snippet, "暂无摘要").slice(0, 120);
+}
+
+function citationReferenceHtml(citation, sources, isInvalid = false, sourceCitation = citation) {
+  const source = sourceForCitation(sources, citation, sourceCitation);
+  const label = `[${escapeHtml(citation)}]`;
+  if (!source) {
+    return `<span class="citation-ref citation-ref--missing ${isInvalid ? "citation-ref--invalid" : ""}">${label}</span>`;
+  }
+  const title = sourceTitle(source);
+  const sourceType = compactText(source.source_type, "unknown");
+  const summary = sourceSummary(source);
+  return `<button class="citation-ref ${isInvalid ? "citation-ref--invalid" : ""}" type="button" data-citation-ref="${escapeHtml(citation)}" aria-label="查看来源 ${escapeHtml(citation)}：${escapeHtml(title)}">${label}<span class="citation-popover" role="tooltip"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(sourceType)}</small><span>${escapeHtml(summary)}</span></span></button>`;
+}
+
+function citationNumbersInAnswer(answer) {
+  const numbers = [];
+  const seen = new Set();
+  for (const match of String(answer || "").matchAll(/\[(\d+)\]/g)) {
+    if (!seen.has(match[1])) {
+      seen.add(match[1]);
+      numbers.push(match[1]);
+    }
+  }
+  return numbers;
+}
+
+function normalizeCitationDisplay(result = {}) {
+  const rawAnswer = String(result.answer || "");
+  const orderedOriginalCitations = citationNumbersInAnswer(rawAnswer);
+  if (!orderedOriginalCitations.length) {
+    for (const citation of result.citations || []) {
+      const key = String(citation);
+      if (!orderedOriginalCitations.includes(key)) {
+        orderedOriginalCitations.push(key);
+      }
+    }
+  }
+  const originalToDisplay = new Map();
+  const displayToOriginal = {};
+  orderedOriginalCitations.forEach((original, index) => {
+    const display = String(index + 1);
+    originalToDisplay.set(String(original), display);
+    displayToOriginal[display] = String(original);
+  });
+  const answer = rawAnswer.replace(/\[(\d+)\]/g, (marker, original) => {
+    const display = originalToDisplay.get(String(original));
+    return display ? `[${display}]` : marker;
+  });
+  const citations = orderedOriginalCitations.map((_, index) => index + 1);
+  const invalidCitations = (result.invalid_citations || [])
+    .map((citation) => originalToDisplay.get(String(citation)))
+    .filter(Boolean)
+    .map((citation) => Number(citation));
+  return {
+    ...result,
+    answer,
+    citations,
+    invalid_citations: invalidCitations,
+    citation_source_map: displayToOriginal,
+  };
+}
+
+function renderInlineMarkdown(text) {
+  return String(text || "")
+    .split(/(\*\*[^*\n][\s\S]*?[^*\n]\*\*)/g)
+    .map((part) => {
+      const match = part.match(/^\*\*([^*\n][\s\S]*?[^*\n])\*\*$/);
+      if (match) {
+        return `<strong>${escapeHtml(match[1])}</strong>`;
+      }
+      return escapeHtml(part);
+    })
+    .join("");
+}
+
+function renderAnswerWithCitationLinks(answer, sources = [], invalidCitations = [], citationSourceMap = {}) {
+  const invalidCitationSet = new Set(invalidCitations.map((citation) => String(citation)));
+  return String(answer || "")
+    .split(/(\[\d+\])/g)
+    .map((part) => {
+      const match = part.match(/^\[(\d+)\]$/);
+      if (!match) {
+        return renderInlineMarkdown(part);
+      }
+      const citation = match[1];
+      return citationReferenceHtml(
+        citation,
+        sources,
+        invalidCitationSet.has(String(citation)),
+        citationSourceMap[String(citation)] || citation,
+      );
+    })
+    .join("");
+}
+
 function formatRefusalCategory(category) {
   const labels = {
     responsibility_gate_triggered: "责任边界",
@@ -340,6 +471,7 @@ async function reindexSource(sourceId) {
 }
 
 function renderAnswer(result) {
+  result = normalizeCitationDisplay(result);
   const answerBox = document.querySelector("[data-answer-box]");
   const chatMode = document.querySelector("[data-chat-mode]");
   if (!answerBox) {
@@ -349,14 +481,21 @@ function renderAnswer(result) {
     chatMode.textContent = result.retrieval_mode || "none";
   }
   const citationBadges = (result.citations || [])
-    .map((citation) => `<span class="pill">[${escapeHtml(citation)}]</span>`)
+    .map((citation) =>
+      citationReferenceHtml(
+        citation,
+        result.sources || [],
+        false,
+        result.citation_source_map?.[String(citation)] || citation,
+      ),
+    )
     .join("");
   const refused = result.refused
     ? `<div class="refusal"><strong>拒答</strong><p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`
     : "";
   answerBox.innerHTML = `
     ${refused}
-    <div class="answer-text">${escapeHtml(result.answer)}</div>
+    <div class="answer-text">${renderAnswerWithCitationLinks(result.answer, result.sources || [], [], result.citation_source_map || {})}</div>
     <div class="answer-meta">
       ${citationBadges || '<span class="pill neutral">无引用</span>'}
       <span class="pill neutral">${escapeHtml(result.model_provider)} / ${escapeHtml(result.model_name)}</span>
@@ -536,9 +675,9 @@ function appendAgentThinkingMessage() {
       <article class="chat-message chat-message--assistant chat-message--thinking" aria-live="polite">
         <div class="chat-message-bubble">
           <div class="chat-message-role">Agent</div>
-          <div class="agent-thinking-status" data-agent-thinking-status>正在思考<span aria-hidden="true">...</span></div>
+          <div class="agent-thinking-status" data-agent-thinking-status><span class="loading-spinner" aria-hidden="true"></span>正在思考</div>
           <div class="agent-live-steps" data-agent-live-steps hidden aria-label="Agent live steps"></div>
-          <div class="answer-text thinking-text">正在思考<span aria-hidden="true">...</span></div>
+          <div class="answer-text thinking-text"><span class="loading-spinner" aria-hidden="true"></span>正在思考</div>
         </div>
       </article>
     `,
@@ -558,7 +697,11 @@ function liveAgentEventView(eventName, payload = {}) {
   }
   if (eventName === "tool_call_result") {
     return {
-      kind: payload.succeeded === false ? "tool-call-result failed" : "tool-call-result",
+      kind: payload.skipped
+        ? "tool-call-result skipped"
+        : payload.succeeded === false
+          ? "tool-call-result failed"
+          : "tool-call-result",
       title: "Tool result",
       summary: payload.observation_summary || payload.output_summary || payload.step_summary || "",
       meta: payload.tool_name || payload.action || "",
@@ -567,13 +710,16 @@ function liveAgentEventView(eventName, payload = {}) {
   return {
     kind: "agent-step",
     title: "Agent step",
-    summary: payload.step_summary || payload.decision_summary || payload.action || "",
+    summary: userFacingAgentSummary(
+      payload.step_summary || payload.decision_summary || payload.action || "",
+    ),
     meta: payload.action || payload.phase || "",
   };
 }
 
 function localizeAgentAction(action) {
   const labels = {
+    llm_with_tools: "分析问题并选择检索工具",
     search_knowledge: "检索知识库",
     rewrite_query: "改写问题",
     answer_with_citations: "结合证据回答",
@@ -595,11 +741,37 @@ function localizeAgentTool(toolName) {
   return labels[toolName] || toolName || "工具";
 }
 
+function isSkippedAgentStep(step = {}) {
+  const text = `${step.error || ""} ${step.output_summary || ""} ${step.observation_summary || ""}`.toLowerCase();
+  return text.includes("skipped") || step.skipped === true;
+}
+
+function userFacingAgentSummary(summary) {
+  const text = String(summary || "");
+  const normalized = text.toLowerCase();
+  if (!text) {
+    return "";
+  }
+  if (normalized.includes("calling model with tool definitions") || normalized.includes("llm_with_tools")) {
+    return "正在分析问题并选择检索工具";
+  }
+  if (normalized.includes("near-duplicate") || normalized.includes("existing evidence available")) {
+    return "已有可用证据，跳过重复工具调用";
+  }
+  if (normalized.includes("model request failed") || normalized.includes("llm") || normalized.includes("provider")) {
+    return "模型服务暂时不可用，系统已转入错误处理";
+  }
+  return text;
+}
+
 function agentLiveStatusText(eventName, payload = {}) {
   if (eventName === "tool_call_start") {
     return `正在调用：${localizeAgentTool(payload.tool_name || payload.action)}`;
   }
   if (eventName === "tool_call_result") {
+    if (payload.skipped) {
+      return `${localizeAgentTool(payload.tool_name || payload.action)} 已跳过重复调用`;
+    }
     return payload.succeeded === false
       ? `${localizeAgentTool(payload.tool_name || payload.action)} 调用失败`
       : `${localizeAgentTool(payload.tool_name || payload.action)} 已返回`;
@@ -639,15 +811,19 @@ function appendAgentLiveStep(messageElement, eventName, payload = {}) {
 
 function agentThoughtStepHtml(step, index) {
   const action = localizeAgentAction(step.action || step.name || step.tool_name);
-  const succeeded = step.succeeded !== false;
-  const input = step.input_summary ? `<div class="agent-thought-line">输入：${escapeHtml(step.input_summary)}</div>` : "";
-  const output = step.output_summary ? `<div class="agent-thought-line">结果：${escapeHtml(step.output_summary)}</div>` : "";
-  const error = step.error ? `<div class="agent-thought-line agent-thought-line--error">错误：${escapeHtml(step.error)}</div>` : "";
+  const skipped = isSkippedAgentStep(step);
+  const succeeded = step.succeeded !== false || skipped;
+  const statusText = skipped ? "已跳过" : succeeded ? "完成" : "已处理";
+  const input = step.input_summary ? `<div class="agent-thought-line">输入：${escapeHtml(userFacingAgentSummary(step.input_summary))}</div>` : "";
+  const output = step.output_summary ? `<div class="agent-thought-line">结果：${escapeHtml(userFacingAgentSummary(step.output_summary))}</div>` : "";
+  const error = step.error && !skipped
+    ? `<div class="agent-thought-line agent-thought-line--error">说明：${escapeHtml(userFacingAgentSummary(step.error))}</div>`
+    : "";
   return `
     <li class="agent-thought-step">
       <div class="agent-thought-step-title">
         <span>${index + 1}. ${escapeHtml(action)}</span>
-        <span class="pill ${succeeded ? "neutral" : "warning"}">${escapeHtml(succeeded ? "完成" : "失败")}</span>
+        <span class="pill ${succeeded ? "neutral" : "warning"}">${escapeHtml(statusText)}</span>
       </div>
       ${input}
       ${output}
@@ -704,6 +880,7 @@ function appendTokenToAgentMessage(messageElement, token) {
 }
 
 function finalizeAgentStreamingMessage(messageElement, result) {
+  result = normalizeCitationDisplay(result);
   if (!messageElement) {
     appendAgentAssistantMessage(result);
     return;
@@ -728,7 +905,12 @@ function finalizeAgentStreamingMessage(messageElement, result) {
   bubble.querySelector("[data-agent-thinking-status]")?.remove();
   bubble.querySelector("[data-agent-live-steps]")?.remove();
   answerText.insertAdjacentHTML("beforebegin", agentThoughtHtml(result));
-  answerText.textContent = result.answer;
+  answerText.innerHTML = renderAnswerWithCitationLinks(
+    result.answer,
+    result.sources || [],
+    result.invalid_citations || [],
+    result.citation_source_map || {},
+  );
 
   if (result.refused) {
     const refusalCategory = result.refusal_category
@@ -744,7 +926,7 @@ function finalizeAgentStreamingMessage(messageElement, result) {
   const citationBadges = (result.citations || [])
     .map((c) => {
       const isInvalid = invalidCitationSet.has(String(c));
-      return `<span class="pill ${isInvalid ? "danger" : ""}">[${escapeHtml(c)}]${isInvalid ? " 无效" : ""}</span>`;
+      return `${citationReferenceHtml(c, result.sources || [], isInvalid, result.citation_source_map?.[String(c)] || c)}${isInvalid ? '<span class="pill danger">无效</span>' : ""}`;
     })
     .join("");
   const orphanInvalidBadges = (result.invalid_citations || [])
@@ -788,7 +970,7 @@ function appendAgentErrorMessage(message) {
           <div class="chat-message-role">Agent</div>
           <div class="refusal">
             <strong>生成失败</strong>
-            <p>${escapeHtml(message || "请求失败，请稍后重试")}</p>
+            <p>${escapeHtml(message || "请求失败，请稍后重试；如持续失败，请检查服务日志。")}</p>
           </div>
         </div>
       </article>
@@ -833,11 +1015,12 @@ function updateAgentModeStatus(mode) {
 }
 
 function agentAnswerHtml(result) {
+  result = normalizeCitationDisplay(result);
   const invalidCitationSet = new Set((result.invalid_citations || []).map((citation) => String(citation)));
   const citationBadges = (result.citations || [])
     .map((citation) => {
       const isInvalid = invalidCitationSet.has(String(citation));
-      return `<span class="pill ${isInvalid ? "danger" : ""}">[${escapeHtml(citation)}]${isInvalid ? " 无效" : ""}</span>`;
+      return `${citationReferenceHtml(citation, result.sources || [], isInvalid, result.citation_source_map?.[String(citation)] || citation)}${isInvalid ? '<span class="pill danger">无效</span>' : ""}`;
     })
     .join("");
   const orphanInvalidBadges = (result.invalid_citations || [])
@@ -859,7 +1042,7 @@ function agentAnswerHtml(result) {
   return `
     ${agentThoughtHtml(result)}
     ${refused}
-    <div class="answer-text">${escapeHtml(result.answer)}</div>
+    <div class="answer-text">${renderAnswerWithCitationLinks(result.answer, result.sources || [], result.invalid_citations || [], result.citation_source_map || {})}</div>
     <div class="answer-meta">
       ${citationBadges || '<span class="pill neutral">无引用</span>'}
       ${orphanInvalidBadges}
@@ -1046,7 +1229,7 @@ async function submitAgent() {
       mode: "tool_calling_agent",
     };
     if (!state.currentConversationId) {
-      const conversation = await createAgentConversation();
+      const conversation = await createAgentConversation(conversationTitleFromQuestion(question));
       state.currentConversationId = conversation.id;
     }
     pendingUserMessage = appendAgentUserMessage(question);
@@ -1113,7 +1296,7 @@ async function submitAgent() {
     pendingThinkingMessage?.remove();
     setAgentPanelStatus("error");
     updateAgentModeStatus("auto");
-    appendAgentErrorMessage(error.message);
+    appendAgentErrorMessage(userFriendlyErrorMessage(error));
     throw error;
   } finally {
     setAgentBusy(false);

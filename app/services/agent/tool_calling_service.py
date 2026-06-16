@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from collections.abc import Callable, Sequence
@@ -18,6 +19,7 @@ from app.services.agent.tools import (
     AgentToolbox,
     truncate_text,
 )
+from app.core.structured_logging import log_event, safe_text_summary
 from app.services.brain.workflow import (
     RESPONSIBILITY_REFUSAL_ANSWER,
     evaluate_responsibility_gate,
@@ -54,6 +56,7 @@ ToolCallingFinalAnswerStrategy = Literal["baseline", "structured_final_answer"]
 TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY: ToolCallingFinalAnswerStrategy = (
     "structured_final_answer"
 )
+agent_logger = logging.getLogger("rfc_rag_agent.agent")
 
 
 @dataclass(frozen=True)
@@ -103,8 +106,27 @@ class ToolCallingAgentService:
         if max_tool_calls <= 0:
             raise ValueError("max_tool_calls must be greater than 0")
 
+        log_event(
+            agent_logger,
+            "query_received",
+            mode="tool_calling_agent",
+            top_k=top_k,
+            max_tool_calls=max_tool_calls,
+            final_answer_strategy=self.final_answer_strategy,
+            question_summary=safe_text_summary(normalized_question, limit=80),
+        )
+
         responsibility_gate = evaluate_responsibility_gate(normalized_question)
         if responsibility_gate.triggered:
+            log_event(
+                agent_logger,
+                "refusal_triggered",
+                mode="tool_calling_agent",
+                refusal_category="responsibility_gate_triggered",
+                source_count=0,
+                citation_count=0,
+                tool_call_count=0,
+            )
             return AgentQueryResult(
                 question=normalized_question,
                 answer=RESPONSIBILITY_REFUSAL_ANSWER,
@@ -126,6 +148,15 @@ class ToolCallingAgentService:
 
         topic_gate_query = " ".join([normalized_question, *(history or [])])
         if not has_topic_anchor(topic_gate_query):
+            log_event(
+                agent_logger,
+                "refusal_triggered",
+                mode="tool_calling_agent",
+                refusal_category="off_topic",
+                source_count=0,
+                citation_count=0,
+                tool_call_count=0,
+            )
             return AgentQueryResult(
                 question=normalized_question,
                 answer="当前问题缺少项目资料库的领域锚点，无法基于堆石混凝土资料可靠回答。",
@@ -558,6 +589,15 @@ class ToolCallingAgentService:
         record: AgentToolCallRecord,
         iteration: int,
     ) -> None:
+        log_event(
+            agent_logger,
+            "tool_call_executed",
+            mode="tool_calling_agent",
+            iteration=iteration,
+            tool_name=record.tool_name,
+            succeeded=record.succeeded,
+            output_summary=record.output_summary,
+        )
         self._emit(
             event_sink,
             "tool_call_result",
@@ -566,6 +606,7 @@ class ToolCallingAgentService:
                 "tool_name": record.tool_name,
                 "observation_summary": record.output_summary,
                 "succeeded": record.succeeded,
+                "skipped": bool(record.error and "skipped" in record.error),
             },
         )
 
@@ -981,6 +1022,19 @@ def result_from_tool_calling_loop(
     latency_trace["skipped_tool_call_count"] = skipped_tool_call_count
     latency_trace["executed_tool_call_count"] = executed_tool_call_count
     latency_trace["citation_repair_count"] = citation_repair_count
+    log_event(
+        agent_logger,
+        "refusal_triggered" if refused else "answer_generated",
+        mode="tool_calling_agent",
+        refused=refused,
+        source_count=len(sources),
+        citation_count=len(citations),
+        tool_call_count=len(tool_calls),
+        executed_tool_call_count=executed_tool_call_count,
+        skipped_tool_call_count=skipped_tool_call_count,
+        citation_repair_count=citation_repair_count,
+        latency_ms=latency_trace.get("total_latency_ms"),
+    )
     return AgentQueryResult(
         question=question,
         answer=answer,
