@@ -12,8 +12,10 @@ from app.db.repositories import (
 from app.db.session import create_sqlite_engine
 from app.services.retrieval.vector_index import calculate_text_hash
 from scripts.backfill_parent_chunks import (
+    ChildSpan,
     PARENT_HEADING_PREFIX,
     backfill_parent_chunks,
+    choose_parent_for_child,
 )
 
 
@@ -157,3 +159,40 @@ def test_backfill_parent_chunks_is_idempotent(tmp_path) -> None:
     assert second_stats.parent_chunks_created == 0
     assert second_stats.parent_chunks_reused == len(parent_chunks)
     assert second_stats.child_chunks_updated == 0
+
+
+def test_choose_parent_for_child_falls_back_to_nearest_parent_without_overlap() -> None:
+    child = Chunk(
+        id=10,
+        document_id=1,
+        chunk_index=2,
+        content="short tail",
+        char_count=10,
+        start_char=210,
+        end_char=220,
+    )
+    earlier_parent = Chunk(
+        id=20,
+        document_id=1,
+        chunk_index=3,
+        content="earlier",
+        char_count=100,
+        start_char=0,
+        end_char=100,
+    )
+    nearest_parent = Chunk(
+        id=21,
+        document_id=1,
+        chunk_index=4,
+        content="nearest",
+        char_count=80,
+        start_char=120,
+        end_char=180,
+    )
+
+    parent = choose_parent_for_child(
+        ChildSpan(chunk=child, start=210, end=220),
+        [earlier_parent, nearest_parent],
+    )
+
+    assert parent is nearest_parent

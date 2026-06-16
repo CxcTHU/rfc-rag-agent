@@ -1,5 +1,21 @@
 # RFC-RAG-Agent
 
+## Phase 41 Post-Import Retrieval Optimization Update
+
+Current branch: `codex/phase-41-post-import-retrieval-optimization`.
+
+Phase 41 starts from the Phase 40 merge point `0dc5158 Complete phase 40 streaming output safety and corpus import`. It does not change prompt strategy, Stage 30 scoring rules, provider topology, frontend code, or data-source boundaries. The phase focuses on making the Phase 40 imported corpus visible to retrieval after import.
+
+Key result: the local corpus remains `documents=753` and `chunks=25687`, where the chunk table includes parent rows. The indexable child chunk set is `19300`; all indexable child chunks now have both production `paratera / GLM-Embedding-3 / 2048` embeddings and CI-baseline `deterministic / hash-token-v1 / 64` embeddings, with no orphan or duplicate embedding records. Parent rows intentionally do not receive embeddings and do not enter FAISS.
+
+Parent context and vector indexes were refreshed: parent backfill created 3301 new parent rows and linked all ordinary child chunks; GLM and deterministic FAISS indexes were rebuilt with `vectors=19300`; `VectorIndexCache` loads the GLM index in `faiss_only` mode.
+
+Retrieval validation: the new Stage 41 evaluation set covers new Chinese RFC papers, Chinese dam-engineering papers, and English RFC papers. GLM retrieval with `hybrid_rrf_tail` reached `p@1=0.833`, `p@3=0.833`, `p@5=1.000`, `coverage=0.972`; deterministic baseline reached `p@5=0.917`, `coverage=0.917`. Stage 30 remains `overall=91.52 grade=A release_decision=pass`.
+
+Verification: focused Phase 41 regression -> `18 passed`; full `python -m pytest -q` -> `830 passed`; desktop and 390x844 mobile browser smoke passed, including new-corpus retrieval, stop-generation recovery, no horizontal overflow, and no application console errors.
+
+Boundary: no real API call is required for CI or local full regression. Runtime DB/PDF/index state remains local and gitignored: `data/app.sqlite`, `data/raw/`, `data/fulltext/`, and `data/faiss/`. Phase 41 is intentionally stopped before `git add`, commit, tag, push, or PR creation pending user human verification.
+
 ## Phase 40 Streaming Output Safety Update
 
 Current branch: `codex/phase-40-streaming-output-safety`.

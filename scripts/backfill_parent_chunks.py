@@ -286,7 +286,24 @@ def choose_parent_for_child(span: ChildSpan, parents: list[Chunk]) -> Chunk | No
         if overlap > best_overlap:
             best_overlap = overlap
             best_parent = parent
-    return best_parent if best_overlap > 0 else None
+    if best_parent is not None and best_overlap > 0:
+        return best_parent
+    return choose_nearest_parent_for_child(span, parents)
+
+
+def choose_nearest_parent_for_child(span: ChildSpan, parents: list[Chunk]) -> Chunk | None:
+    best_parent: Chunk | None = None
+    best_distance: int | None = None
+    child_center = (span.start + span.end) // 2
+    for parent in parents:
+        if parent.start_char is None or parent.end_char is None:
+            continue
+        parent_center = (parent.start_char + parent.end_char) // 2
+        distance = abs(parent_center - child_center)
+        if best_distance is None or distance < best_distance:
+            best_distance = distance
+            best_parent = parent
+    return best_parent
 
 
 def count_child_parent_updates_for_dry_run(
