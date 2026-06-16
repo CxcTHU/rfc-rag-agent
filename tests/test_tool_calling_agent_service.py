@@ -6,6 +6,10 @@ from app.db.session import create_sqlite_engine
 from app.services.agent.tool_calling_service import (
     ToolCallingAgentService,
     ToolCallingRuntimeEvent,
+    citation_repair_messages,
+    evidence_answer_messages,
+    final_answer_strategy_instruction,
+    tool_calling_messages,
 )
 from app.services.generation.chat_model import (
     ChatMessage,
@@ -395,3 +399,69 @@ def test_tool_calling_agent_respects_responsibility_gate(tmp_path) -> None:
     assert result.refused
     assert result.tool_calls == []
     assert result.workflow_steps[0].tool_name == "responsibility_gate"
+
+
+def test_tool_calling_structured_final_answer_prompt_is_default() -> None:
+    messages = tool_calling_messages("What affects RFC filling capacity?")
+
+    assert "structured_final_answer" in messages[0].content
+    assert "citation-first compact structure" in messages[0].content
+    assert "direct answer in one or two cited sentences" in messages[0].content
+    assert "at most 3 to 5 short factual bullets" in messages[0].content
+    assert "Each factual sentence and each factual bullet" in messages[0].content
+    assert "cite each side separately" in messages[0].content
+    assert "evidence gap" in messages[0].content
+    assert "Do not reveal internal outline" in messages[0].content
+
+
+def test_tool_calling_baseline_prompt_remains_available() -> None:
+    messages = tool_calling_messages(
+        "What affects RFC filling capacity?",
+        final_answer_strategy="baseline",
+    )
+
+    assert "Final answer strategy: baseline" in messages[0].content
+    assert "structured_final_answer" not in messages[0].content
+
+
+def test_tool_calling_evidence_and_repair_prompts_use_structured_strategy() -> None:
+    evidence_messages = evidence_answer_messages(
+        "What affects RFC filling capacity?",
+        sources=[],
+        final_answer_strategy="structured_final_answer",
+    )
+    repair_messages = citation_repair_messages(
+        "What affects RFC filling capacity?",
+        draft_answer="Filling depends on flowability.",
+        sources=[],
+        final_answer_strategy="structured_final_answer",
+    )
+
+    assert "structured_final_answer" in evidence_messages[0].content
+    assert "evidence gap" in evidence_messages[0].content
+    assert "Do not add new facts" in repair_messages[0].content
+    assert "not answer expansion" in repair_messages[0].content
+
+
+def test_tool_calling_final_answer_strategy_validation(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        try:
+            ToolCallingAgentService(
+                db=db,
+                embedding_provider=DeterministicEmbeddingProvider(dimension=32),
+                chat_model_provider=DeterministicChatModelProvider(),
+                final_answer_strategy="unsupported",  # type: ignore[arg-type]
+            )
+        except ValueError as exc:
+            assert "final answer strategy" in str(exc)
+        else:
+            raise AssertionError("unsupported final answer strategy should fail")
+
+    try:
+        final_answer_strategy_instruction("unsupported")  # type: ignore[arg-type]
+    except ValueError as exc:
+        assert "final answer strategy" in str(exc)
+    else:
+        raise AssertionError("unsupported final answer strategy should fail")

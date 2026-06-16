@@ -1,5 +1,28 @@
 # 架构说明
 
+## 阶段 38 架构增量：默认 Tool Calling 链路生成质量攻坚
+
+阶段 38 不引入新外部数据源、不替换 provider 拓扑、不修改 Stage 30 评分规则，也不把 deterministic citation-validator 接入生产链路。增量集中在默认 `tool_calling_agent` 的最终答案生成约束、扩展评测、真实 Judge A/B 和默认入口稳定性回归。
+
+```text
+POST /agent/query or /agent/query/stream
+-> omitted mode defaults to tool_calling_agent
+-> ToolCallingAgentService(final_answer_strategy="structured_final_answer")
+-> LLM(messages + tools)
+-> hybrid_search_knowledge / search_knowledge tool calls
+-> sanitized role="tool" evidence feedback
+-> native tool-calling final synthesis
+-> citation extraction / repair / refusal if unsupported
+```
+
+`ToolCallingFinalAnswerStrategy` 当前支持 `baseline` 和 `structured_final_answer`。`structured_final_answer` 已从 outline-first 改成 compact citation-first：先给 1-2 句带引用的直接回答，再按需输出最多 3-5 个短事实点，每个事实句或事实 bullet 都必须带最近的 `[N]` source marker；证据缺口用 evidence gap 明说，不推断补全。它不调用旧 `AgentToolbox.answer_with_citations` 作为最终生成器，因此不回退到 ReAct/Brain 的旧 answer tool 路径。
+
+默认入口在阶段 38 被收紧：前端默认、`/agent/query` 省略 `mode`、`/agent/query/stream` 省略 `mode` 均进入 `tool_calling_agent`。显式 `mode="react_agent"` 继续作为回滚路径；显式 `mode="default"` 继续保留，用于旧 RAG 链路、source detail 和 follow-up transform 等能力。`ToolCallingAgentService` 还增加 provider capability 护栏：如果注入的 provider 不支持 `generate_with_tools`，API 返回受控 503，而不是暴露内部 AttributeError。
+
+评测层新增两个 Stage 38 脚本：`evaluate_stage38_tool_calling_quality.py` 用 24 条、16 类场景做 deterministic 对照；`judge_stage38_tool_calling_quality.py` 用同一题集做 `baseline` vs `structured_final_answer` 真实 Judge A/B，默认 dry-run，显式 `--execute` 才调用真实 provider/Judge。CSV 只保存指标、风险、短理由和安全摘要，不保存答案全文、raw provider response、`reasoning_content`、hidden thought、API key 或 Bearer token。
+
+真实 Judge 最终结论：baseline `answer_coverage=0.775 / citation_support=0.731 / safety=1.000 / review_required`，compact citation-first `structured_final_answer` 为 `0.808 / 0.867 / 1.000 / pass`。因此阶段 38 的架构决策是“保持默认 tool-calling，并保留 compact citation-first structured final answer”，而不是调权、接 deterministic 后处理或把旧 answer tool 硬接回生产。
+
 ## 阶段 37 架构增量：Tool Calling Loop 并行迁移
 
 阶段 37 新增并行 `tool_calling_agent`，把 ReAct 自定义 JSON action loop 的一部分能力迁移到 OpenAI-compatible `tools/tool_calls` 协议上。关键点是：tool-calling 只是模型表达工具请求的协议，真正的 Agent 能力来自外层 loop。

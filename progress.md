@@ -1,148 +1,149 @@
-# Phase 37 Submission Progress
-
-Phase 37 is complete and user-authorized for submission/merge.
-
-Current verification:
-
-```text
-python -m pytest -q -> 758 passed
-python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
-python scripts/evaluate_stage37_tool_calling_vs_react.py -> deterministic comparison refreshed
-python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:8000 --timeout-seconds 120 -> rows=9 execute=true failed=0
-```
-
-Current decision: keep tool_calling_agent parallel, with no default switch in Phase 37.
-
-# 阶段 36 进度日志：生成可靠性与多轮体验稳定化
+# 阶段 38 进度日志：默认 Tool Calling 链路生成质量攻坚与扩展评测闭环
 
 ## 当前状态
 
-- 当前阶段：阶段 36 开发、测试、文档与用户人工核验已完成，正在执行提交、tag、推送与 GitHub 合并。
-- 当前本地分支：`codex/phase-36-generation-reliability-and-conversation-stability`。
-- 当前 Git 基线：`main / origin/main -> dc751fb Merge pull request #5 from CxcTHU/codex/phase35-multiturn-intent-router`。
-- 最新阶段 tag：`phase-35-complete -> 7877308 Complete phase 35 remediation with Judge gate documented`。
-- tag 合并状态：`phase-35-complete` 是 `main` 的祖先；多轮意图路由补充（commit 0af4a87）已用户人工验收并合并到 main。
-- 当前提交边界：用户已于 2026-06-15 明确授权执行 `git add`、commit、`phase-36-complete` tag、push 与 GitHub merge。
+- 当前阶段：阶段 38 Phase 6 已完成，等待用户人工核验。
+- 当前本地分支：`codex/phase-38-tool-calling-generation-quality`。
+- 当前 Git 基线：`main / origin/main -> 25344a8 Merge phase 37 tool calling loop migration`。
+- 最新阶段 tag：`phase-37-complete -> 62eff40 Complete phase 37 tool calling loop migration`（已合并到 main）。
+- Phase 37 状态：开发、测试、真实评测、默认链路切换、提交、tag 和 main 合并均已完成。
+- 阶段 38 目标分支：`codex/phase-38-tool-calling-generation-quality`（已从 Phase 37 合并后的 main 创建）。
 
-## 阶段 35 验收基线
+## 阶段 37 验收基线
 
 ```text
-阶段 35 主线提交：7877308 Complete phase 35 remediation with Judge gate documented
-阶段 35 多轮补充提交：0af4a87 Add phase 35 multiturn intent routing supplement
-阶段 35 merge 链：c9097b1 + dc751fb
-phase-35-complete -> 7877308（不移动）
+Phase 37 核心改动（已进入 main）：
+- tool_calling_agent 成为默认：前端 app.js、后端 agent.py query/stream 两个入口
+- 三个 bug 修复：GBK encoding、assistant tool_calls protocol、ChatToolCall forward reference
+- stream 层 mode 解析修复：auto-route 到 tool_calling_agent 时跳过 QueueStreamingChatModelProvider
+- 真实评测：tool_calling 13.5s avg / react 28.0s avg，0 errors，8/8 refusal match
+
+验证结果：
+python -m pytest -q -> 758 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/run_production_smoke.py --execute -> rows=9 execute=true failed=0
 ```
 
-阶段 35 完成：
-
+Phase 36 Judge 攻坚留下的基线：
 ```text
-Stage 30 = 91.52 / A / pass（GLM, hybrid_rrf_tail，干净通过）
-HybridRrfTailSearchService 接入 Brain 生产路径
-citation_validator 已从生产 Brain 解耦，保留为离线评测工具
-Judge gate 显式标注 FAIL：cov=0.41 / cit=0.64 / safety=1.00（GLM 链路）
-ReAct planner 解析失败兜底改为 in-scope 先 search
-多轮意图路由补充：翻译/转述、模型信息、能力说明、拒答原因（已合并 main）
-react p50 ≈ 39s / p90 ≈ 55s
-全量 pytest 698 passed
+baseline: cov=0.655 / cit=0.640 / safety=1.000
+outline_first: cov=0.703 / cit=0.685 / safety=1.000
+answer_provider_ab: cov=0.772 / cit=0.820 / safety=0.950
+三组均 review_required，未接生产
 ```
 
-阶段 35 留给阶段 36 的开放项：
+## 阶段 38 启动决策
 
 ```text
-Judge gate FAIL 仍未解决（cov 0.41 / cit 0.64）；阶段 35 续整改未试 outline-first 与 answer provider A/B
-拒答信息单薄：refusal_reason 只有短文本，没有改写建议或检索摘要
-生产 smoke 仍是手动跑，没有脚本化
-多轮路由补充已合并，但未做完整回归集
-真实 LLM Judge 样本仍只 10 条，统计噪声大
-```
-
-## 阶段 36 启动决策
-
-```text
-主线：生成可靠性 + 用户对话体验稳定化，不追分。
+主线：默认 tool_calling_agent 链路的回答质量、引用质量和评测置信度补齐。
        Stage 30 维持 91.52 / A / pass；Judge gate 显式攻坚但不强行包装。
-目标分支：codex/phase-36-generation-reliability-and-conversation-stability
-预期范围：拒答可解释性 + 生产 smoke 自动化 + Judge gate 离线 A/B 攻坚（≤ 2 周）+ 多轮路由模块化辅线 + 文档收尾
-不动项：chat provider 拓扑、embedding/rerank provider、外部数据源、写入型 Agent 工具、tool-calling 协议迁移、多用户隔离、Stage 30 评分规则、生产链路引入 deterministic 后处理
-风险点：Judge gate 攻坚仍可能失败；要求 Codex 试过即诚实写归因，不再追指标
+目标分支：codex/phase-38-tool-calling-generation-quality
+预期范围：评测集扩充 20-30 条 + tool-calling 专属生成策略 + Judge 质量门真实攻坚 + 默认链路稳定性回归
+不动项：embedding/rerank provider、外部数据源、架构迁移、多用户隔离、Stage 30 评分规则、deterministic 后处理进生产
+风险点：Judge gate 攻坚仍可能失败；tool_calling_agent final answer 质量需 baseline 后才知起点
 ```
 
 ## Phase 日志（待 Codex 填充）
 
-### Phase 0：启动校准与阶段 36 规划落盘
+### Phase 0：启动校准与阶段 38 规划落盘
 
 - 状态：已完成。
-- 已读：`AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、阶段 35 review/remediation、Stage 35 设计、Judge summary 与 safety attribution、三份规划文件和 goal prompt 模板。
-- Git 校准：`phase-35-complete -> 7877308`，`main -> dc751fb`，`phase-35-complete` 是 `main` 的祖先；未移动任何 tag。
-- 分支：已从 `main` 创建并切换到 `codex/phase-36-generation-reliability-and-conversation-stability`。
-- 提交边界：未执行 `git add`、commit、tag、push 或 PR。
+- 已阅读全部入口、进度、架构、数据源、Phase 37 review/decision 和本地规划文件。
+- 已运行 `git status -sb`、`git log --oneline -5 --decorate`。
+- 已确认 `phase-37-complete -> 62eff40` 是 `main / origin/main -> 25344a8` 的祖先，Phase 37 已合并。
+- 已从 `main` 创建并切换到 `codex/phase-38-tool-calling-generation-quality`。
+- 新词解释：`tool_calling_agent baseline Judge` 指先不加新生成策略，直接用当前默认 tool-calling 链路跑真实 Judge，得到 answer_coverage、citation_support、safety_leak_check 起点；它是后续 A/B 的对照组。
 
-### Phase 1：阶段 36 设计文档与评价口径
-
-- 状态：已完成。
-- 新增 `docs/stage36_generation_reliability_and_conversation_stability.md`，固定主线、辅线、不做事项、安全边界、Judge 离线门槛和最终验收标准。
-- 新增 `tests/test_stage36_design.py`，用文档断言锁定阶段 36 的核心约束。
-- 验证：`python -m pytest tests/test_stage36_design.py -q` -> `5 passed`。
-
-### Phase 2：拒答可解释性升级
+### Phase 1：阶段 38 设计文档与评测口径
 
 - 状态：已完成。
-- 新增 `app/services/agent/refusal_explainer.py`，实现 off-topic 改写建议与 evidence_insufficient 安全检索摘要。
-- `/agent/query` schema 未新增字段；解释追加到已有 `reasoning_summary`。
-- `AgentToolbox.answer_with_citations()` 在拒答且无 sources 时补只读 hybrid 检索，用于生成真实来源摘要；不调用 LLM、不写库。
-- 新增 `tests/test_refusal_explainer.py`，并补充 Agent API 拒答解释测试。
-- 验证：`python -m pytest tests/test_refusal_explainer.py tests/test_agent_api.py tests/test_agent_tools.py tests/test_agent_service.py -q` -> `42 passed`。
+- 已新增 `docs/stage38_tool_calling_generation_quality.md`。
+- 已新增 `tests/test_stage38_design.py`。
+- 已锁定 Judge 评测口径：先跑 `tool_calling_agent baseline Judge`，再做 `baseline vs structured_final_answer`；最终答案生成保持 tool-calling 原生 final synthesis，不硬接旧 `answer_with_citations`。
+- 已运行 `python -m pytest tests/test_stage38_design.py -q`，结果 `8 passed`。
 
-### Phase 3：生产 smoke 自动化
-
-- 状态：已完成。
-- 新增 `scripts/run_production_smoke.py`，默认 dry-run，`--execute` 才访问真实端点。
-- 覆盖 `/health`、`/quality-report`、`/quality-report/data.json`、正常 RAG、多轮转述、模型信息和 `/agent/query/stream`。
-- 输出 `data/evaluation/stage36_production_smoke_results.csv`，仅包含安全字段。
-- 新增 `tests/test_run_production_smoke.py`。
-- 验证：`python -m pytest tests/test_run_production_smoke.py -q` -> `5 passed`。
-- 验证：`python scripts/run_production_smoke.py` -> `rows=7 execute=false failed=0`。
-- 真实 `--execute`：留到阶段收尾时启动服务后一键运行。
-
-### Phase 4：Judge gate 显式离线攻坚（≤ 2 周）
-
-- 状态：已完成（真实 20 题 A/B 已落盘，Judge gate 未通过，未包装通过）。
-- 新增 `app/services/generation/outline_first_strategy.py`，作为离线候选策略，默认不接生产。
-- 新增 `scripts/judge_stage36_strategy_ab.py`，覆盖 `baseline`、`outline_first`、`answer_provider_ab` 三组。
-- 新增 `tests/test_stage36_judge_strategy_ab.py`。
-- 新增/更新 `data/evaluation/stage36_judge_strategy_ab_results.csv`、`data/evaluation/stage36_judge_strategy_ab_summary.csv`、`docs/stage36_judge_strategy_decision.md`。
-- 验证：`python -m pytest tests/test_stage36_judge_strategy_ab.py -q` -> `6 passed`。
-- dry-run：`python scripts/judge_stage36_strategy_ab.py` -> `rows=60 queries=20 execute=false`。
-- 真实执行：`python scripts/judge_stage36_strategy_ab.py --execute --limit 20 --timeout-seconds 180` -> completed_rows=60。
-- 当前 Judge 结论：baseline `0.655/0.640/1.000`、outline_first `0.703/0.685/1.000`、answer_provider_ab `0.772/0.820/0.950`，三组均为 `review_required`。
-- 不得宣称通过，不接生产；后续若继续攻坚，应先分析 answer_coverage 缺口。
-
-### Phase 5：多轮路由模块化（辅线）
+### Phase 2：评测集扩充到 20-30 条
 
 - 状态：已完成。
-- 新增 `app/services/agent/intent_router.py`，抽取多轮转述、模型信息、能力说明、拒答原因和 history prefix 处理。
-- `app/api/agent.py` 已调用 intent router 纯函数，API 层保留会话编排。
-- 新增 `tests/test_intent_router.py`，覆盖 8 类意图回归集。
-- 验证：`python -m pytest tests/test_intent_router.py tests/test_agent_api.py -q` -> `30 passed`。
-- 遗留观察：英文 `it` 仍是子串触发，可能误命中 `quality`/`durability`；阶段 36 不改变历史行为，只记录后续可优化点。
+- 已新增 `scripts/evaluate_stage38_tool_calling_quality.py`，输出 `stage38_tool_calling_quality_results.csv`、`stage38_tool_calling_quality_summary.csv`，并预留 real-provider 输出路径。
+- 已新增 `tests/test_stage38_tool_calling_eval.py`。
+- 评测集已扩展到 24 条，覆盖 16 类场景和 tool-calling edge case。
+- 已运行 `python -m pytest tests/test_stage38_tool_calling_eval.py -q`，结果 `5 passed`。
+- 已运行 `python scripts/evaluate_stage38_tool_calling_quality.py`，结果：`react_agent errors=0 same_refusal=24/24 same_top_source=24/24`；`tool_calling_agent errors=0 same_refusal=23/24 same_top_source=20/24`。
 
-### Phase 6：文档、Obsidian 与阶段收尾验证
+### Phase 3：Tool Calling 专属 Final Answer 生成策略
 
-- 状态：已完成，用户人工核验已通过，进入提交合并收尾。
-- 已更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`；按协作规则未抢改 `AGENT.MD`。
-- 已新增 `docs/phase_reviews/phase-36.md`、`docs/stage36_judge_strategy_decision.md`。
-- 已新增 Obsidian 阶段 36 阶段页、Phase 0-6 汇报、阶段 36 汇报索引，并同步首页、阶段索引、阶段汇报索引。
-- 验证：`python -m pytest -q` -> `724 passed`。
-- 验证：`python scripts/score_stage30_quality.py` -> `stage30 quality score overall=91.52 grade=A release_decision=pass`。
-- 验证：`python scripts/run_production_smoke.py --execute` -> `rows=7 execute=true failed=0`。
-- 浏览器 smoke：桌面 `scrollWidth=clientWidth=1265`、console errors=0；390x844 移动端 `scrollWidth=bodyScrollWidth=375`、console errors=0。
-- 提交前微调：前端聊天框改为 Enter 发送、Shift+Enter 换行；非正常 RAG 问答的 meta/路由回复默认中文。
-- 当前提交边界：用户已授权提交、tag、push 与 GitHub merge。
+- 状态：已完成。
+- 已在 `ToolCallingAgentService` 增加 `baseline` / `structured_final_answer` 策略参数，默认使用 `structured_final_answer`。
+- 已把结构化生成要求接入 tool-calling 原生 final synthesis prompt，覆盖常规 tool loop、evidence convergence 和 citation repair。
+- `baseline` 保留为 Phase 4 A/B 对照；未硬接旧 `answer_with_citations`，未接 `citation_validator`。
+- 已运行 `python -m pytest tests/test_tool_calling_agent_service.py tests/test_stage38_design.py tests/test_stage38_tool_calling_eval.py -q`，结果 `28 passed`。
+- 已重跑 `python scripts/evaluate_stage38_tool_calling_quality.py`，结果 `tool_calling_agent errors=0 same_refusal=23/24 same_top_source=20/24`。
+
+### Phase 4：Judge 质量门真实攻坚
+
+- 状态：已完成。
+- 已新增 `scripts/judge_stage38_tool_calling_quality.py` 和 `tests/test_stage38_tool_calling_judge.py`。
+- 已运行 `python -m pytest tests/test_stage38_tool_calling_judge.py -q`，结果 `4 passed`。
+- 已运行 `python scripts/judge_stage38_tool_calling_quality.py --limit 24` dry-run，生成 48 行计划结果。
+- 已运行 `python scripts/judge_stage38_tool_calling_quality.py --execute --limit 24 --timeout-seconds 180`，完成 24 cases x 2 strategies 真实 Judge。
+- 真实结果：baseline `cov=0.869 / cit=0.794 / safety=1.000 / gate=review_required`；structured_final_answer `cov=0.808 / cit=0.729 / safety=1.000 / gate=review_required`。
+- 已新增 `docs/stage38_tool_calling_quality_decision.md` 草稿，明确两组均未过 Judge gate，不强行包装。
+
+### Phase 5：默认链路稳定性回归
+
+- 状态：已完成。
+- 已确认前端默认 `mode` 为 `tool_calling_agent`。
+- 已将 `/agent/query`、`/agent/query/stream` 的省略 `mode` 默认行为锁定为 `tool_calling_agent`。
+- 显式 `mode="default"`、`mode="react_agent"`、`mode="agentic"`、`mode="tool_calling_agent"` 均保留；其中 `react_agent` 继续作为显式回滚路径。
+- 已增强 `scripts/run_production_smoke.py`：新增默认 query/stream 用例，增加 `expected_mode`、`actual_mode`、`mode_matched` 字段，mode 不匹配会失败。
+- 已补 `ToolCallingAgentService` provider capability 护栏：provider 不支持 `generate_with_tools` 时返回受控 503。
+- 已运行 `python -m pytest tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_run_production_smoke.py -q`，结果 `44 passed`。
+- 已运行 `python -m pytest tests/test_stage38_design.py tests/test_stage38_tool_calling_eval.py tests/test_stage38_tool_calling_judge.py tests/test_tool_calling_agent_service.py -q`，结果 `32 passed`。
+- 已运行 `python scripts/run_production_smoke.py`，结果 `rows=11 execute=false failed=0`。
+- 已重跑 `python scripts/evaluate_stage38_tool_calling_quality.py`，结果 `tool_calling_agent errors=0 same_refusal=23/24 same_top_source=20/24`。
+- 新词解释：`mode_matched` 是 production smoke 的默认链路校验字段，表示响应里的实际 `mode` 是否等于该用例期望的 mode。
+
+### Phase 6：裁定报告、文档与阶段收尾
+
+- 状态：已完成。
+- 已更新普通文档：`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/stage38_tool_calling_quality_decision.md`。
+- 已新增 `docs/phase_reviews/phase-38.md`。
+- 已补齐 Obsidian：阶段 38 目录、Phase 汇报索引、Phase 0-6 小汇报、阶段主页、阶段汇报索引和阶段索引。
+- 已运行 `python -m pytest -q`，结果 `780 passed`。
+- 已运行 `python scripts/score_stage30_quality.py`，结果 `overall=91.52 grade=A release_decision=pass`。
+- 已运行 `python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:8000 --timeout-seconds 120`，结果 `rows=11 execute=true failed=0`。
+- 浏览器 smoke：桌面最新回答 `mode=tool_calling_agent`、有引用、console errors=0、horizontal overflow=false；390x844 移动端 console errors=0、horizontal overflow=false。
+- 用户人工核验前追加 citation gap 补强：已新增离线分析脚本，确认原 structured 主要是 prompt citation gap；已把 `structured_final_answer` 优化为 compact citation-first。
+- 已运行 `python -m pytest tests/test_tool_calling_agent_service.py tests/test_stage38_citation_gap_analysis.py tests/test_stage38_tool_calling_eval.py tests/test_stage38_tool_calling_judge.py -q`，结果 `27 passed`。
+- 已运行 `python scripts/evaluate_stage38_tool_calling_quality.py`，结果 `tool_calling_agent errors=0 same_refusal=23/24 same_top_source=20/24`。
+- 已运行 `python scripts/judge_stage38_tool_calling_quality.py --execute --limit 24 --timeout-seconds 180`，最终结果：structured_final_answer `cov=0.808 / cit=0.867 / safety=1.000 / gate=pass`。
+- citation gap 补强后已运行最终验证：`python -m pytest -q -> 783 passed`；`python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`；production smoke execute `rows=11 failed=0`；浏览器桌面/390x844 只读 smoke 均无横向溢出、console errors=0。Browser runtime 文本输入受虚拟剪贴板限制，默认 mode 执行由 production smoke 覆盖。
+- 当前停在用户人工核验前；未执行 `git add`、commit、tag、push 或 PR。
 
 ## 提交边界（贯穿全阶段）
 
-- 用户人工核验并明确授权后，允许执行 `git add`、`git commit`、`git tag`、`git push`、GitHub merge，并创建 `phase-36-complete` tag。
-- 不替换默认 chat / embedding / rerank provider；不动 chat provider 拓扑。
+- 尚未提交，等待用户人工核验。
+- 不替换默认 embedding / rerank provider；不动 provider 拓扑。
 - 不引入新外部数据源、不爬新网页、不切 chunk、不做架构迁移、不做多用户隔离。
 - 不接 deterministic 后处理（含 citation_validator）进生产链路。
-- 不写 API key / Bearer token / raw provider response / reasoning_content / hidden thought / 完整 chunk 全文进任何提交物。
+- 不改 Stage 30 评分权重、等级阈值、release_decision 规则。
+- 不写 API key / Bearer token / raw provider response / reasoning_content / hidden thought / 受限全文进任何提交物。
+## Six-Metric Gate Update
+
+Stage 38 now uses a six-metric Judge gate after the user's review note. The gate requires all averages to be at least `0.80`: `faithfulness`, `answer_coverage`, `citation_support`, `refusal_correctness`, `conciseness`, and `safety_leak_check`.
+
+The existing 48 real Judge rows were summarized again with:
+
+```text
+python scripts/judge_stage38_tool_calling_quality.py --summarize-existing
+```
+
+Result:
+
+```text
+baseline: faith=0.958 / cov=0.775 / cit=0.731 / refusal=0.958 / concise=0.960 / safety=1.000 / gate=review_required
+structured_final_answer: faith=0.981 / cov=0.808 / cit=0.867 / refusal=0.921 / concise=0.925 / safety=1.000 / gate=pass
+```
+
+`structured_final_answer` remains the Stage 38 candidate. The two refusal-correctness anomalies remain a human-verification focus.

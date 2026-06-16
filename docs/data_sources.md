@@ -2,6 +2,32 @@
 
 本文件用于记录后续采集的堆石混凝土相关资料来源。
 
+## 阶段 38 数据说明
+
+阶段 38 不新增外部资料来源、不爬新网页、不下载新 PDF、不写入新的受限全文，也不重切语料。新增内容均为默认 tool-calling 链路生成质量攻坚、扩展评测、真实 Judge A/B、production smoke 和文档/Obsidian 草稿的派生产物。
+
+阶段 38 新增派生产物：
+
+- `docs/stage38_tool_calling_generation_quality.md`
+- `docs/stage38_tool_calling_quality_decision.md`
+- `docs/phase_reviews/phase-38.md`
+- `scripts/evaluate_stage38_tool_calling_quality.py`
+- `scripts/judge_stage38_tool_calling_quality.py`
+- `data/evaluation/stage38_tool_calling_quality_results.csv`
+- `data/evaluation/stage38_tool_calling_quality_summary.csv`
+- `data/evaluation/stage38_tool_calling_judge_results.csv`
+- `data/evaluation/stage38_tool_calling_judge_summary.csv`
+- `data/evaluation/stage38_citation_gap_analysis.csv`
+- `data/evaluation/stage36_production_smoke_results.csv`（扩展为 11 个 smoke case，增加 `expected_mode` / `actual_mode` / `mode_matched`）
+- `obsidian-vault/阶段汇报/阶段 38 - Tool Calling 生成质量攻坚/`
+
+数据安全边界：
+
+- Stage 38 CSV 与文档不得保存 API key、Bearer token、Authorization header、供应商原始响应、raw provider response、`reasoning_content`、hidden thought、完整 chunk 全文或受限全文。
+- Judge CSV 只保存分数、风险等级、短理由、next_action、计数和安全摘要，不保存答案全文或 provider 原始 JSON。
+- production smoke CSV 不保存 response body，只保存 endpoint、状态、耗时、关键字段、mode 校验字段、refused、citation_count、validator_marker、sensitive_field_detected 和 error_summary。
+- 真实 API 调用只在显式 `--execute` 命令中发生，不进入 CI 或本地全量 pytest 前提。
+
 ## 阶段 37 数据说明
 
 阶段 37 不新增外部资料来源、不爬新网页、不下载新 PDF、不写入新的受限全文，也不重切语料。新增内容均为协议迁移、Agent loop、API/SSE 接入、deterministic 本地评估 fixture、production smoke 和文档草稿。

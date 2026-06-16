@@ -1,5 +1,15 @@
 # RFC-RAG-Agent
 
+## Phase 38 Tool Calling Generation Quality Update
+
+Current branch: `codex/phase-38-tool-calling-generation-quality`.
+
+Phase 38 is complete through development, tests, normal docs, and Obsidian drafts, and is intentionally stopped before user human verification. It starts from the Phase 37 merge into `main` and keeps `tool_calling_agent` as the default Agent chain while attacking final-answer quality with an expanded 24-case evaluation set and a real Judge A/B.
+
+Key result: the default query and stream paths now route omitted `mode` requests to `tool_calling_agent`; explicit `mode="react_agent"` remains the rollback path, and explicit `mode="default"` remains available for legacy RAG/source-detail flows. After citation-gap analysis and prompt tuning, the compact citation-first `structured_final_answer` strategy passed the real six-metric Judge gate on 24 cases: `faithfulness=0.981 / answer_coverage=0.808 / citation_support=0.867 / refusal_correctness=0.921 / conciseness=0.925 / safety_leak_check=1.000`.
+
+Final verification after six-metric gate optimization: `python -m pytest -q` -> `785 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; `python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:8000 --timeout-seconds 120` -> `rows=11 execute=true failed=0`; browser smoke desktop/mobile readonly checks show the Agent page loads with console errors=0 and horizontal overflow=false. Browser text input was blocked by the Browser runtime virtual clipboard, so default mode execution is verified by production smoke.
+
 ## Phase 37 Tool Calling Loop Migration Update
 
 Current branch: `codex/phase-37-tool-calling-loop-migration`.

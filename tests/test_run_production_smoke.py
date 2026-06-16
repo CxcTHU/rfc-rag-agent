@@ -23,23 +23,35 @@ def test_stage36_production_smoke_dry_run_rows_are_safe() -> None:
         urlopen_func=lambda *args, **kwargs: None,
     )
 
-    assert len(rows) == 9
+    assert len(rows) == 11
     assert {row["status"] for row in rows} == {"dry_run"}
     assert all(row["execute_requested"] == "false" for row in rows)
     assert all(set(row) == set(SMOKE_FIELDS) for row in rows)
     assert all("Bearer" not in row["error_summary"] for row in rows)
+    assert all(row["mode_matched"] == "not_run" for row in rows)
+    assert "agent_query_default_tool_calling" in {row["case_id"] for row in rows}
     assert "agent_query_tool_calling" in {row["case_id"] for row in rows}
+    assert "agent_query_stream_default_tool_calling" in {row["case_id"] for row in rows}
     assert "agent_query_tool_calling_stream" in {row["case_id"] for row in rows}
 
 
 def test_stage37_production_smoke_covers_tool_calling_agent() -> None:
     cases = {case.case_id: case for case in smoke_cases()}
 
+    assert "mode" not in cases["agent_query_default_tool_calling"].payload
+    assert cases["agent_query_default_tool_calling"].expected_mode == "tool_calling_agent"
     assert cases["agent_query_tool_calling"].payload["mode"] == "tool_calling_agent"
+    assert cases["agent_query_tool_calling"].expected_mode == "tool_calling_agent"
+    assert "mode" not in cases["agent_query_stream_default_tool_calling"].payload
+    assert (
+        cases["agent_query_stream_default_tool_calling"].expected_mode
+        == "tool_calling_agent"
+    )
     assert (
         cases["agent_query_tool_calling_stream"].payload["mode"]
         == "tool_calling_agent"
     )
+    assert cases["agent_query_tool_calling_stream"].expected_mode == "tool_calling_agent"
     assert cases["agent_query_tool_calling_stream"].stream is True
 
 
@@ -49,6 +61,7 @@ def test_stage36_production_smoke_evaluates_agent_payload_without_body_leak() ->
         method="POST",
         endpoint="/agent/query",
         required_fields=("answer", "refused", "citations", "sources", "mode"),
+        expected_mode="react_agent",
     )
     result = HttpResult(
         status_code=200,
@@ -65,6 +78,8 @@ def test_stage36_production_smoke_evaluates_agent_payload_without_body_leak() ->
     assert row["required_fields_present"] == "true"
     assert row["refused"] == "false"
     assert row["citation_count"] == "2"
+    assert row["actual_mode"] == "react_agent"
+    assert row["mode_matched"] == "true"
     assert row["latency_ms"] == "12.346"
     assert "ok" not in row.values()
 
@@ -96,6 +111,7 @@ def test_stage36_production_smoke_parses_sse_metadata_and_done() -> None:
         endpoint="/agent/query/stream",
         required_fields=("metadata", "done"),
         stream=True,
+        expected_mode="react_agent",
     )
 
     parsed = parse_sse_events(body)
@@ -108,6 +124,30 @@ def test_stage36_production_smoke_parses_sse_metadata_and_done() -> None:
     assert parsed["metadata"]["refused"] is False
     assert row["status"] == "passed"
     assert row["citation_count"] == "1"
+    assert row["actual_mode"] == "react_agent"
+    assert row["mode_matched"] == "true"
+
+
+def test_stage38_production_smoke_fails_mode_mismatch() -> None:
+    case = SmokeCase(
+        case_id="default-mode",
+        method="POST",
+        endpoint="/agent/query",
+        required_fields=("answer", "refused", "mode"),
+        expected_mode="tool_calling_agent",
+    )
+    result = HttpResult(
+        status_code=200,
+        text='{"answer":"ok","refused":false,"mode":"default"}',
+        latency_ms=1.0,
+    )
+
+    row = evaluate_http_result("2026-06-15T00:00:00+00:00", case, result)
+
+    assert row["status"] == "failed"
+    assert row["actual_mode"] == "default"
+    assert row["mode_matched"] == "false"
+    assert "mode_mismatch" in row["error_summary"]
 
 
 def test_stage36_production_smoke_writes_expected_csv(tmp_path: Path) -> None:

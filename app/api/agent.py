@@ -169,8 +169,7 @@ def query_agent(
 
     effective_mode = request.mode
     if effective_mode is None:
-        routing = classify_query_complexity(request.question)
-        effective_mode = "tool_calling_agent" if routing.complexity == "complex" else "default"
+        effective_mode = "tool_calling_agent"
 
     response: AgentQueryResponse
     if effective_mode == "agentic":
@@ -442,8 +441,7 @@ def stream_non_chitchat_agent_response(
         try:
             resolved_mode = request.mode
             if resolved_mode is None:
-                routing = classify_query_complexity(request.question)
-                resolved_mode = "tool_calling_agent" if routing.complexity == "complex" else "default"
+                resolved_mode = "tool_calling_agent"
             effective_chat_model_provider = chat_model_provider
             if resolved_mode not in {"react_agent", "tool_calling_agent"}:
                 effective_chat_model_provider = QueueStreamingChatModelProvider(
@@ -771,8 +769,7 @@ def build_agent_query_response(
 ) -> AgentQueryResponse:
     effective_mode = request.mode
     if effective_mode is None:
-        routing = classify_query_complexity(request.question)
-        effective_mode = "tool_calling_agent" if routing.complexity == "complex" else "default"
+        effective_mode = "tool_calling_agent"
 
     if effective_mode == "agentic":
         agentic_result = run_agentic_rag(
