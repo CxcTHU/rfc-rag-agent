@@ -20,8 +20,8 @@ def test_frontend_index_is_served() -> None:
     assert "混合检索" in response.text
     assert "流式回答" in response.text
     assert "结构化分块" in response.text
-    assert "/static/app.js?v=phase39-experience-markdown-citations" in response.text
-    assert "/static/styles.css?v=phase39-citation-thought-compact" in response.text
+    assert "/static/app.js?v=phase40-streaming-output-safety-fix2" in response.text
+    assert "/static/styles.css?v=phase40-streaming-output-safety-fix2" in response.text
     assert 'class="hero-layout"' in response.text
     assert 'class="demo-panel"' in response.text
     assert 'id="agent-panel"' in response.text
@@ -106,7 +106,16 @@ def test_frontend_static_assets_are_served() -> None:
     assert "createAgentConversation" in response.text
     assert "deleteCurrentConversation" in response.text
     assert "agentRequestInFlight" in response.text
+    assert "activeAgentAbortController" in response.text
     assert "setAgentBusy" in response.text
+    assert "abortAgentStream" in response.text
+    assert "markAgentStreamingAborted" in response.text
+    assert "已停止生成" in response.text
+    assert "command-button--stop" in response.text
+    assert "停止生成" in response.text
+    assert "data-agent-stop" not in response.text
+    assert 'querySelector("[data-agent-submit]")?.addEventListener("click"' in response.text
+    assert "event.preventDefault();" in response.text
     assert "setAgentPanelStatus" in response.text
     assert "querySelectorAll" in response.text
     assert "bindViewNavigation" in response.text
@@ -129,12 +138,15 @@ def test_frontend_static_assets_are_served() -> None:
     assert "async function consumeSseBuffer" in response.text
     assert "await consumeSseBuffer" in response.text
     assert "waitForAgentTokenPaint" in response.text
-    assert "await waitForAgentTokenPaint()" in response.text
+    assert "createAgentTokenFlushScheduler" in response.text
+    assert "tokenScheduler.push(token)" in response.text
+    assert "tokenScheduler.flushNow()" in response.text
     assert "await handlers.onToken" in response.text
     assert "finalizeAgentStreamingMessage" in response.text
     assert "appendTokenToAgentMessage" in response.text
-    assert 'setAgentPanelStatus(result?.refused ? "refused" : "answered")' in response.text
+    assert 'setAgentPanelStatus(result?.aborted ? "aborted" : result?.refused ? "refused" : "answered")' in response.text
     assert '"Accept": "text/event-stream"' in response.text
+    assert "signal:" in response.text
     assert "apiEndpoints.agentStream" in response.text
     assert "workflow_steps" in response.text
     assert "iteration_count" in response.text
@@ -164,6 +176,11 @@ def test_frontend_static_assets_are_served() -> None:
     assert "citationNumbersInAnswer" in response.text
     assert "renderAnswerWithCitationLinks" in response.text
     assert "renderInlineMarkdown" in response.text
+    assert "sanitizeRenderedHtml" in response.text
+    assert "SAFE_RENDERED_TAGS" in response.text
+    assert "DANGEROUS_RENDERED_TAGS" in response.text
+    assert "javascript:" in response.text
+    assert 'name.startsWith("on")' in response.text
     assert "<strong>" in response.text
     assert "data-citation-ref" in response.text
     assert "citation-popover" in response.text
@@ -200,6 +217,10 @@ def test_frontend_static_assets_are_served() -> None:
     assert "white-space: nowrap" in styles.text
     assert "height: 1.3em" in styles.text
     assert "agent-live-step--tool-call-result.skipped" in styles.text
+    assert "command-button--stop" in styles.text
+    assert ".chat-message--thinking .answer-text" not in styles.text
+    assert "chat-message--aborted" in styles.text
+    assert "agent-stream-status" in styles.text
 
 
 def test_quality_report_is_served_read_only() -> None:

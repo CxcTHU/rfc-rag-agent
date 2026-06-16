@@ -5,6 +5,7 @@ import csv
 from app.services.source_collection import SourceCandidate
 from scripts.expand_open_access_corpus import (
     append_manifest_rows,
+    is_cc_by_or_cc0_open_access,
     is_permissive_open_access,
     manifest_row_from_candidate,
 )
@@ -32,6 +33,15 @@ def test_permissive_license_accepts_cc_by_and_oa_status() -> None:
 def test_permissive_license_rejects_unknown_and_closed() -> None:
     assert not is_permissive_open_access(_candidate(license_or_terms="", access_rights="unknown"))
     assert not is_permissive_open_access(_candidate(license_or_terms="all rights reserved", access_rights="closed"))
+
+
+def test_cc_by_or_cc0_policy_rejects_non_derivative_and_non_commercial_variants() -> None:
+    assert is_cc_by_or_cc0_open_access(_candidate(license_or_terms="cc-by"))
+    assert is_cc_by_or_cc0_open_access(_candidate(license_or_terms="CC BY 4.0"))
+    assert is_cc_by_or_cc0_open_access(_candidate(license_or_terms="cc0"))
+    assert not is_cc_by_or_cc0_open_access(_candidate(license_or_terms="cc-by-nc-nd"))
+    assert not is_cc_by_or_cc0_open_access(_candidate(license_or_terms="cc-by-nc"))
+    assert not is_cc_by_or_cc0_open_access(_candidate(license_or_terms="", access_rights="gold"))
 
 
 def test_manifest_row_marks_open_access_permission() -> None:

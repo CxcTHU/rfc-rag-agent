@@ -59,6 +59,21 @@ PERMISSIVE_LICENSE_TOKENS = (
 )
 # OpenAlex open_access.oa_status / access_rights 中视为开放的取值。
 OPEN_ACCESS_STATUSES = {"gold", "green", "hybrid", "bronze", "diamond", "open"}
+REDISTRIBUTABLE_LICENSE_TOKENS = (
+    "cc-by",
+    "cc by",
+    "cc0",
+    "public-domain",
+    "public domain",
+)
+NON_REDISTRIBUTABLE_LICENSE_TOKENS = (
+    "cc-by-nc",
+    "cc by-nc",
+    "cc-by-nd",
+    "cc by-nd",
+    "cc-by-sa",
+    "cc by-sa",
+)
 
 MANIFEST_FIELDS = [
     "source_id",
@@ -87,6 +102,21 @@ def is_permissive_open_access(candidate: SourceCandidate) -> bool:
     if access in OPEN_ACCESS_STATUSES:
         return True
     return False
+
+
+def is_cc_by_or_cc0_open_access(candidate: SourceCandidate) -> bool:
+    """Return true for redistributable CC-BY/CC0/public-domain style OA licenses."""
+
+    license_text = (candidate.license_or_terms or "").casefold()
+    if any(token in license_text for token in NON_REDISTRIBUTABLE_LICENSE_TOKENS):
+        return False
+    return any(token in license_text for token in REDISTRIBUTABLE_LICENSE_TOKENS)
+
+
+def license_policy_filter(policy: str):
+    if policy == "cc-by-or-cc0":
+        return is_cc_by_or_cc0_open_access
+    return is_permissive_open_access
 
 
 def manifest_row_from_candidate(candidate: SourceCandidate) -> dict[str, str]:
@@ -208,6 +238,12 @@ def main() -> None:
     parser.add_argument("--mailto", default="rfc-rag-agent@example.org")
     parser.add_argument("--download", action="store_true", help="Actually download permissive OA PDFs.")
     parser.add_argument("--import-to-db", action="store_true", help="Import downloaded PDFs with hardened parser.")
+    parser.add_argument(
+        "--license-policy",
+        choices=["legacy-openalex-oa", "cc-by-or-cc0"],
+        default="legacy-openalex-oa",
+        help="Filter policy for downloadable PDFs. Use cc-by-or-cc0 for redistribution-safe expansion.",
+    )
     parser.add_argument("--raw-dir", default="data/raw")
     parser.add_argument("--chunk-size", type=int, default=900)
     parser.add_argument("--chunk-overlap", type=int, default=120)
@@ -222,12 +258,19 @@ def main() -> None:
 
     # 只把 RFC 相关候选与已有 discovery 文件合并，避免把非相关 OpenAlex 噪声写入跟踪文件。
     relevant_discovered = filter_relevant_candidates(discovered)
-    relevant = dedupe_candidates([*read_candidates_csv(Path(args.candidates_out)), *relevant_discovered])
-    permissive = [c for c in relevant if is_permissive_open_access(c) and c.pdf_url]
+    relevant = dedupe_candidates(
+        filter_relevant_candidates([*read_candidates_csv(Path(args.candidates_out)), *relevant_discovered])
+    )
+    is_allowed_license = license_policy_filter(args.license_policy)
+    permissive = [c for c in relevant if is_allowed_license(c) and c.pdf_url]
     not_yet = [c for c in permissive if not (c.local_path or c.status == "downloaded")]
 
     print(f"discovered={len(discovered)} relevant={len(relevant)}")
-    print(f"permissive_oa_with_pdf={len(permissive)} not_yet_downloaded={len(not_yet)}")
+    print(
+        f"license_policy={args.license_policy} "
+        f"permissive_oa_with_pdf={len(permissive)} "
+        f"not_yet_downloaded={len(not_yet)}"
+    )
 
     if not args.download:
         print("dry-run: pass --download (and --import-to-db) to actually expand the corpus.")

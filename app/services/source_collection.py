@@ -140,7 +140,10 @@ def is_relevant_rfc_text(text: str) -> bool:
         return True
     if "自密实混凝土" in normalized and ("堆石体" in normalized or "块石" in normalized):
         return True
-    if re.search(r"\brfc\b", normalized) and any(term in normalized for term in ["concrete", "dam", "self-compacting"]):
+    if re.search(r"\brfc\b", normalized) and any(
+        re.search(pattern, normalized)
+        for pattern in [r"\bconcrete\b", r"\bdam\b", r"\bself-compacting\b"]
+    ):
         return True
 
     return False

@@ -279,6 +279,13 @@ p {
   box-shadow: 0 14px 34px rgba(84, 214, 255, 0.24);
 }
 
+.command-button--stop {
+  border-color: rgba(255, 107, 122, 0.72);
+  background: linear-gradient(135deg, #ff6b7a, #ff9a6b);
+  color: #1f070b;
+  box-shadow: 0 14px 34px rgba(255, 107, 122, 0.24);
+}
+
 .secondary-button,
 .inline-action {
   min-height: 38px;
@@ -778,13 +785,14 @@ td {
   border-color: rgba(84, 214, 255, 0.22);
 }
 
-.chat-message--thinking .answer-text {
-  display: none;
-}
-
 .chat-message--error .chat-message-bubble {
   border-color: rgba(255, 107, 122, 0.32);
   background: rgba(255, 107, 122, 0.1);
+}
+
+.chat-message--aborted .chat-message-bubble {
+  border-color: rgba(246, 183, 86, 0.32);
+  background: rgba(246, 183, 86, 0.08);
 }
 
 .chat-message-role {
@@ -925,6 +933,13 @@ td {
   color: var(--text);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.agent-stream-status {
+  margin: 10px 0 0;
+  color: var(--warning);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .answer-meta {

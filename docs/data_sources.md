@@ -2,6 +2,78 @@
 
 本文件用于记录后续采集的堆石混凝土相关资料来源。
 
+## 阶段 40 流式输出体验与输出安全说明
+
+阶段 40 的流式输出体验与输出安全开发不新增外部资料来源，不爬新网页，不下载新 PDF，不导入受限全文，不重切 chunk，也不重建 embedding。新增内容是前端安全渲染、停止生成、token 渲染节流、测试、普通文档和 Obsidian 草稿。
+
+新增或更新的工程/文档产物：
+
+- `docs/stage40_streaming_output_safety.md`
+- `docs/phase_reviews/phase-40.md`
+- `app/frontend/index.html`
+- `app/frontend/static/app.js`
+- `app/frontend/static/styles.css`
+- `tests/test_stage40_streaming_output_safety.py`
+- `tests/test_frontend_app.py`
+- `obsidian-vault/阶段汇报/阶段 40 - 流式输出体验与输出安全/`
+- `obsidian-vault/阶段/阶段 40 - 流式输出体验与输出安全.md`
+
+数据安全边界：
+
+- 不把 API key、Bearer token、Authorization header、供应商原始响应、`reasoning_content`、hidden thought、完整 chunk 全文或受限全文写入 Git、CSV、文档、测试或 Obsidian。
+- 前端 sanitizer 只处理最终渲染 HTML，不改变资料来源归属，也不生成新语料。
+- 浏览器 smoke 只记录安全状态、控制台错误和横向溢出结论，不保存 response body 或受限全文。
+
+## 阶段 40 数据说明
+
+阶段 40 开始补齐中文行业标准/规程语料。新增内容只包含公开题录、范围级摘要、纠错说明和检索关键词；没有下载或提交受版权、购买或机构访问限制的标准全文。
+
+新增数据产物：
+
+- `scripts/seed_chinese_standards_metadata.py`
+- `data/imports/chinese_standards_metadata/`
+- `data/corpus_expansion/chinese_standards_metadata.csv`
+- `data/evaluation/stage40_chinese_standards_results.csv`
+- `docs/stage40_corpus_expansion.md`
+
+新增中文标准题录：
+
+- `NB/T 10077-2018`《堆石混凝土筑坝技术导则》
+- `DL/T 5806-2020`《水电水利工程堆石混凝土施工规范》
+- `GB 50496-2018`《大体积混凝土施工标准》
+- `SL/T 352-2020`《水工混凝土试验规程》
+- `DL/T 5330-2015`《水工混凝土配合比设计规程》
+- `SL 314-2018`《碾压混凝土坝设计规范》，作为用户原标准号纠错和 RCC 对照标准，不标为 RFC 专门标准。
+- `DB52/T 1545-2020`《堆石混凝土拱坝技术规范》，作为已废止历史地方标准记录。
+
+当前语料计数核验：
+
+```text
+standard_document: 9 -> 16
+open_access_pdf: 15 -> 15
+metadata_record: 115
+institutional_access_pdf: 325
+wikipedia: 25
+```
+
+OpenAlex 二次筛选结果：
+
+```text
+queries: rock-filled concrete durability; RFC dam seismic; self-compacting concrete large aggregate
+license_policy: cc-by-or-cc0
+discovered=238 relevant=91
+permissive_oa_with_pdf=10
+downloaded_this_run=9
+imported=0 duplicate=9
+```
+
+数据安全边界：
+
+- 标准卡片只保存公开题录和范围级信息，不保存标准正文条文。
+- `data/fulltext/` 和本地 SQLite 仍由 `.gitignore` 排除。
+- `CC-BY-NC`、`CC-BY-NC-ND` 等非严格 `CC-BY/CC0` 论文不进入本轮自动下载。
+- 如用户后续提供购买或机构授权的标准全文，应以 `institutional_access` 本地保存，并继续避免进入 Git。
+
 ## 阶段 39 数据说明
 
 阶段 39 不新增外部资料来源、不爬新网页、不下载新 PDF、不写入新的受限全文，也不重切语料或重建 chunk embedding。新增内容均为部署、日志、前端体验、配置模板、测试和文档派生产物。
@@ -1312,3 +1384,44 @@ chunk_embeddings（deterministic 与已有 Jina 索引）
 ## Stage 37 refinement data note
 
 No new external data source was added for the Phase 37 runtime refinement. The new tool-calling controls operate only on existing local RAG search results from `search_knowledge` and `hybrid_search_knowledge`. Evaluation outputs were refreshed under `data/evaluation/`, including real-provider CSVs, but no source corpus expansion, recrawling, PDF download, or rechunking was performed.
+
+## Phase 40 Corpus Import Closeout
+
+Phase 40 added the authorized local paper expansion after the streaming output safety work. The import used existing ingestion boundaries: full-text PDFs and SQLite runtime state remain local and gitignored, while only scripts, metadata, evaluation summaries, tests, and documentation are committed.
+
+Chinese institutional-access papers:
+
+- Source directory: `G:\Codex\program\papers_0616`.
+- Command: `python scripts/import_papers_corpus.py --dir "G:\Codex\program\papers_0616" --source-type institutional_access_pdf`.
+- Dry-run found `150` real PDFs, not the originally estimated `155`: `rfc_core=109`, `dam_engineering=41`.
+- Cumulative import result after fixing surrogate cleanup and per-file rollback: `imported=106`, `duplicate=55`, `empty=2`, `failed=0`, `new_chunks=6183`.
+- Source type: `institutional_access_pdf`.
+
+Zotero RFC-related English papers:
+
+- Source directory: `C:\Users\admin\Zotero\storage`.
+- Script: `scripts/import_stage40_zotero_rfc.py`.
+- Filter: filename-only RFC context matching for `rock-filled`, `rock filled`, `rock-fill/rockfill` with dam/concrete context, `SCC` with concrete/rock/aggregate context, `stone-concrete` with dam/rockfill context, and `堆石`.
+- Dry-run: `scanned_pdfs=66`, `matched_pdfs=9`.
+- Formal import: `scanned_pdfs=67`, `matched_pdfs=9`, `imported=5`, `duplicate=4`, `empty=0`, `failed=0`, `new_chunks=372`.
+- Source type: `open_access_pdf`.
+
+Verified local corpus after Phase 40 import:
+
+```text
+documents: 753
+chunks: 25687
+institutional_access_pdf: 431
+web_page: 136
+metadata_record: 115
+wikipedia: 25
+open_access_pdf: 20
+standard_document: 16
+local_file: 10
+```
+
+Safety boundary:
+
+- `data/app.sqlite`, `data/raw/`, `data/fulltext/`, and `data/faiss/` are gitignored and must not be staged.
+- Imported full text stays local; no restricted PDF, API key, Bearer token, raw provider response, `reasoning_content`, hidden thought, or restricted full text is written into Git, CSV, docs, tests, or Obsidian.
+- The Zotero filter intentionally excluded non-RFC rock support, mining, tunnel, foundation, and generic concrete papers to avoid corpus noise.

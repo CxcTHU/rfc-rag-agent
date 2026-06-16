@@ -26,6 +26,7 @@ const state = {
   conversations: [],
   currentConversationId: null,
   agentRequestInFlight: false,
+  activeAgentAbortController: null,
   currentView: "ask",
 };
 
@@ -80,10 +81,29 @@ function setAgentPanelStatus(message) {
 function setAgentBusy(isBusy) {
   state.agentRequestInFlight = isBusy;
   const submitButton = document.querySelector("[data-agent-submit]");
+  const questionInput = document.querySelector("[data-agent-question]");
   if (submitButton) {
-    submitButton.disabled = isBusy;
-    submitButton.textContent = isBusy ? "运行中" : "运行";
+    submitButton.disabled = false;
+    submitButton.textContent = isBusy ? "停止生成" : "运行";
+    submitButton.classList.toggle("command-button--stop", isBusy);
+    submitButton.setAttribute("aria-label", isBusy ? "停止生成" : "运行 Agent");
   }
+  if (questionInput) {
+    questionInput.required = !isBusy;
+  }
+}
+
+function abortAgentStream() {
+  if (!state.activeAgentAbortController) {
+    return;
+  }
+  state.activeAgentAbortController.abort();
+  setAgentPanelStatus("stopping");
+  setApiStatus("正在停止生成");
+}
+
+function isAgentAbortError(error) {
+  return error?.name === "AbortError" || String(error?.message || "").includes("AbortError");
 }
 
 function escapeHtml(value) {
@@ -93,6 +113,85 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+const SAFE_RENDERED_TAGS = new Set([
+  "A",
+  "BUTTON",
+  "CODE",
+  "DETAILS",
+  "DIV",
+  "LI",
+  "OL",
+  "P",
+  "SMALL",
+  "SPAN",
+  "STRONG",
+  "SUMMARY",
+]);
+
+const SAFE_RENDERED_ATTRS = new Set([
+  "aria-hidden",
+  "aria-label",
+  "class",
+  "data-agent-abort-status",
+  "data-citation-ref",
+  "href",
+  "open",
+  "rel",
+  "role",
+  "target",
+  "type",
+]);
+
+const DANGEROUS_RENDERED_TAGS = new Set([
+  "SCRIPT",
+  "IFRAME",
+  "OBJECT",
+  "EMBED",
+  "STYLE",
+  "LINK",
+  "META",
+  "FORM",
+]);
+
+const URL_RENDERED_ATTRS = new Set(["href", "src", "xlink:href", "action", "formaction"]);
+
+function isDangerousRenderedUrl(value) {
+  const normalized = String(value || "").trim().replace(/[\u0000-\u001F\u007F\s]+/g, "").toLowerCase();
+  return normalized.startsWith("javascript:") || normalized.startsWith("data:text/html");
+}
+
+function sanitizeRenderedHtml(html) {
+  const template = document.createElement("template");
+  template.innerHTML = String(html || "");
+  const nodes = [template.content];
+  while (nodes.length) {
+    const current = nodes.pop();
+    for (const child of Array.from(current.children || [])) {
+      const tagName = child.tagName;
+      if (DANGEROUS_RENDERED_TAGS.has(tagName) || !SAFE_RENDERED_TAGS.has(tagName)) {
+        child.remove();
+        continue;
+      }
+      for (const attribute of Array.from(child.attributes)) {
+        const name = attribute.name.toLowerCase();
+        const value = attribute.value;
+        if (
+          name.startsWith("on") ||
+          !SAFE_RENDERED_ATTRS.has(name) ||
+          (URL_RENDERED_ATTRS.has(name) && isDangerousRenderedUrl(value))
+        ) {
+          child.removeAttribute(attribute.name);
+        }
+      }
+      if (child.tagName === "A") {
+        child.setAttribute("rel", "noreferrer");
+      }
+      nodes.push(child);
+    }
+  }
+  return template.innerHTML;
 }
 
 function compactText(value, fallback = "-") {
@@ -213,7 +312,7 @@ function renderInlineMarkdown(text) {
 
 function renderAnswerWithCitationLinks(answer, sources = [], invalidCitations = [], citationSourceMap = {}) {
   const invalidCitationSet = new Set(invalidCitations.map((citation) => String(citation)));
-  return String(answer || "")
+  const rendered = String(answer || "")
     .split(/(\[\d+\])/g)
     .map((part) => {
       const match = part.match(/^\[(\d+)\]$/);
@@ -229,6 +328,7 @@ function renderAnswerWithCitationLinks(answer, sources = [], invalidCitations = 
       );
     })
     .join("");
+  return sanitizeRenderedHtml(rendered);
 }
 
 function formatRefusalCategory(category) {
@@ -879,6 +979,88 @@ function appendTokenToAgentMessage(messageElement, token) {
   scrollAgentChatToBottom();
 }
 
+function createAgentTokenFlushScheduler({ onFlush, maxDelayMs = 32 } = {}) {
+  let tokenBuffer = "";
+  let frameId = null;
+  let timeoutId = null;
+
+  const clearScheduledFlush = () => {
+    if (frameId !== null) {
+      cancelAnimationFrame(frameId);
+      frameId = null;
+    }
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+
+  const flush = () => {
+    clearScheduledFlush();
+    if (!tokenBuffer) {
+      return;
+    }
+    const text = tokenBuffer;
+    tokenBuffer = "";
+    onFlush?.(text);
+  };
+
+  const schedule = () => {
+    if (frameId === null) {
+      frameId = requestAnimationFrame(flush);
+    }
+    if (timeoutId === null) {
+      timeoutId = window.setTimeout(flush, maxDelayMs);
+    }
+  };
+
+  return {
+    push(token) {
+      tokenBuffer += String(token || "");
+      schedule();
+    },
+    flushNow() {
+      flush();
+    },
+    cancel() {
+      clearScheduledFlush();
+      tokenBuffer = "";
+    },
+  };
+}
+
+function markAgentStreamingAborted(messageElement) {
+  if (!messageElement) {
+    return;
+  }
+  messageElement.classList.remove("chat-message--thinking");
+  messageElement.classList.add("chat-message--aborted");
+  const answerText = messageElement.querySelector(".answer-text");
+  if (answerText) {
+    const wasThinkingText = answerText.classList.contains("thinking-text");
+    answerText.classList.remove("thinking-text");
+    if (wasThinkingText || !answerText.textContent.trim()) {
+      answerText.textContent = "";
+    }
+  }
+  const status = messageElement.querySelector("[data-agent-thinking-status]");
+  if (status) {
+    status.textContent = "已停止生成";
+  }
+  const liveSteps = messageElement.querySelector("[data-agent-live-steps]");
+  if (liveSteps && !liveSteps.children.length) {
+    liveSteps.remove();
+  }
+  const bubble = messageElement.querySelector(".chat-message-bubble");
+  if (bubble && !bubble.querySelector("[data-agent-abort-status]")) {
+    bubble.insertAdjacentHTML(
+      "beforeend",
+      sanitizeRenderedHtml('<p class="agent-stream-status" data-agent-abort-status>已停止生成</p>'),
+    );
+  }
+  scrollAgentChatToBottom();
+}
+
 function finalizeAgentStreamingMessage(messageElement, result) {
   result = normalizeCitationDisplay(result);
   if (!messageElement) {
@@ -894,22 +1076,24 @@ function finalizeAgentStreamingMessage(messageElement, result) {
 
   const answerText = bubble.querySelector(".answer-text");
   if (!answerText || !answerText.textContent.trim()) {
-    bubble.innerHTML = `
+    bubble.innerHTML = sanitizeRenderedHtml(`
       <div class="chat-message-role">Agent</div>
       ${agentAnswerHtml(result)}
-    `;
+    `);
     scrollAgentChatToBottom();
     return;
   }
 
   bubble.querySelector("[data-agent-thinking-status]")?.remove();
   bubble.querySelector("[data-agent-live-steps]")?.remove();
-  answerText.insertAdjacentHTML("beforebegin", agentThoughtHtml(result));
-  answerText.innerHTML = renderAnswerWithCitationLinks(
-    result.answer,
-    result.sources || [],
-    result.invalid_citations || [],
-    result.citation_source_map || {},
+  answerText.insertAdjacentHTML("beforebegin", sanitizeRenderedHtml(agentThoughtHtml(result)));
+  answerText.innerHTML = sanitizeRenderedHtml(
+    renderAnswerWithCitationLinks(
+      result.answer,
+      result.sources || [],
+      result.invalid_citations || [],
+      result.citation_source_map || {},
+    ),
   );
 
   if (result.refused) {
@@ -1039,7 +1223,7 @@ function agentAnswerHtml(result) {
   const refused = result.refused
     ? `<div class="refusal"><strong>拒答</strong>${refusalCategory}<p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`
     : "";
-  return `
+  return sanitizeRenderedHtml(`
     ${agentThoughtHtml(result)}
     ${refused}
     <div class="answer-text">${renderAnswerWithCitationLinks(result.answer, result.sources || [], result.invalid_citations || [], result.citation_source_map || {})}</div>
@@ -1051,7 +1235,7 @@ function agentAnswerHtml(result) {
       ${iterationBadge}
     </div>
     <p class="meta-line">${escapeHtml(result.reasoning_summary || "")}</p>
-  `;
+  `);
 }
 
 function renderAgentAnswer(result) {
@@ -1203,7 +1387,7 @@ async function submitChat() {
 
 async function submitAgent() {
   if (state.agentRequestInFlight) {
-    setApiStatus("Agent 正在运行，请等待当前请求完成");
+    abortAgentStream();
     return;
   }
   const questionInput = document.querySelector("[data-agent-question]");
@@ -1243,14 +1427,22 @@ async function submitAgent() {
     }
     let streamStarted = false;
     let result = null;
+    const abortController = new AbortController();
+    const tokenScheduler = createAgentTokenFlushScheduler({
+      onFlush: (text) => {
+        streamStarted = true;
+        appendTokenToAgentMessage(pendingThinkingMessage, text);
+      },
+    });
+    state.activeAgentAbortController = abortController;
     try {
       result = await streamAgentQuery(body, {
-        onToken: async (token) => {
-          streamStarted = true;
-          appendTokenToAgentMessage(pendingThinkingMessage, token);
-          await waitForAgentTokenPaint();
+        abortController,
+        onToken: (token) => {
+          tokenScheduler.push(token);
         },
         onMetadata: (metadata) => {
+          tokenScheduler.flushNow();
           result = metadata;
           finalizeAgentStreamingMessage(pendingThinkingMessage, metadata);
           pendingThinkingMessage = null;
@@ -1270,27 +1462,42 @@ async function submitAgent() {
         onToolCallResult: (payload) => {
           appendAgentLiveStep(pendingThinkingMessage, "tool_call_result", payload);
         },
+        onDone: () => {
+          tokenScheduler.flushNow();
+        },
+        onError: () => {
+          tokenScheduler.flushNow();
+        },
+        onAbort: () => {
+          tokenScheduler.flushNow();
+        },
       });
     } catch (streamError) {
-      if (streamStarted) {
+      if (isAgentAbortError(streamError)) {
+        tokenScheduler.flushNow();
+        markAgentStreamingAborted(pendingThinkingMessage);
+        pendingThinkingMessage = null;
+        result = { aborted: true, refused: false };
+      } else if (streamStarted) {
         throw streamError;
-      }
-      result = await fetchJson(apiEndpoints.agent, {
-        method: "POST",
-        body: JSON.stringify(body),
-        timeoutMs: 45000,
-      });
-      pendingThinkingMessage?.remove();
-      pendingThinkingMessage = null;
-      renderAgentAnswer(result);
-      if ((result.workflow_steps || []).length) {
-        renderAgentWorkflowSteps(result.workflow_steps || []);
       } else {
-        renderAgentToolCalls(result.tool_calls || []);
+        result = await fetchJson(apiEndpoints.agent, {
+          method: "POST",
+          body: JSON.stringify(body),
+          timeoutMs: 45000,
+        });
+        pendingThinkingMessage?.remove();
+        pendingThinkingMessage = null;
+        renderAgentAnswer(result);
+        if ((result.workflow_steps || []).length) {
+          renderAgentWorkflowSteps(result.workflow_steps || []);
+        } else {
+          renderAgentToolCalls(result.tool_calls || []);
+        }
       }
     }
-    setApiStatus(result?.refused ? "Agent 已拒答" : "Agent 已完成");
-    setAgentPanelStatus(result?.refused ? "refused" : "answered");
+    setApiStatus(result?.aborted ? "Agent 已停止生成" : result?.refused ? "Agent 已拒答" : "Agent 已完成");
+    setAgentPanelStatus(result?.aborted ? "aborted" : result?.refused ? "refused" : "answered");
     await refreshConversationList();
   } catch (error) {
     pendingThinkingMessage?.remove();
@@ -1299,19 +1506,30 @@ async function submitAgent() {
     appendAgentErrorMessage(userFriendlyErrorMessage(error));
     throw error;
   } finally {
+    state.activeAgentAbortController = null;
     setAgentBusy(false);
   }
 }
 
 async function streamAgentQuery(body, handlers = {}) {
-  const response = await fetch(apiEndpoints.agentStream, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "text/event-stream",
-    },
-    body: JSON.stringify(body),
-  });
+  const abortController = handlers.abortController || new AbortController();
+  let response = null;
+  try {
+    response = await fetch(apiEndpoints.agentStream, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+      },
+      body: JSON.stringify(body),
+      signal: handlers.signal || abortController.signal,
+    });
+  } catch (error) {
+    if (isAgentAbortError(error)) {
+      await handlers.onAbort?.();
+    }
+    throw error;
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     const detail = payload.detail || `HTTP ${response.status}`;
@@ -1325,17 +1543,24 @@ async function streamAgentQuery(body, handlers = {}) {
   const decoder = new TextDecoder();
   let buffer = "";
   let metadata = null;
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) {
-      break;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const parsed = await consumeSseBuffer(buffer, handlers);
+      buffer = parsed.remaining;
+      if (parsed.metadata) {
+        metadata = parsed.metadata;
+      }
     }
-    buffer += decoder.decode(value, { stream: true });
-    const parsed = await consumeSseBuffer(buffer, handlers);
-    buffer = parsed.remaining;
-    if (parsed.metadata) {
-      metadata = parsed.metadata;
+  } catch (error) {
+    if (isAgentAbortError(error)) {
+      await handlers.onAbort?.();
     }
+    throw error;
   }
   buffer += decoder.decode();
   if (buffer.trim()) {
@@ -1375,7 +1600,10 @@ async function consumeSseBuffer(buffer, handlers = {}) {
       await handlers.onToolCallStart?.(event.data);
     } else if (event.name === "tool_call_result") {
       await handlers.onToolCallResult?.(event.data);
+    } else if (event.name === "done") {
+      await handlers.onDone?.(event.data);
     } else if (event.name === "error") {
+      await handlers.onError?.(event.data);
       throw new Error(event.data.detail || "流式响应失败");
     }
   }
@@ -1489,6 +1717,13 @@ function bindCommands() {
       setApiStatus(`Agent 失败：${error.message}`);
     });
   });
+  document.querySelector("[data-agent-submit]")?.addEventListener("click", (event) => {
+    if (!state.agentRequestInFlight) {
+      return;
+    }
+    event.preventDefault();
+    abortAgentStream();
+  });
   document.querySelector("[data-new-conversation]")?.addEventListener("click", () => {
     createAgentConversation().catch((error) => {
       setApiStatus(`新建会话失败：${error.message}`);
@@ -1580,7 +1815,11 @@ async function initializeShell() {
 
 window.rfcRagFrontend = {
   apiEndpoints,
+  abortAgentStream,
   fetchJson,
+  isAgentAbortError,
+  markAgentStreamingAborted,
+  sanitizeRenderedHtml,
   setApiStatus,
 };
 
