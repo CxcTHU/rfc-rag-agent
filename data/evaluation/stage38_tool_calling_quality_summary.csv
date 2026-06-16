@@ -1,0 +1,3 @@
+mode,total,errors,refused,avg_llm_call_count,avg_tool_call_count,avg_iteration_count,avg_time_to_final_ms,avg_citation_count,avg_source_count,avg_executed_tool_call_count,avg_skipped_tool_call_count,avg_citation_repair_count,same_refusal_as_react,same_top_source_as_react,decision
+react_agent,24,0,4,0.000,2.000,2.000,165.601,0.833,5.250,0.000,0.000,0.000,24/24,24/24,keep_parallel_candidate
+tool_calling_agent,24,0,3,1.833,1.042,2.042,1.477,0.875,2.458,0.875,0.167,0.000,23/24,20/24,review

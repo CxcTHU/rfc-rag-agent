@@ -1,5 +1,25 @@
 # 项目进度
 
+## Latest Status: 2026-06-15 Phase 38 Tool Calling Generation Quality Complete Before Human Verification
+
+Current branch: `codex/phase-38-tool-calling-generation-quality`.
+
+Phase 38 starts from `main / origin/main -> 25344a8 Merge phase 37 tool calling loop migration` and focuses on the default `tool_calling_agent` chain. It expands the evaluation set from 8 to 24 cases across 16 categories, implements `baseline` vs `structured_final_answer` final synthesis strategies, runs real Judge A/B, locks the default query/stream entrances to `tool_calling_agent`, and preserves explicit `mode="react_agent"` as rollback.
+
+Main result:
+
+```text
+Stage 38 deterministic eval: cases=24, tool_calling_agent errors=0, same_refusal=23/24, same_top_source=20/24
+Citation-gap analysis: 6/9 original structured low-citation rows were prompt_citation_gap, so prompt tuning was prioritized over retrieval changes
+Final real Judge baseline: cov=0.775, cit=0.731, safety=1.000, gate=review_required
+Final real Judge structured_final_answer: cov=0.808, cit=0.867, safety=1.000, gate=pass
+Default entrance regression: frontend/query/stream default -> tool_calling_agent
+Production smoke dry-run: rows=11, execute=false, failed=0, with expected_mode/actual_mode/mode_matched fields
+Final verification after citation-gap optimization: pytest 783 passed; Stage 30 91.52 / A / pass; production smoke execute rows=11 failed=0; browser desktop/mobile readonly smoke passed
+```
+
+Decision: keep `tool_calling_agent` as the default chain because Phase 5 found no stability blocker, and keep the compact citation-first `structured_final_answer` as the default tool-calling final-answer strategy after human verification. No Stage 30 scoring rule, provider topology, data source, deterministic citation-validator production hook, tag, commit, push, or PR is included before human verification.
+
 ## Latest Status: 2026-06-15 Phase 37 Tool Calling Loop Migration Complete
 
 Current branch: `codex/phase-37-tool-calling-loop-migration`.
@@ -3015,3 +3035,16 @@ POST /agent/query mode=react_agent -> refused=false, marker=false
 ```
 
 Submission boundary: user approved commit, push, and GitHub merge for Phase 35; do not create or move phase tags unless separately requested.
+## Stage 38 Six-Metric Gate Update
+
+Stage 38 now records the user-requested six-metric Judge gate. The pass condition covers `faithfulness`, `answer_coverage`, `citation_support`, `refusal_correctness`, `conciseness`, and `safety_leak_check`, each with average `>= 0.80`.
+
+The existing 24-case A/B result was summarized again without new provider calls:
+
+```text
+python scripts/judge_stage38_tool_calling_quality.py --summarize-existing
+baseline: faith=0.958 / cov=0.775 / cit=0.731 / refusal=0.958 / concise=0.960 / safety=1.000 / gate=review_required
+structured_final_answer: faith=0.981 / cov=0.808 / cit=0.867 / refusal=0.921 / concise=0.925 / safety=1.000 / gate=pass
+```
+
+`structured_final_answer` remains the Stage 38 default-strategy candidate. `refusal_correctness=0.921` is above threshold but the two anomalous refusal rows should be inspected in human verification.

@@ -30,7 +30,7 @@ def parse_sse_events(body: str) -> list[tuple[str, dict]]:
     return events
 
 
-def test_agent_stream_api_returns_token_metadata_done(tmp_path) -> None:
+def test_agent_stream_api_defaults_to_tool_calling_metadata_done(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query/stream",
@@ -41,13 +41,15 @@ def test_agent_stream_api_returns_token_metadata_done(tmp_path) -> None:
     assert response.headers["content-type"].startswith("text/event-stream")
     events = parse_sse_events(response.text)
     event_names = [name for name, _payload in events]
-    assert event_names[0] == "token"
+    assert "agent_step" in event_names
+    assert "tool_call_start" in event_names
+    assert "tool_call_result" in event_names
     assert event_names[-2:] == ["metadata", "done"]
 
     streamed_answer = "".join(payload["text"] for name, payload in events if name == "token")
     metadata = next(payload for name, payload in events if name == "metadata")
     assert metadata["answer"] == streamed_answer
-    assert metadata["mode"] == "default"
+    assert metadata["mode"] == "tool_calling_agent"
     assert metadata["citations"] == [1]
     assert metadata["sources"]
 
@@ -114,7 +116,7 @@ def test_agent_stream_api_persists_completed_conversation_messages(tmp_path) -> 
     assert messages[1]["metadata"]["citations"] == [1]
 
 
-def test_agent_stream_api_auto_routes_complex_to_tool_calling(tmp_path) -> None:
+def test_agent_stream_api_default_routes_to_tool_calling(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query/stream",
@@ -207,11 +209,15 @@ def test_agent_stream_yields_first_token_before_model_finishes(tmp_path, monkeyp
         seed_agent_api_document(db)
         SourceRepository(db).create_source(source_record())
 
-    with TestingSessionLocal() as db:
-        event_stream = stream_agent_query_events(
-            request=AgentQueryRequest(question="What affects filling capacity?", top_k=2),
-            db=db,
-            conversation_repository=ConversationRepository(db),
+        with TestingSessionLocal() as db:
+            event_stream = stream_agent_query_events(
+                request=AgentQueryRequest(
+                    question="What affects filling capacity?",
+                    top_k=2,
+                    mode="default",
+                ),
+                db=db,
+                conversation_repository=ConversationRepository(db),
             conversation_history=[],
             chat_model_provider=SlowStreamingChatModelProvider(),
             embedding_provider=embedding_provider,

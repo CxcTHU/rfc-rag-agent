@@ -32,6 +32,9 @@ SMOKE_FIELDS = [
     "required_fields_present",
     "refused",
     "citation_count",
+    "expected_mode",
+    "actual_mode",
+    "mode_matched",
     "validator_marker",
     "sensitive_field_detected",
     "error_summary",
@@ -63,6 +66,7 @@ class SmokeCase:
     payload: dict[str, Any] | None = None
     required_fields: tuple[str, ...] = ()
     stream: bool = False
+    expected_mode: str | None = None
 
 
 @dataclass(frozen=True)
@@ -124,7 +128,19 @@ def smoke_cases() -> list[SmokeCase]:
             required_fields=("run_id", "dimension", "score", "status"),
         ),
         SmokeCase(
-            case_id="agent_query_rag",
+            case_id="agent_query_default_tool_calling",
+            method="POST",
+            endpoint="/agent/query",
+            payload={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 5,
+                "max_tool_calls": 3,
+            },
+            required_fields=("answer", "refused", "citations", "sources", "mode"),
+            expected_mode="tool_calling_agent",
+        ),
+        SmokeCase(
+            case_id="agent_query_react_agent_rollback",
             method="POST",
             endpoint="/agent/query",
             payload={
@@ -134,6 +150,7 @@ def smoke_cases() -> list[SmokeCase]:
                 "mode": "react_agent",
             },
             required_fields=("answer", "refused", "citations", "sources", "mode"),
+            expected_mode="react_agent",
         ),
         SmokeCase(
             case_id="agent_query_tool_calling",
@@ -146,6 +163,7 @@ def smoke_cases() -> list[SmokeCase]:
                 "mode": "tool_calling_agent",
             },
             required_fields=("answer", "refused", "citations", "sources", "mode"),
+            expected_mode="tool_calling_agent",
         ),
         SmokeCase(
             case_id="agent_query_multiturn_transform",
@@ -159,6 +177,7 @@ def smoke_cases() -> list[SmokeCase]:
                 "mode": "default",
             },
             required_fields=("answer", "refused", "mode"),
+            expected_mode="default",
         ),
         SmokeCase(
             case_id="agent_query_model_meta",
@@ -166,9 +185,23 @@ def smoke_cases() -> list[SmokeCase]:
             endpoint="/agent/query",
             payload={"question": "What model are you using?", "mode": "default"},
             required_fields=("answer", "refused", "mode"),
+            expected_mode="meta",
         ),
         SmokeCase(
-            case_id="agent_query_stream",
+            case_id="agent_query_stream_default_tool_calling",
+            method="POST",
+            endpoint="/agent/query/stream",
+            payload={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 5,
+                "max_tool_calls": 3,
+            },
+            required_fields=("metadata", "done"),
+            stream=True,
+            expected_mode="tool_calling_agent",
+        ),
+        SmokeCase(
+            case_id="agent_query_stream_react_agent_rollback",
             method="POST",
             endpoint="/agent/query/stream",
             payload={
@@ -179,6 +212,7 @@ def smoke_cases() -> list[SmokeCase]:
             },
             required_fields=("metadata", "done"),
             stream=True,
+            expected_mode="react_agent",
         ),
         SmokeCase(
             case_id="agent_query_tool_calling_stream",
@@ -192,6 +226,7 @@ def smoke_cases() -> list[SmokeCase]:
             },
             required_fields=("metadata", "done"),
             stream=True,
+            expected_mode="tool_calling_agent",
         ),
     ]
 
@@ -297,11 +332,14 @@ def evaluate_http_result(
     refused = payload.get("refused") if isinstance(payload, dict) else None
     citations = payload.get("citations") if isinstance(payload, dict) else None
     citation_count = len(citations) if isinstance(citations, list) else 0
+    actual_mode = payload.get("mode") if isinstance(payload, dict) else None
+    mode_matched = case.expected_mode is None or actual_mode == case.expected_mode
     validator_marker = contains_validator_marker(body)
     sensitive = contains_sensitive_marker(body)
     passed = (
         200 <= result.status_code < 300
         and required_present
+        and mode_matched
         and not validator_marker
         and not sensitive
     )
@@ -315,9 +353,11 @@ def evaluate_http_result(
         required_fields_present=str(required_present).lower(),
         refused=str(refused).lower() if isinstance(refused, bool) else "",
         citation_count=str(citation_count),
+        actual_mode=actual_mode if isinstance(actual_mode, str) else "",
+        mode_matched=str(mode_matched).lower(),
         validator_marker=str(validator_marker).lower(),
         sensitive_field_detected=str(sensitive).lower(),
-        error_summary="" if passed else failure_summary(result.status_code, required_present, validator_marker, sensitive),
+        error_summary="" if passed else failure_summary(result.status_code, required_present, mode_matched, validator_marker, sensitive),
     )
 
 
@@ -328,6 +368,7 @@ def dry_run_row(run_at: str, case: SmokeCase) -> dict[str, str]:
         execute_requested=False,
         status="dry_run",
         required_fields_present="not_run",
+        mode_matched="not_run",
         validator_marker="not_run",
         sensitive_field_detected="not_run",
         error_summary="Run with --execute to call real service endpoints.",
@@ -345,6 +386,8 @@ def base_row(
     required_fields_present: str = "",
     refused: str = "",
     citation_count: str = "",
+    actual_mode: str = "",
+    mode_matched: str = "",
     validator_marker: str = "",
     sensitive_field_detected: str = "",
     error_summary: str = "",
@@ -361,6 +404,9 @@ def base_row(
         "required_fields_present": required_fields_present,
         "refused": refused,
         "citation_count": citation_count,
+        "expected_mode": case.expected_mode or "",
+        "actual_mode": actual_mode,
+        "mode_matched": mode_matched,
         "validator_marker": validator_marker,
         "sensitive_field_detected": sensitive_field_detected,
         "error_summary": sanitize_text(error_summary, limit=240),
@@ -425,6 +471,7 @@ def contains_sensitive_marker(text: str) -> bool:
 def failure_summary(
     http_status: int,
     required_present: bool,
+    mode_matched: bool,
     validator_marker: bool,
     sensitive: bool,
 ) -> str:
@@ -433,6 +480,8 @@ def failure_summary(
         failures.append(f"http_status={http_status}")
     if not required_present:
         failures.append("required_fields_missing")
+    if not mode_matched:
+        failures.append("mode_mismatch")
     if validator_marker:
         failures.append("validator_marker_detected")
     if sensitive:
