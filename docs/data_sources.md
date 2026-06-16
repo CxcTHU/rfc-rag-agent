@@ -1425,3 +1425,23 @@ Safety boundary:
 - `data/app.sqlite`, `data/raw/`, `data/fulltext/`, and `data/faiss/` are gitignored and must not be staged.
 - Imported full text stays local; no restricted PDF, API key, Bearer token, raw provider response, `reasoning_content`, hidden thought, or restricted full text is written into Git, CSV, docs, tests, or Obsidian.
 - The Zotero filter intentionally excluded non-RFC rock support, mining, tunnel, foundation, and generic concrete papers to avoid corpus noise.
+
+## Phase 41 Data Source Note
+
+Phase 41 adds no external source, crawler, download, imported PDF, restricted full text, or new data-source category. It works only on the local corpus created by Phase 40.
+
+The post-import retrieval refresh builds derived local artifacts:
+
+- GLM-Embedding-3 embeddings for all 19300 indexable child chunks.
+- deterministic embeddings for the same 19300 child chunks.
+- parent chunk links for all ordinary child chunks.
+- GLM and deterministic FAISS indexes under `data/faiss/`.
+- post-import retrieval evaluation CSVs under `data/evaluation/`.
+
+The local database still reports `documents=753` and `chunks=25687`. The chunk count includes Stage 31 parent rows; parent rows are context containers and intentionally do not receive embeddings or enter FAISS.
+
+Data safety boundary:
+
+- No API key, Bearer token, Authorization header, vendor raw response, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, or full chunk body is written to Git, CSV, tests, docs, or Obsidian.
+- Runtime corpus and index state remains local and gitignored: `data/app.sqlite`, `data/raw/`, `data/fulltext/`, and `data/faiss/`.
+- Evaluation CSVs contain only ids, categories, source types, metric numbers, top titles, and sanitized error summaries.

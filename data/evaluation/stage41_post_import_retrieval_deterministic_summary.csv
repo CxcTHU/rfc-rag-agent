@@ -1,0 +1,2 @@
+provider,model_name,retrieval_mode,total_queries,precision_at_1,precision_at_3,precision_at_5,avg_coverage_ratio,source_type_distribution,decision,next_action
+deterministic,hash-token-v1,hybrid_rrf_tail,12,0.667,0.667,0.917,0.917,institutional_access_pdf:52;local_file:9;metadata_record:17;open_access_pdf:11;standard_document:4;web_page:3,completed,Review low coverage cases; tune only if post-import retrieval misses persist

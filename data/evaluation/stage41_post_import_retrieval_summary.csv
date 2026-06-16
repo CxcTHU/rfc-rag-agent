@@ -1,0 +1,2 @@
+provider,model_name,retrieval_mode,total_queries,precision_at_1,precision_at_3,precision_at_5,avg_coverage_ratio,source_type_distribution,decision,next_action
+paratera,GLM-Embedding-3,hybrid_rrf_tail,12,0.833,0.833,1.000,0.972,institutional_access_pdf:55;local_file:6;metadata_record:19;open_access_pdf:13;standard_document:1;web_page:2,completed,Review low coverage cases; tune only if post-import retrieval misses persist

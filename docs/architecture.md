@@ -3768,3 +3768,33 @@ No Stage 30 scoring weights, grade thresholds, release rules, default providers,
 `ToolCallingAgentService` now behaves as a lightweight tool runtime, not only a provider wrapper. It enforces one executed read-only RAG search per model turn, returns safe skipped `role="tool"` messages for skipped `tool_call_id`s, blocks near-duplicate search queries, converges from existing sanitized sources when the model keeps asking for tools, and performs one bounded citation repair turn when a source-backed draft misses `[N]` markers.
 
 This keeps Phase 37 inside the existing provider topology: no LangGraph, no checkpointing framework, no write tools, no default provider replacement, and no default routing switch. The tiered-provider tradeoff remains: `react_agent` can use Flash planner + V4-Pro answer, while the first `tool_calling_agent` path uses one tools-capable model for planning and final answering unless a later phase explicitly designs a tiered tool-calling variant.
+
+## Phase 41 Architecture Delta: Post-Import Retrieval Optimization
+
+Phase 41 does not change the default Agent chain, prompt strategy, Stage 30 scoring rules, provider topology, frontend code, or data-source boundaries. The architecture delta is limited to rebuilding the retrieval substrate after the Phase 40 corpus import.
+
+The chunk table now contains both child chunks and Stage 31 parent rows:
+
+```text
+documents=753
+chunks table rows=25687
+indexable child chunks=19300
+parent rows=6387
+```
+
+`VectorIndexService._list_chunks()` intentionally indexes only child chunks that are not parent containers. Parent rows provide context expansion and are not embedded or stored in FAISS. This keeps the retrieval vector set aligned with answerable evidence chunks while preserving parent context for synthesis.
+
+The production retrieval substrate is:
+
+```text
+query
+-> GLM-Embedding-3 query embedding
+-> FAISS paratera_GLM-Embedding-3_dim2048
+-> hybrid_rrf_tail retrieval/rerank path
+-> parent context expansion
+-> default tool_calling_agent answer path
+```
+
+The CI/offline baseline substrate mirrors the same child chunk set with `deterministic / hash-token-v1 / dim64` embeddings and a deterministic FAISS index. CI and full local pytest do not require real provider API calls.
+
+Phase 41 also adds safe post-import retrieval evaluation. The evaluation CSVs store query ids, categories, source types, top titles, numeric metrics, and sanitized errors only. They do not store API keys, Bearer tokens, raw provider responses, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, or full chunk content.
