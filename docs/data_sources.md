@@ -2,6 +2,38 @@
 
 本文件用于记录后续采集的堆石混凝土相关资料来源。
 
+## 阶段 39 数据说明
+
+阶段 39 不新增外部资料来源、不爬新网页、不下载新 PDF、不写入新的受限全文，也不重切语料或重建 chunk embedding。新增内容均为部署、日志、前端体验、配置模板、测试和文档派生产物。
+
+新增或更新的主要工程/文档产物：
+
+- `docs/stage39_production_deployment.md`
+- `docs/deployment_guide.md`
+- `docs/phase_reviews/phase-39.md`
+- `Dockerfile`
+- `docker-compose.yml`
+- `.dockerignore`
+- `.env.example`
+- `app/core/structured_logging.py`
+- `app/main.py`
+- `app/api/agent.py`
+- `app/services/agent/tool_calling_service.py`
+- `app/frontend/index.html`
+- `app/frontend/static/app.js`
+- `app/frontend/static/styles.css`
+- `tests/test_stage39_design.py`
+- `tests/test_stage39_docker.py`
+- `tests/test_stage39_logging.py`
+- `tests/test_stage39_deployment_docs.py`
+
+数据安全边界：
+
+- 结构化日志只记录安全字段和截断摘要，不记录 API key、Bearer token、Authorization header、raw provider response、`reasoning_content`、hidden thought、完整用户问题、完整 chunk 或受限全文。
+- production smoke CSV 仍只记录 endpoint、状态、耗时、mode 校验、citation_count、refused 和错误摘要，不保存 response body。
+- `.env.example` 只列变量名和安全默认值，不包含真实 key。
+- Docker 构建上下文通过 `.dockerignore` 排除 `.env`、测试、`data/evaluation`、本地数据库、原始全文、Obsidian 和日志。
+
 ## 阶段 38 数据说明
 
 阶段 38 不新增外部资料来源、不爬新网页、不下载新 PDF、不写入新的受限全文，也不重切语料。新增内容均为默认 tool-calling 链路生成质量攻坚、扩展评测、真实 Judge A/B、production smoke 和文档/Obsidian 草稿的派生产物。

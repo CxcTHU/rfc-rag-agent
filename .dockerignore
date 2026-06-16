@@ -9,6 +9,12 @@ __pycache__
 *.py[cod]
 *.egg-info
 .pytest_cache
+tests
+tests/**
+docs/phase_reviews
+docs/phase_reviews/**
+data/evaluation
+data/evaluation/**
 .chainlit/translations
 .chainlit/translations/**
 .mypy_cache

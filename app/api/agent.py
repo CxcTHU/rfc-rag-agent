@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from collections.abc import Iterator, Sequence
 from queue import Queue
@@ -10,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.structured_logging import log_event, safe_text_summary
 from app.db.models import Message
 from app.db.repositories import ConversationRepository, MessageCreate
 from app.db.repositories import deserialize_metadata
@@ -45,6 +47,7 @@ from app.services.generation.chat_model import (
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
 
 router = APIRouter(prefix="/agent", tags=["agent"])
+agent_logger = logging.getLogger("rfc_rag_agent.agent")
 
 
 def get_agent_chat_model_provider() -> ChatModelProvider:
@@ -170,6 +173,7 @@ def query_agent(
     effective_mode = request.mode
     if effective_mode is None:
         effective_mode = "tool_calling_agent"
+    log_agent_query_received(request, effective_mode=effective_mode)
 
     response: AgentQueryResponse
     if effective_mode == "agentic":
@@ -192,6 +196,7 @@ def query_agent(
                 detail="chat model provider is unavailable or timed out",
             ) from exc
         response = agent_response_from_agentic_result(agentic_result)
+        log_agent_response_event(response)
         persist_agent_conversation_messages(
             repository=conversation_repository,
             conversation_id=request.conversation_id,
@@ -225,6 +230,7 @@ def query_agent(
                 detail="chat model provider is unavailable or timed out",
             ) from exc
         response = agent_response_from_result(result)
+        log_agent_response_event(response)
         persist_agent_conversation_messages(
             repository=conversation_repository,
             conversation_id=request.conversation_id,
@@ -257,6 +263,7 @@ def query_agent(
                 detail="chat model provider is unavailable or timed out",
             ) from exc
         response = agent_response_from_result(result)
+        log_agent_response_event(response)
         persist_agent_conversation_messages(
             repository=conversation_repository,
             conversation_id=request.conversation_id,
@@ -290,6 +297,7 @@ def query_agent(
         ) from exc
 
     response = agent_response_from_result(result)
+    log_agent_response_event(response)
     persist_agent_conversation_messages(
         repository=conversation_repository,
         conversation_id=request.conversation_id,
@@ -770,6 +778,7 @@ def build_agent_query_response(
     effective_mode = request.mode
     if effective_mode is None:
         effective_mode = "tool_calling_agent"
+    log_agent_query_received(request, effective_mode=effective_mode)
 
     if effective_mode == "agentic":
         agentic_result = run_agentic_rag(
@@ -779,7 +788,9 @@ def build_agent_query_response(
             chat_model_provider=chat_model_provider,
             history=conversation_history or request.history,
         )
-        return agent_response_from_agentic_result(agentic_result)
+        response = agent_response_from_agentic_result(agentic_result)
+        log_agent_response_event(response)
+        return response
 
     if effective_mode == "react_agent":
         result = ReActAgentService(
@@ -794,7 +805,9 @@ def build_agent_query_response(
             history=conversation_history or request.history,
             event_sink=event_sink,
         )
-        return agent_response_from_result(result)
+        response = agent_response_from_result(result)
+        log_agent_response_event(response)
+        return response
 
     if effective_mode == "tool_calling_agent":
         result = ToolCallingAgentService(
@@ -808,7 +821,9 @@ def build_agent_query_response(
             history=conversation_history or request.history,
             event_sink=event_sink,
         )
-        return agent_response_from_result(result)
+        response = agent_response_from_result(result)
+        log_agent_response_event(response)
+        return response
 
     result = AgentService(
         db=db,
@@ -821,7 +836,43 @@ def build_agent_query_response(
         source_id=request.source_id,
         history=conversation_history or request.history,
     )
-    return agent_response_from_result(result)
+    response = agent_response_from_result(result)
+    log_agent_response_event(response)
+    return response
+
+
+def log_agent_query_received(
+    request: AgentQueryRequest,
+    *,
+    effective_mode: str,
+) -> None:
+    log_event(
+        agent_logger,
+        "query_received",
+        mode=effective_mode,
+        conversation_id=request.conversation_id,
+        top_k=request.top_k,
+        max_tool_calls=request.max_tool_calls,
+        source_id=request.source_id,
+        question_summary=safe_text_summary(request.question, limit=80),
+    )
+
+
+def log_agent_response_event(response: AgentQueryResponse) -> None:
+    event = "refusal_triggered" if response.refused else "answer_generated"
+    latency_ms = response.latency_trace.get("total_latency_ms")
+    log_event(
+        agent_logger,
+        event,
+        mode=response.mode,
+        refused=response.refused,
+        refusal_category=response.refusal_category,
+        citation_count=len(response.citations),
+        source_count=len(response.sources),
+        tool_call_count=len(response.tool_calls),
+        iteration_count=response.iteration_count,
+        latency_ms=latency_ms,
+    )
 
 
 def sse_event(event: str, payload: dict[str, object]) -> str:
