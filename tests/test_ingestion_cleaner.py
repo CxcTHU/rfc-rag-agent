@@ -14,3 +14,7 @@ def test_clean_text_normalizes_whitespace_and_line_breaks() -> None:
 
 def test_clean_text_returns_empty_string_for_blank_input() -> None:
     assert clean_text(" \n\t\n ") == ""
+
+
+def test_clean_text_removes_lone_surrogate_codepoints() -> None:
+    assert clean_text("valid\ud835 text") == "valid text"

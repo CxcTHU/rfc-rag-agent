@@ -9,7 +9,13 @@ from app.db.models import Base
 from app.db.repositories import ConversationRepository
 from app.db.session import create_sqlite_engine
 from app.schemas.agent import AgentQueryRequest
-from app.services.generation.chat_model import ChatMessage, ChatModelResult
+from app.services.generation.chat_model import (
+    ChatMessage,
+    ChatModelResult,
+    ChatToolCall,
+    ChatToolDefinition,
+    ToolCallingChatModelResult,
+)
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from tests.test_agent_api import make_test_client, seed_agent_api_document, source_record
 from app.db.repositories import SourceRepository
@@ -194,6 +200,54 @@ class SlowStreamingChatModelProvider:
         yield "capacity depends on SCC flowability [1]."
 
 
+class SlowToolCallingStreamingChatModelProvider:
+    provider_name = "slow-tool-stream"
+    model_name = "slow-tool-stream-model"
+
+    def generate_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[ChatToolDefinition],
+    ) -> ToolCallingChatModelResult:
+        if not any(message.role == "tool" for message in messages):
+            return ToolCallingChatModelResult(
+                content="",
+                tool_calls=[
+                    ChatToolCall(
+                        id="call_1",
+                        name="hybrid_search_knowledge",
+                        arguments={"query": "filling capacity", "top_k": 2},
+                    )
+                ],
+                provider=self.provider_name,
+                model_name=self.model_name,
+            )
+        return ToolCallingChatModelResult(
+            content="",
+            tool_calls=[
+                ChatToolCall(
+                    id="call_2",
+                    name="hybrid_search_knowledge",
+                    arguments={"query": "filling capacity", "top_k": 2},
+                )
+            ],
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        return ChatModelResult(
+            answer="".join(self.stream_generate(messages)),
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+    def stream_generate(self, messages: list[ChatMessage]):
+        yield "Filling "
+        time.sleep(0.4)
+        yield "capacity depends on SCC flowability [1]."
+
+
 def test_agent_stream_yields_first_token_before_model_finishes(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         "app.services.retrieval.hybrid_search.create_reranking_provider",
@@ -231,4 +285,50 @@ def test_agent_stream_yields_first_token_before_model_finishes(tmp_path, monkeyp
     assert elapsed < 0.25
     assert first_event.startswith("event: token\n")
     assert '"Filling "' in first_event
+    assert any("event: metadata" in event for event in remaining_events)
+
+
+def test_tool_calling_agent_streams_final_answer_before_model_finishes(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.create_reranking_provider",
+        lambda **_kwargs: None,
+    )
+    database_path = tmp_path / "tool_calling_stream_timing.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    embedding_provider = DeterministicEmbeddingProvider(dimension=32)
+
+    with TestingSessionLocal() as db:
+        seed_agent_api_document(db)
+        SourceRepository(db).create_source(source_record())
+
+        with TestingSessionLocal() as db:
+            event_stream = stream_agent_query_events(
+                request=AgentQueryRequest(
+                    question="What affects filling capacity?",
+                    top_k=2,
+                    mode="tool_calling_agent",
+                ),
+                db=db,
+                conversation_repository=ConversationRepository(db),
+                conversation_history=[],
+                chat_model_provider=SlowToolCallingStreamingChatModelProvider(),
+                embedding_provider=embedding_provider,
+            )
+
+            started_at = time.perf_counter()
+            first_token_event = ""
+            for event in event_stream:
+                if event.startswith("event: token\n"):
+                    first_token_event = event
+                    break
+            elapsed = time.perf_counter() - started_at
+            remaining_events = list(event_stream)
+
+    assert elapsed < 0.35
+    assert '"Filling "' in first_token_event
     assert any("event: metadata" in event for event in remaining_events)

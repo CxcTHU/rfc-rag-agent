@@ -1,5 +1,48 @@
 # 项目进度
 
+## Latest Status: 2026-06-16 Phase 40 Streaming Output Safety And Corpus Import Complete
+
+Current branch: `codex/phase-40-streaming-output-safety`.
+
+Phase 40 starts from `main / origin/main -> c6e7927 Merge phase 39 production deployment`. It preserves the Phase 38/39 `tool_calling_agent` chain and does not change retrieval strategy, prompt strategy, Stage 30 scoring rules, provider topology, login, deployment optimization, or long-answer virtualization. The work focuses on `/agent/query/stream -> fetch ReadableStream -> safe UI render`, then completes the authorized Phase 40 local corpus import.
+
+Completed:
+
+```text
+docs/stage40_streaming_output_safety.md -> design, safety boundary, four tracks, verification contract
+app/frontend/static/app.js -> sanitizeRenderedHtml allowlist, AbortController stop generation, partial answer retention, token buffer scheduler
+app/frontend/index.html -> in-place submit button stop-generation state and phase40 asset version
+app/frontend/static/styles.css -> red stop button state, aborted message, stream status styles
+app/api/agent.py -> QueueStreamingChatModelProvider for default tool-calling final-answer token streaming
+app/services/ingestion/cleaner.py + scripts/import_papers_corpus.py -> surrogate cleanup and per-file rollback
+scripts/import_stage40_zotero_rfc.py -> filtered Zotero RFC PDF import
+tests/test_stage40_streaming_output_safety.py + frontend tests -> sanitize/abort/scheduler contracts
+docs/phase_reviews/phase-40.md + Obsidian drafts
+```
+
+Verification:
+
+```text
+node --check app/frontend/static/app.js -> passed
+python -m pytest tests/test_agent_stream_api.py tests/test_stage40_streaming_output_safety.py tests/test_frontend_app.py -q -> 27 passed
+python -m pytest -q -> 821 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+desktop browser smoke -> normal stream answered, stop generation aborted with partial message retained, horizontal overflow=false
+mobile browser smoke 390x844 -> Agent controls present, horizontal overflow=false, console errors=0
+```
+
+Corpus import:
+
+```text
+Chinese papers: scanned=150, imported=106, duplicate=55, empty=2, failed=0, new_chunks=6183, source_type=institutional_access_pdf
+Zotero RFC PDFs: matched=9, imported=5, duplicate=4, empty=0, failed=0, new_chunks=372, source_type=open_access_pdf
+Verified DB: documents=753, chunks=25687, institutional_access_pdf=431, open_access_pdf=20
+```
+
+Known boundary: browser `AbortController` stops frontend `fetch`/ReadableStream and UI rendering immediately, but current backend producer thread/provider call may not be cancelled instantly. This is documented honestly as a backend cancellation limitation.
+
+Current boundary: user has authorized Phase 40 staging, commit, push, PR creation, and merge. Do not create or move a phase tag unless separately requested. Do not stage local runtime corpus files (`data/app.sqlite`, `data/raw/`, `data/fulltext/`, `data/faiss/`).
+
 ## Latest Status: 2026-06-16 Phase 39 Production Deployment And End-to-End Experience Complete Before Human Verification
 
 Current branch: `codex/phase-39-production-deployment`.
@@ -3079,3 +3122,38 @@ structured_final_answer: faith=0.981 / cov=0.808 / cit=0.867 / refusal=0.921 / c
 ```
 
 `structured_final_answer` remains the Stage 38 default-strategy candidate. `refusal_correctness=0.921` is above threshold but the two anomalous refusal rows should be inspected in human verification.
+
+## Latest Status: 2026-06-16 Phase 40 Streaming Output Safety And Corpus Import Complete
+
+Current branch: `codex/phase-40-streaming-output-safety`.
+
+Phase 40 completed the streaming output experience and output safety work, then imported the authorized Phase 40 paper expansion and reran release verification.
+
+Streaming/output safety:
+
+- Frontend rendered answer HTML now passes through `sanitizeRenderedHtml()` before insertion.
+- The Agent submit button becomes the red stop-generation control while a request is running; no separate stop button remains.
+- `streamAgentQuery()` uses `AbortController.signal`; stopping a stream keeps already received tokens visible and marks the assistant message as stopped.
+- Token rendering uses a buffer with `requestAnimationFrame` plus a 32ms timeout flush; `metadata`, `done`, `error`, and abort paths flush remaining tokens.
+- Default `tool_calling_agent` streaming now emits real final-answer token events through `QueueStreamingChatModelProvider`.
+
+Corpus import:
+
+- Chinese source `G:\Codex\program\papers_0616`: dry-run found `150` PDFs (`rfc_core=109`, `dam_engineering=41`); cumulative import result `imported=106`, `duplicate=55`, `empty=2`, `failed=0`, `new_chunks=6183`.
+- Zotero source `C:\Users\admin\Zotero\storage`: RFC filename filter matched `9` PDFs; import result `imported=5`, `duplicate=4`, `empty=0`, `failed=0`, `new_chunks=372`.
+- Verified local DB: `documents=753`, `chunks=25687`, `institutional_access_pdf=431`, `open_access_pdf=20`.
+
+Verification:
+
+```text
+node --check app/frontend/static/app.js -> passed
+python -m pytest tests/test_agent_stream_api.py tests/test_stage40_streaming_output_safety.py tests/test_frontend_app.py -q -> 27 passed
+python -m pytest -q -> 821 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+```
+
+Submission state:
+
+- User has authorized commit, push, PR creation, and merge for Phase 40 closeout.
+- Do not stage local runtime corpus files: `data/app.sqlite`, `data/raw/`, `data/fulltext/`, `data/faiss/`.
+- Do not create or move a phase tag unless the user separately asks for tag handling.

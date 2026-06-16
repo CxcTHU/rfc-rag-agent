@@ -171,10 +171,12 @@ def main() -> None:
                     source_type=args.source_type,
                 )
             except EmptyDocumentError:
+                db.rollback()
                 empty += 1
                 failures.append((path.name, "EmptyDocumentError"))
                 continue
             except Exception as exc:  # noqa: BLE001 - keep batch alive
+                db.rollback()
                 failed += 1
                 failures.append((path.name, f"{type(exc).__name__}: {exc}"))
                 continue

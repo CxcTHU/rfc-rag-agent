@@ -80,6 +80,21 @@ def test_filter_relevant_candidates_uses_abstract_and_keywords() -> None:
     assert [candidate.source_id for candidate in filtered] == ["1"]
 
 
+def test_filter_relevant_candidates_drops_random_forest_classifier_rfc_noise() -> None:
+    candidates = [
+        SourceCandidate(
+            source_id="noise",
+            title="Machine Learning Assessment for Severity of Liver Fibrosis for Chronic HBV",
+            abstract=(
+                "Random Forest Classifier (RFC) models were used with serum markers. "
+                "The retrospective data set was used to establish a classifier."
+            ),
+        )
+    ]
+
+    assert filter_relevant_candidates(candidates) == []
+
+
 def test_mdpi_static_pdf_url_converts_known_pdf_link() -> None:
     url = "https://www.mdpi.com/1996-1944/13/1/108/pdf?version=1577274421"
 

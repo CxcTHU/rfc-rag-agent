@@ -41,6 +41,8 @@ from app.services.generation.chat_model import (
     ChatMessage,
     ChatModelProvider,
     ChatModelResult,
+    ChatToolDefinition,
+    ToolCallingChatModelResult,
     create_chat_model_provider,
     split_streaming_text,
 )
@@ -451,7 +453,7 @@ def stream_non_chitchat_agent_response(
             if resolved_mode is None:
                 resolved_mode = "tool_calling_agent"
             effective_chat_model_provider = chat_model_provider
-            if resolved_mode not in {"react_agent", "tool_calling_agent"}:
+            if resolved_mode != "react_agent":
                 effective_chat_model_provider = QueueStreamingChatModelProvider(
                     base_provider=chat_model_provider,
                     queue=queue,
@@ -914,6 +916,13 @@ class QueueStreamingChatModelProvider:
 
     def stream_generate(self, messages: Sequence[ChatMessage]) -> Iterator[str]:
         yield from self.base_provider.stream_generate(messages)
+
+    def generate_with_tools(
+        self,
+        messages: Sequence[ChatMessage],
+        tools: Sequence[ChatToolDefinition],
+    ) -> ToolCallingChatModelResult:
+        return self.base_provider.generate_with_tools(messages, tools)
 
 
 def agent_response_from_chitchat(

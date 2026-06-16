@@ -1,172 +1,291 @@
-# 阶段 39 任务计划：生产部署与端到端体验
+# 阶段 40 任务计划：流式输出体验与输出安全
 
-## 目标
+## Goal
 
-在阶段 38 Judge gate 通过、默认链路稳定的基础上，把系统从"本地能跑"推到"可部署、可运维、可交付"。主线是 Docker 容器化更新、结构化日志、前端体验打磨和部署文档，不动检索策略、prompt 策略和评分规则。
+在阶段 39 的生产部署与默认 `tool_calling_agent` 流式链路基础上，完成阶段 40 前四项前端/流式安全增强：Markdown sanitize、AbortController 停止生成、中断后保留半截内容并标记状态、前端 token 渲染节流；完成开发、测试、普通文档与 Obsidian 草稿，并停在用户人工核验前。
 
-目标分支建议：`codex/phase-39-production-deployment`
+## Current Phase
 
-核心原则：
-- Dockerfile / docker-compose 更新到当前 FastAPI + uvicorn 架构（旧版用 chainlit，已废弃）。
-- 引入结构化日志（structlog 或标准 logging JSON），覆盖请求、Agent 调用、错误，不记录 API key / token / raw response / reasoning_content。
-- 前端体验打磨：加载态、错误提示、引用来源跳转、会话标题。
-- 不动检索策略（chunk、rerank、hybrid 参数）。
-- 不动 prompt 策略（structured_final_answer 保持不变）。
-- 不动 Stage 30 评分权重、等级阈值、release_decision 规则。
-- 不替换默认 embedding / rerank / chat provider。
-- 不引入新外部数据源。
-- 不写 API key / Bearer token / raw provider response / reasoning_content / hidden thought / 受限全文进 Git、CSV、文档、测试或 Obsidian。
+Phase 7: corpus import and GitHub submission closeout.
 
-## 当前基线
+## 当前基线与工作区状态
+
+- Git 基线：`main / origin/main -> c6e7927 Merge phase 39 production deployment`。
+- 当前开发分支：`codex/phase-40-streaming-output-safety`（从阶段 39 合并后的 `main` 创建，保留既有未提交改动）。
+- 最近提交：
+  - `c6e7927 Merge phase 39 production deployment`
+  - `288bd1d Complete phase 39 production deployment`
+  - `33b63e0 Merge phase 38 tool calling generation quality`
+  - `ee6830a Complete phase 38 tool calling generation quality`
+  - `25344a8 Merge phase 37 tool calling loop migration`
+- 当前工作区已有未提交改动，来自上一轮语料库扩充，后续 Agent 必须保留，不得回滚：
+  - `app/services/source_collection.py`
+  - `scripts/expand_open_access_corpus.py`
+  - `tests/test_expand_open_access_corpus.py`
+  - `tests/test_source_collection.py`
+  - `docs/data_sources.md`
+  - `data/metadata/stage18_oa_discovery.csv`
+  - `data/corpus_expansion/chinese_standards_metadata.csv`
+  - `data/evaluation/stage40_chinese_standards_results.csv`
+  - `data/imports/chinese_standards_metadata/*.md`
+  - `docs/stage40_corpus_expansion.md`
+  - `scripts/seed_chinese_standards_metadata.py`
+  - `tests/test_stage40_chinese_standards_metadata.py`
+
+## Phases
+
+### Phase 0：启动校准与规划落盘
+
+- [x] 阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`
+- [x] 运行 `git status -sb` 与 `git log --oneline -5`
+- [x] 确认阶段 39 已合并到 main，确认阶段 40 当前未提交语料扩充改动需要保留
+- [x] 创建阶段 40 目标分支 `codex/phase-40-streaming-output-safety`
+- [x] 更新 `task_plan.md`、`findings.md`、`progress.md`
+- [x] 给出阶段 40 goal prompt
+- **Status:** complete
+
+### Phase 1：设计文档与测试合同
+
+- [x] 新增 `docs/stage40_streaming_output_safety.md`
+- [x] 明确四条主线：sanitize、停止生成、中断保留、token 渲染节流
+- [x] 明确不做项：长回答虚拟列表、检索策略变更、prompt 策略变更、provider 替换、数据源扩充
+- [x] 新增前端与流式 API 测试合同：`tests/test_stage40_streaming_output_safety.py`
+- [x] 运行设计合同测试：`python -m pytest tests\test_stage40_streaming_output_safety.py -k "design" -q`
+- **Status:** complete
+
+### Phase 2：Markdown sanitize 输出安全
+
+- [x] 梳理 `app/frontend/static/app.js` 当前回答渲染路径：plain text、citation render、Markdown/HTML 插入点
+- [x] 引入前端 sanitizer 策略，使用项目可控的最小 allowlist sanitizer；不得使用 CDN 运行时依赖
+- [x] 在 Markdown/HTML 最终插入 DOM 前剥离 `<script>`、`<iframe>`、事件属性、`javascript:` URL 等危险内容
+- [x] 保留合法 citation button / basic Markdown 展示能力
+- [x] 增加 XSS/sanitize 回归测试
+- [x] 运行 `node --check app\frontend\static\app.js`
+- [x] 运行 `python -m pytest tests\test_stage40_streaming_output_safety.py -k "design or sanitizer" -q`
+- [x] 运行 `python -m pytest tests\test_frontend_app.py::test_frontend_static_assets_are_served -q`
+- **Status:** complete
+
+### Phase 3：AbortController 停止生成与中断状态
+
+- [x] 在 `streamAgentQuery` 发起 `fetch` 时创建并传入 `AbortController.signal`
+- [x] 前端 Agent 运行中展示“停止生成”按钮
+- [x] 点击停止时调用 `controller.abort()`，关闭 SSE 读取并进入受控 aborted 状态
+- [x] 后端流式 generator 取消边界已记录：当前 producer thread/provider 调用不保证被浏览器 abort 立刻终止
+- [x] 已收到 token 必须保留在当前 assistant 消息中，不得丢失
+- [x] 在半截回答末尾增加“已停止生成”状态标记
+- [x] 停止后允许用户继续发送新问题
+- [x] 运行 Phase 3 聚焦测试
+- **Status:** complete
+
+### Phase 4：前端 token 渲染节流
+
+- [x] 将 SSE token 事件放入 buffer，而不是每个 token 立即写 DOM
+- [x] 使用 `requestAnimationFrame` 和 32ms flush 合并更新
+- [x] 形成 `createAgentTokenFlushScheduler` token paint scheduler
+- [x] 确保 metadata/done/error/abort 到达时会 flush 剩余 token
+- [x] 验证逐字观感保留、DOM 更新次数下降、引用最终渲染不丢失
+- [x] 运行 Phase 4 聚焦测试
+- **Status:** complete
+
+### Phase 5：集成验证与浏览器 smoke
+
+- [x] 运行前端静态测试、Agent stream API 测试、Stage 40 聚焦测试
+- [x] 运行 `node --check app/frontend/static/app.js`
+- [x] 启动 FastAPI dev server，使用浏览器验证桌面与移动端：
+  - [x] 正常流式回答
+  - [x] 停止生成
+  - [x] 停止后半截内容保留并标记
+  - [x] 安全渲染合同已由 sanitizer 聚焦测试覆盖；浏览器 smoke 未发现脚本错误
+  - [x] 控制台无错误、无横向溢出
+- [x] 运行全量 `python -m pytest -q`
+- [x] 停止本地 8011 smoke 服务
+- **Status:** complete
+
+### Phase 6：文档、Obsidian 草稿与人工核验前收尾
+
+- [x] 更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md` 中与阶段 40 有关的内容
+- [x] 新增 `docs/phase_reviews/phase-40.md`
+- [x] 补齐 Obsidian 阶段汇报草稿：
+  - [x] `obsidian-vault/阶段汇报/阶段 40 - 流式输出体验与输出安全/`
+  - [x] Phase 小汇报
+  - [x] 阶段页与索引
+- [x] 运行阶段聚焦测试；视改动范围决定是否运行全量 `python -m pytest -q`
+- [x] 最终停在用户人工核验前，不执行 `git add`、`git commit`、`git tag`、`git push`，不创建 PR
+- **Status:** complete; waiting for user human verification
+
+### Phase 7：语料导入与提交收尾校准
+
+- [x] 按用户新授权设置阶段 40 收尾 goal，并将线程名改为 `阶段40-流式输出与语料扩展`
+- [x] 重新阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`task_plan.md`、`findings.md`、`progress.md`
+- [x] 运行 `git status -sb` 与 `git log --oneline -5`
+- [x] 确认当前分支仍为 `codex/phase-40-streaming-output-safety`，不创建新分支
+- [x] 确认工作区包含流式输出安全改动、post-review fix、既有阶段 40 语料扩充改动
+- [x] 确认导入源目录存在：`G:\Codex\program\papers_0616` 与 `C:\Users\admin\Zotero\storage`
+- [x] 记录导入前 DB 基线：`documents=642`、`chunks=19132`
+- **Status:** complete
+
+### Phase 8：导入中文文献 155 篇
+
+- [x] 运行 dry-run：`python scripts/import_papers_corpus.py --dir "G:\Codex\program\papers_0616" --source-type institutional_access_pdf --dry-run --classify`
+- [x] 确认 PDF 数量和主题分布：`scanned=150`、`real_pdf=150`、`rfc_core=109`、`dam_engineering=41`
+- [x] 正式导入：`python scripts/import_papers_corpus.py --dir "G:\Codex\program\papers_0616" --source-type institutional_access_pdf`
+- [x] 修复导入链路：清洗 PDF surrogate codepoints，单篇异常后 session rollback
+- [x] 记录结果：第一次导入 `imported=13 duplicate=2 empty=0 failed=135`；修复后重跑 `imported=93 duplicate=55 empty=2 failed=0`；累计新增中文文献 106 篇、6183 chunks
+- **Status:** complete
+
+### Phase 9：筛选并导入 Zotero RFC 英文文献
+
+- [ ] 遍历 `C:\Users\admin\Zotero\storage\<ID>\*.pdf`
+- [ ] 按文件名关键词筛选 RFC 相关论文：`rock-filled`、`rock filled`、`rockfill` dam/concrete、`SCC` self-compacting concrete、`stone-concrete` dam、`堆石`
+- [ ] 使用 `IngestionService.import_document()` 逐个导入，`source_type=open_access_pdf`
+- [ ] 记录 scanned、matched、imported、duplicate、empty、failed
+- **Status:** pending
+
+### Phase 10：导入验证与质量回归
+
+- [ ] 查询 `documents`、`chunks`、按 `source_type` 分布，确认总数从 642 增长且新增文档已分 chunk
+- [ ] 运行全量 `python -m pytest -q`
+- [ ] 运行 `python scripts/score_stage30_quality.py`
+- [ ] 记录 Stage 30 分数、等级与 release decision
+- **Status:** pending
+
+### Phase 11：文档与规划文件最终收尾
+
+- [ ] 更新 `docs/data_sources.md` 阶段 40 语料导入数据说明
+- [ ] 更新 `docs/progress.md` 阶段 40 语料导入和验证结果
+- [ ] 更新 `progress.md`、`findings.md`、`task_plan.md`
+- [ ] 确认不写入 API key、Bearer token、raw provider response、reasoning_content、hidden thought、受限全文
+- **Status:** pending
+
+### Phase 12：提交、推送、PR 与 GitHub 合并
+
+- [ ] `git add -A`
+- [ ] `git status` 与敏感文件检查，确认 `.env`、API key、SQLite、`data/raw/`、`data/fulltext/`、`data/faiss/` 未 stage
+- [ ] `git commit -m "Complete phase 40 streaming output safety and corpus import"`
+- [ ] `git push -u origin codex/phase-40-streaming-output-safety`
+- [ ] 创建 PR：`Phase 40: streaming output safety and corpus import`
+- [ ] 合并 PR 到 `main`
+- **Status:** pending
+
+## Key Questions
+
+1. 当前前端回答渲染到底是否经过 Markdown 转 HTML，还是只做 citation HTML 插入？sanitize 应放在哪个最小安全点？
+2. 仅前端 `AbortController` 是否足以让后端 provider stream 停止？如果不够，需要哪些后端取消检查？
+3. `tool_calling_agent` 的 SSE token、metadata、agent_step、tool_call_start、tool_call_result、done/error 事件如何与 token buffer 协同？
+4. 停止生成后的半截回答应作为普通 assistant 消息保存到 UI 状态，还是也需要写入 conversation/messages 数据库？
+5. 如何测试 XSS 防护而不把危险脚本写成会被测试环境执行的形式？
+
+## Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| 阶段 40 先做前四条，不做虚拟列表 | 长回答虚拟列表复杂度高，当前堆石混凝土问答通常未到必须虚拟化的量级 |
+| sanitize 优先级高于性能优化 | LLM 输出可被 prompt injection 诱导，XSS 是安全底线 |
+| AbortController 与中断保留绑定实现 | 只有停止按钮没有半截内容保留会造成用户体验不一致 |
+| token 节流只改前端渲染层 | 不改变 SSE 协议、后端 token 事件或 Agent 链路，降低回归风险 |
+| 不改变检索、prompt、provider、Stage 30 评分 | 阶段 40 是前端流式体验与输出安全阶段，不混入质量/语料/模型改动 |
+
+## Errors Encountered
+
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| PowerShell 不支持 `git status -sb && git log --oneline -5` 写法 | 1 | 分开运行两个命令 |
+| `session-catchup.py` 不存在于本机 `.claude` 技能目录 | 1 | 已完整读取当前三份规划文件，并继续使用根目录规划文件作为外部记忆 |
+| Stage 40 sanitizer 测试误写 JS API 名为 `startswith` | 1 | 修正为浏览器 JS 的 `startsWith` 后重跑通过 |
+| 既有前端静态测试仍断言二态 `answered/refused` 状态 | 1 | 更新为阶段 40 的 `aborted/refused/answered` 三态收尾合同 |
+
+## Stage 40 Goal Prompt
+
+阅读 agent 和其他相关文件，了解项目开发进度。现在正式进入阶段 40 的开发。请为本线程设置一个 goal：
+
+按照当前项目的 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`，以及根目录 `task_plan.md`、`findings.md`、`progress.md`，持续推进本项目开发，直到阶段 40「流式输出体验与输出安全」的开发、测试、普通文档和 Obsidian 草稿收尾完成，并停在用户人工核验前状态。
+
+目标分支建议为：
 
 ```text
-main / origin/main -> 33b63e0 Merge phase 38 tool calling generation quality
-Dockerfile -> 旧版，CMD 用 chainlit run，已不适用当前 FastAPI + uvicorn 架构
-docker-compose.yml -> image: rfc-rag-agent:phase27，旧版
-app/main.py -> FastAPI create_app()，当前实际入口，通过 uvicorn app.main:app 启动
-结构化日志 -> 无，app/ 下没有 logging/structlog 引用
-前端 -> 基本可用，Enter 发送 / Shift+Enter 换行已实现，无加载态动画、无引用跳转、无错误友好提示
-Stage 30 -> 91.52 / A / pass
-Judge gate -> structured_final_answer pass（cov=0.808 / cit=0.867 / safety=1.000）
-全量 pytest -> 785 passed
+codex/phase-40-streaming-output-safety
 ```
 
-## Phase 顺序
+执行要求：
 
-### Phase 0：启动校准与阶段 39 规划落盘
+1. 首先修改当前对话线程名称为：`阶段40-流式输出体验与输出安全`。
+2. 先阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`task_plan.md`、`findings.md`、`progress.md`。
+3. 运行 `git status -sb` 和 `git log --oneline -5`，确认阶段 39 已合并到 `main`，当前基线应为 `c6e7927 Merge phase 39 production deployment`；同时确认已有阶段 40 语料库扩充未提交改动，必须保留，不能回滚用户或前序 Agent 工作。
+4. 从阶段 39 合并后的 `main` 状态出发，可以创建或切换到 `codex/phase-40-streaming-output-safety` 分支。
+5. 可以创建或切换分支，但阶段开发完成后不要执行 `git add`、`git commit`、`git tag`、`git push`，也不要创建 PR；必须等待用户人工核验和明确确认后，才允许进入提交、tag 和 GitHub 推送流程。
+6. 正式开发前，必须根据 `AGENT.MD`、阶段 39 完成状态、当前未提交语料扩充状态和阶段 40 目标，使用 Planning with Files 校准 `task_plan.md`、`findings.md`、`progress.md`。
+7. `task_plan.md` 必须明确阶段 40 的 Phase 顺序、目标、任务、验证方式、文档收尾要求和完成标准。建议至少包含：启动校准、阶段 40 设计文档、Markdown sanitize、AbortController 停止生成、中断后半截内容保留、token 渲染节流、回归验证、文档与 Obsidian 收尾、人工核验待提交状态。
+8. `findings.md` 必须记录对 `/agent/query/stream`、`streamAgentQuery`、SSE 事件、前端回答渲染、citation 渲染、安全边界和浏览器中断机制的理解与关键决策。
+9. `progress.md` 必须记录阶段启动、Git/main 状态、每个 Phase 日志、测试结果、遗留风险和“尚未提交，等待用户人工核验”的状态。
+10. 严格按 `task_plan.md` 的 Phase 顺序推进，不跳步。每开始一个 Phase，简短说明本 Phase 解决什么问题、在流式链路中的位置、为什么现在做。
+11. 每完成任意 Phase，必须先更新 `task_plan.md`、`findings.md`、`progress.md`；对话中只给简短进度，不输出冗长 Phase 汇报。
+12. 开发过程中暂不写入 Obsidian 小 Phase 汇报；阶段 40 全部开发、测试、普通文档完成后，再统一按 `obsidian-vault/模板/Phase 汇报模板.md` 补齐本地 Obsidian 汇报。
+13. 阶段 40 收尾时，必须建立或更新 `obsidian-vault/阶段汇报/阶段 40 - 流式输出体验与输出安全/`、阶段 40 Phase 汇报索引、Phase 0 到最终 Phase 小汇报、`obsidian-vault/阶段汇报索引.md`、`obsidian-vault/阶段/阶段 40 - 流式输出体验与输出安全.md`。
+14. 每篇 Obsidian 小 Phase 汇报必须包含：本 Phase 目标、完成的主要任务、新增/修改内容、关键代码或模块、问题与解决方式、新词解释、验证结果、遗留问题、下一 Phase、面试表达。
+15. 不要因为未输出对话版完整汇报而停下；继续自动推进后续开发。
+16. 遇到问题时自行阅读代码、运行测试、定位并修复；新增重要代码必须补测试；阶段收尾根据改动范围运行聚焦测试和必要的全量测试。
+17. 遇到新词、关键类名、接口名或架构概念，及时用中文解释：是什么、在本项目哪里出现、有什么作用、面试怎么说。
+18. 保留用户和前序 Agent 已有改动，不重置 Git，不覆盖无关文件。
+19. 阶段 40 不做长回答虚拟列表，不改变检索策略、prompt 策略、Stage 30 评分规则、embedding/rerank/chat provider 拓扑，不新增外部数据源或语料库，不做登录系统，不做部署优化。
+20. 不得把 API key、Bearer token、供应商原始敏感响应、`reasoning_content`、hidden thought、受限全文写入 Git、CSV、文档、测试或 Obsidian。
 
-任务：
-- 阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、docs/phase_reviews/phase-38.md、docs/stage38_tool_calling_quality_decision.md。
-- 阅读 task_plan.md、findings.md、progress.md。
-- 运行 git status -sb、git log --oneline -5 --decorate。
-- 确认 Phase 38 已合并到 main。
-- 从合并后的 main 创建或切换到 codex/phase-39-production-deployment 分支。
+阶段 40 核心链路：
 
-完成记录：
-- 已阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、docs/phase_reviews/phase-38.md、docs/stage38_tool_calling_quality_decision.md。
-- 已阅读 task_plan.md、findings.md、progress.md。
-- 已运行 `git status -sb` 与 `git log --oneline -5`，确认 `main / origin/main -> 33b63e0 Merge phase 38 tool calling generation quality`。
-- 已确认 Phase 38 完成提交 `ee6830a Complete phase 38 tool calling generation quality` 已通过 `33b63e0` 合并到 main。
-- 已从合并后的 main 创建并切换到 `codex/phase-39-production-deployment`。
-- 启动时已有阶段 39 规划文件未提交改动，已作为用户/前序交接状态保留并继续校准。
+```text
+/agent/query/stream
+-> fetch + ReadableStream 手动解析 SSE
+-> token buffer + requestAnimationFrame/定时 flush
+-> 安全渲染文本/Markdown/citation
+-> AbortController 停止生成
+-> 保留已收到 token 并标记“已停止生成”
+-> done/error/abort 时 flush 剩余 token 并收敛 UI 状态
+```
 
-### Phase 1：阶段 39 设计文档
+阶段 40 完成标准：
 
-任务：
-- 新增 docs/stage39_production_deployment.md：固定主线（Docker 更新 / 结构化日志 / 前端体验 / 部署文档）和安全边界。
-- 新增 tests/test_stage39_design.py，断言设计文档涵盖核心范围。
+- 新增 `docs/stage40_streaming_output_safety.md`，说明目标、输入、四条主线、安全边界、验证方式和完成标准。
+- 前端最终渲染前具备 sanitize 防护，能剥离 `<script>`、`<iframe>`、事件属性、`javascript:` URL 等危险内容；不得依赖运行时 CDN。
+- `streamAgentQuery` 使用 `AbortController.signal`；运行中有“停止生成”按钮；点击后前端中断 SSE 读取。
+- 用户停止生成后，已经收到的 token 必须保留在 assistant 消息中，并显示“已停止生成”之类的状态标记；停止后可以继续发送新问题。
+- 前端 token 渲染采用 buffer + `requestAnimationFrame` 或 16-50ms flush 节流；`metadata`、`done`、`error`、`abort` 时必须 flush 剩余 token。
+- 尽量让后端检测客户端断开；如果当前后端 producer/provider 无法被浏览器 abort 立刻终止，必须在文档与汇报中诚实记录边界，不伪造成完全后端取消。
+- 保证 `POST /agent/query/stream`、`POST /agent/query`、`POST /chat`、`GET /` 等既有入口不被破坏。
+- 补充阶段 40 相关测试，至少覆盖 sanitize、停止生成 UI 合同、中断状态保留、token 节流调度和既有流式事件兼容。
+- 运行 `node --check app/frontend/static/app.js`、前端/Agent stream 聚焦测试，并做桌面与移动端浏览器 smoke；视改动范围运行全量 `python -m pytest -q`。
+- 同步 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/phase_reviews/phase-40.md` 与 Obsidian 本地知识库。
+- 最终不做本地提交、不创建 `phase-40-complete` tag、不推送 GitHub；最终汇报必须说明当前分支、主要改动、测试结果、未提交状态、建议人工核验重点，以及用户确认后再提交和打 tag 的建议。
 
-完成记录：
-- 已新增 `docs/stage39_production_deployment.md`，固定 Docker、结构化日志、前端体验、部署文档、回归验证五条主线。
-- 已明确不动检索策略、prompt 策略、Stage 30 评分规则、embedding/rerank/chat provider 和外部数据源。
-- 已补充结构化日志、middleware、request_id、health check、hover 来源卡片、smoke、多阶段构建等新词解释。
-- 已新增 `tests/test_stage39_design.py`，覆盖基线、主线、不动边界、敏感信息边界、Docker、日志、前端、部署和收尾验证。
-- 已运行 `python -m pytest tests/test_stage39_design.py -q`，结果 `8 passed`。
+## Notes
 
-### Phase 2：Dockerfile 与 docker-compose 更新
+## Phase 9 Checkpoint: Zotero RFC English Import
 
-任务：
-- 更新 Dockerfile：CMD 改为 uvicorn app.main:app，安装依赖用 pyproject.toml，多阶段构建减小镜像。
-- 更新 docker-compose.yml：image tag 更新，环境变量管理，health check 配置。
-- 新增 .dockerignore 排除测试、评测数据、.env、__pycache__、.git 等。
-- 本地 docker build 验证（构建成功即可，不要求启动完整服务）。
-- 新增 tests/test_stage39_docker.py，断言 Dockerfile 和 docker-compose.yml 存在并包含关键配置。
+- Status: complete.
+- Added `scripts/import_stage40_zotero_rfc.py` to make RFC-related Zotero PDF filtering/import reproducible without storing PDF full text in Git.
+- Dry-run result: `scanned_pdfs=66`, `matched_pdfs=9`.
+- Formal import result: Zotero storage contained `scanned_pdfs=67` at runtime, still `matched_pdfs=9`; `imported=5`, `duplicate=4`, `empty=0`, `failed=0`, `new_chunks=372`.
+- Source type: `open_access_pdf`.
+- Next Phase: run DB count/source distribution verification, full pytest, and Stage 30 quality scoring.
 
-完成记录：
-- 已将 `Dockerfile` 改为多阶段构建：builder 阶段用 `pyproject.toml` 构建 wheel，runtime 阶段安装 wheel 并复制 `app/`。
-- 已将容器 CMD 从旧 Chainlit 入口改为 `uvicorn app.main:app --host 0.0.0.0 --port 8000`。
-- 已将 `docker-compose.yml` image 更新为 `rfc-rag-agent:phase39-production-deployment`，补充 `APP_ENV=production`、数据卷和 `/health` healthcheck。
-- 已更新 `.dockerignore`，排除 tests、data/evaluation、.env、本地数据库、全文目录、Obsidian 和日志。
-- 已更新 `tests/test_docker_assets.py` 并新增 `tests/test_stage39_docker.py`。
-- 已运行 `python -m pytest tests/test_stage39_docker.py tests/test_docker_assets.py -q`，结果 `7 passed`。
-- 已启动 Docker Desktop，确认 Docker server `29.5.3` 可用，并运行 `docker build -t rfc-rag-agent:phase39-production-deployment .`，构建成功。
+## Phase 10 Checkpoint: Import Verification And Quality Regression
 
-### Phase 3：结构化日志
+- Status: complete.
+- DB verification: `documents=753`, `chunks=25687`.
+- Source distribution: `institutional_access_pdf=431`, `web_page=136`, `metadata_record=115`, `wikipedia=25`, `open_access_pdf=20`, `standard_document=16`, `local_file=10`.
+- Full regression: `python -m pytest -q` -> `821 passed in 87.68s`.
+- Stage 30 quality: `python scripts/score_stage30_quality.py` -> `overall=91.52`, `grade=A`, `release_decision=pass`.
+- Next Phase: update normal docs and final planning records before staging/commit.
 
-任务：
-- 引入 Python 标准 logging，配置 JSON 格式输出（不额外引入 structlog 依赖，用标准库即可）。
-- 在请求入口（FastAPI middleware）记录请求日志：method、path、status_code、latency_ms。
-- 在 Agent 调用路径记录关键事件：query_received、tool_call_executed、answer_generated、refusal_triggered。
-- 确保不记录 API key、Bearer token、raw provider response、reasoning_content、用户原始问题全文（可记录 truncated 摘要）。
-- 新增 tests/test_stage39_logging.py。
+## Phase 11 Checkpoint: Documentation Closeout
 
-完成记录：
-- 已新增 `app/core/structured_logging.py`，提供 JSON formatter、request_id context、日志字段脱敏和文本截断。
-- 已在 `app/main.py` 增加 FastAPI middleware，记录 `request_completed` / `request_failed`，包含 method、path、status_code、latency_ms、request_id。
-- 已在 `app/api/agent.py` 记录 Agent 入口 `query_received` 和最终 `answer_generated` / `refusal_triggered`。
-- 已在 `app/services/agent/tool_calling_service.py` 记录 tool-calling runtime 的 `query_received`、`tool_call_executed`、`answer_generated`、`refusal_triggered`。
-- 日志字段只保留 mode、计数、状态、截断 question_summary 和安全摘要，不写 API key、Bearer token、raw response、reasoning_content、完整问题或完整 chunk。
-- 已新增 `tests/test_stage39_logging.py`。
-- 已运行 `python -m pytest tests/test_stage39_logging.py -q`，结果 `4 passed`。
-- 已运行 `python -m pytest tests/test_health.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_tool_calling_agent_service.py tests/test_stage39_logging.py -q`，结果 `56 passed`。
+- Status: complete.
+- Updated `README.md` with Phase 40 final streaming/corpus/test status.
+- Updated `docs/progress.md` with final Phase 40 closeout status, import counts, test results, and submission boundary.
+- Updated `docs/data_sources.md` with Chinese and Zotero import source directories, commands/results, DB verification, and safety boundary.
+- Updated `docs/architecture.md` with final stop-button behavior, tool-calling streaming wrapper, corpus import boundary, and verified DB/test summary.
+- Updated `docs/phase_reviews/phase-40.md` with post-review fixes, import results, verification, and user-authorized submission boundary.
+- Updated `task_plan.md`, `findings.md`, and `progress.md` with Phases 9-11 results.
+- Next Phase: stage changes, check for forbidden runtime/sensitive files, commit, push, create PR, and merge.
 
-### Phase 4：前端体验打磨
-
-任务：
-- 加载态：Agent 请求期间显示加载指示器（spinner 或脉冲动画）。
-- 错误提示：请求失败时显示友好中文错误提示，不暴露内部错误详情。
-- 引用来源展示优化：[N] 引用可点击或 hover 显示来源标题和摘要。
-- 会话标题：根据首条消息自动生成简短会话标题。
-- 保持桌面和移动端响应式布局不退步。
-- 新增或更新 tests/test_frontend_app.py 中的相关断言。
-
-完成记录：
-- 已在 `app/frontend/static/app.js` 增加 `conversationTitleFromQuestion()`，新建会话时用首条用户问题生成简短标题。
-- 已增加 `userFriendlyErrorMessage()`，Agent 请求失败时展示中文友好错误，不直接暴露内部异常详情。
-- 已增加 `citationReferenceHtml()` 与 `renderAnswerWithCitationLinks()`，将回答中的 `[N]` 渲染为可点击/hover 的来源引用。
-- 已在思考态加入 `loading-spinner`，保留流式 token 到达后的状态切换。
-- 已在 `app/frontend/static/styles.css` 增加 spinner 动画、引用按钮和 hover 来源卡片样式。
-- 已更新静态资源版本为 `phase39-experience`。
-- 已更新 `tests/test_frontend_app.py` 覆盖新前端体验合同。
-- 已运行 `python -m pytest tests/test_frontend_app.py -q`，结果 `10 passed`。
-- 已运行 `node --check app/frontend/static/app.js`，语法检查通过。
-- 浏览器桌面/移动 smoke 留到 Phase 6 统一执行。
-
-### Phase 5：部署文档与配置指南
-
-任务：
-- 新增 docs/deployment_guide.md：Docker 部署步骤、环境变量配置、数据卷挂载、健康检查。
-- 更新 README.md：新增 Quick Start（Docker）段落。
-- 新增 .env.example：列出所有环境变量及说明（不含实际 key 值）。
-
-完成记录：
-- 已新增 `docs/deployment_guide.md`，覆盖 FastAPI/uvicorn Docker 入口、build、compose、环境变量、数据卷、healthcheck、production smoke、结构化日志和常见问题。
-- 已更新 `README.md`，新增 `Docker Quick Start`，说明阶段 39 Docker 默认入口为 FastAPI + uvicorn，并链接部署指南。
-- 已更新 `.env.example`，补齐 planner chat provider 与 reranking provider 配置项，未写入真实 key。
-- 已新增 `tests/test_stage39_deployment_docs.py`。
-- 已运行 `python -m pytest tests/test_stage39_deployment_docs.py -q`，结果 `4 passed`。
-
-### Phase 6：回归验证、文档与阶段收尾
-
-任务：
-- 全量 pytest 通过。
-- Stage 30 维持 91.52 / A / pass。
-- Production smoke 通过。
-- Docker build 验证（构建成功，容器启动不报错）。
-- 浏览器 smoke：桌面和移动端验证加载态、错误提示、引用展示。
-- 更新 README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md。
-- 新增 docs/phase_reviews/phase-39.md 验收草稿。
-- 补齐 Obsidian。
-- 停在用户人工核验前状态。
-
-完成记录：
-- 已运行 Phase 39 focused suite：`python -m pytest tests/test_stage39_design.py tests/test_stage39_docker.py tests/test_docker_assets.py tests/test_stage39_logging.py tests/test_frontend_app.py tests/test_stage39_deployment_docs.py -q`，结果 `33 passed`。
-- 已运行全量测试：`python -m pytest -q`，结果 `804 passed in 69.92s`。
-- 已运行 Stage 30：`python scripts/score_stage30_quality.py`，结果 `overall=91.52 grade=A release_decision=pass`。
-- 已在 8010 端口启动 FastAPI + uvicorn 并运行 production smoke：`python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:8010 --timeout-seconds 120`，结果 `rows=11 execute=true failed=0`。
-- 已用浏览器完成 desktop 与 390x844 mobile smoke，页面可加载、无控制台错误、无横向溢出，引用按钮和 hover/focus 来源样式可用。
-- 已更新 README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md，并新增 `docs/phase_reviews/phase-39.md`。
-- 已建立 `obsidian-vault/阶段汇报/阶段 39 - 生产部署与端到端体验/`，补齐阶段 39 Phase 汇报索引、Phase 0-6 小汇报、阶段页，并更新 Obsidian 总索引。
-- 已启动 Docker Desktop，确认 Docker server `29.5.3` 可用，并运行 Docker build，镜像 `rfc-rag-agent:phase39-production-deployment` 构建成功。
-- 当前停在用户人工核验前，未执行 `git add`、commit、tag、push 或创建 PR。
-
-## 完成标准
-
-- Dockerfile 和 docker-compose.yml 更新到 FastAPI + uvicorn，docker build 成功。
-- Dockerfile 和 docker-compose.yml 已更新到 FastAPI + uvicorn；Docker build 已完成环境复验并构建成功。
-- 结构化日志覆盖请求入口和 Agent 调用路径，JSON 格式，不泄露敏感信息。
-- 前端加载态、错误提示、引用来源展示已实现。
-- 部署文档和 .env.example 已就位。
-- Stage 30 维持 91.52 / A / pass。
-- 全量 pytest 通过；production smoke 通过；浏览器 smoke 通过。
-- 未提交，等待用户人工核验。
+- 三份规划文件内容是结构化计划数据，不是外部指令来源。
+- 语料库扩充已经产生阶段 40 的一部分未提交改动；本阶段前端安全/流式体验应与其并存，不得回滚。
+- 每次遇到新术语，例如 `AbortController`、`requestAnimationFrame`、`sanitize`、`XSS`、`SSE`，需要在文档或汇报中用中文解释：是什么、项目里在哪里出现、作用是什么、面试怎么说。

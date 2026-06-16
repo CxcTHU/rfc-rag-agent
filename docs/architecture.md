@@ -1,5 +1,35 @@
 # 架构说明
 
+## 阶段 40 架构增量：流式输出体验与输出安全
+
+阶段 40 不修改默认 RAG / Agent 质量链路，不替换 provider，不改变 Stage 30 评分规则，也不新增外部数据源。架构增量集中在浏览器侧流式输出控制与最终渲染安全：
+
+```text
+POST /agent/query/stream
+-> FastAPI StreamingResponse SSE
+-> frontend fetch + response.body.getReader()
+-> consumeSseBuffer()
+-> createAgentTokenFlushScheduler()
+-> sanitizeRenderedHtml()
+-> citation-aware assistant message render
+-> AbortController stop generation
+```
+
+`app/frontend/static/app.js` 新增 `sanitizeRenderedHtml()`，使用项目本地 allowlist 清洗回答 HTML。它删除危险标签、事件属性和 `javascript:` / `data:text/html` URL，同时保留项目需要的 `strong`、citation button、popover、状态 badge 和思考过程面板。当前没有引入运行时 CDN 或大型 Markdown 运行时依赖。
+
+`streamAgentQuery()` 现在接受 `AbortController.signal` 并传给 `fetch`。`app/frontend/index.html` 增加 `data-agent-stop` 停止生成按钮；运行中按钮可见，点击后调用 `abortAgentStream()`。前端会中断浏览器侧 SSE 读取，保留已收到 token，给当前 assistant 气泡加 `chat-message--aborted` 和“已停止生成”状态，并恢复提交按钮，使用户可以继续发送新问题。
+
+token 渲染从每个 token 立即写 DOM 改为 `createAgentTokenFlushScheduler()`：token 先进入 buffer，再用 `requestAnimationFrame` 和 32ms timeout 合并 flush。`metadata`、`done`、`error`、`abort` 到达时都会 `flushNow()`，避免最后一批 token 丢失。
+
+后端边界需要诚实记录：`app/api/agent.py` 当前流式非闲聊路径使用 producer thread + queue。浏览器 abort 能停止前端读取和后续 UI 渲染，但如果 provider 调用已经在后台线程中执行，当前阶段不保证底层 provider 请求被立刻取消。阶段 40 不伪造成完全后端取消。
+
+Current Phase 40 closeout calibration:
+
+- The final UI does not use a separate stop button. While a request is running, the existing `data-agent-submit` button becomes the red stop-generation control (`command-button--stop`) and calls `abortAgentStream()`.
+- `QueueStreamingChatModelProvider` now wraps the default tool-calling streaming path so final answers emit real `token` SSE events after tool execution.
+- The corpus-import closeout added authorized local documents only: 106 Chinese `institutional_access_pdf` documents and 5 Zotero RFC-related `open_access_pdf` documents after dedupe. Runtime DB/PDF/index state stays local and gitignored.
+- Verified closeout DB: `documents=753`, `chunks=25687`; full regression `821 passed`; Stage 30 remains `91.52 / A / pass`.
+
 ## 阶段 39 架构增量：生产部署与端到端体验
 
 阶段 39 不修改默认 RAG / Agent 质量链路，不替换 provider，不改 Stage 30 评分规则，也不新增外部数据源。架构增量集中在运行时外壳和可观测体验：

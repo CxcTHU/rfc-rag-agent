@@ -1,5 +1,17 @@
 # RFC-RAG-Agent
 
+## Phase 40 Streaming Output Safety Update
+
+Current branch: `codex/phase-40-streaming-output-safety`.
+
+Phase 40 starts from `main / origin/main -> c6e7927 Merge phase 39 production deployment` and keeps the Phase 38/39 default `tool_calling_agent` chain unchanged. The phase is complete: local rendered-HTML sanitization, in-place red stop-generation submit button, `AbortController` stream cancellation, partial assistant output retention after abort, requestAnimationFrame/32ms token flush scheduling, and default tool-calling final-answer token streaming are implemented.
+
+Phase 40 corpus import is also complete: `G:\Codex\program\papers_0616` contributed 106 new Chinese `institutional_access_pdf` documents after dedupe/empty handling, and Zotero RFC filtering contributed 5 new English `open_access_pdf` documents. The verified local corpus is now `documents=753`, `chunks=25687`, with `institutional_access_pdf=431` and `open_access_pdf=20`.
+
+Verification: `node --check app/frontend/static/app.js` -> passed; focused Phase 40/Agent stream tests -> `27 passed`; `python -m pytest -q` -> `821 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`.
+
+Boundary: Phase 40 does not change retrieval strategy, prompt strategy, Stage 30 scoring rules, provider topology, login, deployment optimization, or long-answer virtualization. Runtime corpus files remain local and gitignored: `data/app.sqlite`, `data/raw/`, `data/fulltext/`, and `data/faiss/`.
+
 ## Phase 39 Production Deployment And End-to-End Experience Update
 
 Current branch: `codex/phase-39-production-deployment`.
