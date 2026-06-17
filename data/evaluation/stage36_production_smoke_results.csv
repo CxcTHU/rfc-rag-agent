@@ -1,12 +1,12 @@
 run_at,case_id,endpoint,method,execute_requested,status,http_status,latency_ms,required_fields_present,refused,citation_count,expected_mode,actual_mode,mode_matched,validator_marker,sensitive_field_detected,error_summary
-2026-06-16T01:45:32.613684+00:00,health,/health,GET,true,passed,200,100.912,true,,0,,,true,false,false,
-2026-06-16T01:45:32.613684+00:00,quality_report_html,/quality-report,GET,true,passed,200,75.595,true,,0,,,true,false,false,
-2026-06-16T01:45:32.613684+00:00,quality_report_data,/quality-report/data.json,GET,true,passed,200,42.783,true,,0,,,true,false,false,
-2026-06-16T01:45:32.613684+00:00,agent_query_default_tool_calling,/agent/query,POST,true,passed,200,16759.382,true,false,2,tool_calling_agent,tool_calling_agent,true,false,false,
-2026-06-16T01:45:32.613684+00:00,agent_query_react_agent_rollback,/agent/query,POST,true,passed,200,25249.982,true,false,2,react_agent,react_agent,true,false,false,
-2026-06-16T01:45:32.613684+00:00,agent_query_tool_calling,/agent/query,POST,true,passed,200,16965.679,true,false,1,tool_calling_agent,tool_calling_agent,true,false,false,
-2026-06-16T01:45:32.613684+00:00,agent_query_multiturn_transform,/agent/query,POST,true,passed,200,1201.890,true,false,0,default,default,true,false,false,
-2026-06-16T01:45:32.613684+00:00,agent_query_model_meta,/agent/query,POST,true,passed,200,2.745,true,false,0,meta,meta,true,false,false,
-2026-06-16T01:45:32.613684+00:00,agent_query_stream_default_tool_calling,/agent/query/stream,POST,true,passed,200,15269.991,true,false,2,tool_calling_agent,tool_calling_agent,true,false,false,
-2026-06-16T01:45:32.613684+00:00,agent_query_stream_react_agent_rollback,/agent/query/stream,POST,true,passed,200,26507.570,true,false,2,react_agent,react_agent,true,false,false,
-2026-06-16T01:45:32.613684+00:00,agent_query_tool_calling_stream,/agent/query/stream,POST,true,passed,200,15913.503,true,false,2,tool_calling_agent,tool_calling_agent,true,false,false,
+2026-06-17T11:52:19.448341+00:00,health,/health,GET,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,quality_report_html,/quality-report,GET,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,quality_report_data,/quality-report/data.json,GET,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,agent_query_default_tool_calling,/agent/query,POST,false,dry_run,,,not_run,,,tool_calling_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,agent_query_react_agent_rollback,/agent/query,POST,false,dry_run,,,not_run,,,react_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,agent_query_tool_calling,/agent/query,POST,false,dry_run,,,not_run,,,tool_calling_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,agent_query_multiturn_transform,/agent/query,POST,false,dry_run,,,not_run,,,default,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,agent_query_model_meta,/agent/query,POST,false,dry_run,,,not_run,,,meta,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,agent_query_stream_default_tool_calling,/agent/query/stream,POST,false,dry_run,,,not_run,,,tool_calling_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,agent_query_stream_react_agent_rollback,/agent/query/stream,POST,false,dry_run,,,not_run,,,react_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-17T11:52:19.448341+00:00,agent_query_tool_calling_stream,/agent/query/stream,POST,false,dry_run,,,not_run,,,tool_calling_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.

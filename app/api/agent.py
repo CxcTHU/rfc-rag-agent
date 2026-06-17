@@ -118,6 +118,13 @@ def query_agent(
             )
         conversation_messages = conversation_repository.list_messages(request.conversation_id)
         conversation_history = history_from_messages(conversation_messages)
+        log_event(
+            agent_logger,
+            "conversation_loaded",
+            conversation_id=request.conversation_id,
+            message_count=len(conversation_messages),
+            history_count=len(conversation_history),
+        )
 
     meta_response = build_agent_meta_response(
         question=request.question,
@@ -332,6 +339,13 @@ def stream_query_agent(
             )
         conversation_messages = conversation_repository.list_messages(request.conversation_id)
         conversation_history = history_from_messages(conversation_messages)
+        log_event(
+            agent_logger,
+            "conversation_loaded",
+            conversation_id=request.conversation_id,
+            message_count=len(conversation_messages),
+            history_count=len(conversation_history),
+        )
 
     return StreamingResponse(
         stream_agent_query_events(
@@ -1176,11 +1190,18 @@ def persist_agent_conversation_messages(
     if not summarize:
         return
     try:
-        summarize_conversation_if_needed(
+        summary_message = summarize_conversation_if_needed(
             repository=repository,
             conversation_id=conversation_id,
             chat_model_provider=chat_model_provider,
         )
+        if summary_message is not None:
+            log_event(
+                agent_logger,
+                "summary_assembled",
+                conversation_id=conversation_id,
+                summary_message_id=summary_message.id,
+            )
     except RuntimeError:
         # Summary compression is a best-effort optimization. Do not fail an
         # otherwise successful user answer when the model provider times out.

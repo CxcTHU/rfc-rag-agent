@@ -1,5 +1,87 @@
 # 架构说明
 
+## 阶段 43 架构增量：多轮对话质量与生产可观测性强化
+
+阶段 43 不改变 Stage 30 评分规则、不替换 provider、不新增外部资料来源、不引入跨会话长期记忆或用户画像。架构增量集中在两个位置：多轮评测 + 会话内最小分层记忆，以及 request_id 全链路追踪 + 本地诊断端点。
+
+多轮评测链路：
+
+```text
+data/evaluation/stage43_multi_turn_eval_cases.csv
+-> scripts/evaluate_stage43_multi_turn.py
+-> no_history / recent_only / summary_recent / layered_memory
+-> deterministic lightweight corpus snapshot
+-> stage43_multi_turn_baseline_results.csv
+-> stage43_multi_turn_baseline_summary.csv
+```
+
+评测脚本默认 dry-run；`--no-dry-run` 使用本地 deterministic 轻量评分，不调用真实 provider。CSV 只保存 case id、scenario、history mode、命中/覆盖等指标和安全摘要，不保存 API key、Bearer token、供应商原始响应、`raw_response`、`reasoning_content`、完整 chunk 或受限全文。
+
+多轮 Judge 链路：
+
+```text
+data/evaluation/stage43_multi_turn_eval_cases.csv
+-> scripts/judge_stage43_multi_turn_quality.py
+-> dry-run plan or explicit --execute
+-> AgentService answer generation with selected history mode
+-> OpenAI-compatible Judge
+-> stage43_multi_turn_judge_results.csv
+-> stage43_multi_turn_judge_summary.csv
+```
+
+Judge 维度为 `answer_faithfulness`、`citation_accuracy`、`context_coherence`、`refusal_consistency`。脚本默认不调用真实 API；真实执行要求显式 `--execute` 和本地 provider 配置。由于真实 provider 运行较慢，单路执行支持逐行 checkpoint、重跑跳过 completed 行、按 `history_mode` 合并默认结果文件。Judge CSV 只保存分数、短理由、风险和 next_action，不保存完整答案、完整 chunk、raw provider response、`raw_response` 或 `reasoning_content`。
+
+最小分层会话记忆：
+
+```text
+current conversation history
+-> build_session_memory()
+-> SessionMemory(entities, retrieval_anchors, constraints, stale_anchors)
+-> augment_query_with_session_memory()
+-> BrainService._rewrite_query_step()
+-> retrieval query only
+```
+
+`SessionMemory` 位于 `app/services/conversation/session_memory.py`，只从当前 conversation 的 history 中提取 entities 与 retrieval_anchors，不写新表、不跨会话持久化、不形成用户画像。memory hint 明确标注“仅用于检索，不作为引用来源”。最终 answer generation 仍只使用 retrieval sources 构造可引用证据；summary 和 memory 都不能替代知识库证据。
+
+Phase 16 增加纠错感知过滤：当当前问题包含“更正/我说错/想问”等纠错信号时，未在当前问题重申的旧 retrieval anchors 会进入 `stale_anchors`，不再写入 retrieval hint；当前问题中显式出现的领域词会补入新 retrieval anchors。`BrainService._rewrite_query_step()` 在这类问题上不再把上一轮完整原文前置到 query，避免已被纠正的旧目标污染检索。
+
+request_id 追踪链路：
+
+```text
+FastAPI middleware
+-> set_request_id()
+-> start_request_trace()
+-> log_event() structured logs
+-> conversation / summary / memory / query rewrite / retrieval / provider / response events
+-> finish_request_trace()
+-> data/logs/request_traces.jsonl
+```
+
+`app/core/request_logger.py` 用 contextvars 聚合一次请求内的安全事件。`app/core/structured_logging.py::log_event()` best-effort 同步事件到当前 trace；失败不影响主请求。JSONL trace 存放在 `data/logs/`，该目录已 gitignore。trace 只保存 request_id、路径、状态、延迟、provider/model 名称、计数和短摘要等脱敏字段，不保存完整问题、完整 chunk、API key、Authorization、raw provider response、`reasoning_content` 或 hidden thought。
+
+诊断端点：
+
+```text
+GET /health/details
+-> SQLAlchemy SELECT 1 + documents/chunks count
+-> data/faiss/*.index + *_ids.json metadata inspection
+-> provider config booleans
+-> no external provider ping
+```
+
+`GET /health` 保持轻量心跳不变。`GET /health/details` 只做本地 DB、FAISS 文件/metadata 和 provider 配置状态检查，不加载重型 FAISS 原生索引、不调用外部 chat/embedding/rerank provider，也不返回任何 key/header 字段。
+
+HTTPS reverse proxy 模板：
+
+```text
+client
+-> HTTPS Nginx/Caddy
+-> HTTP uvicorn 127.0.0.1:8000
+```
+
+`deploy/nginx-https.example.conf` 与 `deploy/Caddyfile.example` 只是示例模板，不改变 Docker、CI 或运行时默认。模板传递 `X-Request-ID`，以便和 request trace 对齐；Nginx 模板对 `/agent/query/stream` 关闭 buffering，避免 SSE token streaming 被代理延迟。
+
 ## 阶段 42 架构增量：生成质量校准与生产体验完善
 
 阶段 42 不修改 Stage 30 评分规则、不替换 provider、不改变数据源边界，也不引入 React/Vue/Node 构建链。架构增量集中在两个位置：离线 Judge 质量校准链路，以及原生前端会话/长回答体验。

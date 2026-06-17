@@ -1,0 +1,5 @@
+history_mode,status,total_rows,completed_rows,skipped_rows,error_rows,avg_answer_faithfulness,avg_citation_accuracy,avg_context_coherence,avg_refusal_consistency,high_risk_count,medium_risk_count,judge_gate,decision
+layered_memory,completed,32,32,0,0,0.769,0.622,0.852,0.853,0,28,review_required,compare_against_summary_recent_before_default_change
+no_history,completed,32,32,0,0,0.678,0.603,0.794,0.778,0,29,review_required,comparison_baseline
+recent_only,completed,32,32,0,0,0.766,0.680,0.853,0.816,0,29,review_required,comparison_baseline
+summary_recent,completed,32,32,0,0,0.764,0.641,0.784,0.794,0,32,review_required,current_default_reference

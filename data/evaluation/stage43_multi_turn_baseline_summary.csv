@@ -1,0 +1,5 @@
+history_mode,total_turns,completed_turns,dry_run_turns,avg_retrieval_hit,avg_citation_support,avg_answer_coverage,avg_refusal_correctness,avg_entity_or_constraint_used,decision,next_action
+layered_memory,32,32,0,0.594,0.594,0.208,1.000,1.000,completed,Compare history modes and inspect low coverage turns
+no_history,32,32,0,0.312,0.312,0.104,1.000,0.500,completed,Compare history modes and inspect low coverage turns
+recent_only,32,32,0,0.531,0.531,0.125,1.000,0.969,completed,Compare history modes and inspect low coverage turns
+summary_recent,32,32,0,0.594,0.594,0.167,1.000,1.000,completed,Compare history modes and inspect low coverage turns

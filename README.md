@@ -1,5 +1,25 @@
 # RFC-RAG-Agent
 
+## Phase 43 Multi-Turn Quality And Observability Update
+
+Current branch: `codex/phase-43-multi-turn-quality-and-observability`.
+
+Phase 43 starts from the Phase 42 GitHub merge `origin/main -> 5850139 Merge pull request #9 from CxcTHU/codex/phase-42-generation-quality-and-experience`. Local `main` was still at `d7dfca1`, so this branch was created from `origin/main` rather than the stale local main. The phase keeps Stage 30 scoring rules, provider topology, data-source boundaries, and the default evidence/citation contract unchanged.
+
+Multi-turn quality: added `data/evaluation/stage43_multi_turn_eval_cases.csv` with 16 multi-turn conversations across 8 scenarios: follow-up, pronoun/ellipsis, clarification, topic switch, previous-turn reference, user correction, constrained follow-up, and multi-turn refusal. `scripts/evaluate_stage43_multi_turn.py` compares `no_history`, `recent_only`, `summary_recent`, and `layered_memory`; CSV outputs store metrics and short safe summaries only.
+
+Post-review data repair and Judge: Phase 11 fixed the evaluator so single-mode reruns merge by `history_mode` instead of overwriting the other modes; both baseline CSVs now have four completed modes. Phase 12-13 added `scripts/judge_stage43_multi_turn_quality.py`, `docs/stage43_multi_turn_judge.md`, and sanitized Judge CSVs. Phase 16 added correction-aware stale-anchor filtering and current-question anchor promotion; latest layered-memory baseline is hit=0.594 / coverage=0.208. Phase 17 reran real Judge for optimized `layered_memory`: faith=0.769 / citation=0.622 / coherence=0.852 / refusal=0.853 / gate=review_required. Decision: keep `summary_recent` as the default because optimized `layered_memory` still trails on citation accuracy, while retaining `layered_memory` as a query rewrite/retrieval aid.
+
+Session memory: added minimal in-session `SessionMemory(entities, retrieval_anchors, constraints, stale_anchors)` in `app/services/conversation/session_memory.py`. Memory is built only from the current conversation, is not persisted as long-term memory or a user profile, and is used only to augment query rewrite/retrieval. Final answers still cite only retrieved knowledge-base sources; summary or memory is not a citation source.
+
+Observability: `request_id` now flows through request middleware, conversation loading, summary/memory assembly, query rewrite, retrieval, provider call boundaries, and response assembly. `app/core/request_logger.py` writes sanitized JSONL request traces to `data/logs/request_traces.jsonl` (gitignored). `GET /health/details` reports local DB, FAISS metadata/files, and provider configuration state without external provider ping and without exposing secrets.
+
+HTTPS templates: Phase 14 added optional Nginx and Caddy reverse proxy examples under `deploy/` plus `docs/deployment_https_reverse_proxy.md`; these do not alter Docker, CI, or runtime defaults.
+
+Verification: `python -m pytest -q` -> `876 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; `python scripts/run_production_smoke.py` -> `rows=11 execute=false failed=0`; desktop and `390x844` browser smoke passed with console errors=0 and horizontal overflow=false.
+
+Boundary: Phase 43 development, tests, normal docs, and local Obsidian drafts are complete. On 2026-06-17 the user explicitly authorized Phase 43 submission and GitHub merge. Do not create or move a phase tag unless separately requested.
+
 ## Phase 42 Generation Quality And Experience Update
 
 Current branch: `codex/phase-42-generation-quality-and-experience`.

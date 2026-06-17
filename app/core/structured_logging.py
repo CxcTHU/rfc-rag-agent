@@ -76,7 +76,17 @@ def log_event(
     event: str,
     **fields: object,
 ) -> None:
-    logger.info(event, extra={"structured": sanitize_log_value(fields)})
+    safe_fields = sanitize_log_value(fields)
+    logger.info(event, extra={"structured": safe_fields})
+    try:
+        from app.core.request_logger import record_request_event
+
+        if isinstance(safe_fields, Mapping):
+            record_request_event(event, **safe_fields)
+    except Exception:
+        # Request traces are diagnostic best-effort output and must never break
+        # the application path.
+        return
 
 
 def safe_text_summary(value: str | None, *, limit: int = MAX_LOG_TEXT_LENGTH) -> str:

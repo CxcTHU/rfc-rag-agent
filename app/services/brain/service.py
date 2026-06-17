@@ -1,10 +1,12 @@
 from collections.abc import Sequence
 from dataclasses import replace
+import logging
 import re
 
 from sqlalchemy.orm import Session
 
 from app.db.repositories import QuestionAnswerLogCreate, QuestionAnswerLogRepository
+from app.core.structured_logging import log_event, safe_text_summary
 from app.services.brain.config import RetrievalConfig
 from app.services.brain.workflow import (
     DEFAULT_REFUSAL_ANSWER,
@@ -20,6 +22,12 @@ from app.services.brain.workflow import (
 )
 from app.services.generation.chat_model import ChatModelProvider
 from app.services.generation.prompt_builder import SearchResultLike, build_rag_prompt
+from app.services.conversation.session_memory import (
+    augment_query_with_session_memory,
+    build_session_memory,
+    is_correction_question,
+    refine_memory_for_question,
+)
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
 from app.services.retrieval.decompose import DecomposeRetrievalService, decompose_query
 from app.services.retrieval.hybrid_rrf_tail import HybridRrfTailSearchService
@@ -31,6 +39,7 @@ from app.services.retrieval.vector_search import VectorSearchService
 CONTEXT_REFERENCE_RE = re.compile(
     r"(它|这个技术|这项技术|这类问题|这种技术|这个问题|其|上面|刚才)"
 )
+brain_logger = logging.getLogger("rfc_rag_agent.brain")
 
 
 class BrainService:
@@ -158,6 +167,13 @@ class BrainService:
         else:
             filtered_history = ()
 
+        log_event(
+            brain_logger,
+            "history_filtered",
+            history_count=len(history),
+            kept_history=len(filtered_history),
+            max_history=max_history,
+        )
         return filtered_history, BrainWorkflowStepRecord(
             name="filter_history",
             input_summary=f"history={len(history)} max_history={max_history}",
@@ -171,8 +187,28 @@ class BrainService:
         history: Sequence[str],
     ) -> tuple[str, BrainWorkflowStepRecord]:
         rewritten_question = rewrite_contextual_question(question, history)
+        memory = build_session_memory(history)
+        if CONTEXT_REFERENCE_RE.search(question):
+            memory = refine_memory_for_question(question, memory)
+        log_event(
+            brain_logger,
+            "memory_assembled",
+            entity_count=len(memory.entities),
+            retrieval_anchor_count=len(memory.retrieval_anchors),
+            constraint_count=len(memory.constraints),
+            stale_anchor_count=len(memory.stale_anchors),
+        )
+        if CONTEXT_REFERENCE_RE.search(question):
+            rewritten_question = augment_query_with_session_memory(rewritten_question, memory)
         changed = rewritten_question != question
         output_summary = "query rewritten from recent history" if changed else "query unchanged"
+        log_event(
+            brain_logger,
+            "query_rewritten",
+            changed=changed,
+            question_summary=safe_text_summary(question, limit=80),
+            retrieval_query_summary=safe_text_summary(rewritten_question, limit=120),
+        )
         return rewritten_question, BrainWorkflowStepRecord(
             name="rewrite_query",
             input_summary=f"question={question[:80]}",
@@ -204,6 +240,14 @@ class BrainService:
                 error=str(exc),
             )
 
+        log_event(
+            brain_logger,
+            "retrieval_completed",
+            retrieval_mode=outcome.used_retrieval_mode,
+            requested_mode=config.retrieval_mode,
+            result_count=len(outcome.results),
+            top_k=config.top_k,
+        )
         return outcome, BrainWorkflowStepRecord(
             name="retrieve",
             input_summary=(
@@ -337,9 +381,23 @@ class BrainService:
                 workflow_steps=workflow_steps,
             )
 
+        log_event(
+            brain_logger,
+            "provider_call_started",
+            provider=self.chat_model_provider.provider_name,
+            model=self.chat_model_provider.model_name,
+            source_count=len(rag_prompt.sources),
+        )
         model_result = self.chat_model_provider.generate(rag_prompt.messages)
         allowed_source_ids = [source.source_id for source in rag_prompt.sources]
         citations = extract_citations(model_result.answer, allowed_source_ids)
+        log_event(
+            brain_logger,
+            "provider_call_completed",
+            provider=model_result.provider,
+            model=model_result.model_name,
+            citation_count=len(citations),
+        )
         workflow_steps.append(
             BrainWorkflowStepRecord(
                 name="generate_answer",
@@ -363,6 +421,13 @@ class BrainService:
             model_provider=model_result.provider,
             model_name=model_result.model_name,
             workflow_steps=list(workflow_steps),
+        )
+        log_event(
+            brain_logger,
+            "brain_response_ready",
+            retrieval_mode=retrieval_outcome.used_retrieval_mode,
+            citation_count=len(citations),
+            refused=False,
         )
         return self._log_and_return(result)
 
@@ -447,6 +512,14 @@ class BrainService:
             model_name=self.chat_model_provider.model_name,
             workflow_steps=list(workflow_steps),
         )
+        log_event(
+            brain_logger,
+            "brain_response_ready",
+            retrieval_mode=retrieval_mode,
+            citation_count=0,
+            refused=True,
+            error_type="refusal",
+        )
         return self._log_and_return(result)
 
     def _log_and_return(self, result: BrainAnswerResult) -> BrainAnswerResult:
@@ -476,6 +549,8 @@ def rewrite_contextual_question(question: str, history: Sequence[str]) -> str:
     if not history:
         return normalized_question
     if not CONTEXT_REFERENCE_RE.search(normalized_question):
+        return normalized_question
+    if is_correction_question(normalized_question):
         return normalized_question
 
     latest_context = next((item.strip() for item in reversed(history) if item.strip()), "")

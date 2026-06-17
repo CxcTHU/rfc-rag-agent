@@ -2,6 +2,53 @@
 
 本文件用于记录后续采集的堆石混凝土相关资料来源。
 
+## 阶段 43 多轮对话质量与生产可观测性说明
+
+阶段 43 不新增外部资料来源，不爬新网页，不下载新 PDF，不导入受限全文，不重切 chunk，也不重建 embedding。新增内容均为多轮质量评测、会话内检索辅助记忆、request_id 追踪、健康诊断、测试、普通文档和本地 Obsidian 草稿。
+
+新增或更新的工程/文档产物：
+
+- `docs/stage43_multi_turn_quality_and_observability.md`
+- `docs/stage43_multi_turn_judge.md`
+- `docs/deployment_https_reverse_proxy.md`
+- `docs/phase_reviews/phase-43.md`
+- `data/evaluation/stage43_multi_turn_eval_cases.csv`
+- `data/evaluation/stage43_multi_turn_baseline_results.csv`
+- `data/evaluation/stage43_multi_turn_baseline_summary.csv`
+- `data/evaluation/stage43_multi_turn_judge_results.csv`
+- `data/evaluation/stage43_multi_turn_judge_summary.csv`
+- `scripts/evaluate_stage43_multi_turn.py`
+- `scripts/judge_stage43_multi_turn_quality.py`
+- `deploy/nginx-https.example.conf`
+- `deploy/Caddyfile.example`
+- `app/services/conversation/session_memory.py`
+- `app/core/request_logger.py`
+- `app/core/structured_logging.py`
+- `app/main.py`
+- `app/api/agent.py`
+- `app/api/health.py`
+- `app/schemas/health.py`
+- `app/services/brain/service.py`
+- `tests/test_stage43_design.py`
+- `tests/test_stage43_multi_turn_eval.py`
+- `tests/test_session_memory.py`
+- `tests/test_request_logger.py`
+- `tests/test_health_details.py`
+- `tests/test_stage43_multi_turn_judge.py`
+- `tests/test_stage43_https_templates.py`
+- `obsidian-vault/阶段/阶段 43 - 多轮对话质量与生产可观测性强化.md`
+- `obsidian-vault/阶段汇报/阶段 43 - 多轮对话质量与生产可观测性强化/`
+
+数据与日志边界：
+
+- Stage 43 多轮评测集是人工编写的对话场景与期望指标，不是新的外部资料来源。
+- Stage 43 多轮 Judge CSV 是由现有评测集、现有 RAG 链路和真实 Judge 派生的脱敏评测结果，不是新的资料来源；真实 API 只在显式 `--execute` 中调用。
+- `SessionMemory(entities, retrieval_anchors)` 只来自当前 conversation history，只辅助 query rewrite / retrieval，不作为引用来源，不跨会话持久化，不形成用户画像。
+- JSONL request trace 写入 `data/logs/request_traces.jsonl`，目录已 gitignore；trace 只保存脱敏摘要。
+- `/health/details` 只做本地 DB、FAISS 文件/metadata、provider 配置状态检查，不做外部 provider ping。
+- HTTPS reverse proxy 文件只是配置模板，不包含真实域名证书、密钥或部署 secret，不改变数据源边界。
+- 不把 API key、Bearer token、Authorization header、供应商原始响应、`raw_response`、`reasoning_content`、hidden thought、完整 chunk 全文或受限全文写入 Git、CSV、文档、测试或 Obsidian。
+
 ## 阶段 42 生成质量校准与生产体验说明
 
 阶段 42 不新增外部资料来源，不爬新网页，不下载新 PDF，不导入受限全文，不重切 chunk，也不重建 embedding。新增内容均为生成质量评测派生产物、prompt 校准、前端体验、会话管理、测试、普通文档和本地 Obsidian 草稿。
