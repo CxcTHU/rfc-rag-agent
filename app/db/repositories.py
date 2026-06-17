@@ -13,6 +13,7 @@ from app.db.models import (
     Message,
     QuestionAnswerLog,
     Source,
+    User,
     utc_now,
 )
 
@@ -64,8 +65,17 @@ class QuestionAnswerLogCreate:
 
 
 @dataclass(frozen=True)
+class UserCreate:
+    username: str
+    email: str
+    password_hash: str
+    is_active: bool = True
+
+
+@dataclass(frozen=True)
 class ConversationCreate:
     title: str = "新对话"
+    user_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +115,43 @@ class SourceCreate:
     status: str = "candidate"
     notes: str | None = None
     document_id: int | None = None
+
+
+class UserRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def create_user(self, user_data: UserCreate, commit: bool = True) -> User:
+        user = User(
+            username=user_data.username,
+            email=user_data.email,
+            password_hash=user_data.password_hash,
+            is_active=user_data.is_active,
+        )
+        self.db.add(user)
+        if commit:
+            self.db.commit()
+            self.db.refresh(user)
+        return user
+
+    def get_by_id(self, user_id: int) -> User | None:
+        statement = select(User).where(User.id == user_id)
+        return self.db.scalar(statement)
+
+    def get_by_username(self, username: str) -> User | None:
+        statement = select(User).where(User.username == username)
+        return self.db.scalar(statement)
+
+    def get_by_email(self, email: str) -> User | None:
+        statement = select(User).where(User.email == email)
+        return self.db.scalar(statement)
+
+    def get_by_username_or_email(self, value: str) -> User | None:
+        normalized = value.strip()
+        statement = select(User).where(
+            (User.username == normalized) | (User.email == normalized)
+        )
+        return self.db.scalar(statement)
 
 
 class DocumentRepository:
@@ -342,26 +389,44 @@ class ConversationRepository:
     ) -> Conversation:
         data = conversation_data or ConversationCreate()
         title = normalize_conversation_title(data.title)
-        conversation = Conversation(title=title)
+        conversation = Conversation(title=title, user_id=data.user_id)
         self.db.add(conversation)
         if commit:
             self.db.commit()
             self.db.refresh(conversation)
         return conversation
 
-    def get_conversation(self, conversation_id: int) -> Conversation | None:
+    def get_conversation(
+        self,
+        conversation_id: int,
+        user_id: int | None = None,
+    ) -> Conversation | None:
         statement = select(Conversation).where(Conversation.id == conversation_id)
+        if user_id is not None:
+            statement = statement.where(Conversation.user_id == user_id)
         return self.db.scalar(statement)
 
-    def list_conversations(self, limit: int = 50) -> list[Conversation]:
+    def list_conversations(
+        self,
+        limit: int = 50,
+        user_id: int | None = None,
+    ) -> list[Conversation]:
         statement = (
             select(Conversation)
             .order_by(Conversation.updated_at.desc(), Conversation.id.desc())
             .limit(limit)
         )
+        if user_id is not None:
+            statement = statement.where(Conversation.user_id == user_id)
         return list(self.db.scalars(statement).all())
 
-    def list_messages(self, conversation_id: int) -> list[Message]:
+    def list_messages(
+        self,
+        conversation_id: int,
+        user_id: int | None = None,
+    ) -> list[Message]:
+        if user_id is not None and self.get_conversation(conversation_id, user_id) is None:
+            return []
         statement = (
             select(Message)
             .where(Message.conversation_id == conversation_id)
@@ -393,8 +458,13 @@ class ConversationRepository:
             self.db.refresh(message)
         return message
 
-    def delete_conversation(self, conversation_id: int, commit: bool = True) -> bool:
-        conversation = self.get_conversation(conversation_id)
+    def delete_conversation(
+        self,
+        conversation_id: int,
+        commit: bool = True,
+        user_id: int | None = None,
+    ) -> bool:
+        conversation = self.get_conversation(conversation_id, user_id=user_id)
         if conversation is None:
             return False
         self.db.delete(conversation)
@@ -407,8 +477,9 @@ class ConversationRepository:
         conversation_id: int,
         title: str,
         commit: bool = True,
+        user_id: int | None = None,
     ) -> Conversation | None:
-        conversation = self.get_conversation(conversation_id)
+        conversation = self.get_conversation(conversation_id, user_id=user_id)
         if conversation is None:
             return None
         conversation.title = normalize_conversation_title(title)
@@ -418,7 +489,14 @@ class ConversationRepository:
             self.db.refresh(conversation)
         return conversation
 
-    def count_messages(self, conversation_id: int, role: str | None = None) -> int:
+    def count_messages(
+        self,
+        conversation_id: int,
+        role: str | None = None,
+        user_id: int | None = None,
+    ) -> int:
+        if user_id is not None and self.get_conversation(conversation_id, user_id) is None:
+            return 0
         statement = select(func.count(Message.id)).where(Message.conversation_id == conversation_id)
         if role is not None:
             statement = statement.where(Message.role == role)

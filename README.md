@@ -1,5 +1,17 @@
 # RFC-RAG-Agent
 
+## Phase 44 Production Deployment Auth Update
+
+Current branch: `codex/phase-44-cloud-deployment-auth`.
+
+Phase 44 starts from `origin/main -> 5596d27 Merge phase 43 multi-turn quality and observability`. Local `main` was stale, so this branch was created directly from `origin/main`. The rented Ubuntu CPU server is Docker-ready and is used only as a deployment smoke target, not as a CI or full-test prerequisite.
+
+Main changes: `app/db/session.py` now selects SQLite or PostgreSQL from `DATABASE_URL`; Alembic initial migration creates the existing schema plus `users` and nullable `conversations.user_id`; `/auth/register`, `/auth/login`, and `/auth/me` provide bcrypt + JWT auth; `/agent/query`, `/agent/query/stream`, and `/conversations/*` require auth when `AUTH_ENABLED=true`; the native frontend now uses a Chinese standalone login/register gate and injects `Authorization: Bearer <token>` for JSON and SSE requests after sign-in.
+
+Deployment: `docker-compose.prod.yml` runs the FastAPI app plus `postgres:16-alpine`, stores PostgreSQL rows in `postgres_data`, runs `alembic upgrade head` before Uvicorn, and requires secrets through local `.env.prod`. See `docs/deployment_cloud.md`. Do not commit `.env.prod`, JWT secrets, database passwords, SSH passwords, bearer tokens, API keys, provider raw responses, or restricted full text.
+
+Verification: focused Phase 44 tests `25 passed`; full `python -m pytest -q` -> `894 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; local browser smoke with `AUTH_ENABLED=true` passed registration, login, conversation creation, token-authenticated Agent query, mobile `390x844` no horizontal overflow, and console errors `[]`. Remote server-local compose smoke passed on `127.0.0.1:8044`: health 200, register/login/me 200, unauthenticated Agent 401, authenticated Agent 200, app and db containers healthy. After cloud inbound TCP 8044 was opened, public smoke on `http://36.103.199.132:8044` also passed health/home/auth/query checks. The final frontend follow-up localized the auth gate to Chinese and bumped static assets to `phase44-auth-gate-zh-fix1` to avoid stale browser cache during registration.
+
 ## Phase 43 Multi-Turn Quality And Observability Update
 
 Current branch: `codex/phase-43-multi-turn-quality-and-observability`.

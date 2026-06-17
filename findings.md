@@ -1,179 +1,141 @@
-# 阶段 43 Findings：多轮对话质量与生产可观测性强化
+# 阶段 44 Findings：生产部署上线（PostgreSQL + 用户注册登录 + 云端部署）
 
 ## Requirements
 
-- 主线 A：建立多轮对话评测集，实现最小分层会话记忆，量化四路 history 注入策略对比。
-- 主线 B：补齐 request_id 贯穿链路追踪，新增 /health/details 诊断端点，新增 JSONL request trace。
+- 主线 A：数据库抽象，SQLite ↔ PostgreSQL 双 engine 支持，由 `DATABASE_URL` scheme 自动切换。
+- 主线 B：用户注册登录系统，User 模型 + bcrypt 密码哈希 + JWT 认证 + 对话隔离。
+- 主线 C：docker-compose 生产部署配置，app + PostgreSQL 一键部署。
 - Stage 30 评分不得低于 91.52 / A / pass。
 - 不做跨会话长期记忆，不做用户画像/私人偏好记忆。
-- 不把 summary 当作可引用资料来源，不把模型生成的 memory 写成知识库事实。
+- 不把 summary 当作可引用资料来源。
 - 不改变 Stage 30 评分规则、provider 拓扑或数据源边界。
-- 不引入外部监控 SaaS（Prometheus/Grafana/Sentry/Datadog）。
 - 不让真实 API 成为 CI 或本地全量测试前提。
-- 不把 API key、Bearer token、供应商原始响应、raw_response、reasoning_content 写入 Git/CSV/文档/测试/Obsidian。
+- 不把 API key、Bearer token、JWT secret、密码明文、供应商原始响应、raw_response、reasoning_content 写入 Git/CSV/文档/测试/Obsidian。
+- 已租用的云服务器用于阶段 44 部署 smoke 与人工核验前验证，但不得成为 CI 或本地全量测试前提。
 
 ## Research Findings
 
-### 多轮对话现状
+### 数据库现状
 
-- 阶段 24 引入多轮会话：`conversation_id` 注入 `/agent/query`，`ConversationRepository` 持久化 user/assistant 消息。
-- 阶段 25 补充闲聊短路和 SSE 流式输出。
-- `app/services/conversation/history.py` 实现了 summary 压缩机制：
-  - 触发条件：非 summary 消息超过 16 条后触发压缩。
-  - 压缩策略：保留最近 6 条非 summary 消息，其余压缩为 role="summary" 消息。
-  - 压缩 prompt 要求保留用户目标、关键约束、已有结论、引用主题和未解决问题。
-- 当前 history 注入点：Brain `rewrite_query` step 使用 history 做追问上下文补全。
-- 尚未评测的盲区：追问检索命中率变化、指代/省略解析、话题切换后上下文污染、summary 丢失关键实体、带约束追问遵从度。
+- `app/db/session.py`：阶段 44 已新增 `create_database_engine()`，根据 `DATABASE_URL` backend 自动选择 SQLite 或 PostgreSQL；SQLite 继续使用 `check_same_thread=False`，PostgreSQL 使用 `pool_pre_ping=True`。
+- `app/db/models.py`：阶段 44 前有 6 个 ORM 模型（Document, Source, Chunk, ChunkEmbedding, Conversation, Message）+ 1 个日志模型（QuestionAnswerLog）；阶段 44 已新增 `User`，并为 `Conversation` 增加 nullable `user_id` 外键。
+- SQLAlchemy DeclarativeBase，使用 `mapped_column` 注解模式。
+- 所有字段类型（Text, String, Integer, Boolean, DateTime, Float, JSON）天然兼容 PostgreSQL，无需改动列定义。
+- `engine` 和 `SessionLocal` 仍是模块级全局变量，但 engine 创建逻辑已切换为 `create_database_engine(get_settings().database_url)`。
 
-### request_id 现状
+### 认证现状
 
-- Phase 39 已建立：`app/core/structured_logging.py` 有 `request_id_var`（contextvars）、`JsonLogFormatter`（JSON 格式化器）、`log_event()`（结构化事件）。
-- `app/main.py` 的 request middleware 在请求入口 `new_request_id()` 并 `set_request_id()`，请求结束 `reset_request_id()`。
-- 当前日志在 `app/api/agent.py`（query_received/answer_generated/refusal_triggered）和 `tool_calling_service.py`（tool_call_executed）有 request_id。
-- 缺口：conversation loading、summary assembly、query rewrite、retrieval（keyword/vector/hybrid）、embedding provider call、rerank provider call 未注入 request_id。
-- 缺口：没有按 request_id 汇总全链路日志的机制，排错需要手动 grep stdout。
+- 阶段 44 已新增 `User` 模型、bcrypt 密码哈希、HS256 JWT、`/auth/register`、`/auth/login`、`/auth/me`。
+- `POST /agent/query` 和 `/agent/query/stream` 已接入 `get_current_user()`；`AUTH_ENABLED=true` 时需要 Bearer token。
+- `Conversation` 模型已新增 `user_id` 外键；`ConversationRepository` 已支持按 `user_id` 过滤读取、列表、消息、删除、重命名和计数。
+- FastAPI 的 `Depends()` 依赖注入机制天然支持认证守卫。
 
-### /health 现状
+### Docker 现状
 
-- `GET /health` 返回 `{"status": "healthy", "version": ...}`，是轻量心跳。
-- 没有 DB、FAISS、provider 配置的诊断信息。
-- Phase 39 做了 `scripts/run_production_smoke.py`（默认 dry-run），但这是外部测试脚本，不是运行时自检端点。
+- `Dockerfile`：multi-stage build，python:3.11-slim，uvicorn CMD。
+- `docker-compose.yml`：单 service，`DATABASE_URL: sqlite:////app/data/app.sqlite`，`./data:/app/data` volume。
+- `.dockerignore`：正确排除 .env、SQLite 文件、raw 数据、obsidian-vault、tests。
+- 阶段 43 新增 `deploy/nginx-https.example.conf` 和 `deploy/Caddyfile.example` 反向代理模板。
 
-### 现有评测集覆盖
+### 云服务器现状（2026-06-17）
 
-- Stage 38: 24 cases（单轮生成质量）。
-- Stage 41: 12 queries（导入后检索质量）。
-- Stage 42: 36 cases = Stage 38 24 + Stage 41 12（单轮 Judge gate=pass）。
-- 多轮对话：阶段 24 有基本功能测试但无质量评测集。
+- 平台：并行智算云。
+- 配置：纯 CPU、4 核、8GB 内存、Ubuntu 22.04 CMD、系统盘约 100GB、公网 IP `36.103.199.132`。
+- 计费：按量计费，约 `0.69 元/小时`；长期运行前需要确认是否切换为包天/包月或人工释放策略。
+- 远端初始化结果：
+  - SSH 用户：`ubuntu`。
+  - 已安装基础工具：`git`、`curl`、`vim`、`ca-certificates`、`gnupg`、`lsb-release`。
+  - Docker：`Docker version 29.1.3`。
+  - Docker Compose v2：`Docker Compose version 2.40.3`。
+  - `ubuntu` 用户已加入 `docker` 组，新 SSH 会话中可直接执行 `docker ps`。
+  - 根分区约 97GB，当前可用约 86GB；内存约 8GB，当前可用约 7GB。
+- 该服务器尚未部署本项目应用，也尚未传输项目数据；当前状态是 Docker-ready 服务器，不是阶段 44 应用上线完成。
+- 截图/对话中曾暴露初始 SSH 密码；用户明确要求暂不修改。后续文档、脚本、测试和 Obsidian 不得写入该密码。
 
-## Technical Decisions
+### 技术选型决策
 
-| Decision | Rationale |
-|----------|-----------|
-| 先做 entities + retrieval_anchors 两类 slot | 最小可验证单元，避免一口气做 5 类 slot 却无法证明每类的增量价值 |
-| session memory 不持久化到新表 | 复用 Message metadata 或内存对象，保持最小侵入；后续如需持久化再加表 |
-| memory 只注入 query rewrite / retrieval | 回答引用必须来自知识库证据，memory 不能替代；避免 summary 被当作引用来源 |
-| JSONL request trace 而非 SQLite | JSONL 最简，可 grep、可 tail，无需额外 DB 迁移；后续如需查询再考虑 SQLite |
-| /health/details 不做外部 provider 真实 ping | 避免健康检查触发付费 API 调用 |
-| HTTPS reverse proxy 模板降为 stretch goal | 与多轮质量主题脱节，阶段 43 已够重；可在阶段 44 单独做 |
-| 四路对比优先用 deterministic provider | 保持可复现；真实 provider 对比作为可选 `--execute` 模式 |
+- **密码哈希**: bcrypt（passlib[bcrypt]），业界标准，自带 salt，抗暴力破解。
+- **认证方式**: JWT Bearer Token。无状态，适合 API 场景，前端简单存储 token。
+- **JWT 库**: python-jose[cryptography] 或 PyJWT。
+- **JWT 实现校准**: 阶段 44 当前使用标准库实现 HS256 JWT（base64url + HMAC-SHA256），避免额外 JWT 运行时依赖；测试覆盖签名、过期字段和 subject。
+- **PostgreSQL driver**: psycopg2-binary（开发/部署通用，免编译依赖）。
+- **迁移工具**: Alembic（SQLAlchemy 官方迁移工具）。
+- **生产 PostgreSQL 镜像**: postgres:16-alpine（轻量、长期支持）。
+- **云服务器使用方式**: 服务器仅用于部署 smoke 与人工核验前验证；正式开发、全量 pytest、Stage 30 评分仍以本地 deterministic/SQLite 路径为主，避免远端环境成为必要前提。
 
-## Issues Encountered
+### 安全边界
 
-- Phase 0 接手时工作树仍在 `codex/phase-42-generation-quality-and-experience`，且 `task_plan.md`、`findings.md`、`progress.md` 已由 Claude 规划方预填为阶段 43 草稿。
-- 本地 `main` 仍停在 Phase 41 合并点 `d7dfca1 Merge phase 41 post-import retrieval optimization`，但 `origin/main` 已是 Phase 42 GitHub 合并提交 `5850139 Merge pull request #9 from CxcTHU/codex/phase-42-generation-quality-and-experience`，并包含 `00e1424 Complete phase 42 generation quality and experience`。
-- 按阶段 43 要求，Codex 从 Phase 42 合并后的 `origin/main` 创建 `codex/phase-43-multi-turn-quality-and-observability`，未快进本地 `main`，也未执行 `git add` / commit / tag / push / PR。
-- 接手时已有 `data/evaluation/stage30_quality_scores.csv` 与 `stage30_quality_summary.csv` 的新增 Stage 30 run 工作树改动（91.52 / A / pass），暂保留为现有校准产物，后续回归时统一核验。
-- Phase 3 首次用线上 `HybridRrfTailSearchService` 执行四路 32-turn 对比时超时；原因是每个 turn 触发全库向量扫描，乘以多种 history mode 后成本过高。为保持阶段评测可复现且不改变线上链路，脚本改为一次加载轻量语料快照并在内存中做 lexical scoring。
-- Phase 3 baseline 结果显示 history 注入有明显增益：`no_history avg_retrieval_hit=0.312`，`recent_only=0.531`，`summary_recent=0.594`；Phase 4 后已用真实 `layered_memory` 重建完整四路 CSV。
-- Phase 3 Stage 30 复跑保持 `91.52 / A / pass`，未发现评分退化。
-- Phase 4 实现 `SessionMemory(entities, retrieval_anchors)` 后，Brain 只在指代/省略类问题的 query rewrite 阶段追加“仅用于检索，不作为引用来源”的 memory hint；回答生成仍只引用 retrieval sources。
-- Phase 4 回填四路结果中 `layered_memory` 曾低于 `summary_recent=0.594`。Phase 16 纠错优化后当前值为 `avg_retrieval_hit=0.594, avg_answer_coverage=0.208`。结论是 memory anchors 对覆盖率有增益；Phase 17 已复跑真实 Judge，默认策略仍不替换 summary_recent。
-- Phase 5 按场景复核：layered memory 在 `clarification` coverage `0.333` 和 `reference_previous_turn` coverage `0.333` 优于 summary_recent，但 `user_correction` hit 从 `1.000` 降到 `0.750`，说明 retrieval anchors 可能带来前轮残留噪声。阶段 43 不把 layered memory 设为默认替换策略，只作为 query rewrite 的最小辅助能力保留。
-- 人工核验反馈后复核并重建 `stage43_multi_turn_baseline_results.csv` 与 `stage43_multi_turn_baseline_summary.csv`：四路均为 `completed_turns=32`、`dry_run_turns=0`，summary 中不再存在未回填的 layered memory 行。Phase 16 后最终 summary 数字为 no_history `hit=0.312/cov=0.104`、recent_only `hit=0.531/cov=0.125`、summary_recent `hit=0.594/cov=0.167`、layered_memory `hit=0.594/cov=0.208`。
-- Phase 6 采用 JSONL trace 而非 SQLite：`app/core/request_logger.py` 用 request context 聚合 `log_event()` 的安全字段，middleware 在请求结束写入 `data/logs/request_traces.jsonl`。该目录已加入 `.gitignore`，避免运行日志进入 Git。
-- Phase 6 request trace 只保存脱敏摘要；测试覆盖 API key 和 raw_response redaction，并确认 `X-Request-ID` 会进入响应头和 JSONL trace。
-- Phase 7 新增 `/health/details` 时保持 `/health` 轻量心跳不变。诊断端点只做本地 DB ping、documents/chunks 计数、FAISS `.index` + `_ids.json` metadata 检查、provider 配置布尔状态，不加载 FAISS 原生索引、不做外部 provider ping。
-- Phase 7 响应只包含 provider/model/configured/enabled 等安全字段；测试确认响应中不出现 `api_key`、`Bearer`、`Authorization` 等敏感字段。
-- Phase 8 全量回归从阶段 42 的 843 tests 增长到 863 tests，新增覆盖主要来自 Stage 43 多轮评测、session memory、request trace 和 health details；全量 `python -m pytest -q` 通过。
-- Phase 8 复跑 Stage 30 仍为 `91.52 / A / pass`，production smoke 默认 dry-run `rows=11 execute=false failed=0`。
-- Phase 9 浏览器 smoke 使用本地临时服务 `127.0.0.1:8023`，仅执行闲聊短路多轮（`你好` / `谢谢`），不触发真实 provider。桌面端与 390x844 移动端均为 console errors=0、horizontal overflow=false；临时服务已停止。
-- Phase 10 已补齐 README、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/phase_reviews/phase-43.md` 与 Obsidian 阶段页/Phase 汇报草稿。阶段 43 停在人工核验前，未执行 `git add`、commit、tag、push 或 PR。
+- JWT_SECRET_KEY 必须从环境变量读取，不进 Git。
+- 密码必须 bcrypt 哈希存储，register/login 响应中不返回 password_hash。
+- JWT token 有过期时间（建议 24h），过期后需重新登录。
+- 日志中不输出密码明文、token 全文或 JWT secret。
+- `.env.example` 只包含模板，不含真实值。
+- 云服务器 SSH 密码、数据库密码、JWT secret、API key、Bearer token 只允许存在用户本地安全位置或服务器运行环境中，不得写入规划文件、提交物、部署文档示例、测试 fixture 或 Obsidian。
+- 远端 smoke 只记录安全结论、HTTP 状态、健康检查、认证链路和脱敏错误摘要，不保存真实 token、密码、完整回答、完整 chunk 或供应商响应。
 
-## Claude 人工核验发现（2026-06-17）
+## Key Decisions
 
-### P1：四路评测数据与文档不一致
+1. **保留 SQLite 本地开发路径**：`docker-compose.yml`（SQLite）用于本地开发，`docker-compose.prod.yml`（PostgreSQL）用于生产部署。两者共存，不强制本地安装 PostgreSQL。
+2. **Alembic 管理迁移**：initial migration 包含全部现有表 + 新 User 表。后续阶段修改表结构通过 alembic revision --autogenerate。
+3. **认证边界明确化**：生产环境必须启用认证；本地测试可通过显式环境变量走兼容模式，但必须有测试覆盖认证开启时 `/agent/query`、`/agent/query/stream`、`/conversations/*` 的 401 与用户隔离行为。
+4. **对话隔离 nullable**：`Conversation.user_id` 设为 nullable，旧数据（无用户）保持兼容。新创建的对话在认证启用时必须绑定用户；列表、读取、重命名、删除和追加消息都必须按 `user_id` 过滤。
+5. **前端认证入口需要纳入阶段 44**：浏览器 smoke 需要注册/登录/带 token 查询，因此阶段 44 不能只做后端 API；原生前端需要最小登录/注册入口、token 保存和 Authorization header 注入。
+6. **远端部署 smoke 晚于本地验证**：先完成本地 SQLite 全量回归、Stage 30 和本地 `docker-compose.prod.yml` 验证，再把代码与必要数据传到服务器执行 smoke。
 
-人工核验发现 `stage43_multi_turn_baseline_summary.csv` 仍有 `layered_memory` pending，且当时的三路 CSV 数字与文档数字不一致。复核后确认根因是评测产物没有在 Phase 4 后完整重建，且单路回填命令会覆盖默认 results CSV。
+## Implementation Findings
 
-Phase 11 已重建四路 CSV，并以最终 `stage43_multi_turn_baseline_summary.csv` 为准：
+### 聚焦测试结果
 
-| history_mode | completed_turns | dry_run_turns | avg_hit | avg_cov |
-|---|---:|---:|---:|---:|
-| no_history | 32 | 0 | 0.312 | 0.104 |
-| recent_only | 32 | 0 | 0.531 | 0.125 |
-| summary_recent | 32 | 0 | 0.594 | 0.167 |
-| layered_memory | 32 | 0 | 0.594 | 0.208 |
+```text
+python -m pytest tests/test_stage44_db_session.py tests/test_stage44_auth.py -q -> 9 passed
+```
 
-修正后结论：`summary_recent` 与 `layered_memory` 的 retrieval hit 同为 0.594；`layered_memory` answer coverage 最高（0.208），说明 entities + retrieval_anchors 可以作为辅助检索信号继续保留。Phase 17 真实 Judge 复跑后 citation accuracy 仍低于 `summary_recent`，默认策略不替换。
+覆盖范围：
 
-### P2：results CSV 被局部重跑覆盖
+- SQLite engine 仍自动创建父目录。
+- PostgreSQL engine 可在不连接数据库的情况下创建，并启用 `pool_pre_ping`。
+- 未知 `DATABASE_URL` backend 会快速失败。
+- bcrypt 哈希不保存明文，正确密码可验证，错误密码不可验证。
+- 注册/登录/`/auth/me` 不返回 `password_hash`。
+- `AUTH_ENABLED=true` 时 `/agent/query`、`/agent/query/stream`、`/conversations` 未登录返回 401。
+- 两个用户创建的 conversation 互相不可见，跨用户读取/删除返回 404。
 
-已修复 `scripts/evaluate_stage43_multi_turn.py`：默认输出文件下单路 `--history-mode` 运行会读取既有 results CSV，按 `history_mode` 替换本次模式并保留其它模式。已用 `--history-mode layered_memory --no-dry-run` 复现验证，结果文件仍保持四路各 32 行 completed。
+### 新词解释
 
-### 后续 Track（Phase 11-15）
+- **bcrypt**：密码哈希算法，自带随机 salt，适合存储用户密码；本项目只保存 `password_hash`，不保存明文密码。
+- **JWT（JSON Web Token）**：无状态访问令牌，本项目用 HS256 签名，payload 保存 `sub`（用户 id）、`iat`（签发时间）和 `exp`（过期时间）。
+- **Bearer token**：HTTP `Authorization: Bearer <token>` 认证方式；前端登录后把 JWT 放入该请求头。
+- **pool_pre_ping**：SQLAlchemy 连接池选项，取连接前先检查连接是否仍可用，适合 PostgreSQL 长连接环境。
 
-- Track A：真实 LLM Judge 评判多轮生成质量（faithfulness / citation / coherence / refusal）
-- Track B：基于 Judge 反馈决策 layered_memory 优化方向
-- Stretch：HTTPS reverse proxy 模板
+### 2026-06-17 Implementation Update
 
-### Phase 12：多轮 Judge 设计与合同
+- Alembic 已落地：`alembic.ini`、`alembic/env.py`、`alembic/script.py.mako`、`alembic/versions/20260617_0001_initial_schema.py`。
+- Initial migration 显式创建全部现有表：`documents`、`sources`、`chunks`、`chunk_embeddings`、`conversations`、`messages`、`qa_logs`，并新增 `users` 与 `conversations.user_id`。
+- 已用临时 SQLite smoke 库执行 `python -m alembic upgrade head`，迁移可真实运行。
+- `docker-compose.prod.yml` 已新增 app + `postgres:16-alpine`，PostgreSQL 使用 named volume `postgres_data` 持久化，app 在 DB healthcheck 通过后执行 `alembic upgrade head` 再启动。
+- `.env.example` 新增 `AUTH_ENABLED`、`JWT_SECRET_KEY`、JWT 过期时间、PostgreSQL 模板变量；`.env.prod` 被 `.gitignore` 覆盖，不应提交。
+- `docs/deployment_cloud.md` 已记录云端部署、smoke、数据持久化和安全边界，仍只使用占位符。
+- 前端已新增最小登录/注册/退出入口，JWT 保存在浏览器 `localStorage`，`fetchJson()` 和 `streamAgentQuery()` 统一注入 `Authorization: Bearer <token>`。
+- `AUTH_ENABLED=true` 时已测试 `/health`、`/health/details`、`/auth/register`、`/auth/login` 公开，`/agent/query`、`/agent/query/stream`、`/conversations` 未登录 401，跨用户 conversation 访问 404。
 
-- 新增 `docs/stage43_multi_turn_judge.md`，把多轮 Judge 维度固定为 `answer_faithfulness`、`citation_accuracy`、`context_coherence`、`refusal_consistency`。
-- 新增 `scripts/judge_stage43_multi_turn_quality.py`，默认 dry-run 展开 32 turns x 4 history modes = 128 rows；显式 `--execute` 才生成答案并调用真实 Judge。
-- 脚本复用 Phase 34/42 OpenAI-compatible Judge 形态和脱敏 helper，但使用 Stage 43 四维 parser，避免把 Stage 34 的六指标 schema 混入多轮评测。
-- 输出 `stage43_multi_turn_judge_results.csv` / `stage43_multi_turn_judge_summary.csv` 只保存状态、计数、四维分数、risk、short_reason、next_action 和安全错误摘要；不保存完整答案、完整 chunk、raw provider response、`raw_response` 或 `reasoning_content`。
-- 聚焦测试 `tests/test_stage43_multi_turn_judge.py` 覆盖四路展开、dry-run、payload 脱敏和分数归一化；`python -m pytest tests/test_stage43_multi_turn_judge.py -q` -> 4 passed。
+### 2026-06-17 Focused Verification Update
 
-### Phase 13：真实 Judge 执行与 layered_memory 决策
+```text
+python -m pytest tests/test_stage44_auth.py tests/test_stage44_db_session.py tests/test_stage44_deployment.py tests/test_frontend_app.py -q -> 25 passed
+python -m alembic upgrade head with sqlite:///data/stage44_alembic_smoke.sqlite -> passed
+docker compose -f docker-compose.prod.yml --env-file .env.prod config --quiet with temporary placeholder env -> passed
+```
 
-- 本地 `.env` 具备真实 provider 配置；首次全量 `--history-mode all --execute` 与单路 32 行运行均因 provider 耗时超过 10 分钟而超时。
-- 已增强 `scripts/judge_stage43_multi_turn_quality.py`：默认结果文件下单路 `--execute` 支持逐行 checkpoint、重跑跳过 completed 行、按 history_mode 合并结果。该修复避免真实 Judge 长跑中断后丢失已完成结果。
-- 最终真实 Judge 四路均完成 32/32，无 error/high risk：
+注意：临时 `.env.prod` 只用于 compose config 验证，验证后已删除；不得将真实数据库密码、JWT secret、SSH 密码或 token 写入仓库。
 
-| history_mode | faith | citation | coherence | refusal | gate |
-|---|---:|---:|---:|---:|---|
-| no_history | 0.678 | 0.603 | 0.794 | 0.778 | review_required |
-| recent_only | 0.766 | 0.680 | 0.853 | 0.816 | review_required |
-| summary_recent | 0.764 | 0.641 | 0.784 | 0.794 | review_required |
-| layered_memory | 0.769 | 0.622 | 0.852 | 0.853 | review_required |
+### 2026-06-17 Remote Smoke Update
 
-- 结论：`layered_memory` 相比 `summary_recent` 在四个 Judge 维度均有提升，尤其 context coherence 与 refusal consistency；但 citation accuracy 仍低于 0.8，整体 gate 仍为 `review_required`。因此不把 layered_memory 替换为默认策略，只保留为当前 query rewrite / retrieval 辅助，并把 constraints slot 与 stale-anchor invalidation 记录为后续优化方向。
-- Stage 30 复跑仍为 `91.52 / A / pass`。
-
-### Phase 14：HTTPS reverse proxy 模板
-
-- 已完成 stretch goal：新增 `deploy/nginx-https.example.conf`、`deploy/Caddyfile.example` 与 `docs/deployment_https_reverse_proxy.md`。
-- 模板只描述 `client -> HTTPS reverse proxy -> HTTP uvicorn 127.0.0.1:8000` 拓扑，不改 `Dockerfile`、`docker-compose.yml`、CI 或运行时默认配置。
-- Nginx 模板对 `/agent/query/stream` 显式关闭 proxy buffering，避免 SSE token streaming 被代理缓冲；两套模板均传递 `X-Request-ID`，与 Phase 43 request trace 对齐。
-- 新增 `tests/test_stage43_https_templates.py`，验证模板存在、streaming/request_id 边界和无 secret 文本；聚焦测试 3 passed。
-
-### Phase 15：最终验证与收尾
-
-- 全量 `python -m pytest -q` -> 876 passed。
-- Stage 30 -> `91.52 / A / pass`，不退化。
-- production smoke dry-run -> `rows=11 execute=false failed=0`。
-- Browser desktop smoke on `127.0.0.1:8024`：Agent 页加载，`hello` / `thanks` 两轮闲聊追加成功，status=`answered`，console errors=0，horizontal overflow=false。
-- Browser mobile smoke 390x844：Agent 区域、输入框、运行按钮可见，console errors=0，horizontal overflow=false。
-- 临时服务已停止；未执行 `git add`、commit、tag、push 或 PR。
-
-## Phase 16 纠错感知 layered_memory 优化
-
-- Phase 13 真实 Judge 已指出 `layered_memory` 在 coherence/refusal 上有增益，但 citation accuracy 仍不足；后续优化方向是 `constraints slot / stale-anchor invalidation`。
-- 本轮实现后，`SessionMemory` 保持当前会话内、检索辅助性质，新增 `constraints` 与 `stale_anchors` 只用于约束 query rewrite / retrieval，不作为引用来源。
-- 纠错问题（如“更正一下 / 我说错了 / 想问”）会丢弃未在当前问题重申的旧 `retrieval_anchors`，并把当前问题中显式出现的领域词补为新 anchor；例如 `stage43_correction_02` 第 2 轮从旧“施工质量/质量控制”切换到“裂纹”。
-- `BrainService._rewrite_query_step()` 在纠错问题上不再把上一轮完整原文前置到 query，避免旧目标绕过 memory slot 重新污染检索。
-- 回填 `layered_memory` 后四路 CSV 仍完整：no_history / recent_only / summary_recent / layered_memory 各 32 completed。
-- 最新 baseline：`layered_memory avg_retrieval_hit=0.594, avg_answer_coverage=0.208`，相比 Phase 13 记录的 0.198 coverage 有小幅提升；retrieval hit 已追平 `summary_recent=0.594`。
-- 决策不变：不把 `layered_memory` 替换为默认策略；保留为 query rewrite / retrieval 辅助，并把纠错感知过滤作为已落地的安全增量。
-
-## Phase 17 Phase 16 后真实 Judge 复跑
-
-- 为避免默认 Judge CSV 跳过已 completed 的 layered_memory 行，`scripts/judge_stage43_multi_turn_quality.py` 新增 `--force-rerun`。
-- Judge case 构造已修正为向 `build_memory_hint()` 传入当前问题，确保 `layered_memory` 的 Judge 输入覆盖 Phase 16 纠错感知 memory hint。
-- 执行 `python scripts/judge_stage43_multi_turn_quality.py --history-mode layered_memory --execute --force-rerun`，结果文件保持四路各 32 completed，总计 128 completed。
-- 复跑后 `layered_memory` Judge：faith=0.769, citation=0.622, coherence=0.852, refusal=0.853, gate=review_required。
-- 对比 `summary_recent`：faith 0.769 > 0.764，coherence 0.852 > 0.784，refusal 0.853 > 0.794，但 citation 0.622 < 0.641。
-- 结论：Phase 16 优化提升轻量 baseline 与上下文一致性/拒答维度，但真实 Judge 的 citation accuracy 仍是短板；默认策略不切换，继续保持 `summary_recent`。
-
-## Safety Boundaries
-
-- 不做跨会话长期记忆。
-- 不做用户画像/私人偏好记忆。
-- 不把 summary 当作可引用资料来源。
-- 不把模型生成的 memory 写成知识库事实。
-- 不引入新的外部数据源。
-- 不让真实 API 成为 CI 或本地全量测试前提。
-- Stage 30 必须保持 91.52 / A / pass 或不退化。
-- JSONL 日志只保存脱敏摘要，不保存 raw_response、API key、reasoning_content。
-- /health/details 不做外部 provider 真实 ping。
+- 远端 Docker Hub 直连拉取 `postgres:16-alpine` 超时；使用临时镜像预拉取并 tag 后继续 smoke。
+- 远端 Python 包下载直连 PyPI 很慢；`Dockerfile` 与 `docker-compose.prod.yml` 已新增可选 `PIP_INDEX_URL` / `PIP_TRUSTED_HOST` build arg，默认空值不影响普通环境，远端 `.env.prod` 临时设置 Python 包镜像源完成构建。
+- 远端 app 初次启动暴露 `ModuleNotFoundError: No module named 'scripts'`，原因是 runtime 镜像只复制 `app/` 和 Alembic；已修复为 `COPY scripts ./scripts`，并补充部署测试。
+- 远端 server-local smoke 通过：`127.0.0.1:8044/health` 200，register/login/me 200，未登录 `/agent/query` 401，带 token `/agent/query` 200，app/db containers healthy。
+- 用户已在云平台端口列表放行公网 TCP 8044；公网 `http://36.103.199.132:8044/health` 从本机返回 200，首页返回 200，公网 register/login/me、未登录 `/agent/query` 401、带 token `/agent/query` 200 均通过。
+- 公网页面人工 smoke 暴露前端未登录 UX 问题：`/conversations` 401 会显示泛化的 `Request failed`，且流式请求失败后回退到普通 `/agent/query` 时缺少 `Authorization` header。已修复为未登录时提示先登录/注册，并让回退请求携带 `authHeaders()`。
+- 公网页面人工核验继续暴露认证入口不符合上线体验：顶部内联登录/注册表单拥挤，注册失败规则不清楚。已改为独立认证门页，未登录时隐藏工作台，支持 `Sign in` / `Create account` tab、注册前端校验和表单内错误提示；注册成功自动登录并进入对话页。
+- 用户要求认证门页中文化；已将登录/注册门页、tab、按钮、占位符、登录状态、注册校验和错误提示切换为中文，避免生产入口混用英文。
+- 用户人工注册时看到“请求的接口不存在”；公网直测 `/auth/register` 返回 200，判断更可能是浏览器缓存混用旧静态资源。已升级静态资源版本到 `phase44-auth-gate-zh-fix1`，并让前端 404 错误显示具体接口路径，便于后续定位。

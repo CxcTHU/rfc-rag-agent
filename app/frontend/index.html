@@ -4,17 +4,68 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RFC-RAG-Agent</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase42-landing-app-mode-fix8" />
+    <link rel="stylesheet" href="/static/styles.css?v=phase44-auth-gate-zh-fix1" />
   </head>
   <body>
     <main class="app-shell" data-app-shell>
-      <section class="workspace-band">
+      <section class="auth-screen" data-auth-screen aria-labelledby="auth-title">
+        <div class="auth-hero">
+          <a class="brand-lockup auth-brand" href="#home" aria-label="RFC-RAG-Agent">
+            <span class="brand-mark">R</span>
+            <span>
+              <strong>RFC-RAG-Agent</strong>
+              <small>堆石混凝土知识库</small>
+            </span>
+          </a>
+          <div class="auth-copy">
+            <p class="auth-eyebrow">生产环境工作台</p>
+            <h1 id="auth-title">登录后继续</h1>
+            <p>使用个人账号登录后，对话记录会按用户隔离保存，适合在云端部署环境中多人使用。</p>
+          </div>
+        </div>
+
+        <section class="auth-card" aria-label="账号访问">
+          <div class="auth-tabs" role="tablist" aria-label="账号模式">
+            <button type="button" class="auth-tab is-active" data-auth-mode="login" role="tab" aria-selected="true">登录</button>
+            <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">创建账号</button>
+          </div>
+          <form class="auth-form auth-form--login" data-auth-login-form>
+            <label>
+              <span>用户名或邮箱</span>
+              <input data-auth-login-identity type="text" autocomplete="username" placeholder="例如 ethan 或 ethan@example.com" />
+            </label>
+            <label>
+              <span>密码</span>
+              <input data-auth-login-password type="password" autocomplete="current-password" placeholder="至少 8 位字符" />
+            </label>
+            <button class="command-button auth-submit" type="submit">登录</button>
+          </form>
+          <form class="auth-form auth-form--register" data-auth-register-form hidden>
+            <label>
+              <span>用户名</span>
+              <input data-auth-register-username type="text" autocomplete="username" minlength="3" maxlength="100" placeholder="至少 3 位，不能有空格" />
+            </label>
+            <label>
+              <span>邮箱</span>
+              <input data-auth-register-email type="email" autocomplete="email" placeholder="alice@example.com" />
+            </label>
+            <label>
+              <span>密码</span>
+              <input data-auth-register-password type="password" autocomplete="new-password" minlength="8" maxlength="72" placeholder="8 到 72 位字符" />
+            </label>
+            <button class="command-button auth-submit" type="submit">创建账号</button>
+          </form>
+          <p class="auth-help" data-auth-help>用户名至少 3 位且不能有空格；密码需为 8 到 72 位字符。</p>
+        </section>
+      </section>
+
+      <section class="workspace-band" data-workspace-band hidden>
         <header class="top-nav" aria-label="主导航">
           <a class="brand-lockup" href="#home" data-home-link aria-label="RFC-RAG-Agent 首页">
             <span class="brand-mark">R</span>
             <span>
               <strong>RFC-RAG-Agent</strong>
-              <small>Rock-filled Concrete Knowledge Base</small>
+              <small>堆石混凝土知识库</small>
             </span>
           </a>
           <nav class="nav-links" aria-label="页面视图">
@@ -22,6 +73,13 @@
             <a href="#library-view" data-view-target="library">资料库</a>
           </nav>
           <div class="header-actions">
+            <div class="auth-panel" data-auth-panel>
+              <div class="auth-summary">
+                <span data-auth-status>访客</span>
+                <strong data-auth-username>未登录</strong>
+              </div>
+              <button class="secondary-button" type="button" data-auth-logout hidden>退出登录</button>
+            </div>
             <div class="status-strip" aria-live="polite">
               <span data-api-status>连接中</span>
             </div>
@@ -364,6 +422,6 @@
       <button type="button" data-rename-conversation role="menuitem">重命名</button>
       <button type="button" class="danger-menu-item" data-delete-conversation role="menuitem">删除</button>
     </div>
-    <script src="/static/app.js?v=phase42-landing-app-mode-fix8" type="module"></script>
+    <script src="/static/app.js?v=phase44-auth-gate-zh-fix1" type="module"></script>
   </body>
 </html>

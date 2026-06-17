@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.security import get_current_user
 from app.db.models import Conversation, Message
+from app.db.models import User
 from app.db.repositories import (
     ConversationCreate,
     ConversationRepository,
@@ -25,10 +27,14 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 def create_conversation(
     request: ConversationCreateRequest,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> ConversationItem:
     repository = ConversationRepository(db)
     conversation = repository.create_conversation(
-        ConversationCreate(title=request.title or "新对话")
+        ConversationCreate(
+            title=request.title or "新对话",
+            user_id=current_user.id if current_user is not None else None,
+        )
     )
     return conversation_item_from_model(conversation)
 
@@ -37,10 +43,14 @@ def create_conversation(
 def list_conversations(
     limit: int = 50,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> ConversationListResponse:
     normalized_limit = max(1, min(limit, 100))
     repository = ConversationRepository(db)
-    conversations = repository.list_conversations(limit=normalized_limit)
+    conversations = repository.list_conversations(
+        limit=normalized_limit,
+        user_id=current_user.id if current_user is not None else None,
+    )
     return ConversationListResponse(
         conversations=[conversation_item_from_model(item) for item in conversations]
     )
@@ -50,15 +60,22 @@ def list_conversations(
 def get_conversation_messages(
     conversation_id: int,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> ConversationMessagesResponse:
     repository = ConversationRepository(db)
-    conversation = repository.get_conversation(conversation_id)
+    conversation = repository.get_conversation(
+        conversation_id,
+        user_id=current_user.id if current_user is not None else None,
+    )
     if conversation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="conversation not found",
         )
-    messages = repository.list_messages(conversation_id)
+    messages = repository.list_messages(
+        conversation_id,
+        user_id=current_user.id if current_user is not None else None,
+    )
     return ConversationMessagesResponse(
         conversation=conversation_item_from_model(conversation),
         messages=[message_item_from_model(message) for message in messages],
@@ -69,9 +86,13 @@ def get_conversation_messages(
 def delete_conversation(
     conversation_id: int,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> ConversationDeleteResponse:
     repository = ConversationRepository(db)
-    deleted = repository.delete_conversation(conversation_id)
+    deleted = repository.delete_conversation(
+        conversation_id,
+        user_id=current_user.id if current_user is not None else None,
+    )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -85,9 +106,14 @@ def update_conversation(
     conversation_id: int,
     request: ConversationUpdateRequest,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ) -> ConversationItem:
     repository = ConversationRepository(db)
-    conversation = repository.rename_conversation(conversation_id, request.title)
+    conversation = repository.rename_conversation(
+        conversation_id,
+        request.title,
+        user_id=current_user.id if current_user is not None else None,
+    )
     if conversation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

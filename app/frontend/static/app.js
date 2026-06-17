@@ -1,4 +1,7 @@
 const apiEndpoints = {
+  authRegister: "/auth/register",
+  authLogin: "/auth/login",
+  authMe: "/auth/me",
   sources: "/sources",
   sourceSync: "/sources/sync",
   sourceReindex: (sourceId) => `/sources/${encodeURIComponent(sourceId)}/reindex`,
@@ -15,9 +18,13 @@ const apiEndpoints = {
   conversationMessages: (conversationId) => `/conversations/${encodeURIComponent(conversationId)}/messages`,
 };
 
+const AUTH_TOKEN_STORAGE_KEY = "rfc-rag-agent.authToken";
+
 const state = {
   sources: [],
   documents: [],
+  authToken: window.localStorage?.getItem(AUTH_TOKEN_STORAGE_KEY) || "",
+  currentUser: null,
   sourceFilters: {
     keyword: "",
     status: "",
@@ -35,16 +42,21 @@ const state = {
 
 const ANSWER_SEGMENT_MAX_CHARS = 1200;
 
+function authHeaders() {
+  return state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {};
+}
+
 async function fetchJson(url, options = {}) {
   const { timeoutMs, ...fetchOptions } = options;
   const controller = timeoutMs ? new AbortController() : null;
   const timeoutId = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
   const response = await fetch(url, {
+    ...fetchOptions,
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
       ...(fetchOptions.headers || {}),
     },
-    ...fetchOptions,
     signal: controller?.signal || fetchOptions.signal,
   }).catch((error) => {
     if (timeoutId) {
@@ -59,7 +71,10 @@ async function fetchJson(url, options = {}) {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = payload.detail || `HTTP ${response.status}`;
-      throw new Error(Array.isArray(detail) ? detail.map((item) => item.msg).join("; ") : detail);
+      const error = new Error(Array.isArray(detail) ? detail.map((item) => item.msg).join("; ") : detail);
+      error.status = response.status;
+      error.url = url;
+      throw error;
     }
     return payload;
   } finally {
@@ -80,6 +95,195 @@ function setAgentPanelStatus(message) {
   const status = document.querySelector("[data-agent-status]");
   if (status) {
     status.textContent = message;
+  }
+}
+
+function authRequiredMessage() {
+  return "请先登录或创建账号，再使用 Agent 对话。";
+}
+
+function setAuthHelp(message, isError = false) {
+  const help = document.querySelector("[data-auth-help]");
+  if (!help) {
+    return;
+  }
+  help.textContent = message || "用户名至少 3 位且不能有空格；密码需为 8 到 72 位字符。";
+  help.classList.toggle("is-error", Boolean(isError));
+}
+
+function authErrorMessage(error) {
+  const message = String(error?.message || "").trim();
+  if (message.includes("value is not a valid email address")) {
+    return "请输入有效邮箱，例如 ethan@example.com。";
+  }
+  if (message.includes("String should have at least 8 characters") || message.includes("at least 8")) {
+    return "密码至少需要 8 位字符。";
+  }
+  if (message.includes("String should have at least 3 characters") || message.includes("at least 3")) {
+    return "用户名至少需要 3 位字符。";
+  }
+  if (message.includes("username must not contain whitespace")) {
+    return "用户名不能包含空格。";
+  }
+  if (message.includes("already")) {
+    return "该用户名或邮箱已经注册，请尝试直接登录。";
+  }
+  if (error?.status === 404 || message.includes("Not Found") || message.includes("HTTP 404")) {
+    return `请求的接口不存在：${error?.url || "未知接口"}。请按 Ctrl + F5 强制刷新后重试。`;
+  }
+  return message || "认证失败，请检查表单后重试。";
+}
+
+function setAuthMode(mode) {
+  const targetMode = mode === "register" ? "register" : "login";
+  document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+    const isActive = button.dataset.authMode === targetMode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+  const loginForm = document.querySelector("[data-auth-login-form]");
+  const registerForm = document.querySelector("[data-auth-register-form]");
+  if (loginForm) {
+    loginForm.hidden = targetMode !== "login";
+  }
+  if (registerForm) {
+    registerForm.hidden = targetMode !== "register";
+  }
+  setAuthHelp(targetMode === "register" ? "用户名至少 3 位且不能有空格；密码需为 8 到 72 位字符。" : "可使用用户名或邮箱登录。");
+}
+
+function ensureAuthenticated() {
+  if (state.authToken) {
+    return true;
+  }
+  setApiStatus(authRequiredMessage());
+  setAgentPanelStatus("sign_in_required");
+  setConversationListPlaceholder("登录后加载会话");
+  return false;
+}
+
+function renderAuthState() {
+  const statusNode = document.querySelector("[data-auth-status]");
+  const usernameNode = document.querySelector("[data-auth-username]");
+  const logoutButton = document.querySelector("[data-auth-logout]");
+  const authScreen = document.querySelector("[data-auth-screen]");
+  const workspace = document.querySelector("[data-workspace-band]");
+  const appShell = document.querySelector("[data-app-shell]");
+  const isSignedIn = Boolean(state.authToken && state.currentUser);
+  appShell?.classList.toggle("is-signed-in", isSignedIn);
+  appShell?.classList.toggle("is-signed-out", !isSignedIn);
+  if (authScreen) {
+    authScreen.hidden = isSignedIn;
+  }
+  if (workspace) {
+    workspace.hidden = !isSignedIn;
+  }
+  if (statusNode) {
+    statusNode.textContent = isSignedIn ? "已登录" : state.authToken ? "已保存登录状态" : "访客";
+  }
+  if (usernameNode) {
+    usernameNode.textContent = state.currentUser?.username || "未登录";
+  }
+  if (logoutButton) {
+    logoutButton.hidden = !state.authToken;
+  }
+}
+
+function setAuthSession(token, user) {
+  state.authToken = token || "";
+  state.currentUser = user || null;
+  if (state.authToken) {
+    window.localStorage?.setItem(AUTH_TOKEN_STORAGE_KEY, state.authToken);
+  } else {
+    window.localStorage?.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  }
+  renderAuthState();
+}
+
+function clearAuthSession() {
+  setAuthSession("", null);
+  state.conversations = [];
+  state.currentConversationId = null;
+  renderConversationList();
+  setConversationListPlaceholder("登录后加载会话");
+}
+
+async function loadCurrentUserFromToken() {
+  if (!state.authToken) {
+    renderAuthState();
+    return;
+  }
+  try {
+    state.currentUser = await fetchJson(apiEndpoints.authMe);
+  } catch (error) {
+    clearAuthSession();
+    setApiStatus(`需要重新登录：${error.message}`);
+  }
+  renderAuthState();
+}
+
+async function submitAuthLogin() {
+  const identity = document.querySelector("[data-auth-login-identity]")?.value.trim();
+  const password = document.querySelector("[data-auth-login-password]")?.value || "";
+  if (!identity || !password) {
+    setAuthHelp("请输入用户名或邮箱，以及密码。", true);
+    setApiStatus("请输入用户名或邮箱和密码");
+    return;
+  }
+  try {
+    const payload = await fetchJson(apiEndpoints.authLogin, {
+      method: "POST",
+      body: JSON.stringify({ username_or_email: identity, password }),
+    });
+    setAuthSession(payload.access_token, payload.user);
+    setAuthHelp("登录成功，正在加载工作台...");
+    setApiStatus("已登录");
+    enterApp("ask", "#ask-view");
+    await loadAgentConversations();
+  } catch (error) {
+    const message = authErrorMessage(error);
+    setAuthHelp(message, true);
+    throw new Error(message);
+  }
+}
+
+async function submitAuthRegister() {
+  const username = document.querySelector("[data-auth-register-username]")?.value.trim();
+  const email = document.querySelector("[data-auth-register-email]")?.value.trim();
+  const password = document.querySelector("[data-auth-register-password]")?.value || "";
+  if (!username || !email || !password) {
+    setAuthHelp("请输入用户名、邮箱和密码。", true);
+    setApiStatus("请输入用户名、邮箱和密码");
+    return;
+  }
+  if (username.length < 3 || /\s/.test(username)) {
+    setAuthHelp("用户名至少 3 位，且不能包含空格。", true);
+    setApiStatus("用户名不符合要求");
+    return;
+  }
+  if (password.length < 8 || password.length > 72) {
+    setAuthHelp("密码需为 8 到 72 位字符。", true);
+    setApiStatus("密码不符合要求");
+    return;
+  }
+  try {
+    await fetchJson(apiEndpoints.authRegister, {
+      method: "POST",
+      body: JSON.stringify({ username, email, password }),
+    });
+    const payload = await fetchJson(apiEndpoints.authLogin, {
+      method: "POST",
+      body: JSON.stringify({ username_or_email: username, password }),
+    });
+    setAuthSession(payload.access_token, payload.user);
+    setAuthHelp("账号创建成功，正在进入工作台...");
+    setApiStatus("已创建账号并登录");
+    enterApp("ask", "#ask-view");
+    await loadAgentConversations();
+  } catch (error) {
+    const message = authErrorMessage(error);
+    setAuthHelp(message, true);
+    throw new Error(message);
   }
 }
 
@@ -215,6 +419,9 @@ function conversationTitleFromQuestion(question) {
 
 function userFriendlyErrorMessage(error) {
   const message = String(error?.message || "").trim();
+  if (message.includes("authentication required") || message.includes("HTTP 401")) {
+    return authRequiredMessage();
+  }
   if (message.includes("Request timed out") || message.includes("timeout") || error?.name === "AbortError") {
     return "Request timed out. Please retry after checking the model or retrieval service.";
   }
@@ -1453,6 +1660,9 @@ function targetConversationId() {
 }
 
 async function refreshConversationList() {
+  if (!ensureAuthenticated()) {
+    return;
+  }
   try {
     const payload = await fetchJson(apiEndpoints.conversations);
     state.conversations = payload.conversations || [];
@@ -1466,6 +1676,9 @@ async function refreshConversationList() {
 }
 
 async function createAgentConversation(title = "New conversation") {
+  if (!ensureAuthenticated()) {
+    throw new Error("authentication required");
+  }
   const conversation = await fetchJson(apiEndpoints.conversations, {
     method: "POST",
     body: JSON.stringify({ title }),
@@ -1488,6 +1701,9 @@ async function loadConversationMessages(conversationId) {
 }
 
 async function loadAgentConversations() {
+  if (!ensureAuthenticated()) {
+    return;
+  }
   await refreshConversationList();
   if (state.conversations.length) {
     await loadConversationMessages(state.conversations[0].id);
@@ -1497,6 +1713,9 @@ async function loadAgentConversations() {
 }
 
 async function deleteCurrentConversation() {
+  if (!ensureAuthenticated()) {
+    return;
+  }
   const conversationId = targetConversationId();
   if (!conversationId) {
     return;
@@ -1517,6 +1736,9 @@ async function deleteCurrentConversation() {
 }
 
 async function renameCurrentConversation() {
+  if (!ensureAuthenticated()) {
+    return;
+  }
   const conversationId = targetConversationId();
   if (!conversationId) {
     return;
@@ -1563,6 +1785,10 @@ async function submitChat() {
 async function submitAgent() {
   if (state.agentRequestInFlight) {
     abortAgentStream();
+    return;
+  }
+  if (!ensureAuthenticated()) {
+    appendAgentErrorMessage(authRequiredMessage());
     return;
   }
   const questionInput = document.querySelector("[data-agent-question]");
@@ -1650,6 +1876,7 @@ async function submitAgent() {
       } else {
         result = await fetchJson(apiEndpoints.agent, {
           method: "POST",
+          headers: authHeaders(),
           body: JSON.stringify(body),
           timeoutMs: 45000,
         });
@@ -1686,6 +1913,7 @@ async function streamAgentQuery(body, handlers = {}) {
       headers: {
         "Content-Type": "application/json",
         "Accept": "text/event-stream",
+        ...authHeaders(),
       },
       body: JSON.stringify(body),
       signal: handlers.signal || abortController.signal,
@@ -1699,7 +1927,10 @@ async function streamAgentQuery(body, handlers = {}) {
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     const detail = payload.detail || `HTTP ${response.status}`;
-    throw new Error(Array.isArray(detail) ? detail.map((item) => item.msg).join("; ") : detail);
+    const error = new Error(Array.isArray(detail) ? detail.map((item) => item.msg).join("; ") : detail);
+    error.status = response.status;
+    error.url = apiEndpoints.agentStream;
+    throw error;
   }
   if (!response.body || !response.body.getReader) {
     throw new Error("This browser does not support streaming reads; switched to synchronous request.");
@@ -1859,6 +2090,28 @@ function bindEnterToSubmit() {
 }
 
 function bindCommands() {
+  document.querySelector("[data-auth-login-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitAuthLogin().catch((error) => {
+      setApiStatus(`登录失败：${error.message}`);
+    });
+  });
+  document.querySelector("[data-auth-register-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitAuthRegister().catch((error) => {
+      setApiStatus(`注册失败：${error.message}`);
+    });
+  });
+  document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setAuthMode(button.dataset.authMode);
+    });
+  });
+  document.querySelector("[data-auth-logout]")?.addEventListener("click", () => {
+    clearAuthSession();
+    setAuthMode("login");
+    setApiStatus("已退出登录");
+  });
   document.querySelector("[data-refresh-all]")?.addEventListener("click", () => {
     loadWorkspaceData().catch((error) => {
       setApiStatus(`Load failed: ${error.message}`);
@@ -2030,10 +2283,20 @@ async function initializeShell() {
   bindViewNavigation();
   bindSourceFilters();
   bindCommands();
+  setAuthMode("login");
+  renderAuthState();
   try {
     await fetchJson("/health");
+    await loadCurrentUserFromToken();
     await loadWorkspaceData();
-    await loadAgentConversations();
+    if (state.authToken) {
+      if (!window.location.hash || window.location.hash === "#home") {
+        enterApp("ask", "#ask-view");
+      }
+      await loadAgentConversations();
+    } else {
+      setConversationListPlaceholder("登录后加载会话");
+    }
   } catch (error) {
     setApiStatus(`Connection error: ${error.message}`);
   }
@@ -2042,7 +2305,10 @@ async function initializeShell() {
 window.rfcRagFrontend = {
   apiEndpoints,
   abortAgentStream,
+  authHeaders,
   fetchJson,
+  submitAuthLogin,
+  submitAuthRegister,
   isAgentAbortError,
   markAgentStreamingAborted,
   sanitizeRenderedHtml,

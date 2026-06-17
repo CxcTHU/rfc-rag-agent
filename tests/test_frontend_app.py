@@ -20,8 +20,19 @@ def test_frontend_index_is_served() -> None:
     assert "operations-grid" in response.text
     assert "answer-grid" in response.text
     assert "data-agent-form" in response.text
-    assert "/static/app.js?v=phase42-landing-app-mode-fix8" in response.text
-    assert "/static/styles.css?v=phase42-landing-app-mode-fix8" in response.text
+    assert "data-auth-login-form" in response.text
+    assert "data-auth-register-form" in response.text
+    assert "data-auth-screen" in response.text
+    assert "data-auth-mode=\"login\"" in response.text
+    assert "data-auth-mode=\"register\"" in response.text
+    assert "创建账号" in response.text
+    assert "登录后继续" in response.text
+    assert "data-workspace-band" in response.text
+    assert "data-auth-logout" in response.text
+    assert "data-auth-status" in response.text
+    assert "data-auth-username" in response.text
+    assert "/static/app.js?v=phase44-auth-gate-zh-fix1" in response.text
+    assert "/static/styles.css?v=phase44-auth-gate-zh-fix1" in response.text
     assert 'class="hero-layout"' in response.text
     assert "hero-kicker" not in response.text
     assert 'class="demo-panel agent-workspace-panel"' in response.text
@@ -77,6 +88,27 @@ def test_frontend_static_assets_are_served() -> None:
 
     assert response.status_code == 200
     assert "apiEndpoints" in response.text
+    assert "/auth/register" in response.text
+    assert "/auth/login" in response.text
+    assert "/auth/me" in response.text
+    assert "AUTH_TOKEN_STORAGE_KEY" in response.text
+    assert "authHeaders" in response.text
+    assert "Authorization" in response.text
+    assert "Bearer" in response.text
+    assert "submitAuthLogin" in response.text
+    assert "submitAuthRegister" in response.text
+    assert "loadCurrentUserFromToken" in response.text
+    assert "ensureAuthenticated" in response.text
+    assert "setAuthMode" in response.text
+    assert "authErrorMessage" in response.text
+    assert "setAuthHelp" in response.text
+    assert "error.status = response.status" in response.text
+    assert "error.url = url" in response.text
+    assert "用户名至少 3 位" in response.text
+    assert "密码需为 8 到 72 位字符" in response.text
+    assert "请先登录或创建账号，再使用 Agent 对话。" in response.text
+    assert "登录后加载会话" in response.text
+    assert "window.localStorage" in response.text
     assert "/sources" in response.text
     assert "/documents" in response.text
     assert "/chat" in response.text
@@ -145,6 +177,8 @@ def test_frontend_static_assets_are_served() -> None:
     assert "[data-view-target]" in response.text
     assert "[data-view]" in response.text
     assert "timeoutMs: 45000" in response.text
+    fallback_agent_block = response.text.split("result = await fetchJson(apiEndpoints.agent", 1)[1].split("});", 1)[0]
+    assert "headers: authHeaders()" in fallback_agent_block
     assert "Request timed out" in response.text
     assert "pendingUserMessage.remove()" not in response.text
     assert "body.conversation_id = state.currentConversationId" in response.text
@@ -174,6 +208,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "appendTokenToAgentMessage" in response.text
     assert 'setAgentPanelStatus(result?.aborted ? "aborted" : result?.refused ? "refused" : "answered")' in response.text
     assert '"Accept": "text/event-stream"' in response.text
+    assert "...authHeaders()" in response.text
     assert "signal:" in response.text
     assert "apiEndpoints.agentStream" in response.text
     assert "workflow_steps" in response.text
@@ -269,6 +304,14 @@ def test_frontend_static_assets_are_served() -> None:
     assert "conversation-list-item" in styles.text
     assert "conversation-context-menu" in styles.text
     assert "agent-composer" in styles.text
+    assert "auth-panel" in styles.text
+    assert "auth-screen" in styles.text
+    assert "auth-card" in styles.text
+    assert "auth-tabs" in styles.text
+    assert "auth-tab.is-active" in styles.text
+    assert "auth-help.is-error" in styles.text
+    assert "auth-form" in styles.text
+    assert "auth-summary" in styles.text
     assert "height: calc(100vh - 108px)" in styles.text
     assert "grid-template-rows: auto minmax(0, 1fr)" in styles.text
 
