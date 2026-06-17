@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = "sqlite:///./data/app.sqlite"
     raw_data_dir: str = "data/raw"
+    auth_enabled: bool = False
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 1440
 
     chat_model_provider: str = ""
     chat_model_name: str = ""

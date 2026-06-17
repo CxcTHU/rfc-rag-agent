@@ -3330,3 +3330,31 @@ browser desktop/mobile smoke -> new corpus retrievable, stop generation usable, 
 Important architecture note: `chunks=25687` includes Stage 31 parent rows. Parent rows do not receive embeddings and do not enter FAISS; the acceptance target is full coverage of the `19300` indexable child chunks.
 
 Current boundary: do not run `git add`, commit, tag, push, or create a PR before user human verification and explicit approval.
+
+## Latest Status: 2026-06-18 Phase 44 Production Deployment Auth Complete And User-Approved For Submit
+
+Current branch: `codex/phase-44-cloud-deployment-auth`.
+
+Phase 44 starts from `origin/main -> 5596d27 Merge phase 43 multi-turn quality and observability`. Local `main` remains stale, so Phase 44 intentionally used `origin/main` as the correct starting point. The phase preserves Stage 30 scoring rules, provider topology, data-source boundaries, and the rule that real APIs/cloud services must not become CI or local full-test prerequisites.
+
+Completed:
+
+- `app/db/session.py` supports SQLite and PostgreSQL engine selection by `DATABASE_URL`.
+- Alembic initial migration includes all existing tables plus `users` and nullable `conversations.user_id`.
+- User auth endpoints are available: `POST /auth/register`, `POST /auth/login`, `GET /auth/me`.
+- Passwords are stored as bcrypt hashes; JWT uses expiry and an environment secret.
+- `AUTH_ENABLED=true` protects `/agent/query`, `/agent/query/stream`, and `/conversations/*`; health and auth register/login remain public.
+- Conversation repository operations filter by `user_id`.
+- `docker-compose.prod.yml` runs app + `postgres:16-alpine`, persistent `postgres_data`, DB healthcheck, and `alembic upgrade head`.
+- Native frontend has a Chinese standalone login/register gate and injects bearer token into JSON and SSE requests after sign-in.
+
+Verification:
+
+- Focused Phase 44 tests: `25 passed`.
+- Full regression: `python -m pytest -q -> 894 passed`.
+- Stage 30: `overall=91.52 grade=A release_decision=pass`.
+- Local browser smoke: registration, login, conversation creation, authenticated Agent query, mobile 390x844 no horizontal overflow, console errors `[]`.
+- Remote deployment smoke: server-local `127.0.0.1:8044` passed health/register/login/me/unauthenticated Agent 401/authenticated Agent 200; app and db containers are healthy. After cloud inbound TCP 8044 was opened, public `http://36.103.199.132:8044` passed health/home/auth/query checks.
+- Frontend follow-up: the first inline auth controls were replaced with a Chinese standalone auth gate. A later user-reported registration `Not Found` was traced to a likely stale static asset mix because `/auth/register` returned 200 directly; static asset URLs were bumped to `phase44-auth-gate-zh-fix1`, and frontend 404 errors now include the failed API path for diagnosis.
+
+State: user manual verification has completed in chat on 2026-06-18. User explicitly authorized submitting Phase 44, pushing to GitHub, merging, and tagging. Data migration is intentionally deferred to a later phase.

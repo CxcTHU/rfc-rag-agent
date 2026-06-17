@@ -28,7 +28,17 @@ def create_sqlite_engine(database_url: str) -> Engine:
     )
 
 
-engine = create_sqlite_engine(get_settings().database_url)
+def create_database_engine(database_url: str) -> Engine:
+    url = make_url(database_url)
+    backend_name = url.get_backend_name()
+    if backend_name == "sqlite":
+        return create_sqlite_engine(database_url)
+    if backend_name in {"postgresql", "postgres"}:
+        return create_engine(database_url, pool_pre_ping=True)
+    raise ValueError(f"Unsupported DATABASE_URL backend: {backend_name}")
+
+
+engine = create_database_engine(get_settings().database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

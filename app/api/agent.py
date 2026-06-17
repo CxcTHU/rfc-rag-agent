@@ -11,8 +11,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.security import get_current_user
 from app.core.structured_logging import log_event, safe_text_summary
 from app.db.models import Message
+from app.db.models import User
 from app.db.repositories import ConversationRepository, MessageCreate
 from app.db.repositories import deserialize_metadata
 from app.db.session import get_db
@@ -100,6 +102,7 @@ def get_agent_embedding_provider() -> EmbeddingProvider:
 def query_agent(
     request: AgentQueryRequest,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
     planner_chat_provider: ChatModelProvider | None = Depends(
@@ -110,13 +113,19 @@ def query_agent(
     conversation_messages: list[Message] = []
     conversation_history: list[str] = []
     if request.conversation_id is not None:
-        conversation = conversation_repository.get_conversation(request.conversation_id)
+        conversation = conversation_repository.get_conversation(
+            request.conversation_id,
+            user_id=current_user.id if current_user is not None else None,
+        )
         if conversation is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="conversation not found",
             )
-        conversation_messages = conversation_repository.list_messages(request.conversation_id)
+        conversation_messages = conversation_repository.list_messages(
+            request.conversation_id,
+            user_id=current_user.id if current_user is not None else None,
+        )
         conversation_history = history_from_messages(conversation_messages)
         log_event(
             agent_logger,
@@ -321,6 +330,7 @@ def query_agent(
 def stream_query_agent(
     request: AgentQueryRequest,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
     planner_chat_provider: ChatModelProvider | None = Depends(
@@ -331,13 +341,19 @@ def stream_query_agent(
     conversation_messages: list[Message] = []
     conversation_history: list[str] = []
     if request.conversation_id is not None:
-        conversation = conversation_repository.get_conversation(request.conversation_id)
+        conversation = conversation_repository.get_conversation(
+            request.conversation_id,
+            user_id=current_user.id if current_user is not None else None,
+        )
         if conversation is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="conversation not found",
             )
-        conversation_messages = conversation_repository.list_messages(request.conversation_id)
+        conversation_messages = conversation_repository.list_messages(
+            request.conversation_id,
+            user_id=current_user.id if current_user is not None else None,
+        )
         conversation_history = history_from_messages(conversation_messages)
         log_event(
             agent_logger,

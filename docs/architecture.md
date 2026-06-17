@@ -3926,3 +3926,31 @@ query
 The CI/offline baseline substrate mirrors the same child chunk set with `deterministic / hash-token-v1 / dim64` embeddings and a deterministic FAISS index. CI and full local pytest do not require real provider API calls.
 
 Phase 41 also adds safe post-import retrieval evaluation. The evaluation CSVs store query ids, categories, source types, top titles, numeric metrics, and sanitized errors only. They do not store API keys, Bearer tokens, raw provider responses, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, or full chunk content.
+
+## Phase 44 Architecture Delta: Production Deployment, PostgreSQL, And Auth Isolation
+
+Phase 44 expands the local SQLite-only shape into a production-deployable shape while keeping SQLite as the default local development and full-test path. `app/db/session.py::create_database_engine()` selects the engine from `DATABASE_URL`: SQLite keeps `check_same_thread=False`, while PostgreSQL uses `pool_pre_ping=True`. Alembic is now the schema migration entry point; the initial migration explicitly creates `documents`, `sources`, `chunks`, `chunk_embeddings`, `conversations`, `messages`, `qa_logs`, `users`, and nullable `conversations.user_id`.
+
+Auth adds `User`, `app/core/security.py`, `app/api/auth.py`, and `app/schemas/auth.py`:
+
+```text
+POST /auth/register -> bcrypt password_hash -> users
+POST /auth/login -> verify_password -> HS256 JWT
+GET /auth/me -> Authorization: Bearer <token> -> current user
+```
+
+When `AUTH_ENABLED=false`, local development remains backward compatible. When `AUTH_ENABLED=true`, `/agent/query`, `/agent/query/stream`, and `/conversations/*` are guarded by `get_current_user()`. `/health`, `/health/details`, `/auth/register`, and `/auth/login` remain public. Conversation isolation is enforced in the repository layer: list, read, messages, delete, rename, and Agent append paths all filter by `user_id`; cross-user conversation access returns 404.
+
+Production deployment shape:
+
+```text
+docker-compose.prod.yml
+-> db: postgres:16-alpine + postgres_data volume + pg_isready healthcheck
+-> app: build Dockerfile
+-> env: AUTH_ENABLED=true, DATABASE_URL=postgresql+psycopg2://..., JWT_SECRET_KEY
+-> command: alembic upgrade head && uvicorn app.main:app
+```
+
+The native frontend remains static HTML/CSS/JS with no Node/React/Vue build chain. Phase 44 adds a standalone Chinese authentication gate with login and account creation tabs, then reveals the Agent workspace only after sign-in. After login, the JWT is stored in browser `localStorage`; `fetchJson()` and `streamAgentQuery()` inject the `Authorization` header. The frontend must not display or log the full token.
+
+Security boundary: JWT secrets, database passwords, SSH passwords, bearer tokens, API keys, provider raw responses, `raw_response`, `reasoning_content`, and restricted full text must not enter Git, CSV, docs, tests, or Obsidian. The cloud server is a deployment smoke and human-verification target, not a CI or local full-test prerequisite.

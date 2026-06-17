@@ -5,7 +5,12 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /build
 
-RUN python -m pip install --no-cache-dir --upgrade pip
+ARG PIP_INDEX_URL
+ARG PIP_TRUSTED_HOST
+
+RUN if [ -n "$PIP_INDEX_URL" ]; then python -m pip config set global.index-url "$PIP_INDEX_URL"; fi \
+    && if [ -n "$PIP_TRUSTED_HOST" ]; then python -m pip config set global.trusted-host "$PIP_TRUSTED_HOST"; fi \
+    && python -m pip install --no-cache-dir --upgrade pip
 
 COPY pyproject.toml README.md ./
 COPY app ./app
@@ -22,6 +27,9 @@ COPY --from=builder /wheels /wheels
 RUN python -m pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
 
 COPY app ./app
+COPY scripts ./scripts
+COPY alembic.ini ./alembic.ini
+COPY alembic ./alembic
 
 EXPOSE 8000
 
