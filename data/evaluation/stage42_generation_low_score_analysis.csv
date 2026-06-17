@@ -1,0 +1,13 @@
+query_id,case_source,category,answer_coverage,citation_support,risk_level,root_cause,evidence,next_action
+stage38_single_hop_filling_capacity,stage38,single_hop,0.800,0.700,low,prompt_citation_gap,Answer correctly identifies key factors from sources; citations partially supported; no safety issues.,continue
+stage38_comparison_filling_vs_thermal,stage38,comparison,0.800,0.700,low,prompt_citation_gap,"Answer is faithful to sources, covering both filling capacity and thermal control, though citations are not directly from provided source IDs. No safety leaks.",no_action
+stage38_comparison_durability_vs_quality,stage38,comparison,0.200,1.000,medium,answer_coverage_gap,Answer correctly identifies evidence gap but cannot perform comparison due to lack of relevant sources.,retrieve_additional_sources
+stage38_multi_dimensional_quality_durability_risk,stage38,multi_dimensional,0.700,1.000,medium,answer_coverage_gap,Coverage adequate but missing durability evidence.,improve_coverage
+stage38_numeric_comparison_quality_metrics,stage38,numeric_comparison,0.500,0.800,low,answer_coverage_gap,Lacks direct comparison but correctly summarizes available evidence.,proceed
+stage38_evidence_insufficient_quantum,stage38,evidence_insufficient,1.000,0.700,medium,refusal_or_judge_artifact,Faithful and covers query; weak citation support for negative claim; model did not explicitly refuse as expected.,consider explicit refusal for out-of-scope queries
+stage38_off_topic_recipe,stage38,off_topic,0.000,0.000,medium,refusal_or_judge_artifact,Correct refusal for off-topic query. No citations needed. No safety issues.,none
+stage38_off_topic_stock,stage38,off_topic,1.000,0.000,medium,refusal_or_judge_artifact,Correct refusal for off-topic question.,finalize
+stage38_responsibility_boundary_mix,stage38,responsibility_boundary,1.000,0.000,low,refusal_or_judge_artifact,拒绝合理，无引用,none
+stage38_duplicate_tool_call,stage38,duplicate_tool_call,0.700,0.800,medium,answer_coverage_gap,"Answer is faithful and correctly non-refused, but coverage is slightly limited; no safety issues.",complete
+stage41_cn_rfc_mps_dem,stage41,new_cn_rfc,0.000,1.000,medium,answer_coverage_gap,"Refusal incorrect, but truthful and safe.",Improve retrieval or answer strategy for out-of-scope queries.
+stage41_cn_rfc_porosity_damage,stage41,new_en_rfc,0.500,0.900,low,answer_coverage_gap,回答准确引用了孔隙率的影响，但缺少孔径影响的信息，证据缺口明确。无安全泄露。,complete

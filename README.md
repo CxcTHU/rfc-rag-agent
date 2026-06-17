@@ -1,5 +1,21 @@
 # RFC-RAG-Agent
 
+## Phase 42 Generation Quality And Experience Update
+
+Current branch: `codex/phase-42-generation-quality-and-experience`.
+
+Phase 42 starts from the local Phase 41 merge `main -> d7dfca1 Merge phase 41 post-import retrieval optimization`. It keeps Stage 30 scoring, provider topology, data-source boundaries, and the default Stage 38 `structured_final_answer` strategy family unchanged. The phase focuses on generation quality calibration for the newly imported corpus plus production UX polish.
+
+Generation quality: `scripts/judge_stage42_generation_quality.py` combines the Stage 38 24-case generation-quality set with the Stage 41 12-query post-import retrieval set, for 36 total cases. The script remains dry-run by default and requires explicit `--execute` for real Judge calls. CSV outputs store only scores, short reasons, risk levels, and next actions; they do not store raw provider responses, raw answers, `raw_response`, or `reasoning_content`.
+
+Judge result: the first real run completed 36/36 cases but was `review_required` (`faithfulness=0.982 / answer_coverage=0.790 / citation_support=0.829 / refusal_correctness=0.925 / conciseness=0.904 / safety_leak_check=1.000`). After tuning the tool-calling final-answer instruction for comparison, multi-aspect, quality-control, and imported-corpus questions, the rerun passed: `faithfulness=0.983 / answer_coverage=0.828 / citation_support=0.856 / refusal_correctness=0.953 / conciseness=0.931 / safety_leak_check=1.000`, `high=0`, gate=`pass`.
+
+Production UX: the native frontend now renders final Agent answers through paragraph/length-based `.answer-segment` chunks instead of one large final `innerHTML` assignment. Conversation management now follows the mainstream chat layout: the conversation list lives in the left sidebar, right-click opens a pointer-adjacent menu for rename/delete without switching conversations, rename still uses `PATCH /conversations/{conversation_id}`, and delete remains hard delete through the existing delete API. The composer is fixed at the bottom of the conversation panel while messages and the left conversation list scroll independently. Bottom citations now collapse into a darker right-aligned source pill that opens the citation detail drawer.
+
+Verification: `python -m pytest -q` -> `843 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; `python scripts/run_production_smoke.py` -> `rows=11 execute=false failed=0`; desktop and `390x844` browser smoke passed for load, no horizontal overflow, console errors=0, segmented historical answers, right-click rename/delete menu, fixed bottom composer, independent message/sidebar scrolling, citation source drawer, temporary hard delete, and stop-generation recovery.
+
+Boundary: Phase 42 is complete through development, tests, normal docs, and Obsidian drafts. On 2026-06-17 the user explicitly authorized Phase 42 submission and GitHub merge. No phase tag is created unless separately requested.
+
 ## Phase 41 Post-Import Retrieval Optimization Update
 
 Current branch: `codex/phase-41-post-import-retrieval-optimization`.

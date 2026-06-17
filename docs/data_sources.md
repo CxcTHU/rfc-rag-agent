@@ -2,6 +2,43 @@
 
 本文件用于记录后续采集的堆石混凝土相关资料来源。
 
+## 阶段 42 生成质量校准与生产体验说明
+
+阶段 42 不新增外部资料来源，不爬新网页，不下载新 PDF，不导入受限全文，不重切 chunk，也不重建 embedding。新增内容均为生成质量评测派生产物、prompt 校准、前端体验、会话管理、测试、普通文档和本地 Obsidian 草稿。
+
+新增或更新的工程/文档产物：
+
+- `docs/stage42_generation_quality_and_experience.md`
+- `docs/phase_reviews/phase-42.md`
+- `scripts/judge_stage42_generation_quality.py`
+- `data/evaluation/stage42_generation_judge_results.csv`
+- `data/evaluation/stage42_generation_judge_summary.csv`
+- `data/evaluation/stage42_generation_low_score_analysis.csv`
+- `app/services/agent/tool_calling_service.py`
+- `app/api/conversations.py`
+- `app/db/repositories.py`
+- `app/schemas/conversation.py`
+- `app/frontend/index.html`
+- `app/frontend/static/app.js`
+- `app/frontend/static/styles.css`
+- `tests/test_stage42_design.py`
+- `tests/test_stage42_generation_judge.py`
+- `obsidian-vault/阶段/阶段 42 - 生成质量校准与生产体验完善.md`
+- `obsidian-vault/阶段汇报/阶段 42 - 生成质量校准与生产体验完善/`
+
+Judge 语料边界：
+
+- Stage 42 Judge 评测集由既有 Stage 38 24 条 generation-quality cases 与 Stage 41 12 条 post-import retrieval queries 组合而成。
+- Stage 41 queries 只引用已有评测问题、期望来源和目标类别，不写入新增全文。
+- 真实 Judge 需要显式 `--execute`，默认 dry-run 不调用真实 provider。
+- CSV 只保存脱敏分数、短理由、风险等级、next_action 和错误摘要，不保存 raw provider response、raw answer、`raw_response`、`reasoning_content`、hidden thought、API key、Bearer token 或受限全文。
+
+数据安全边界：
+
+- 不改变资料来源归属、source_type、数据库 schema 或 embedding 边界。
+- 不把 API key、Bearer token、Authorization header、供应商原始响应、`reasoning_content`、hidden thought、完整 chunk 全文或受限全文写入 Git、CSV、文档、测试或 Obsidian。
+- 浏览器 smoke 只记录 UI 状态、控制台错误和横向溢出结论，不保存回答全文或供应商响应。
+
 ## 阶段 40 流式输出体验与输出安全说明
 
 阶段 40 的流式输出体验与输出安全开发不新增外部资料来源，不爬新网页，不下载新 PDF，不导入受限全文，不重切 chunk，也不重建 embedding。新增内容是前端安全渲染、停止生成、token 渲染节流、测试、普通文档和 Obsidian 草稿。

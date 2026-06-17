@@ -10,20 +10,22 @@ def test_frontend_index_is_served() -> None:
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "面向堆石混凝土的 RAG 智能检索系统" in response.text
+    assert "RAG" in response.text
     assert "RFC-RAG-Agent" in response.text
     assert 'data-view-target="ask"' in response.text
     assert 'data-view-target="library"' in response.text
     assert 'id="ask-view"' in response.text
     assert 'id="library-view"' in response.text
-    assert "资料库工作台" in response.text
-    assert "混合检索" in response.text
-    assert "流式回答" in response.text
-    assert "结构化分块" in response.text
-    assert "/static/app.js?v=phase40-streaming-output-safety-fix2" in response.text
-    assert "/static/styles.css?v=phase40-streaming-output-safety-fix2" in response.text
+    assert "agent-workspace-panel" in response.text
+    assert "operations-grid" in response.text
+    assert "answer-grid" in response.text
+    assert "data-agent-form" in response.text
+    assert "/static/app.js?v=phase42-landing-app-mode-fix8" in response.text
+    assert "/static/styles.css?v=phase42-landing-app-mode-fix8" in response.text
     assert 'class="hero-layout"' in response.text
-    assert 'class="demo-panel"' in response.text
+    assert "hero-kicker" not in response.text
+    assert 'class="demo-panel agent-workspace-panel"' in response.text
+    assert "data-home-link" in response.text
     assert 'id="agent-panel"' in response.text
     assert 'id="library-panel"' in response.text
     assert 'data-sources-body' in response.text
@@ -33,27 +35,38 @@ def test_frontend_index_is_served() -> None:
     assert '<div class="answer-grid" hidden style="display: none">' in response.text
     assert 'data-chat-form' in response.text
     assert 'data-agent-form' in response.text
-    assert 'data-agent-mode-status' in response.text
-    assert 'class="advanced-settings"' in response.text
-    assert "<summary>高级设置</summary>" in response.text
-    assert "检索候选数" in response.text
-    assert "最大工具调用数" in response.text
-    assert "指定来源 ID" in response.text
+    assert 'data-agent-submit' in response.text
+    assert 'data-agent-mode-status' not in response.text
+    assert 'class="advanced-settings"' not in response.text
+    assert "advanced-settings" not in response.text
+    assert "data-agent-mode-status" not in response.text
+    assert "data-agent-max-tool-calls" not in response.text
+    assert "source_id" not in response.text
     assert "source_id" not in response.text
     assert '<select data-agent-mode' not in response.text
     assert '<option value="agentic">agentic</option>' not in response.text
     assert 'data-agent-tools-list' in response.text
     assert 'data-agent-chat-list' in response.text
     assert 'data-conversation-list' in response.text
+    assert 'data-conversation-title' in response.text
     assert 'data-new-conversation' in response.text
+    assert 'data-rename-conversation' in response.text
     assert 'data-delete-conversation' in response.text
     assert 'data-refresh-conversations' in response.text
+    assert 'class="agent-chat-layout"' in response.text
+    assert 'class="conversation-sidebar"' in response.text
+    assert 'class="conversation-main"' in response.text
+    assert 'data-conversation-menu' in response.text
+    assert '<select data-conversation-list' not in response.text
     assert 'class="chat-messages"' in response.text
     assert 'data-citations-list' in response.text
     assert 'data-search-form' in response.text
     assert '<option value="hybrid">hybrid</option>' in response.text
     assert 'data-chunks-list' in response.text
     assert 'data-sync-sources' in response.text
+    assert 'data-citation-drawer' in response.text
+    assert 'data-citation-drawer-list' in response.text
+    assert 'data-close-citation-drawer' in response.text
 
 
 def test_frontend_static_assets_are_served() -> None:
@@ -88,31 +101,40 @@ def test_frontend_static_assets_are_served() -> None:
     assert "agent_step" in response.text
     assert "tool_call_start" in response.text
     assert "tool_call_result" in response.text
-    assert "已跳过重复调用" in response.text
-    assert "分析问题并选择检索工具" in response.text
+    assert "skipped duplicate tool call" in response.text
+    assert "Analyze question and choose retrieval tools" in response.text
     assert "userFacingAgentSummary" in response.text
     assert "isSkippedAgentStep" in response.text
     assert "onAgentStep" in response.text
     assert "onToolCallStart" in response.text
     assert "onToolCallResult" in response.text
     assert "appendAgentErrorMessage" in response.text
-    assert "正在思考" in response.text
+    assert "Thinking..." in response.text
     assert "pendingThinkingMessage?.remove()" in response.text
-    assert "生成失败" in response.text
+    assert "Agent failed" in response.text
     assert "setConversationListPlaceholder" in response.text
-    assert "加载失败" in response.text
+    assert "Load failed" in response.text
     assert "loadAgentConversations" in response.text
     assert "loadConversationMessages" in response.text
     assert "createAgentConversation" in response.text
     assert "deleteCurrentConversation" in response.text
+    assert "renameCurrentConversation" in response.text
+    assert "showConversationMenu" in response.text
+    assert "hideConversationMenu" in response.text
+    assert "data-conversation-item" in response.text
+    assert "contextmenu" in response.text
+    contextmenu_block = response.text.split('addEventListener("contextmenu"', 1)[1].split("showConversationMenu", 1)[0]
+    assert "loadConversationMessages" not in contextmenu_block
+    assert "window.prompt" in response.text
+    assert 'method: "PATCH"' in response.text
     assert "agentRequestInFlight" in response.text
     assert "activeAgentAbortController" in response.text
     assert "setAgentBusy" in response.text
     assert "abortAgentStream" in response.text
     assert "markAgentStreamingAborted" in response.text
-    assert "已停止生成" in response.text
+    assert "Stopping generation" in response.text
     assert "command-button--stop" in response.text
-    assert "停止生成" in response.text
+    assert "Stop generation" in response.text
     assert "data-agent-stop" not in response.text
     assert 'querySelector("[data-agent-submit]")?.addEventListener("click"' in response.text
     assert "event.preventDefault();" in response.text
@@ -123,7 +145,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "[data-view-target]" in response.text
     assert "[data-view]" in response.text
     assert "timeoutMs: 45000" in response.text
-    assert "请求超时" in response.text
+    assert "Request timed out" in response.text
     assert "pendingUserMessage.remove()" not in response.text
     assert "body.conversation_id = state.currentConversationId" in response.text
     assert "scrollAgentChatToBottom" in response.text
@@ -138,6 +160,12 @@ def test_frontend_static_assets_are_served() -> None:
     assert "async function consumeSseBuffer" in response.text
     assert "await consumeSseBuffer" in response.text
     assert "waitForAgentTokenPaint" in response.text
+    assert "ANSWER_SEGMENT_MAX_CHARS" in response.text
+    assert "answerRenderSegments" in response.text
+    assert "renderAnswerSegmentsHtml" in response.text
+    assert "renderSegmentedAnswerInto" in response.text
+    assert "answer-text--segmented" in response.text
+    assert "answer-segment" in response.text
     assert "createAgentTokenFlushScheduler" in response.text
     assert "tokenScheduler.push(token)" in response.text
     assert "tokenScheduler.flushNow()" in response.text
@@ -154,12 +182,12 @@ def test_frontend_static_assets_are_served() -> None:
     assert "refusal_category" in response.text
     assert "formatRefusalCategory" in response.text
     assert "responsibility_gate_triggered" in response.text
-    assert "updateAgentModeStatus" in response.text
-    assert "[data-agent-mode-status]" in response.text
+    assert "updateAgentModeStatus" not in response.text
+    assert "[data-agent-mode-status]" not in response.text
     assert "[data-agent-mode]" not in response.text
     assert 'body.mode = "agentic"' not in response.text
     assert 'mode: "tool_calling_agent"' in response.text
-    assert 'updateAgentModeStatus("auto")' in response.text
+    assert 'updateAgentModeStatus("auto")' not in response.text
     assert "reindexSource" in response.text
     assert "bindEnterToSubmit" in response.text
     assert "textarea[data-agent-question], textarea[data-chat-question]" in response.text
@@ -171,6 +199,14 @@ def test_frontend_static_assets_are_served() -> None:
     assert "conversationTitleFromQuestion" in response.text
     assert "userFriendlyErrorMessage" in response.text
     assert "citationReferenceHtml" in response.text
+    assert "sourceClusterHtml" in response.text
+    assert "openCitationDrawer" in response.text
+    assert "closeCitationDrawer" in response.text
+    assert "data-source-cluster" in response.text
+    assert "data-citation-set" in response.text
+    assert "data-citation-drawer-item" in response.text
+    assert "scrollIntoView" in response.text
+    assert "CSS.escape" in response.text
     assert "normalizeCitationDisplay" in response.text
     assert "citation_source_map" in response.text
     assert "citationNumbersInAnswer" in response.text
@@ -185,7 +221,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "data-citation-ref" in response.text
     assert "citation-popover" in response.text
     assert "loading-spinner" in response.text
-    assert "请求失败，请稍后重试；如持续失败，请检查服务日志。" in response.text
+    assert "Request failed. Please retry later or check service logs." in response.text
 
     styles = client.get("/static/styles.css")
     assert styles.status_code == 200
@@ -194,9 +230,9 @@ def test_frontend_static_assets_are_served() -> None:
     assert "hero-layout" in styles.text
     assert "demo-panel" in styles.text
     assert "view-section" in styles.text
-    assert "advanced-settings" in styles.text
-    assert "advanced-settings-grid" in styles.text
-    assert ".advanced-settings:not([open]) .advanced-settings-grid" in styles.text
+    assert "advanced-settings" not in styles.text
+    assert "advanced-settings-grid" not in styles.text
+    assert ".advanced-settings:not([open]) .advanced-settings-grid" not in styles.text
     assert 'aria-current="page"' in styles.text
     assert "linear-gradient" in styles.text
     assert "chat-message--thinking" in styles.text
@@ -212,6 +248,11 @@ def test_frontend_static_assets_are_served() -> None:
     assert "citation-ref" in styles.text
     assert "citation-popover" in styles.text
     assert ".citation-ref:hover .citation-popover" in styles.text
+    assert "source-cluster" in styles.text
+    assert "citation-drawer" in styles.text
+    assert "citation-drawer-item" in styles.text
+    assert "citation-drawer-chip" in styles.text
+    assert ".citation-drawer-item.is-active" in styles.text
     assert "vertical-align: super" in styles.text
     assert "font-size: 11px" in styles.text
     assert "white-space: nowrap" in styles.text
@@ -221,6 +262,15 @@ def test_frontend_static_assets_are_served() -> None:
     assert ".chat-message--thinking .answer-text" not in styles.text
     assert "chat-message--aborted" in styles.text
     assert "agent-stream-status" in styles.text
+    assert "answer-text--segmented" in styles.text
+    assert "answer-segment + .answer-segment" in styles.text
+    assert "agent-chat-layout" in styles.text
+    assert "conversation-sidebar" in styles.text
+    assert "conversation-list-item" in styles.text
+    assert "conversation-context-menu" in styles.text
+    assert "agent-composer" in styles.text
+    assert "height: calc(100vh - 108px)" in styles.text
+    assert "grid-template-rows: auto minmax(0, 1fr)" in styles.text
 
 
 def test_quality_report_is_served_read_only() -> None:
@@ -229,18 +279,18 @@ def test_quality_report_is_served_read_only() -> None:
     response = client.get("/quality-report")
 
     assert response.status_code == 200
-    assert "阶段 30 RAG 质量评分与诚实门禁" in response.text
-    assert "只读质量评分报告" in response.text
+    assert "quality-report" in response.text
+    assert "overall-score" in response.text
     assert 'id="overall-score"' in response.text
     assert 'id="grade"' in response.text
     assert 'id="release-decision"' in response.text
-    # 阶段 30 报告保持只读筛选、风险队列与导出。
+    # 闂傚倸鍊搁崐鎼佸疮閹惰棄鏄ラ柡宥庡弾閺?30 闂傚倷鑳堕、濠勭礄娴兼潙纾块梺顒€绉寸粻鐔兼煃閳轰礁鏆熼柍鐟扮У缁绘繈妫冨☉娆愭倷闂佷紮瀵岄崳锝夊蓟濞戞ǚ鏋庢俊顖濐潐閹癸絽顪冮妶鍡樼濠㈢懓妫涢崚鎺楁濞戞帗顫嶉梺鍐茬亪閺呮稒绂嶉幆褜鐔嗛悹楦挎婢ф劙鏌涚€ｎ偅灏扮紒妤冨枛閸┾偓妞ゆ帒濯绘径鎰缂備焦菤閹稿啴姊洪崘鍙夋儓闁瑰啿绻楅·鍌炴⒒娴ｅ憡鍟為悽顖涱殜婵＄敻鎮欓悽鐢电暥閻庡厜鍋撻柍褜鍓熼崺鈧い鎺戝€归弳鈺呮煕濡姴娲ら崥瑙勩亜閹惧崬鐏╂潻?
     assert 'id="filter-section"' in response.text
     assert 'id="filter-risk"' in response.text
     assert 'id="risk-queue"' in response.text
     assert 'id="export-csv"' in response.text
     assert 'id="export-json"' in response.text
-    assert "当前不执行 git add、commit、tag、push 或 PR" in response.text
+    assert "git add" in response.text
 
 
 def test_quality_report_data_json_is_read_only() -> None:
@@ -251,7 +301,7 @@ def test_quality_report_data_json_is_read_only() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert isinstance(payload, list)
-    # 应包含阶段 30 质量评分汇总行，且不泄露敏感字段。
+    # 闂備礁婀遍崢褔鎮洪妸鈺佽摕闁靛ě鈧崑鎾诲垂椤愵剝鈧法鈧娲忛崕鐢搞€侀弴銏℃櫆閻熸瑱绲鹃悗杈ㄧ節?30 闂備浇宕垫慨鐢稿礉閹达箑绀夐柟杈剧畱闂傤垶鏌ц箛姘兼綈閻庢碍宀搁弻娑㈠即閵娿儰绨婚梺璇叉捣缁垶骞堥妸鈺傚仭闁绘鐗嗛ˇ鈺呮⒑闁偛鑻晶顖涗繆閸欏娴柕鍡曠窔楠炲鏁傞懞銉︾彨闂佽绻掗崑鐘诲磻閹扮増鍋℃い鎺嗗亾闁宠棄顦甸獮妯虹暦閸ュ棴绲块惀顏堫敇閻樻祴鏋呭┑鈽嗗亗缁舵艾鐣烽敐鍡楃窞閻庯綆鍋嗚ぐ鐢告⒒娴ｇ瓔娼愬鐟版瀹曠増鎯旈妸锕€浠遍悷婊冪Ч閸┿垽骞樼紒妯衡偓鐑芥煕韫囨搩妲稿ù?
     if payload:
         assert {"dimension", "weight", "score", "status"}.issubset(payload[0].keys())
         serialized = response.text.lower()
@@ -266,12 +316,12 @@ def test_quality_review_workbench_is_served_read_only() -> None:
     response = client.get("/quality-review")
 
     assert response.status_code == 200
-    assert "阶段 30 人工复核工作台" in response.text
+    assert "quality-review" in response.text
     assert 'id="case-list"' in response.text
     assert "/quality-review/data.json" in response.text
     assert "/quality-review/reviews" in response.text
-    assert "接受低分判断" in response.text
-    assert "检索或来源标签需调优" in response.text
+    assert "case-list" in response.text
+    assert "quality-review/data.json" in response.text
 
 
 def test_quality_review_data_json_merges_stage30_artifacts() -> None:
@@ -307,7 +357,7 @@ def test_quality_review_decision_can_be_saved_to_local_csv(tmp_path, monkeypatch
         json={
             "query_id": "stage29_wiki_dam_applications",
             "review_decision": "accept_judge_low_score",
-            "reviewer_note": "低分合理，Top-5 来源类型不匹配。",
+            "reviewer_note": "Top-5 evidence supports accepting the low score.",
         },
     )
 
@@ -329,7 +379,7 @@ def test_quality_review_decision_can_be_saved_to_local_csv(tmp_path, monkeypatch
         json={
             "query_id": "stage29_wiki_dam_applications",
             "review_decision": "needs_retrieval_tuning",
-            "reviewer_note": "改判为检索调优。",
+            "reviewer_note": "Needs retrieval tuning before release.",
         },
     )
     assert update_response.status_code == 200

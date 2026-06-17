@@ -1,5 +1,51 @@
 # 架构说明
 
+## 阶段 42 架构增量：生成质量校准与生产体验完善
+
+阶段 42 不修改 Stage 30 评分规则、不替换 provider、不改变数据源边界，也不引入 React/Vue/Node 构建链。架构增量集中在两个位置：离线 Judge 质量校准链路，以及原生前端会话/长回答体验。
+
+```text
+Stage 38 24 generation cases
++ Stage 41 12 post-import retrieval queries
+-> scripts/judge_stage42_generation_quality.py
+-> tool_calling_agent structured_final_answer
+-> explicit --execute real Judge
+-> sanitized CSV metrics / short reasons / risk levels
+-> low-score analysis
+-> tool-calling final-answer prompt calibration
+```
+
+阶段 42 的 Judge 脚本默认 dry-run，真实 Judge 必须显式 `--execute`。输出 CSV 只保存 case id、类别、分数、短理由、风险等级和 next_action，不保存 raw provider response、raw answer、`raw_response`、`reasoning_content`、hidden thought、API key 或 Bearer token。
+
+prompt 校准落在 `app/services/agent/tool_calling_service.py::final_answer_strategy_instruction()`，而不是旧的普通 RAG prompt builder。原因是阶段 38 之后默认 Agent 链路是 tool-calling final synthesis：LLM 先通过工具召回证据，再由 tool-calling service 的最终答案策略生成引用式回答。阶段 42 只收紧 `structured_final_answer` 对比较题、多维题、质量控制题和新增语料题的覆盖要求，不改变 tool loop、provider 拓扑或 citation repair 规则。
+
+前端长回答渲染仍保持原生 HTML/CSS/JS：
+
+```text
+finalizeAgentStreamingMessage()
+-> renderSegmentedAnswerInto()
+-> answerRenderSegments()
+-> DocumentFragment
+-> .answer-text--segmented > .answer-segment
+```
+
+流式阶段继续复用 Phase 40 的 token buffer 与 AbortController；最终回答落地时按段落和长度拆分为多个 segment，再批量 append 到 `.answer-text`。这样避免一次性大块 `innerHTML` 造成长回答 reflow 峰值，同时保留 sanitizer、citation button、invalid citation 标记和停止生成后的部分输出保留。
+
+会话管理保持当前无认证前提下的简单 CRUD：
+
+```text
+PATCH /conversations/{conversation_id}
+-> ConversationUpdateRequest(title)
+-> ConversationRepository.rename_conversation()
+-> ConversationItem
+
+DELETE /conversations/{conversation_id}
+-> hard delete
+-> frontend fallback to remaining conversation / new conversation
+```
+
+重命名使用左侧会话列表的右键菜单触发，菜单靠近指针显示且不会切换当前会话；空标题归一化为“新对话”。删除同样从右键菜单触发并使用 hard delete，因为当前项目没有用户账号、归属权限、回收站或审计恢复模型。后续如果引入认证和多用户权限，再考虑 soft delete、删除审计和恢复。
+
 ## 阶段 40 架构增量：流式输出体验与输出安全
 
 阶段 40 不修改默认 RAG / Agent 质量链路，不替换 provider，不改变 Stage 30 评分规则，也不新增外部数据源。架构增量集中在浏览器侧流式输出控制与最终渲染安全：

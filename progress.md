@@ -1,449 +1,159 @@
-# 阶段 40 Progress：流式输出体验与输出安全
+# 阶段 42 Progress：生成质量校准与生产体验完善
 
-## Session: 2026-06-16
+## Session: 2026-06-17
 
-### Phase 7：语料导入与提交收尾校准
+### Phase 0：启动校准与规划落盘（Claude 规划方）
 
-- **Status:** complete
-- **Started:** 2026-06-16
+- **Status:** complete (by Claude planning agent)
+- **Started:** 2026-06-17
 
 Phase purpose:
 
-- 这一 Phase 将阶段 40 从“流式输出安全人工核验前状态”切换到“用户已授权的语料导入与 GitHub 提交收尾”。
-- 它位于实际导入前，负责重新读取规则、确认分支和工作区、固定导入计划与安全边界。
-- 现在做它，是因为后续会写入本地 SQLite 和 raw 文件，并最终 `git add/commit/push/PR/merge`，必须先确认哪些内容可以进 Git、哪些必须保持本地。
+- 这一 Phase 由 Claude 规划方完成，为阶段 42 编写任务计划、发现记录和进度文件。
+- 阶段 42 有两条主线：A（Judge 评测扩展 + prompt 微调）和 C（长回答分段渲染 + 会话管理 UX）。
+- 现在做它，是因为 Judge gate 从未完全通过（Stage 38 structured_final_answer 是唯一 gate=pass 但覆盖面有限），用户体验侧的长回答卡顿和会话管理缺失也是明确短板。
 
 Actions taken:
 
-- 设置新 goal：完成阶段 40 语料库导入、验证、文档更新、提交、推送、PR 与 GitHub 合并。
-- 修改线程名称为 `阶段40-流式输出与语料扩展`。
-- 重新阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- 运行 `git status -sb` 与 `git log --oneline -5`，确认当前分支为 `codex/phase-40-streaming-output-safety`，最近提交为 `c6e7927 Merge phase 39 production deployment`。
-- 确认工作区同时包含流式输出安全改动、post-review fix、阶段 40 既有语料扩充改动和 Stage 30 score 文件改动。
-- 确认 `G:\Codex\program\papers_0616` 与 `C:\Users\admin\Zotero\storage` 存在。
-- 停止本地 8000 服务，避免语料导入写 SQLite 时产生锁冲突。
-- 记录导入前 DB 基线：`documents=642`、`chunks=19132`。
+- 确认阶段 41 最终状态：Phase 0-9 全部 complete，830 tests，Stage 30 = 91.52/A/pass。
+- 确认 Judge 历史：Stage 38 structured_final_answer cov=0.808/cit=0.867/safety=1.000/gate=pass。
+- 确认前端现状：有会话列表但无删除/重命名；长回答无分段渲染。
+- 编写 `task_plan.md` 8 个 Phase 任务计划。
+- 编写 `findings.md` Judge/前端/长回答现状分析。
+- 编写 `progress.md` 本文件。
+- 编写 Codex goal prompt。
 
-Validation:
+Git / tag / main 状态:
 
-- `git status -sb` -> branch `codex/phase-40-streaming-output-safety`
-- `git log --oneline -5` -> latest `c6e7927 Merge phase 39 production deployment`
-- DB baseline query -> `documents=642`、`chunks=19132`
+- 阶段 41 已提交为 `007b0f0 Complete phase 41 post-import retrieval optimization`。
+- 阶段 41 已本地合并到 `main -> d7dfca1 Merge phase 41 post-import retrieval optimization`。
+- 已从新 main 创建并切换到 `codex/phase-42-generation-quality-and-experience`。
+- 当前未提交工作为阶段 42 规划校准文件；后续阶段 42 开发完成前不执行 `git add` / commit / tag / push / PR。
 
 Next:
 
-- Phase 8：中文文献 dry-run 和正式导入。
+- Codex 已完成阶段 42 Phase 0 开工校准。
+- 下一步进入 Phase 1：新增阶段 42 设计文档与设计合同测试。
 
-### Phase 8：导入中文文献
+---
 
-- **Status:** complete
-- **Started:** 2026-06-16
+## 五问重启检查
 
-Phase purpose:
+1. 当前阶段是什么？—— 阶段 42：生成质量校准与生产体验完善。
+2. 上一个阶段完成了什么？—— 阶段 41 完成导入后检索质量优化（GLM embedding 全覆盖、FAISS 重建、p@5=1.000、coverage=0.972）。
+3. 当前分支和提交？—— `codex/phase-42-generation-quality-and-experience`，基于 `main -> d7dfca1 Merge phase 41 post-import retrieval optimization`。
+4. 有未提交的工作吗？—— 有，阶段 42 三份规划文件已在当前分支校准，后续继续开发；最终停在人工核验前，不提交。
+5. 下一步做什么？—— 开始 Phase 1：设计文档与测试合同。
 
-- 这一 Phase 将用户合法下载的中文文献导入本地语料库。
-- 它位于阶段 40 流式体验修复之后、英文 Zotero 筛选导入之前。
-- 现在做它，是因为阶段 40 最终收尾需要把新增授权语料写入本地 DB，并确认全文不进入 Git。
+---
 
-Actions taken:
+## 测试结果表
 
-- dry-run 命令：
-  - `python scripts/import_papers_corpus.py --dir "G:\Codex\program\papers_0616" --source-type institutional_access_pdf --dry-run --classify`
-- dry-run 结果：
-  - `scanned=150`
-  - `real_pdf=150`
-  - `non_pdf_skipped=0`
-  - topics: `rfc_core=109`、`dam_engineering=41`
-- 第一次正式导入：
-  - `imported=13`
-  - `duplicate=2`
-  - `empty=0`
-  - `failed=135`
-  - 根因：PDF 文本中存在 lone surrogate codepoint，且批处理异常后未 rollback session。
-- 修复：
-  - `clean_text()` 删除 surrogate codepoints。
-  - `scripts/import_papers_corpus.py` 单篇异常后 `db.rollback()`。
-  - 新增 cleaner 回归测试。
-- 修复后重跑正式导入：
-  - `real PDFs=150`
-  - `newly imported=93`
-  - `duplicate=55`
-  - `empty=2`
-  - `failed=0`
-  - `chunks=5637`
-- 中文导入累计：
-  - 新增文档 106 篇
-  - 新增 chunks 6183
-  - 导入后 DB：`documents=748`、`chunks=25315`
-
-Validation:
-
-- `python -m pytest tests\test_ingestion_cleaner.py tests\test_ingestion_service.py -q` -> `7 passed`
-- `python -m pytest tests\test_agent_stream_api.py tests\test_stage40_streaming_output_safety.py tests\test_frontend_app.py -q` -> `27 passed`
-
-Notes:
-
-- 用户预估为 155 篇；实际当前目录可扫描真 PDF 为 150 篇。
-- 两篇 PDF 无可抽取文本：`大坝应力变形分析.pdf`、`自密实堆石混凝土力学性能的实验研究和数值模拟.pdf`。
-- 全文只进入本地 DB 和 `data/raw/`，均由 `.gitignore` 排除。
-
-### Phase 0：启动校准与规划落盘
-
-- **Status:** complete
-- **Started:** 2026-06-16
-
-Actions taken:
-
-- 阅读 `AGENT.MD`，确认每个新线程必须先读 Agent、README、progress、architecture、data_sources，并检查 Git 状态。
-- 阅读 `README.md`，确认阶段 39 已完成生产部署与端到端体验，默认 Agent 链路来自阶段 38 的 `tool_calling_agent`。
-- 阅读 `docs/progress.md`，确认当前权威阶段进度为阶段 39 完成并停在人工核验/合并后的主线状态。
-- 阅读 `docs/architecture.md`，确认阶段 39 前端增量已有 loading/error/citation UX；阶段 37/38 已扩展 SSE/tool-calling 事件。
-- 阅读 `docs/data_sources.md`，确认上一轮阶段 40 语料扩充已写入数据说明。
-- 运行 `git status -sb`，确认当前分支为 `main...origin/main`，且存在上一轮阶段 40 语料扩充未提交改动。
-- 运行 `git log --oneline -5`，确认最近主线提交：
-  - `c6e7927 Merge phase 39 production deployment`
-  - `288bd1d Complete phase 39 production deployment`
-  - `33b63e0 Merge phase 38 tool calling generation quality`
-  - `ee6830a Complete phase 38 tool calling generation quality`
-  - `25344a8 Merge phase 37 tool calling loop migration`
-- 创建并切换到阶段 40 目标分支：`codex/phase-40-streaming-output-safety`，保留当前未提交工作区。
-- 检查 Planning with Files session catchup：本机 `.claude` 路径没有 `session-catchup.py`，当前三份规划文件已完整读取，继续以根目录规划文件为准。
-- 读取 `obsidian-vault/模板/goal prompt.md`，确认阶段 goal prompt 模板与“不超过 4000 字符”的要求。
-- 使用 Planning with Files 方式更新根目录三份规划文件：
-  - `task_plan.md`
-  - `findings.md`
-  - `progress.md`
-- 根据用户反馈修正 `task_plan.md` 中的 Stage 40 Goal Prompt：从压缩版执行 prompt 改为严格贴近 `obsidian-vault/模板/goal prompt.md` 的模板版，包含“阅读 agent”、目标分支、执行要求、核心链路和完成标准。
-
-Files created/modified:
-
-- `task_plan.md`：重写为阶段 40 流式输出体验与输出安全任务计划，并包含阶段 40 goal prompt。
-- `task_plan.md`：二次修正 Stage 40 Goal Prompt，使其符合本项目 goal prompt 模板风格。
-- `findings.md`：重写为阶段 40 需求、发现、技术决策、术语解释和开放问题。
-- `progress.md`：重写为阶段 40 进度日志。
-
-Current working-tree note:
-
-- 当前工作区已有未提交语料库扩充改动，属于用户/前序 Agent 工作，不得回滚。
-- 当前阶段 40 的前端流式安全规划需要与这些改动并存。
+| Phase | 测试命令 | 结果 | 备注 |
+|-------|---------|------|------|
+| (阶段 41 基线) | `python -m pytest -q` | 830 passed | 阶段 42 开始前基线 |
+| (阶段 41 基线) | `python scripts/score_stage30_quality.py` | 91.52 / A / pass | 阶段 42 开始前基线 |
+| Phase 1 | `python -m pytest tests/test_stage42_design.py -q` | 5 passed | 设计文档与合同测试 |
+| Phase 2 | `python -m pytest tests/test_stage42_generation_judge.py -q` | 5 passed | Judge 扩展脚本合同 |
+| Phase 2 | `python scripts/judge_stage42_generation_quality.py` | 36 dry-run rows, gate=not_run | 不调用真实 API |
+| Phase 2 | `python scripts/judge_stage42_generation_quality.py --execute --timeout-seconds 180` | 36 completed, gate=review_required | 微调前真实 Judge |
+| Phase 3 | `python -m pytest tests/test_tool_calling_agent_service.py tests/test_stage42_generation_judge.py -q` | 20 passed | prompt 微调聚焦回归 |
+| Phase 3 | `python scripts/judge_stage42_generation_quality.py --execute --timeout-seconds 180` | 36 completed, gate=pass | 微调后真实 Judge |
+| Phase 4/5 | `node --check app/frontend/static/app.js` | passed | 前端语法检查 |
+| Phase 4/5 | `python -m pytest tests/test_conversations_api.py tests/test_repositories.py tests/test_frontend_app.py -q` | 24 passed | 分段渲染静态合同 + 会话 API/Repository/前端 |
+| Phase 6 | `python -m pytest -q` | 843 passed | 全量回归 |
+| Phase 6 | `python scripts/score_stage30_quality.py` | 91.52 / A / pass | Stage 30 评分不退化 |
+| Phase 6 | `python scripts/run_production_smoke.py` | rows=11 execute=false failed=0 | production smoke dry-run，不调用真实 API |
+| Phase 7 | browser desktop smoke on `http://127.0.0.1:8001` | passed | 控件可见、console errors=0、横向溢出=false、已有长回答分段 |
+| Phase 7 | browser mobile smoke `390x844` | passed | 控件可见、console errors=0、横向溢出=false |
+| Phase 7 | browser stream stop smoke | passed | `停止生成` -> `aborted`，无 console errors |
 
 ### Phase 1：设计文档与测试合同
 
 - **Status:** complete
+- 新增 `docs/stage42_generation_quality_and_experience.md`，固定阶段 42 的两条主线、Judge 扩展边界、长回答分段渲染边界、会话 hard delete / inline rename 合同、安全边界和验证合同。
+- 新增 `tests/test_stage42_design.py`，覆盖阶段目标、Phase 顺序、Judge 输出安全、前端/会话合同、验证和不提交边界。
+- 设计合同测试通过：`python -m pytest tests/test_stage42_design.py -q` -> `5 passed`。
 
-- **Started:** 2026-06-16
+Next:
 
-Phase purpose:
+- Phase 2：合并 Stage 38 24 cases 与 Stage 41 12 queries，新增阶段 42 Judge 脚本与 dry-run 测试。
 
-- 先固定阶段 40 的设计文档与测试合同，避免后续 sanitize、abort 和节流实现偏离边界。
-- 这一步位于流式链路实现之前，负责把 `/agent/query/stream -> fetch ReadableStream -> UI 渲染` 的安全与体验约束写清楚。
-- 现在做它，是因为后续每个代码 Phase 都需要可回归的测试合同和不做项边界。
-
-Actions taken:
-
-- 新增 `docs/stage40_streaming_output_safety.md`，说明阶段 40 基线、核心链路、四条主线、安全边界、测试合同和完成标准。
-- 新增 `tests/test_stage40_streaming_output_safety.py`，先固定设计合同与后续前端静态合同。
-- 梳理当前前端渲染路径：`renderAnswerWithCitationLinks()`、`renderInlineMarkdown()`、`citationReferenceHtml()` 生成回答 HTML，最终由多处 `.innerHTML` / `insertAdjacentHTML` 写入 DOM。
-
-Validation:
-
-- `python -m pytest tests\test_stage40_streaming_output_safety.py -k "design" -q` -> `4 passed, 4 deselected`
-
-Planned actions:
-
-- 新增 `docs/stage40_streaming_output_safety.md`。
-- 新增/更新 Stage 40 聚焦测试，固定 sanitize、abort、中断保留、token 节流的合同。
-
-### Phase 2：Markdown sanitize 输出安全
+### Phase 2：Judge 评测集扩展
 
 - **Status:** complete
+- 新增 `scripts/judge_stage42_generation_quality.py`，合并 Stage 38 的 24 条 generation-quality cases 与 Stage 41 的 12 条 post-import retrieval queries。
+- 新增 `tests/test_stage42_generation_judge.py`，验证 36 case 合并、dry-run 输出、安全 CSV、六指标 gate 与低分归因。
+- dry-run 输出 `data/evaluation/stage42_generation_judge_results.csv`、`stage42_generation_judge_summary.csv`、`stage42_generation_low_score_analysis.csv`，不调用真实 API，gate=`not_run`。
+- 真实 Judge 首跑：36/36 completed，gate=`review_required`；主要缺口是 `avg_answer_coverage=0.790`。
 
-- **Started:** 2026-06-16
-
-Phase purpose:
-
-- 这一 Phase 解决模型输出最终进入 DOM 前的 XSS 防护问题。
-- 它位于 `/agent/query/stream` 收到 token/metadata 之后、citation/Markdown HTML 写入页面之前。
-- 现在做它，是因为 sanitize 是停止生成和节流之前的安全底座；后续任何流式或最终渲染都应该复用同一安全出口。
-
-Actions taken:
-
-- 在 `app/frontend/static/app.js` 新增 `sanitizeRenderedHtml()`。
-- sanitizer 使用本地 allowlist，不引入 CDN，不扩大 Markdown 能力。
-- 清洗危险标签、事件属性和危险 URL。
-- 将 `renderAnswerWithCitationLinks()`、`agentAnswerHtml()`、`finalizeAgentStreamingMessage()` 接入最终渲染清洗。
-- 更新 `tests/test_stage40_streaming_output_safety.py` 和 `tests/test_frontend_app.py`，固定 sanitize 合同。
-
-Validation:
-
-- `node --check app\frontend\static\app.js` -> pass
-- `python -m pytest tests\test_stage40_streaming_output_safety.py -k "design or sanitizer" -q` -> `5 passed, 3 deselected`
-- `python -m pytest tests\test_frontend_app.py::test_frontend_static_assets_are_served -q` -> `1 passed`
-
-Issue:
-
-- 首次 sanitizer 合同测试把 JS API `startsWith` 写成了 `startswith`，已修正并重跑通过。
-
-Planned actions:
-
-- 确认前端 HTML 插入路径。
-- 实现 sanitizer。
-- 补 XSS 回归测试。
-
-### Phase 3：AbortController 停止生成与中断状态
+### Phase 3：低分样例分析与 prompt 微调
 
 - **Status:** complete
+- 低分归因显示 coverage 缺口集中在比较题、多维题、quality control 新语料题。
+- 微调 `app/services/agent/tool_calling_service.py` 中 `structured_final_answer` 的最终回答策略：覆盖所有有证据支持的 requested aspects，多维/比较/监测/质量控制/新语料覆盖题允许 4-6 个短 bullet，不省略较弱但有证据的点。
+- 更新 `tests/test_tool_calling_agent_service.py` 对应 prompt 合同。
+- 微调后真实 Judge 复跑：`faithfulness=0.983 / answer_coverage=0.828 / citation_support=0.856 / refusal_correctness=0.953 / conciseness=0.931 / safety_leak_check=1.000 / high=0 / gate=pass`。
 
-- **Started:** 2026-06-16
+Next:
 
-Phase purpose:
+- Phase 4：实现长回答段落级分段渲染。
 
-- 这一 Phase 解决用户主动停止流式生成的问题。
-- 它位于浏览器 `fetch + ReadableStream` 读取 SSE 的控制层，控制 `/agent/query/stream` 请求生命周期。
-- 现在做它，是因为已有安全渲染出口后，可以安全保留半截内容并把 UI 状态收敛为“已停止生成”。
-
-Actions taken:
-
-- 在 `app/frontend/index.html` 增加 `data-agent-stop` 停止生成按钮。
-- 在 `app/frontend/static/app.js` 增加 active abort controller、停止按钮事件、AbortError 识别和 aborted UI 收尾。
-- `streamAgentQuery()` 传入 `signal`，浏览器侧可中断 `fetch + ReadableStream`。
-- 中断后保留当前 assistant 气泡中的 token，并显示“已停止生成”。
-- 更新 `app/frontend/static/styles.css` 的停止按钮、aborted 气泡和状态文案样式。
-- 更新前端静态测试，固定 `aborted/refused/answered` 三态收尾合同。
-
-Validation:
-
-- `node --check app\frontend\static\app.js` -> pass
-- `python -m pytest tests\test_stage40_streaming_output_safety.py -k "design or sanitizer or abort" -q` -> `6 passed, 2 deselected`
-- `python -m pytest tests\test_frontend_app.py::test_frontend_index_is_served tests\test_frontend_app.py::test_frontend_static_assets_are_served -q` -> `2 passed`
-
-Residual risk:
-
-- 浏览器 abort 可以停止前端读取和 UI 渲染，但当前后端 producer thread/provider 调用未必被立即取消；文档和 Obsidian 收尾必须如实记录。
-
-Issue:
-
-- 既有前端静态测试仍断言阶段 39 的二态状态收尾字符串，已更新为阶段 40 三态合同。
-
-### Phase 4：前端 token 渲染节流
+### Phase 4：长回答分段渲染
 
 - **Status:** complete
+- `app/frontend/static/app.js` 新增 `ANSWER_SEGMENT_MAX_CHARS`、`answerRenderSegments()`、`renderAnswerSegmentsHtml()`、`renderSegmentedAnswerInto()`。
+- Agent 最终回答渲染从一次性大块 `innerHTML` 改为按段落/长度拆成 `.answer-segment`，通过 `DocumentFragment` 插入 `.answer-text`。
+- 保留 citation popover、invalid citation、sanitize、AbortController 和停止生成链路。
+- `app/frontend/static/styles.css` 新增 `.answer-text--segmented` 与 `.answer-segment` 间距样式。
 
-- **Started:** 2026-06-16
-
-Phase purpose:
-
-- 这一 Phase 解决流式 token 高频 DOM 写入的问题。
-- 它位于 `consumeSseBuffer()` 解析 token 事件之后、`appendTokenToAgentMessage()` 写入页面之前。
-- 现在做它，是因为停止生成已经能保留半截内容，接下来需要让正常生成和停止收尾都通过可控 flush，避免 token 丢失或高频 repaint。
-
-Actions taken:
-
-- 在 `app/frontend/static/app.js` 新增 `createAgentTokenFlushScheduler()`。
-- token 事件进入 buffer，通过 `requestAnimationFrame` 或 32ms timeout 合并 flush。
-- `metadata`、`done`、`error`、`abort` 均强制 flush 剩余 token。
-- `submitAgent()` 不再在每个 token 后等待两帧 paint，降低高频 DOM 更新。
-- 更新前端静态测试，固定 scheduler 合同。
-
-Validation:
-
-- `node --check app\frontend\static\app.js` -> pass
-- `python -m pytest tests\test_stage40_streaming_output_safety.py -q` -> `8 passed`
-- `python -m pytest tests\test_frontend_app.py::test_frontend_index_is_served tests\test_frontend_app.py::test_frontend_static_assets_are_served -q` -> `2 passed`
-- `python -m pytest tests\test_agent_stream_api.py -q` -> `8 passed`
-
-### Phase 5：集成验证与浏览器 smoke
+### Phase 5：会话管理 UX
 
 - **Status:** complete
+- 后端新增 `PATCH /conversations/{conversation_id}`，支持会话重命名；删除继续使用 hard delete。
+- `ConversationRepository` 新增 `rename_conversation()`，刷新 `updated_at` 并复用标题归一化。
+- 前端会话栏新增标题 inline input 与重命名按钮；切换/刷新会话时同步当前标题。
+- 聚焦测试通过：会话删除、重命名、空标题归一化、404、前端静态合同均覆盖。
 
-- **Started:** 2026-06-16
+Next:
 
-Phase purpose:
+- Phase 6：全量 pytest、Stage 30、production smoke。
 
-- 这一 Phase 验证阶段 40 改动是否破坏既有入口和浏览器体验。
-- 它覆盖完整链路：FastAPI 静态首页、前端 JS、`/agent/query/stream` SSE、桌面与移动视口。
-- 现在做它，是因为 sanitize、abort、token scheduler 都已实现，需要从用户实际操作角度验证正常生成、停止生成和安全渲染。
-
-Actions taken:
-
-- 启动本地 FastAPI smoke 服务 `http://127.0.0.1:8011` 并确认 `/health` 可用。
-- 桌面浏览器 smoke：页面加载、正常短流式回答、停止生成、停止后状态收敛、无横向溢出。
-- 移动端浏览器 smoke：390x844 下 Agent 控件存在、无横向溢出、console errors=0。
-- 修复浏览器 smoke 暴露的首 token 前停止残留“正在思考”问题。
-- 停止本地 8011 smoke 服务。
-
-Validation:
-
-- `python -m pytest tests\test_stage40_streaming_output_safety.py tests\test_frontend_app.py tests\test_agent_stream_api.py -q` -> `26 passed`
-- `python -m pytest -q` -> `819 passed`
-
-Browser smoke:
-
-- Desktop normal stream: passed; `agentStatus=answered`，`apiStatus=Agent 已完成`，horizontal overflow=false。
-- Desktop abort: passed after fix; `agentStatus=aborted`，`apiStatus=Agent 已停止生成`，`hasAbortStatus=true`，`thinkingResidue=false`，submit restored。
-- Mobile 390x844: passed; `horizontalOverflow=false`，console errors=[]。
-
-### Phase 6：文档、Obsidian 草稿与人工核验前收尾
-
-- **Status:** complete; waiting for user human verification
-
-- **Started:** 2026-06-16
-
-Phase purpose:
-
-- 这一 Phase 把阶段 40 的代码、测试和浏览器验证结果沉淀到普通文档与 Obsidian 本地知识库。
-- 它位于开发和验证之后、用户人工核验之前。
-- 现在做它，是因为阶段 40 功能已经通过聚焦测试、全量 pytest 和浏览器 smoke，需要停在可核验、未提交状态。
-
-Actions taken:
-
-- 更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`，记录阶段 40 流式输出体验与输出安全完成状态、后端取消边界和人工核验前状态。
-- 新增 `docs/phase_reviews/phase-40.md`，沉淀目标、主要改动、测试、风险和核验建议。
-- 新增 Obsidian 阶段页：`obsidian-vault/阶段/阶段 40 - 流式输出体验与输出安全.md`。
-- 新增 Obsidian 阶段汇报目录与 Phase 0 到 Phase 6 小汇报。
-- 更新 `obsidian-vault/阶段汇报索引.md`，加入阶段 40 Phase 汇报索引。
-- 保留前序 Agent 的阶段 40 语料扩充未提交改动，未执行 `git add`、`git commit`、`git tag`、`git push`，未创建 PR。
-
-Validation:
-
-- `python -m pytest tests\test_stage40_streaming_output_safety.py tests\test_frontend_app.py tests\test_agent_stream_api.py -q` -> pass
-- 阶段 40 收尾前全量验证曾运行：`python -m pytest -q` -> `819 passed`
-
-Residual risks:
-
-- 浏览器 `AbortController` 已能中断前端 fetch/ReadableStream 与 UI 渲染；当前后端 producer thread/provider 调用不承诺被浏览器 abort 立刻取消，文档与 Obsidian 已诚实记录该边界。
-- 停止生成后的半截回答目前保留在当前页面 UI 状态中，不作为新的后端会话消息持久化。
-- 工作区仍包含阶段 40 语料扩充改动与本轮流式输出安全改动，等待用户人工核验后再决定提交边界。
-
-Post-review fix 1:
-
-- 根据用户在 8000 页面人工查看反馈，修复流式文本不可见、停止按钮交互不符合预期、停止后半截文本不可见三个问题。
-- 移除独立 `data-agent-stop` 按钮；运行中的 `data-agent-submit` 主按钮变为红色 `.command-button--stop`，文案为“停止生成”。
-- 删除 `.chat-message--thinking .answer-text` 隐藏规则，保证 token 追加后立即可见，中断时半截内容留在 assistant 气泡中。
-- `submitAgent()` 在已有请求运行中再次触发时改为调用 `abortAgentStream()`。
-- 静态资源版本更新为 `phase40-streaming-output-safety-fix1`，降低浏览器缓存导致旧 UI 继续出现的概率。
-- 验证：
-  - `node --check app\frontend\static\app.js` -> pass
-  - `python -m pytest tests\test_stage40_streaming_output_safety.py tests\test_frontend_app.py tests\test_agent_stream_api.py -q` -> `26 passed`
-  - 8000 首页检查：存在新资源版本、无独立停止按钮、保留主提交按钮。
-
-Post-review fix 2:
-
-- 修复运行中点击红色主按钮仍触发表单“请填写此字段”的问题。
-- `data-agent-submit` 增加 click 截流：运行中点击时 `preventDefault()` 并调用 `abortAgentStream()`。
-- 运行中临时关闭问题输入框 `required`，收尾时恢复，避免浏览器原生必填气泡干扰停止生成。
-- 修复默认 `tool_calling_agent` 的最终回答 SSE token 生产：流式入口为 tool-calling 链路包装 `QueueStreamingChatModelProvider`，并委托 `generate_with_tools()`，保持工具调用行为不变。
-- 静态资源版本更新为 `phase40-streaming-output-safety-fix2`。
-- 验证：
-  - `node --check app\frontend\static\app.js` -> pass
-  - `python -m pytest tests\test_agent_stream_api.py tests\test_stage40_streaming_output_safety.py tests\test_frontend_app.py -q` -> `27 passed`
-  - 8000 浏览器自动化：运行中 required=false、validation message 为空；二次点击主按钮进入 aborted。
-  - 8000 SSE 计时：默认 tool-calling 链路在工具调用后输出真实 `event: token`。
-
-## Test Results
-
-### Phase 9: Zotero RFC English Import
+### Phase 6：全量回归与 Stage 30
 
 - **Status:** complete
-- **Started/Completed:** 2026-06-16
+- 全量测试：`python -m pytest -q` -> `843 passed`。
+- Stage 30 评分：`python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`。
+- Production smoke dry-run：`python scripts/run_production_smoke.py` -> `rows=11 execute=false failed=0`，不把真实 API 作为 CI 或本地全量测试前提。
 
-Phase purpose:
-
-- This Phase imports the small English RFC-related supplement from Zotero after the Chinese paper batch.
-- It sits in the corpus ingestion chain before DB verification and quality regression.
-- It is done now because the stage closeout requires the local corpus to include the authorized Chinese and English expansion before final tests and GitHub submission.
-
-Actions taken:
-
-- Added `scripts/import_stage40_zotero_rfc.py` for reproducible one-level Zotero storage enumeration and filename filtering.
-- Dry-run command: `python scripts/import_stage40_zotero_rfc.py --storage-dir "C:\Users\admin\Zotero\storage" --source-type open_access_pdf --dry-run`.
-- Formal import command: `python scripts/import_stage40_zotero_rfc.py --storage-dir "C:\Users\admin\Zotero\storage" --source-type open_access_pdf`.
-- Imported through `IngestionService.import_document()` with `source_type=open_access_pdf`.
-
-Results:
-
-- Dry-run: `scanned_pdfs=66`, `matched_pdfs=9`.
-- Formal import: `scanned_pdfs=67`, `matched_pdfs=9`, `imported=5`, `duplicate=4`, `empty=0`, `failed=0`, `new_chunks=372`.
-- Non-RFC PDFs in Zotero storage were not imported.
-
-Residual risk:
-
-- The Zotero filenames displayed mojibake in PowerShell output for Chinese connector words such as author separators, but filtering and import used actual filesystem paths and completed successfully.
-
-### Phase 10: Import Verification And Quality Regression
+### Phase 7：浏览器 smoke
 
 - **Status:** complete
-- **Started/Completed:** 2026-06-16
+- 使用本地 FastAPI `http://127.0.0.1:8001` 做桌面与移动浏览器 smoke。
+- 桌面首屏：Agent 页面加载、重命名/删除/标题控件可见、console errors=0、横向溢出=false。
+- 长回答分段：已有历史回答渲染为 `.answer-text--segmented .answer-segment`，共 8 个 segment，最长 segment 约 1717 字符，3 条回答为多段。
+- 会话重命名：右键会话打开指针附近菜单，不切换当前会话；选择重命名后状态为 `conversation_renamed`，列表标题同步。
+- 会话删除：新建临时 smoke 会话，重命名后 hard delete；删除后目标 ID 和标题均从下拉列表消失，UI 回落到上一会话。
+- 移动端 `390x844`：关键控件可见、无控件溢出、console errors=0、横向溢出=false。
+- 流式停止：移动视口下发起一次 Agent 请求，按钮进入 `停止生成`，点击后恢复为 `运行`，状态为 `aborted`，无 console errors。
 
-Phase purpose:
-
-- This Phase verifies that imported documents actually increased the active corpus and did not regress tests or Stage 30 quality.
-- It sits after corpus ingestion and before documentation/commit closeout.
-- It is done now because GitHub submission should only happen after DB, regression, and release quality gates are proven.
-
-Validation:
-
-- DB counts: `documents=753`, `chunks=25687`.
-- Source distribution: `institutional_access_pdf=431`, `web_page=136`, `metadata_record=115`, `wikipedia=25`, `open_access_pdf=20`, `standard_document=16`, `local_file=10`.
-- Full regression: `python -m pytest -q` -> `821 passed in 87.68s`.
-- Stage 30 quality: `python scripts/score_stage30_quality.py` -> `overall=91.52`, `grade=A`, `release_decision=pass`.
-
-Residual risk:
-
-- The imported full-text corpus remains local runtime state and is intentionally not committed. A fresh clone will need the same import steps to recreate the local DB.
-
-### Phase 11: Documentation Closeout
+### Phase 8：文档与 Obsidian 收尾
 
 - **Status:** complete
-- **Started/Completed:** 2026-06-16
+- 更新 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
+- 新增 `docs/phase_reviews/phase-42.md` 验收草稿。
+- 更新本地 Obsidian 草稿：阶段 42 阶段页、Phase 汇报索引、Phase 汇报、首页、阶段索引和阶段汇报索引。
+- 本阶段完成后停在人工核验前：不执行 `git add`、commit、tag、push 或 PR。
 
-Phase purpose:
+## 错误日志
 
-- This Phase synchronizes the final code, corpus import, DB verification, and quality results into reader-facing docs before submission.
-- It sits after validation and before Git staging/commit.
-- It is done now because the PR should carry a self-contained record of what Phase 40 changed and what remains local-only.
+- 未发现测试失败需要遗留修复。
+- 真实 Judge 首跑 gate=`review_required`，已通过 prompt 微调复跑到 gate=`pass`；剩余 medium risk 样例保留在低分分析 CSV 供人工核验。
+- 浏览器 smoke 中停止生成后当前 assistant 气泡保留“已停止生成”状态，这是 Phase 40 既定交互；没有 console error。
 
-Actions taken:
+## 尚未提交，等待用户人工核验
 
-- Updated `README.md` top Phase 40 status.
-- Updated `docs/progress.md` latest Phase 40 status and final verification.
-- Updated `docs/data_sources.md` Phase 40 corpus import closeout.
-- Updated `docs/architecture.md` with final stop-button behavior, `QueueStreamingChatModelProvider`, and corpus closeout boundary.
-- Updated `docs/phase_reviews/phase-40.md` with streaming fixes, corpus import results, DB counts, and submission boundary.
-- Updated `task_plan.md`, `findings.md`, and `progress.md` with Phase 9-11 checkpoints.
+阶段 42 已完成开发、测试、普通文档和 Obsidian 草稿收尾。当前按用户要求停在人工核验前状态，不执行 git add/commit/tag/push/PR。
+## Submission Update
 
-Residual risk:
-
-- Historical sections still mention earlier human-verification boundaries for previous phases or earlier Phase 40 sub-phases; those are retained as history, while the top/latest Phase 40 sections record the current authorized submission state.
-
-| Test | Input | Expected | Actual | Status |
-|------|-------|----------|--------|--------|
-| Git status | `git status -sb` | 确认分支和未提交改动 | `main...origin/main`，存在阶段 40 语料扩充改动 | pass |
-| Git log | `git log --oneline -5` | 确认阶段 39 已合并 | 最近提交为 `c6e7927 Merge phase 39 production deployment` | pass |
-| Planning files | 更新三份根目录规划文件 | task_plan/findings/progress 指向阶段 40 | 已完成 | pass |
-| Stage 40 focused tests | `python -m pytest tests\test_stage40_streaming_output_safety.py tests\test_frontend_app.py tests\test_agent_stream_api.py -q` | sanitize、abort、节流、SSE 兼容与前端入口通过 | 已通过 | pass |
-| Post-review fix 1 focused tests | `python -m pytest tests\test_stage40_streaming_output_safety.py tests\test_frontend_app.py tests\test_agent_stream_api.py -q` | 主按钮停止态、流式文本可见性和既有 SSE 合同通过 | `26 passed` | pass |
-| Post-review fix 2 focused tests | `python -m pytest tests\test_agent_stream_api.py tests\test_stage40_streaming_output_safety.py tests\test_frontend_app.py -q` | 停止按钮绕过 required 校验、默认 tool-calling 最终回答真流式、前端合同通过 | `27 passed` | pass |
-| Full pytest | `python -m pytest -q` | 全量回归通过 | `819 passed` | pass |
-| Browser smoke | 桌面与移动端 in-app browser | 正常流式、停止生成、无横向溢出、无 console error | 已通过 | pass |
-
-## Error Log
-
-| Timestamp | Error | Attempt | Resolution |
-|-----------|-------|---------|------------|
-| 2026-06-16 | PowerShell 不支持 `git status -sb && git log --oneline -5` | 1 | 分别运行 `git status -sb` 与 `git log --oneline -5` |
-| 2026-06-16 | `goal prompt.md` 路径含空格，普通 `Get-Content` 解析失败 | 1 | 使用 `Get-Content -LiteralPath` |
-
-## 5-Question Reboot Check
-
-| Question | Answer |
-|----------|--------|
-| Where am I? | 阶段 40 Phase 6 已完成，等待用户人工核验 |
-| Where am I going? | 用户核验通过后，才进入提交、tag、push 或 PR 流程 |
-| What's the goal? | 完成阶段 40 前四项流式输出体验与输出安全能力，并停在人工核验前 |
-| What have I learned? | 见 `findings.md` |
-| What have I done? | 已完成阶段 40 开发、测试、普通文档和 Obsidian 草稿，且保持未提交状态 |
-
----
-
-*后续每完成一个 Phase 或遇到错误，都要更新本文件。*
+2026-06-17: Phase 42 development, verification, docs, and final frontend refinements are complete. The user explicitly authorized committing, pushing, creating a GitHub PR, and merging Phase 42. Final frontend checks covered the left conversation sidebar, pointer-adjacent right-click rename/delete menu without conversation switching, fixed bottom composer, independent message/sidebar scrolling, and citation source drawer.
