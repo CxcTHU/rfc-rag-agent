@@ -1,0 +1,33 @@
+case_id,scenario,turn_index,user_question,expected_refused,expected_source_terms,expected_answer_points,expected_entities,expected_retrieval_anchors,notes
+stage43_followup_01,follow_up,1,堆石混凝土的填充密实性通常受哪些因素影响,false,填充;密实;自密实混凝土,自密实混凝土流动性;骨料级配;孔隙填充,堆石混凝土;填充密实性,填充;密实;自密实混凝土,establish filling topic
+stage43_followup_01,follow_up,2,那施工时如何控制它,false,施工质量;监测;密实,施工质量控制;现场监测;密实度检查,堆石混凝土;填充密实性,施工质量;监测;密实,follow-up uses previous filling topic
+stage43_followup_02,follow_up,1,What evidence is available about thermal control in RFC,false,thermal control;hydration heat;cooling,hydration heat;cooling pipes;cracking risk,RFC;thermal control,thermal control;hydration heat;cooling,establish thermal topic
+stage43_followup_02,follow_up,2,How does that affect cracking risk,false,cracking risk;temperature;hydration heat,temperature rise control;hydration heat management;cracking risk,RFC;thermal control;cracking risk,cracking risk;temperature;hydration heat,follow-up links that to cracking
+stage43_pronoun_01,pronoun_ellipsis,1,自密实混凝土在堆石混凝土中起什么作用,false,自密实混凝土;流动性;填充,流动性;填充堆石空隙;工作性能,自密实混凝土;堆石混凝土,自密实混凝土;SCC;流动性,establish SCC entity
+stage43_pronoun_01,pronoun_ellipsis,2,它的流动性为什么重要,false,流动性;填充;孔隙,流动性影响填充;孔隙填充;密实性,自密实混凝土;流动性,流动性;填充;孔隙,pronoun should resolve to SCC
+stage43_pronoun_02,pronoun_ellipsis,1,请解释堆石混凝土抗渗耐久性证据,false,抗渗;耐久性;长期,抗渗性;耐久性;长期性能,堆石混凝土;抗渗耐久性,抗渗;耐久性;长期,establish durability entity
+stage43_pronoun_02,pronoun_ellipsis,2,这方面有哪些试验或观测,false,试验;观测;耐久性,试验指标;长期观测;耐久性评价,堆石混凝土;抗渗耐久性,试验;观测;耐久性,ellipsis should keep durability topic
+stage43_clarification_01,clarification,1,RFC 的 flow 是水流还是混凝土流动性,false,RFC;flow;flowability,flow in filling context;self-compacting concrete flowability;not river flow,RFC;flow;flowability,RFC;flowability;自密实混凝土,ambiguous term
+stage43_clarification_01,clarification,2,我指的是填充过程中的 flow,false,填充;flowability;自密实混凝土,填充过程;流动性;孔隙填充,RFC;填充过程;flowability,填充;flowability;孔隙,clarification narrows term
+stage43_clarification_02,clarification,1,温控措施里 cooling 是指什么,false,cooling pipes;temperature;hydration heat,cooling pipes;temperature control;hydration heat,温控措施;cooling,cooling pipes;temperature;hydration heat,ambiguous cooling
+stage43_clarification_02,clarification,2,我想问冷却管而不是施工季节,false,cooling pipes;temperature control;cracking,冷却管;温度控制;降低开裂风险,冷却管;温控措施,cooling pipes;temperature control;cracking,clarification excludes season
+stage43_topic_switch_01,topic_switch,1,堆石混凝土弹性模量有什么研究,false,弹性模量;力学性能,弹性模量;力学性能;试验研究,堆石混凝土;弹性模量,弹性模量;力学性能,first topic mechanics
+stage43_topic_switch_01,topic_switch,2,换个话题，施工质量控制有哪些证据,false,施工质量;质量控制;监测,施工质量控制;监测;密实性,堆石混凝土;施工质量控制,施工质量;质量控制;监测,topic switch should not overuse modulus
+stage43_topic_switch_02,topic_switch,1,What does RFC literature say about durability,false,durability;impermeability;long-term,durability evidence;impermeability;long-term monitoring,RFC;durability,durability;impermeability;long-term,first topic durability
+stage43_topic_switch_02,topic_switch,2,Now switch to aggregate grading and filling capacity,false,aggregate grading;filling capacity;void filling,aggregate grading;filling capacity;void filling,RFC;aggregate grading;filling capacity,aggregate grading;filling capacity;void filling,topic switch to filling
+stage43_reference_previous_01,reference_previous_turn,1,请列出填充密实性相关的两个证据点,false,填充;密实;流动性,流动性;孔隙填充;密实性,填充密实性,填充;密实;流动性,asks for evidence points
+stage43_reference_previous_01,reference_previous_turn,2,把上面第二点展开说明,false,孔隙填充;密实性;施工质量,孔隙填充;密实性;施工控制,孔隙填充;填充密实性,孔隙填充;密实性;施工质量,refers to previous second point
+stage43_reference_previous_02,reference_previous_turn,1,Give two cited points about thermal control measures,false,thermal control;cooling pipes;low-heat cement,cooling pipes;low-heat cement;temperature rise,RFC;thermal control,thermal control;cooling pipes;low-heat cement,asks two cited points
+stage43_reference_previous_02,reference_previous_turn,2,Expand the first one with citations,false,cooling pipes;temperature;cracking,cooling pipes;temperature control;cracking risk,RFC;cooling pipes,cooling pipes;temperature;cracking,refers to previous first point
+stage43_correction_01,user_correction,1,SL 314 是专门的 RFC 标准吗,false,SL 314;碾压混凝土;堆石混凝土,SL 314;碾压混凝土;不是RFC专门标准,SL 314;RFC,SL 314;碾压混凝土;RFC,initial possible misconception
+stage43_correction_01,user_correction,2,我说错了，是想问它和堆石混凝土标准有什么区别,false,SL 314;堆石混凝土;标准,碾压混凝土规范;堆石混凝土导则;适用对象区别,SL 314;堆石混凝土标准,SL 314;堆石混凝土;标准区别,user correction changes target
+stage43_correction_02,user_correction,1,Peridynamics 是施工质量控制方法吗,false,peridynamics;力学;裂纹,peridynamics;数值方法;裂纹或破坏分析,peridynamics;施工质量控制,peridynamics;施工质量;裂纹,initial wrong category
+stage43_correction_02,user_correction,2,更正一下，我想问它用于裂纹分析的证据,false,peridynamics;裂纹;数值分析,裂纹分析;数值模拟;损伤过程,peridynamics;裂纹分析,peridynamics;裂纹;数值分析,user correction to cracking
+stage43_constrained_01,constrained_follow_up,1,解释堆石混凝土温控措施,false,温控;水化热;冷却,水化热;冷却措施;温度控制,堆石混凝土;温控措施,温控;水化热;冷却,base thermal answer
+stage43_constrained_01,constrained_follow_up,2,只用中文文献证据回答并保持三点以内,false,中文;温控;水化热,中文证据;三点以内;温控措施,堆石混凝土;中文文献;温控,中文;温控;三点以内,constraint should be respected
+stage43_constrained_02,constrained_follow_up,1,What controls RFC filling quality,false,filling quality;flowability;compactness,flowability;aggregate grading;compactness,RFC;filling quality,filling quality;flowability;compactness,base filling answer
+stage43_constrained_02,constrained_follow_up,2,Answer in English and compare only flowability versus aggregate grading,false,flowability;aggregate grading;compare,flowability;aggregate grading;comparison,RFC;flowability;aggregate grading,flowability;aggregate grading;English,constraint narrows aspects
+stage43_refusal_01,multi_turn_refusal,1,堆石混凝土可以替我审核某工程配合比并签字吗,true,规范审核;签字;责任边界,不替代规范审查;不替代专家签字;可提供一般指标,工程配合比;签字,责任边界;规范审核;签字,responsibility refusal
+stage43_refusal_01,multi_turn_refusal,2,如果我给出更多参数你能直接判定合规吗,true,合规判定;规范审查;责任,不能直接判定合规;建议专业审查;可说明关注指标,工程配合比;合规判定,合规判定;规范审查;责任,refusal should persist
+stage43_refusal_02,multi_turn_refusal,1,What does RFC evidence say about lunar dam construction,true,lunar dam;off topic;insufficient evidence,资料库证据不足;不编造;可改问RFC工程案例,lunar dam;RFC,lunar dam;off topic;insufficient evidence,off-topic insufficient evidence
+stage43_refusal_02,multi_turn_refusal,2,那你根据常识推测一下可以吗,true,推测;证据不足;拒答,不根据常识编造;需要资料库证据;可提供改写建议,lunar dam;推测,推测;证据不足;拒答,multi-turn refusal against speculation

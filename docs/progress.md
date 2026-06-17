@@ -1,5 +1,82 @@
 # 项目进度
 
+## Latest Status: 2026-06-17 Phase 43 Multi-Turn Judge And Production Observability Complete Before Human Verification
+
+Current branch: `codex/phase-43-multi-turn-quality-and-observability`.
+
+Phase 43 starts from the Phase 42 GitHub merge `origin/main -> 5850139 Merge pull request #9 from CxcTHU/codex/phase-42-generation-quality-and-experience`. Local `main` remains at `d7dfca1`, so Phase 43 intentionally used `origin/main` as the correct starting point. The phase preserves Stage 30 scoring rules, provider topology, data-source boundaries, and the rule that final answer citations must come from retrieved knowledge-base sources.
+
+Completed:
+
+```text
+docs/stage43_multi_turn_quality_and_observability.md -> design, safety boundary, multi-turn and observability contracts
+data/evaluation/stage43_multi_turn_eval_cases.csv -> 16 multi-turn conversations / 32 turns / 8 scenarios
+scripts/evaluate_stage43_multi_turn.py -> no_history / recent_only / summary_recent / layered_memory comparison
+data/evaluation/stage43_multi_turn_baseline_results.csv -> four-way quantitative rows
+data/evaluation/stage43_multi_turn_baseline_summary.csv -> four-way aggregate metrics
+app/services/conversation/session_memory.py -> in-session entities + retrieval_anchors memory
+app/services/brain/service.py -> memory-assisted query rewrite and request_id observability events
+app/core/request_logger.py -> sanitized JSONL request trace by request_id
+app/api/health.py + app/schemas/health.py -> GET /health/details local diagnostics
+scripts/judge_stage43_multi_turn_quality.py -> real multi-turn Judge, dry-run default, execute with checkpoint
+data/evaluation/stage43_multi_turn_judge_results.csv -> four-way real Judge rows
+data/evaluation/stage43_multi_turn_judge_summary.csv -> four-way Judge summary
+deploy/nginx-https.example.conf + deploy/Caddyfile.example -> optional HTTPS reverse proxy templates
+tests/test_stage43_design.py + tests/test_stage43_multi_turn_eval.py + tests/test_session_memory.py + tests/test_request_logger.py + tests/test_health_details.py + tests/test_stage43_multi_turn_judge.py + tests/test_stage43_https_templates.py
+docs/phase_reviews/phase-43.md + docs/stage43_multi_turn_judge.md + docs/deployment_https_reverse_proxy.md + Obsidian drafts
+```
+
+Multi-turn evaluation:
+
+```text
+no_history avg_retrieval_hit=0.312 avg_answer_coverage=0.104
+recent_only avg_retrieval_hit=0.531 avg_answer_coverage=0.125
+summary_recent avg_retrieval_hit=0.594 avg_answer_coverage=0.167
+layered_memory avg_retrieval_hit=0.594 avg_answer_coverage=0.208
+```
+
+Decision: keep `summary_recent` as the default conversation strategy. `layered_memory` now matches the lightweight baseline hit rate and has higher coverage, but the Phase 17 real Judge rerun still shows lower citation accuracy than `summary_recent`, so it remains a retrieval/query-rewrite aid rather than a default replacement strategy.
+
+Post-review correction: after human verification flagged that the checked-in Stage 43 CSV still contained `layered_memory` dry-run rows, `python scripts/evaluate_stage43_multi_turn.py --history-mode all --no-dry-run` was rerun. `stage43_multi_turn_baseline_results.csv` and `stage43_multi_turn_baseline_summary.csv` now agree: all four modes have `completed_turns=32` and `dry_run_turns=0`.
+
+Real multi-turn Judge:
+
+```text
+no_history faith=0.678 citation=0.603 coherence=0.794 refusal=0.778 gate=review_required
+recent_only faith=0.766 citation=0.680 coherence=0.853 refusal=0.816 gate=review_required
+summary_recent faith=0.764 citation=0.641 coherence=0.784 refusal=0.794 gate=review_required
+layered_memory faith=0.769 citation=0.622 coherence=0.852 refusal=0.853 gate=review_required
+```
+
+Judge decision after Phase 17 rerun: optimized `layered_memory` improves faithfulness, context coherence, and refusal consistency compared with `summary_recent`, but citation accuracy is lower than `summary_recent` and remains below 0.8. Keep `summary_recent` as the default; retain `layered_memory` as retrieval/query-rewrite assistance.
+
+Verification:
+
+```text
+python -m pytest tests/test_stage43_design.py -q -> 6 passed
+python -m pytest tests/test_stage43_multi_turn_eval.py -q -> 5 passed
+python -m pytest tests/test_session_memory.py tests/test_stage43_multi_turn_eval.py tests/test_brain_service.py::test_brain_service_rewrites_contextual_question_before_retrieval -q -> 10 passed
+python -m pytest tests/test_request_logger.py tests/test_stage39_logging.py tests/test_session_memory.py tests/test_brain_service.py::test_brain_service_rewrites_contextual_question_before_retrieval -q -> 11 passed
+python -m pytest tests/test_health_details.py tests/test_request_logger.py -q -> 5 passed
+python -m pytest tests/test_stage43_multi_turn_judge.py -q -> 5 passed
+python scripts/judge_stage43_multi_turn_quality.py --history-mode all -> rows=128 execute=false
+python scripts/judge_stage43_multi_turn_quality.py --history-mode summary_recent --execute -> 32/32 completed
+python scripts/judge_stage43_multi_turn_quality.py --history-mode layered_memory --execute -> 32/32 completed
+python scripts/judge_stage43_multi_turn_quality.py --history-mode recent_only --execute -> 32/32 completed
+python scripts/judge_stage43_multi_turn_quality.py --history-mode no_history --execute -> 32/32 completed
+python -m pytest tests/test_stage43_https_templates.py -q -> 3 passed
+python scripts/evaluate_stage43_multi_turn.py --history-mode all --no-dry-run -> completed
+python -m pytest -q -> 876 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/run_production_smoke.py -> rows=11 execute=false failed=0
+desktop browser smoke -> local two-turn chitchat passed, console errors=0, horizontal overflow=false
+mobile browser smoke 390x844 -> controls visible, recent chat retained, console errors=0, horizontal overflow=false
+Phase 15 desktop browser smoke -> hello/thanks two-turn chitchat passed, console errors=0, horizontal overflow=false
+Phase 15 mobile browser smoke 390x844 -> controls visible, console errors=0, horizontal overflow=false
+```
+
+Current boundary: Phase 43 has completed development, tests, normal docs, and local Obsidian drafts. The user explicitly authorized Phase 43 submission and GitHub merge on 2026-06-17. Do not create or move a phase tag unless separately requested.
+
 ## Latest Status: 2026-06-17 Phase 42 Generation Quality Calibration And Production Experience Complete And Authorized For GitHub Merge
 
 Current branch: `codex/phase-42-generation-quality-and-experience`.

@@ -1,0 +1,20 @@
+# Example Caddy HTTPS reverse proxy for RFC-RAG-Agent.
+# Replace rfc-rag.example.com before use. Caddy manages certificates automatically.
+
+rfc-rag.example.com {
+    encode gzip
+
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+    }
+
+    reverse_proxy 127.0.0.1:8000 {
+        header_up X-Forwarded-Proto https
+        header_up X-Request-ID {http.request.id}
+        transport http {
+            read_timeout 600s
+            write_timeout 600s
+        }
+    }
+}

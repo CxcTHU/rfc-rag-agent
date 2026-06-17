@@ -16,6 +16,11 @@ from app.api.health import router as health_router
 from app.api.search import router as search_router
 from app.api.sources import router as sources_router
 from app.core.config import get_settings
+from app.core.request_logger import (
+    finish_request_trace,
+    reset_request_trace,
+    start_request_trace,
+)
 from app.core.structured_logging import (
     configure_structured_logging,
     log_event,
@@ -49,6 +54,11 @@ def create_app() -> FastAPI:
     async def structured_request_logging(request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or new_request_id()
         token = set_request_id(request_id)
+        trace_token = start_request_trace(
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+        )
         started = time.perf_counter()
         try:
             response = await call_next(request)
@@ -62,6 +72,12 @@ def create_app() -> FastAPI:
                 status_code=500,
                 latency_ms=latency_ms,
             )
+            finish_request_trace(
+                status_code=500,
+                latency_ms=latency_ms,
+                error_type="unhandled_exception",
+            )
+            reset_request_trace(trace_token)
             reset_request_id(token)
             raise
         latency_ms = round((time.perf_counter() - started) * 1000.0, 3)
@@ -73,7 +89,12 @@ def create_app() -> FastAPI:
             status_code=response.status_code,
             latency_ms=latency_ms,
         )
+        finish_request_trace(
+            status_code=response.status_code,
+            latency_ms=latency_ms,
+        )
         response.headers["X-Request-ID"] = request_id
+        reset_request_trace(trace_token)
         reset_request_id(token)
         return response
 
