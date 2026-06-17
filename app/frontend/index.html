@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RFC-RAG-Agent</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase40-streaming-output-safety-fix2" />
+    <link rel="stylesheet" href="/static/styles.css?v=phase42-landing-app-mode-fix8" />
   </head>
   <body>
     <main class="app-shell" data-app-shell>
       <section class="workspace-band">
         <header class="top-nav" aria-label="主导航">
-          <a class="brand-lockup" href="#ask-view" data-view-target="ask" aria-label="RFC-RAG-Agent 首页">
+          <a class="brand-lockup" href="#home" data-home-link aria-label="RFC-RAG-Agent 首页">
             <span class="brand-mark">R</span>
             <span>
               <strong>RFC-RAG-Agent</strong>
@@ -32,13 +32,12 @@
         <section class="view-section is-active" id="ask-view" data-view="ask" aria-labelledby="hero-title">
         <section class="hero-layout" aria-labelledby="hero-title">
           <div class="hero-copy">
-            <p class="hero-kicker">面向堆石混凝土文献的 RAG 智能检索系统</p>
             <h1 id="hero-title">面向堆石混凝土的 RAG 智能检索系统</h1>
             <p class="hero-lede">
               基于混合检索、结构化分块和流式回答，把堆石混凝土资料转成可追溯的智能问答入口。
             </p>
             <div class="hero-actions">
-              <a class="command-button" href="#agent-panel">开始问答</a>
+              <a class="command-button" href="#ask-view" data-view-target="ask">开始问答</a>
               <a class="secondary-button" href="#library-view" data-view-target="library">查看资料库</a>
             </div>
 
@@ -75,8 +74,9 @@
               </article>
             </div>
           </div>
+        </section>
 
-          <section class="demo-panel" id="agent-panel" aria-labelledby="agent-title">
+          <section class="demo-panel agent-workspace-panel" id="agent-panel" aria-labelledby="agent-title">
             <div class="panel-heading demo-heading">
               <div>
                 <h2 id="agent-title">Agent 问答</h2>
@@ -85,74 +85,41 @@
               <span data-agent-status>idle</span>
             </div>
 
-            <div class="conversation-bar" aria-label="会话管理">
-              <button class="secondary-button" type="button" data-new-conversation>新建</button>
-              <label>
-                <span>会话</span>
-                <select data-conversation-list>
-                  <option value="">加载中</option>
-                </select>
-              </label>
-              <button class="secondary-button" type="button" data-refresh-conversations>刷新</button>
-              <button class="secondary-button danger-button" type="button" data-delete-conversation>删除</button>
-            </div>
-
-            <form class="chat-form demo-form" data-agent-form>
-              <label class="question-field">
-                <span>任务</span>
-                <textarea
-                  data-agent-question
-                  rows="4"
-                  placeholder="例如：堆石混凝土的填充性能受哪些因素影响？"
-                  required
-                ></textarea>
-              </label>
-              <div class="agent-controls">
-                <div class="readonly-field">
-                  <span>模式</span>
-                  <output class="mode-indicator" data-agent-mode-status>系统自动</output>
+            <div class="agent-chat-layout">
+              <aside class="conversation-sidebar" aria-label="会话列表">
+                <div class="conversation-sidebar-head">
+                  <strong>会话</strong>
+                  <button class="secondary-button" type="button" data-new-conversation>新建</button>
                 </div>
-                <button class="command-button" type="submit" data-agent-submit>运行</button>
-                <details class="advanced-settings">
-                  <summary>高级设置</summary>
-                  <div class="advanced-settings-grid">
-                    <label>
-                      <span>检索候选数</span>
-                      <input type="number" min="1" max="50" value="5" data-agent-top-k />
-                    </label>
-                    <label>
-                      <span>最大工具调用数</span>
-                      <input type="number" min="1" max="5" value="2" data-agent-max-tool-calls />
-                    </label>
-                    <label>
-                      <span>指定来源 ID</span>
-                      <input type="text" data-agent-source-id placeholder="可选" />
-                    </label>
+                <div class="conversation-list" data-conversation-list role="listbox" aria-label="会话列表">
+                  <div class="empty-state">加载中</div>
+                </div>
+                <button class="secondary-button conversation-refresh-button" type="button" data-refresh-conversations>刷新</button>
+                <input data-conversation-title type="text" maxlength="200" placeholder="新对话" hidden />
+              </aside>
+
+              <section class="conversation-main" aria-label="对话">
+                <div class="chat-messages" data-agent-answer-box data-agent-chat-list aria-live="polite">
+                  <div class="empty-state">在底部输入问题，点击运行。</div>
+                </div>
+
+                <form class="chat-form demo-form agent-composer" data-agent-form>
+                  <label class="question-field">
+                    <span>任务</span>
+                    <textarea
+                      data-agent-question
+                      rows="3"
+                      placeholder="例如：堆石混凝土的填充性能受哪些因素影响？"
+                      required
+                    ></textarea>
+                  </label>
+                  <div class="agent-controls">
+                    <button class="command-button" type="submit" data-agent-submit>运行</button>
                   </div>
-                </details>
-              </div>
-            </form>
-
-            <div class="chat-messages" data-agent-answer-box data-agent-chat-list aria-live="polite">
-              <div class="empty-state">在上方输入问题，点击运行。</div>
-            </div>
-
-            <div class="demo-stats" aria-label="系统能力摘要">
-              <article>
-                <strong data-metric="chunksTotal">0</strong>
-                <span>Chunks</span>
-              </article>
-              <article>
-                <strong>Hybrid</strong>
-                <span>Search</span>
-              </article>
-              <article>
-                <strong>Docker</strong>
-                <span>Ready</span>
-              </article>
+                </form>
+              </section>
             </div>
           </section>
-        </section>
 
         <aside class="data-panel tool-panel" aria-labelledby="agent-tools-title">
           <div class="panel-heading">
@@ -381,6 +348,22 @@
 
       </section>
     </main>
-    <script src="/static/app.js?v=phase40-streaming-output-safety-fix2" type="module"></script>
+    <aside class="citation-drawer" data-citation-drawer hidden aria-label="引用详情">
+      <div class="citation-drawer-header">
+        <div>
+          <strong>来源</strong>
+          <span data-citation-drawer-count>0 个引用</span>
+        </div>
+        <button class="icon-button" type="button" data-close-citation-drawer aria-label="关闭引用详情">×</button>
+      </div>
+      <div class="citation-drawer-list" data-citation-drawer-list>
+        <div class="empty-state">暂无来源</div>
+      </div>
+    </aside>
+    <div class="conversation-context-menu" data-conversation-menu hidden role="menu" aria-label="会话操作">
+      <button type="button" data-rename-conversation role="menuitem">重命名</button>
+      <button type="button" class="danger-menu-item" data-delete-conversation role="menuitem">删除</button>
+    </div>
+    <script src="/static/app.js?v=phase42-landing-app-mode-fix8" type="module"></script>
   </body>
 </html>

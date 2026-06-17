@@ -1,5 +1,52 @@
 # 项目进度
 
+## Latest Status: 2026-06-17 Phase 42 Generation Quality Calibration And Production Experience Complete And Authorized For GitHub Merge
+
+Current branch: `codex/phase-42-generation-quality-and-experience`.
+
+Phase 42 starts from the locally merged Phase 41 main point `d7dfca1 Merge phase 41 post-import retrieval optimization`. It keeps Stage 30 scoring rules, provider topology, data-source boundaries, and the Stage 38 `structured_final_answer` strategy family intact. The phase has two tracks: expand real LLM Judge coverage to the newly imported corpus, and finish the production UX work deferred from Phase 40.
+
+Completed:
+
+```text
+docs/stage42_generation_quality_and_experience.md -> design, safety boundary, Judge and UX contracts
+scripts/judge_stage42_generation_quality.py -> Stage 38 24 cases + Stage 41 12 queries, dry-run default, explicit --execute
+data/evaluation/stage42_generation_judge_results.csv -> sanitized scores / reasons / risk / next_action only
+data/evaluation/stage42_generation_judge_summary.csv -> six-metric gate summary
+data/evaluation/stage42_generation_low_score_analysis.csv -> low-score category and next-action analysis
+app/services/agent/tool_calling_service.py -> structured_final_answer coverage prompt calibration
+app/frontend/static/app.js -> paragraph/length segmented final-answer rendering, right-click conversation menu, citation drawer trigger
+app/frontend/index.html + app/frontend/static/styles.css -> left conversation sidebar, bottom-fixed composer, independent message/sidebar scrolling
+app/api/conversations.py + app/db/repositories.py + app/schemas/conversation.py -> PATCH rename, hard delete unchanged
+tests/test_stage42_design.py + tests/test_stage42_generation_judge.py -> stage contracts
+docs/phase_reviews/phase-42.md + Obsidian drafts
+```
+
+Judge:
+
+```text
+first real Judge -> 36 completed, gate=review_required, faith=0.982 cov=0.790 cit=0.829 refusal=0.925 concise=0.904 safety=1.000
+after prompt calibration -> 36 completed, gate=pass, faith=0.983 cov=0.828 cit=0.856 refusal=0.953 concise=0.931 safety=1.000 high=0 medium=17
+```
+
+Verification:
+
+```text
+python -m pytest tests/test_stage42_design.py -q -> 5 passed
+python -m pytest tests/test_stage42_generation_judge.py -q -> 5 passed
+python -m pytest tests/test_tool_calling_agent_service.py tests/test_stage42_generation_judge.py -q -> 20 passed
+node --check app/frontend/static/app.js -> passed
+python -m pytest tests/test_conversations_api.py tests/test_repositories.py tests/test_frontend_app.py -q -> 24 passed
+python -m pytest -q -> 843 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/run_production_smoke.py -> rows=11 execute=false failed=0
+desktop browser smoke -> segmented answers visible, right-click rename/delete menu did not switch conversation, fixed composer, independent scroll, temporary hard delete passed, horizontal overflow=false, console errors=0
+mobile browser smoke 390x844 -> controls visible, fixed composer, independent scroll, stop-generation recovery passed, horizontal overflow=false, console errors=0
+post-review frontend refinement -> node --check passed; tests/test_frontend_app.py 10 passed; desktop/mobile browser smoke passed
+```
+
+Current boundary: Phase 42 has completed development, tests, normal docs, and local Obsidian drafts. The user explicitly authorized Phase 42 submission and GitHub merge on 2026-06-17. Submit the phase branch and merge it to GitHub; do not create or move a phase tag unless separately requested.
+
 ## Latest Status: 2026-06-16 Phase 40 Streaming Output Safety And Corpus Import Complete
 
 Current branch: `codex/phase-40-streaming-output-safety`.
@@ -3157,3 +3204,52 @@ Submission state:
 - User has authorized commit, push, PR creation, and merge for Phase 40 closeout.
 - Do not stage local runtime corpus files: `data/app.sqlite`, `data/raw/`, `data/fulltext/`, `data/faiss/`.
 - Do not create or move a phase tag unless the user separately asks for tag handling.
+
+## Latest Status: 2026-06-16 Phase 41 Post-Import Retrieval Optimization Complete Before Human Verification
+
+Current branch: `codex/phase-41-post-import-retrieval-optimization`.
+
+Phase 41 starts after Phase 40 corpus import and focuses on retrieval visibility for the imported corpus. It preserves prompt strategy, Stage 30 scoring rules, provider topology, frontend code, and data-source boundaries.
+
+Completed:
+
+```text
+docs/stage41_post_import_retrieval_optimization.md -> design contract and acceptance boundary
+scripts/build_vector_index.py -> GLM and deterministic incremental embedding build
+scripts/backfill_parent_chunks.py -> nearest-parent fallback for short tail chunks
+scripts/build_faiss_index.py -> GLM 2048 and deterministic 64 FAISS rebuild
+data/evaluation/stage41_post_import_retrieval_queries.csv -> 12-case post-import retrieval set
+scripts/evaluate_stage41_post_import_retrieval.py -> safe retrieval evaluation CSV writer
+tests/test_stage41_design.py + tests/test_stage41_post_import_retrieval_eval.py + parent/FAISS regressions
+docs/phase_reviews/phase-41.md + Obsidian drafts
+```
+
+Corpus and index state:
+
+```text
+documents=753
+chunks table rows=25687
+indexable child chunks=19300
+GLM embeddings=19300
+deterministic embeddings=19300
+embedding orphan/duplicate checks=0
+parent_created=3301
+ordinary_child_without_parent=0
+GLM FAISS vectors=19300
+VectorIndexCache load_mode=faiss_only
+```
+
+Evaluation and verification:
+
+```text
+python -m pytest tests/test_stage41_design.py tests/test_stage41_post_import_retrieval_eval.py tests/test_backfill_parent_chunks.py tests/test_faiss_index.py -q -> 18 passed
+python -m pytest -q -> 830 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+stage41 GLM retrieval eval -> p@1=0.833 p@3=0.833 p@5=1.000 coverage=0.972
+stage41 deterministic retrieval eval -> p@1=0.667 p@3=0.667 p@5=0.917 coverage=0.917
+browser desktop/mobile smoke -> new corpus retrievable, stop generation usable, horizontal overflow=false, application console errors=0
+```
+
+Important architecture note: `chunks=25687` includes Stage 31 parent rows. Parent rows do not receive embeddings and do not enter FAISS; the acceptance target is full coverage of the `19300` indexable child chunks.
+
+Current boundary: do not run `git add`, commit, tag, push, or create a PR before user human verification and explicit approval.

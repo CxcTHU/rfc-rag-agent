@@ -1,5 +1,51 @@
 # 架构说明
 
+## 阶段 42 架构增量：生成质量校准与生产体验完善
+
+阶段 42 不修改 Stage 30 评分规则、不替换 provider、不改变数据源边界，也不引入 React/Vue/Node 构建链。架构增量集中在两个位置：离线 Judge 质量校准链路，以及原生前端会话/长回答体验。
+
+```text
+Stage 38 24 generation cases
++ Stage 41 12 post-import retrieval queries
+-> scripts/judge_stage42_generation_quality.py
+-> tool_calling_agent structured_final_answer
+-> explicit --execute real Judge
+-> sanitized CSV metrics / short reasons / risk levels
+-> low-score analysis
+-> tool-calling final-answer prompt calibration
+```
+
+阶段 42 的 Judge 脚本默认 dry-run，真实 Judge 必须显式 `--execute`。输出 CSV 只保存 case id、类别、分数、短理由、风险等级和 next_action，不保存 raw provider response、raw answer、`raw_response`、`reasoning_content`、hidden thought、API key 或 Bearer token。
+
+prompt 校准落在 `app/services/agent/tool_calling_service.py::final_answer_strategy_instruction()`，而不是旧的普通 RAG prompt builder。原因是阶段 38 之后默认 Agent 链路是 tool-calling final synthesis：LLM 先通过工具召回证据，再由 tool-calling service 的最终答案策略生成引用式回答。阶段 42 只收紧 `structured_final_answer` 对比较题、多维题、质量控制题和新增语料题的覆盖要求，不改变 tool loop、provider 拓扑或 citation repair 规则。
+
+前端长回答渲染仍保持原生 HTML/CSS/JS：
+
+```text
+finalizeAgentStreamingMessage()
+-> renderSegmentedAnswerInto()
+-> answerRenderSegments()
+-> DocumentFragment
+-> .answer-text--segmented > .answer-segment
+```
+
+流式阶段继续复用 Phase 40 的 token buffer 与 AbortController；最终回答落地时按段落和长度拆分为多个 segment，再批量 append 到 `.answer-text`。这样避免一次性大块 `innerHTML` 造成长回答 reflow 峰值，同时保留 sanitizer、citation button、invalid citation 标记和停止生成后的部分输出保留。
+
+会话管理保持当前无认证前提下的简单 CRUD：
+
+```text
+PATCH /conversations/{conversation_id}
+-> ConversationUpdateRequest(title)
+-> ConversationRepository.rename_conversation()
+-> ConversationItem
+
+DELETE /conversations/{conversation_id}
+-> hard delete
+-> frontend fallback to remaining conversation / new conversation
+```
+
+重命名使用左侧会话列表的右键菜单触发，菜单靠近指针显示且不会切换当前会话；空标题归一化为“新对话”。删除同样从右键菜单触发并使用 hard delete，因为当前项目没有用户账号、归属权限、回收站或审计恢复模型。后续如果引入认证和多用户权限，再考虑 soft delete、删除审计和恢复。
+
 ## 阶段 40 架构增量：流式输出体验与输出安全
 
 阶段 40 不修改默认 RAG / Agent 质量链路，不替换 provider，不改变 Stage 30 评分规则，也不新增外部数据源。架构增量集中在浏览器侧流式输出控制与最终渲染安全：
@@ -3768,3 +3814,33 @@ No Stage 30 scoring weights, grade thresholds, release rules, default providers,
 `ToolCallingAgentService` now behaves as a lightweight tool runtime, not only a provider wrapper. It enforces one executed read-only RAG search per model turn, returns safe skipped `role="tool"` messages for skipped `tool_call_id`s, blocks near-duplicate search queries, converges from existing sanitized sources when the model keeps asking for tools, and performs one bounded citation repair turn when a source-backed draft misses `[N]` markers.
 
 This keeps Phase 37 inside the existing provider topology: no LangGraph, no checkpointing framework, no write tools, no default provider replacement, and no default routing switch. The tiered-provider tradeoff remains: `react_agent` can use Flash planner + V4-Pro answer, while the first `tool_calling_agent` path uses one tools-capable model for planning and final answering unless a later phase explicitly designs a tiered tool-calling variant.
+
+## Phase 41 Architecture Delta: Post-Import Retrieval Optimization
+
+Phase 41 does not change the default Agent chain, prompt strategy, Stage 30 scoring rules, provider topology, frontend code, or data-source boundaries. The architecture delta is limited to rebuilding the retrieval substrate after the Phase 40 corpus import.
+
+The chunk table now contains both child chunks and Stage 31 parent rows:
+
+```text
+documents=753
+chunks table rows=25687
+indexable child chunks=19300
+parent rows=6387
+```
+
+`VectorIndexService._list_chunks()` intentionally indexes only child chunks that are not parent containers. Parent rows provide context expansion and are not embedded or stored in FAISS. This keeps the retrieval vector set aligned with answerable evidence chunks while preserving parent context for synthesis.
+
+The production retrieval substrate is:
+
+```text
+query
+-> GLM-Embedding-3 query embedding
+-> FAISS paratera_GLM-Embedding-3_dim2048
+-> hybrid_rrf_tail retrieval/rerank path
+-> parent context expansion
+-> default tool_calling_agent answer path
+```
+
+The CI/offline baseline substrate mirrors the same child chunk set with `deterministic / hash-token-v1 / dim64` embeddings and a deterministic FAISS index. CI and full local pytest do not require real provider API calls.
+
+Phase 41 also adds safe post-import retrieval evaluation. The evaluation CSVs store query ids, categories, source types, top titles, numeric metrics, and sanitized errors only. They do not store API keys, Bearer tokens, raw provider responses, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, or full chunk content.

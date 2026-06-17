@@ -17,6 +17,18 @@ class ConversationCreateRequest(BaseModel):
         return normalized
 
 
+class ConversationUpdateRequest(BaseModel):
+    title: str = Field(max_length=200)
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            return "新对话"
+        return normalized
+
+
 class ConversationItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

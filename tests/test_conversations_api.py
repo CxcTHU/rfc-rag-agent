@@ -85,13 +85,43 @@ def test_conversation_api_deletes_conversation_and_messages(tmp_path) -> None:
     assert get_response.status_code == 404
 
 
+def test_conversation_api_renames_conversation(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        conversation_id = seed_conversation(client)
+        rename_response = client.patch(
+            f"/conversations/{conversation_id}",
+            json={"title": "阶段 42 重命名"},
+        )
+        list_response = client.get("/conversations")
+
+    assert rename_response.status_code == 200
+    assert rename_response.json()["id"] == conversation_id
+    assert rename_response.json()["title"] == "阶段 42 重命名"
+    listed = list_response.json()["conversations"]
+    assert listed[0]["title"] == "阶段 42 重命名"
+
+
+def test_conversation_api_rename_normalizes_blank_title(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        conversation_id = seed_conversation(client)
+        rename_response = client.patch(
+            f"/conversations/{conversation_id}",
+            json={"title": "   "},
+        )
+
+    assert rename_response.status_code == 200
+    assert rename_response.json()["title"] == "新对话"
+
+
 def test_conversation_api_returns_404_for_missing_conversation(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         get_response = client.get("/conversations/999/messages")
         delete_response = client.delete("/conversations/999")
+        rename_response = client.patch("/conversations/999", json={"title": "missing"})
 
     assert get_response.status_code == 404
     assert delete_response.status_code == 404
+    assert rename_response.status_code == 404
 
 
 def test_conversation_api_clamps_list_limit(tmp_path) -> None:

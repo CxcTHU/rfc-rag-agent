@@ -407,8 +407,11 @@ def test_tool_calling_structured_final_answer_prompt_is_default() -> None:
     assert "structured_final_answer" in messages[0].content
     assert "citation-first compact structure" in messages[0].content
     assert "direct answer in one or two cited sentences" in messages[0].content
-    assert "at most 3 to 5 short factual bullets" in messages[0].content
+    assert "every requested aspect" in messages[0].content
+    assert "4 to 6 bullets" in messages[0].content
+    assert "quality control" in messages[0].content
     assert "Each factual sentence and each factual bullet" in messages[0].content
+    assert "Do not omit a supported point" in messages[0].content
     assert "cite each side separately" in messages[0].content
     assert "evidence gap" in messages[0].content
     assert "Do not reveal internal outline" in messages[0].content

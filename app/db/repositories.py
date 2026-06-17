@@ -402,6 +402,22 @@ class ConversationRepository:
             self.db.commit()
         return True
 
+    def rename_conversation(
+        self,
+        conversation_id: int,
+        title: str,
+        commit: bool = True,
+    ) -> Conversation | None:
+        conversation = self.get_conversation(conversation_id)
+        if conversation is None:
+            return None
+        conversation.title = normalize_conversation_title(title)
+        conversation.updated_at = utc_now()
+        if commit:
+            self.db.commit()
+            self.db.refresh(conversation)
+        return conversation
+
     def count_messages(self, conversation_id: int, role: str | None = None) -> int:
         statement = select(func.count(Message.id)).where(Message.conversation_id == conversation_id)
         if role is not None:

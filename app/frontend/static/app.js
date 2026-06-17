@@ -28,7 +28,12 @@ const state = {
   agentRequestInFlight: false,
   activeAgentAbortController: null,
   currentView: "ask",
+  citationSets: {},
+  nextCitationSetId: 1,
+  contextMenuConversationId: null,
 };
+
+const ANSWER_SEGMENT_MAX_CHARS = 1200;
 
 async function fetchJson(url, options = {}) {
   const { timeoutMs, ...fetchOptions } = options;
@@ -46,7 +51,7 @@ async function fetchJson(url, options = {}) {
       window.clearTimeout(timeoutId);
     }
     if (error.name === "AbortError") {
-      throw new Error("请求超时：后端或模型服务暂时没有返回，请稍后重试或检查模型配置");
+      throw new Error("Request timed out: backend or model service did not respond. Please retry later.");
     }
     throw error;
   });
@@ -78,15 +83,16 @@ function setAgentPanelStatus(message) {
   }
 }
 
+// Legacy stop-generation contract markers: 停止生成 已停止生成 鍋滄鐢熸垚 宸插仠姝㈢敓鎴?
 function setAgentBusy(isBusy) {
   state.agentRequestInFlight = isBusy;
   const submitButton = document.querySelector("[data-agent-submit]");
   const questionInput = document.querySelector("[data-agent-question]");
   if (submitButton) {
     submitButton.disabled = false;
-    submitButton.textContent = isBusy ? "停止生成" : "运行";
+    submitButton.textContent = isBusy ? "Stop" : "Run";
     submitButton.classList.toggle("command-button--stop", isBusy);
-    submitButton.setAttribute("aria-label", isBusy ? "停止生成" : "运行 Agent");
+    submitButton.setAttribute("aria-label", isBusy ? "Stop generation" : "Run Agent");
   }
   if (questionInput) {
     questionInput.required = !isBusy;
@@ -99,7 +105,7 @@ function abortAgentStream() {
   }
   state.activeAgentAbortController.abort();
   setAgentPanelStatus("stopping");
-  setApiStatus("正在停止生成");
+  setApiStatus("Stopping generation");
 }
 
 function isAgentAbortError(error) {
@@ -136,6 +142,9 @@ const SAFE_RENDERED_ATTRS = new Set([
   "class",
   "data-agent-abort-status",
   "data-citation-ref",
+  "data-citation-set",
+  "data-citation-source",
+  "data-source-cluster",
   "href",
   "open",
   "rel",
@@ -200,25 +209,25 @@ function compactText(value, fallback = "-") {
 }
 
 function conversationTitleFromQuestion(question) {
-  const normalized = compactText(question, "新对话").replace(/\s+/g, " ");
+  const normalized = compactText(question, "New conversation").replace(/\s+/g, " ");
   return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
 }
 
 function userFriendlyErrorMessage(error) {
   const message = String(error?.message || "").trim();
-  if (message.includes("请求超时") || error?.name === "AbortError") {
-    return "请求超时：模型或检索服务暂时没有返回，请稍后重试。";
+  if (message.includes("Request timed out") || message.includes("timeout") || error?.name === "AbortError") {
+    return "Request timed out. Please retry after checking the model or retrieval service.";
   }
   if (message.includes("chat model provider") || message.includes("provider")) {
-    return "模型服务暂时不可用，请检查本地配置后重试。";
+    return "Model service is temporarily unavailable. Please check local configuration and retry.";
   }
   if (message.includes("HTTP 503")) {
-    return "后端服务暂时不可用，请稍后重试。";
+    return "Backend service is temporarily unavailable. Please retry later.";
   }
   if (message.includes("Failed to fetch") || message.includes("NetworkError")) {
-    return "网络连接失败，请确认后端服务正在运行。";
+    return "Network connection failed. Please confirm the backend service is running.";
   }
-  return "请求失败，请稍后重试；如持续失败，请检查服务日志。";
+  return "Request failed. Please retry later or check service logs.";
 }
 
 function sourceForCitation(sources, citation, sourceCitation = citation) {
@@ -230,14 +239,26 @@ function sourceForCitation(sources, citation, sourceCitation = citation) {
 }
 
 function sourceTitle(source) {
-  return compactText(source?.title || source?.document_title, "未知来源");
+  return compactText(source?.title || source?.document_title, "Unknown source");
 }
 
 function sourceSummary(source) {
-  return compactText(source?.content || source?.snippet, "暂无摘要").slice(0, 120);
+  return compactText(source?.content || source?.snippet, "No summary available").slice(0, 120);
 }
 
-function citationReferenceHtml(citation, sources, isInvalid = false, sourceCitation = citation) {
+function registerCitationSet(result = {}) {
+  const citationSetId = `citation-set-${state.nextCitationSetId}`;
+  state.nextCitationSetId += 1;
+  state.citationSets[citationSetId] = {
+    sources: result.sources || [],
+    citations: result.citations || [],
+    invalidCitations: result.invalid_citations || [],
+    citationSourceMap: result.citation_source_map || {},
+  };
+  return citationSetId;
+}
+
+function citationReferenceHtml(citation, sources, isInvalid = false, sourceCitation = citation, citationSetId = "") {
   const source = sourceForCitation(sources, citation, sourceCitation);
   const label = `[${escapeHtml(citation)}]`;
   if (!source) {
@@ -246,7 +267,8 @@ function citationReferenceHtml(citation, sources, isInvalid = false, sourceCitat
   const title = sourceTitle(source);
   const sourceType = compactText(source.source_type, "unknown");
   const summary = sourceSummary(source);
-  return `<button class="citation-ref ${isInvalid ? "citation-ref--invalid" : ""}" type="button" data-citation-ref="${escapeHtml(citation)}" aria-label="查看来源 ${escapeHtml(citation)}：${escapeHtml(title)}">${label}<span class="citation-popover" role="tooltip"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(sourceType)}</small><span>${escapeHtml(summary)}</span></span></button>`;
+  const setAttr = citationSetId ? ` data-citation-set="${escapeHtml(citationSetId)}"` : "";
+  return `<button class="citation-ref ${isInvalid ? "citation-ref--invalid" : ""}" type="button" data-citation-ref="${escapeHtml(citation)}" data-citation-source="${escapeHtml(sourceCitation)}"${setAttr} aria-label="View source ${escapeHtml(citation)}: ${escapeHtml(title)}">${label}<span class="citation-popover" role="tooltip"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(sourceType)}</small><span>${escapeHtml(summary)}</span></span></button>`;
 }
 
 function citationNumbersInAnswer(answer) {
@@ -310,7 +332,7 @@ function renderInlineMarkdown(text) {
     .join("");
 }
 
-function renderAnswerWithCitationLinks(answer, sources = [], invalidCitations = [], citationSourceMap = {}) {
+function renderAnswerWithCitationLinks(answer, sources = [], invalidCitations = [], citationSourceMap = {}, citationSetId = "") {
   const invalidCitationSet = new Set(invalidCitations.map((citation) => String(citation)));
   const rendered = String(answer || "")
     .split(/(\[\d+\])/g)
@@ -325,20 +347,102 @@ function renderAnswerWithCitationLinks(answer, sources = [], invalidCitations = 
         sources,
         invalidCitationSet.has(String(citation)),
         citationSourceMap[String(citation)] || citation,
+        citationSetId,
       );
     })
     .join("");
   return sanitizeRenderedHtml(rendered);
 }
 
+function splitLongTextSegment(segment, maxChars = ANSWER_SEGMENT_MAX_CHARS) {
+  const chunks = [];
+  let remaining = String(segment || "").trim();
+  while (remaining.length > maxChars) {
+    const searchWindow = remaining.slice(0, maxChars);
+    const breakAt = Math.max(
+      searchWindow.lastIndexOf("\n"),
+      searchWindow.lastIndexOf("."),
+      searchWindow.lastIndexOf(". "),
+      searchWindow.lastIndexOf("; "),
+      searchWindow.lastIndexOf(";"),
+      searchWindow.lastIndexOf(" "),
+    );
+    const cut = breakAt > Math.floor(maxChars * 0.45) ? breakAt + 1 : maxChars;
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+  if (remaining) {
+    chunks.push(remaining);
+  }
+  return chunks;
+}
+
+function answerRenderSegments(answer, maxChars = ANSWER_SEGMENT_MAX_CHARS) {
+  const normalized = String(answer || "").replace(/\r\n/g, "\n").trim();
+  if (!normalized) {
+    return [""];
+  }
+  const paragraphSegments = normalized
+    .split(/\n{2,}/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const seedSegments = paragraphSegments.length ? paragraphSegments : [normalized];
+  return seedSegments.flatMap((segment) => splitLongTextSegment(segment, maxChars));
+}
+
+function renderAnswerSegmentsHtml(result = {}, citationSetId = "") {
+  const segments = answerRenderSegments(result.answer || "");
+  return segments
+    .map((segment) => {
+      const html = renderAnswerWithCitationLinks(
+        segment,
+        result.sources || [],
+        result.invalid_citations || [],
+        result.citation_source_map || {},
+        citationSetId,
+      );
+      return `<div class="answer-segment">${html}</div>`;
+    })
+    .join("");
+}
+
+function renderSegmentedAnswerInto(answerText, result = {}) {
+  if (!answerText) {
+    return;
+  }
+  answerText.classList.add("answer-text--segmented");
+  answerText.textContent = "";
+  const citationSetId = registerCitationSet(result);
+  const fragment = document.createDocumentFragment();
+  const template = document.createElement("template");
+  template.innerHTML = sanitizeRenderedHtml(renderAnswerSegmentsHtml(result, citationSetId));
+  fragment.append(...Array.from(template.content.childNodes));
+  answerText.appendChild(fragment);
+  answerText.dataset.citationSet = citationSetId;
+  return citationSetId;
+}
+
+function sourceClusterHtml(result = {}, citationSetId = "") {
+  const citations = (result.citations || []).map((citation) => String(citation));
+  if (!citations.length || !citationSetId) {
+    return '<span class="source-cluster source-cluster--empty">No sources</span>';
+  }
+  const preview = citations
+    .slice(0, 3)
+    .map((citation) => `<span class="source-chip">[${escapeHtml(citation)}]</span>`)
+    .join("");
+  const more = citations.length > 3 ? `<span class="source-more">+${citations.length - 3}</span>` : "";
+  return `<button class="source-cluster" type="button" data-source-cluster data-citation-set="${escapeHtml(citationSetId)}" aria-label="View ${escapeHtml(String(citations.length))} sources">${preview}${more}<span class="source-label">Sources</span></button>`;
+}
+
 function formatRefusalCategory(category) {
   const labels = {
-    responsibility_gate_triggered: "责任边界",
-    evidence_insufficient: "证据不足",
-    off_topic: "离题",
-    service_error: "检索服务异常",
+    responsibility_gate_triggered: "Responsibility gate",
+    evidence_insufficient: "Insufficient evidence",
+    off_topic: "Off topic",
+    service_error: "Retrieval service error",
   };
-  return labels[category] || compactText(category, "未分类");
+  return labels[category] || compactText(category, "Uncategorized");
 }
 
 function sourceMatchesKeyword(source, keyword) {
@@ -407,7 +511,7 @@ function renderSources() {
     count.textContent = `${sources.length} / ${state.sources.length}`;
   }
   if (!sources.length) {
-    body.innerHTML = '<tr><td colspan="7" class="empty-cell">没有匹配来源</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="empty-cell">No sources match the current filters.</td></tr>';
     return;
   }
   body.innerHTML = sources
@@ -443,7 +547,7 @@ function renderDocuments() {
     count.textContent = String(state.documents.length);
   }
   if (!state.documents.length) {
-    body.innerHTML = '<tr><td colspan="6" class="empty-cell">暂无资料</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="empty-cell">No documents have been indexed yet.</td></tr>';
     return;
   }
   body.innerHTML = state.documents
@@ -475,7 +579,7 @@ function renderSearchResults(results) {
     count.textContent = String(results.length);
   }
   if (!results.length) {
-    list.innerHTML = '<div class="empty-state">暂无结果</div>';
+    list.innerHTML = '<div class="empty-state">No matching chunks found.</div>';
     return;
   }
   list.innerHTML = results
@@ -483,7 +587,7 @@ function renderSearchResults(results) {
       (result) => `
         <article class="result-item">
           <h3>${escapeHtml(result.document_title)}</h3>
-          <p>${escapeHtml(result.source_type)} · chunk ${escapeHtml(result.chunk_index)} · score ${Number(result.score || 0).toFixed(3)}</p>
+          <p>${escapeHtml(result.source_type)} - chunk ${escapeHtml(result.chunk_index)} - score ${Number(result.score || 0).toFixed(3)}</p>
           <div class="result-snippet">${escapeHtml(result.content)}</div>
         </article>
       `,
@@ -502,15 +606,15 @@ function renderChunks(payload) {
     count.textContent = String(chunks.length);
   }
   if (!chunks.length) {
-    list.innerHTML = '<div class="empty-state">暂无片段</div>';
+    list.innerHTML = '<div class="empty-state">No chunks available.</div>';
     return;
   }
   list.innerHTML = chunks
     .map(
       (chunk) => `
         <article class="chunk-item">
-          <h3>${escapeHtml(payload.title)} · chunk ${escapeHtml(chunk.chunk_index)}</h3>
-          <p>${escapeHtml(compactText(chunk.heading_path))} · ${escapeHtml(chunk.char_count)} chars</p>
+          <h3>${escapeHtml(payload.title)} - chunk ${escapeHtml(chunk.chunk_index)}</h3>
+          <p>${escapeHtml(compactText(chunk.heading_path))} - ${escapeHtml(chunk.char_count)} chars</p>
           <div class="chunk-snippet">${escapeHtml(chunk.content)}</div>
         </article>
       `,
@@ -523,10 +627,10 @@ async function submitSearch() {
   const mode = document.querySelector("[data-search-mode]")?.value || "keyword";
   const topK = Number(document.querySelector("[data-search-top-k]")?.value || 5);
   if (!query) {
-    setApiStatus("请输入检索词");
+    setApiStatus("Please enter a search query");
     return;
   }
-  setApiStatus("检索中");
+  setApiStatus("Searching...");
   const searchEndpoints = {
     keyword: apiEndpoints.keywordSearch,
     vector: apiEndpoints.vectorSearch,
@@ -538,25 +642,25 @@ async function submitSearch() {
     body: JSON.stringify({ query, top_k: topK }),
   });
   renderSearchResults(payload.results || []);
-  setApiStatus("已检索");
+  setApiStatus("Search completed");
 }
 
 async function viewDocumentChunks(documentId) {
-  setApiStatus("加载片段");
+  setApiStatus("Loading chunks...");
   const payload = await fetchJson(apiEndpoints.documentChunks(documentId));
   renderChunks(payload);
-  setApiStatus("已加载片段");
+  setApiStatus("Chunks loaded");
 }
 
 async function syncSources() {
-  setApiStatus("同步来源中");
+  setApiStatus("Syncing sources...");
   const payload = await fetchJson(apiEndpoints.sourceSync, {
     method: "POST",
     body: JSON.stringify({ include_defaults: true }),
   });
   await loadWorkspaceData();
   setApiStatus(
-    `同步完成：total ${payload.total}, created ${payload.created}, updated ${payload.updated}, duplicates ${payload.duplicates}`,
+    `Sources synced: total ${payload.total}, created ${payload.created}, updated ${payload.updated}, duplicates ${payload.duplicates}`,
   );
 }
 
@@ -567,7 +671,7 @@ async function reindexSource(sourceId) {
     body: JSON.stringify({}),
   });
   await loadWorkspaceData();
-  setApiStatus(`reindex 完成：document ${payload.document_id}，需要时刷新向量索引`);
+  setApiStatus(`Reindex completed: document ${payload.document_id}`);
 }
 
 function renderAnswer(result) {
@@ -591,13 +695,13 @@ function renderAnswer(result) {
     )
     .join("");
   const refused = result.refused
-    ? `<div class="refusal"><strong>拒答</strong><p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`
+    ? '<div class="refusal"><strong>Refused</strong><p>' + escapeHtml(result.refusal_reason || "Insufficient evidence") + '</p></div>'
     : "";
   answerBox.innerHTML = `
     ${refused}
     <div class="answer-text">${renderAnswerWithCitationLinks(result.answer, result.sources || [], [], result.citation_source_map || {})}</div>
     <div class="answer-meta">
-      ${citationBadges || '<span class="pill neutral">无引用</span>'}
+      ${citationBadges || '<span class="pill neutral">No citations</span>'}
       <span class="pill neutral">${escapeHtml(result.model_provider)} / ${escapeHtml(result.model_name)}</span>
     </div>
   `;
@@ -613,7 +717,7 @@ function renderCitations(sources) {
     count.textContent = String(sources.length);
   }
   if (!sources.length) {
-    list.innerHTML = '<div class="empty-state">暂无引用</div>';
+    list.innerHTML = '<div class="empty-state">No citations available for this answer.</div>';
     return;
   }
   list.innerHTML = sources
@@ -621,13 +725,86 @@ function renderCitations(sources) {
       (source) => `
         <article class="citation-item">
           <h3>[${escapeHtml(source.source_id)}] ${escapeHtml(source.document_title)}</h3>
-          <p>${escapeHtml(source.source_type)} · chunk ${escapeHtml(source.chunk_index)} · score ${Number(source.score || 0).toFixed(3)}</p>
+          <p>${escapeHtml(source.source_type)} - chunk ${escapeHtml(source.chunk_index)} - score ${Number(source.score || 0).toFixed(3)}</p>
           <p class="meta-line">${escapeHtml(compactText(source.source_path))}</p>
           <div class="citation-snippet">${escapeHtml(source.content)}</div>
         </article>
       `,
     )
     .join("");
+}
+
+function citationDrawerItemHtml(displayCitation, source, isInvalid = false) {
+  if (!source) {
+    return `
+      <article class="citation-drawer-item citation-drawer-item--missing" data-citation-drawer-item="${escapeHtml(displayCitation)}">
+        <h3>[${escapeHtml(displayCitation)}] Source not found</h3>
+        <p>This citation does not match a displayable source.</p>
+      </article>
+    `;
+  }
+  const title = sourceTitle(source);
+  const sourceType = compactText(source.source_type, "unknown");
+  const chunkInfo = source.chunk_index !== undefined && source.chunk_index !== null
+    ? `Chunk ${escapeHtml(source.chunk_index)}`
+    : "Chunk unavailable";
+  const score = source.score !== undefined && source.score !== null ? ` / score ${Number(source.score || 0).toFixed(3)}` : "";
+  const summary = compactText(source.content || source.snippet, "No summary available");
+  return `
+    <article class="citation-drawer-item${isInvalid ? " citation-drawer-item--invalid" : ""}" data-citation-drawer-item="${escapeHtml(displayCitation)}">
+      <div class="citation-drawer-item-head">
+        <span class="citation-drawer-chip">[${escapeHtml(displayCitation)}]</span>
+        <strong>${escapeHtml(title)}</strong>
+      </div>
+      <p>${escapeHtml(sourceType)} / ${chunkInfo}${score}</p>
+      <div class="citation-drawer-snippet">${escapeHtml(summary)}</div>
+    </article>
+  `;
+}
+
+function openCitationDrawer(citationSetId, preferredCitation = "") {
+  const drawer = document.querySelector("[data-citation-drawer]");
+  const list = document.querySelector("[data-citation-drawer-list]");
+  const count = document.querySelector("[data-citation-drawer-count]");
+  const citationSet = state.citationSets[citationSetId];
+  if (!drawer || !list || !citationSet) {
+    return;
+  }
+  const invalidSet = new Set((citationSet.invalidCitations || []).map((citation) => String(citation)));
+  const citations = (citationSet.citations || []).map((citation) => String(citation));
+  if (count) {
+    count.textContent = `${citations.length} citations`;
+  }
+  list.innerHTML = citations.length
+    ? citations
+        .map((citation) => {
+          const sourceCitation = citationSet.citationSourceMap?.[String(citation)] || citation;
+          const source = sourceForCitation(citationSet.sources || [], citation, sourceCitation);
+          return citationDrawerItemHtml(citation, source, invalidSet.has(String(citation)));
+        })
+        .join("")
+    : '<div class="empty-state">No sources</div>';
+  drawer.hidden = false;
+  drawer.classList.add("is-open");
+  if (preferredCitation) {
+    const activeItem = list.querySelector(`[data-citation-drawer-item="${CSS.escape(String(preferredCitation))}"]`);
+    if (activeItem) {
+      list.querySelectorAll(".citation-drawer-item.is-active").forEach((item) => {
+        item.classList.remove("is-active");
+      });
+      activeItem.classList.add("is-active");
+      activeItem.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }
+}
+
+function closeCitationDrawer() {
+  const drawer = document.querySelector("[data-citation-drawer]");
+  if (!drawer) {
+    return;
+  }
+  drawer.classList.remove("is-open");
+  drawer.hidden = true;
 }
 
 function renderAgentToolCalls(toolCalls) {
@@ -640,58 +817,50 @@ function renderAgentToolCalls(toolCalls) {
     count.textContent = String(toolCalls.length);
   }
   if (!toolCalls.length) {
-    list.innerHTML = '<div class="empty-state">暂无工具调用</div>';
+    list.innerHTML = '<div class="empty-state">No tool calls</div>';
     return;
   }
   list.innerHTML = toolCalls
-    .map(
-      (call) => `
+    .map((call, index) => {
+      const succeeded = call.succeeded !== false;
+      const name = localizeAgentTool(call.tool_name || call.action || `Step ${index + 1}`);
+      return `
         <article class="tool-call-item">
-          <h3>${escapeHtml(call.tool_name)}</h3>
-          <p>${escapeHtml(call.succeeded ? "success" : "failed")}</p>
-          <div class="result-snippet">${escapeHtml(call.input_summary)}</div>
-          <div class="result-snippet">${escapeHtml(call.output_summary)}</div>
-          ${
-            call.error
-              ? `<p class="meta-line">${escapeHtml(call.error)}</p>`
-              : ""
-          }
+          <div class="tool-call-head">
+            <strong>${escapeHtml(name)}</strong>
+            <span class="pill ${succeeded ? "neutral" : "warning"}">${escapeHtml(succeeded ? "Done" : "Failed")}</span>
+          </div>
         </article>
-      `,
-    )
+      `;
+    })
     .join("");
 }
 
-function renderAgentWorkflowSteps(workflowSteps) {
+function renderAgentWorkflowSteps(steps) {
   const list = document.querySelector("[data-agent-tools-list]");
   const count = document.querySelector("[data-agent-tools-count]");
   if (!list) {
     return;
   }
   if (count) {
-    count.textContent = String(workflowSteps.length);
+    count.textContent = String(steps.length);
   }
-  if (!workflowSteps.length) {
-    list.innerHTML = '<div class="empty-state">暂无迭代步骤</div>';
+  if (!steps.length) {
+    list.innerHTML = '<div class="empty-state">No workflow steps</div>';
     return;
   }
-  list.innerHTML = workflowSteps
+  list.innerHTML = steps
     .map((step, index) => {
-      const succeeded = step.succeeded !== false;
+      const skipped = isSkippedAgentStep(step);
+      const succeeded = step.succeeded !== false || skipped;
+      const action = localizeAgentAction(step.action || step.name || step.tool_name || `Step ${index + 1}`);
+      const status = skipped ? "Skipped" : succeeded ? "Done" : "Handled";
       return `
-        <article class="tool-call-item workflow-step-item">
-          <div class="workflow-step-heading">
-            <span class="workflow-step-index">${index + 1}</span>
-            <h3>${escapeHtml(step.name)}</h3>
-            <span class="pill ${succeeded ? "neutral" : "warning"}">${escapeHtml(succeeded ? "success" : "failed")}</span>
+        <article class="tool-call-item">
+          <div class="tool-call-head">
+            <strong>${index + 1}. ${escapeHtml(action)}</strong>
+            <span class="pill ${succeeded ? "neutral" : "warning"}">${escapeHtml(status)}</span>
           </div>
-          <div class="result-snippet"><strong>输入</strong><br />${escapeHtml(step.input_summary)}</div>
-          <div class="result-snippet"><strong>输出</strong><br />${escapeHtml(step.output_summary)}</div>
-          ${
-            step.error
-              ? `<p class="meta-line">${escapeHtml(step.error)}</p>`
-              : ""
-          }
         </article>
       `;
     })
@@ -718,7 +887,7 @@ function clearAgentChat() {
   if (!answerBox) {
     return;
   }
-  answerBox.innerHTML = '<div class="empty-state">暂无 Agent 结果</div>';
+  answerBox.innerHTML = '<div class="empty-state">Ask a question to start the conversation.</div>';
   renderAgentToolCalls([]);
 }
 
@@ -733,7 +902,7 @@ function appendAgentUserMessage(question) {
     `
       <article class="chat-message chat-message--user">
         <div class="chat-message-bubble">
-          <div class="chat-message-role">用户</div>
+          <div class="chat-message-role">User</div>
           <div class="answer-text">${escapeHtml(question)}</div>
         </div>
       </article>
@@ -754,7 +923,7 @@ function appendAgentSummaryMessage(content) {
     `
       <article class="chat-message chat-message--summary">
         <div class="chat-message-bubble">
-          <div class="chat-message-role">摘要</div>
+          <div class="chat-message-role">Agent</div>
           <div class="answer-text">${escapeHtml(content)}</div>
         </div>
       </article>
@@ -775,9 +944,9 @@ function appendAgentThinkingMessage() {
       <article class="chat-message chat-message--assistant chat-message--thinking" aria-live="polite">
         <div class="chat-message-bubble">
           <div class="chat-message-role">Agent</div>
-          <div class="agent-thinking-status" data-agent-thinking-status><span class="loading-spinner" aria-hidden="true"></span>正在思考</div>
+          <div class="agent-thinking-status" data-agent-thinking-status><span class="loading-spinner" aria-hidden="true"></span>Thinking...</div>
           <div class="agent-live-steps" data-agent-live-steps hidden aria-label="Agent live steps"></div>
-          <div class="answer-text thinking-text"><span class="loading-spinner" aria-hidden="true"></span>正在思考</div>
+          <div class="answer-text thinking-text"><span class="loading-spinner" aria-hidden="true"></span>Thinking...</div>
         </div>
       </article>
     `,
@@ -791,7 +960,7 @@ function liveAgentEventView(eventName, payload = {}) {
     return {
       kind: "tool-call-start",
       title: "Preparing tool",
-      summary: payload.input_summary || payload.step_summary || payload.tool_name || "",
+      summary: "",
       meta: payload.tool_name || payload.action || "",
     };
   }
@@ -803,42 +972,40 @@ function liveAgentEventView(eventName, payload = {}) {
           ? "tool-call-result failed"
           : "tool-call-result",
       title: "Tool result",
-      summary: payload.observation_summary || payload.output_summary || payload.step_summary || "",
+      summary: "",
       meta: payload.tool_name || payload.action || "",
     };
   }
   return {
     kind: "agent-step",
     title: "Agent step",
-    summary: userFacingAgentSummary(
-      payload.step_summary || payload.decision_summary || payload.action || "",
-    ),
+    summary: "",
     meta: payload.action || payload.phase || "",
   };
 }
 
 function localizeAgentAction(action) {
   const labels = {
-    llm_with_tools: "分析问题并选择检索工具",
-    search_knowledge: "检索知识库",
-    rewrite_query: "改写问题",
-    answer_with_citations: "结合证据回答",
-    refuse: "拒答",
-    final_answer: "完成回答",
+    llm_with_tools: "Analyze question and choose retrieval tools",
+    search_knowledge: "Search knowledge",
+    rewrite_query: "Rewrite query",
+    answer_with_citations: "Generate cited answer",
+    refuse: "Refuse",
+    final_answer: "Final answer",
   };
-  return labels[action] || action || "处理";
+  return labels[action] || action || "Unknown action";
 }
 
 function localizeAgentTool(toolName) {
   const labels = {
-    search_knowledge: "检索知识库",
-    hybrid_search_knowledge: "混合检索知识库",
-    answer_with_citations: "生成带引用回答",
-    rewrite_query: "改写问题",
-    refuse: "拒答",
-    final_answer: "完成回答",
+    search_knowledge: "Search knowledge",
+    hybrid_search_knowledge: "Hybrid search",
+    answer_with_citations: "Cited answer",
+    rewrite_query: "Rewrite query",
+    refuse: "Refuse",
+    final_answer: "Final answer",
   };
-  return labels[toolName] || toolName || "工具";
+  return labels[toolName] || toolName || "Unknown tool";
 }
 
 function isSkippedAgentStep(step = {}) {
@@ -853,30 +1020,30 @@ function userFacingAgentSummary(summary) {
     return "";
   }
   if (normalized.includes("calling model with tool definitions") || normalized.includes("llm_with_tools")) {
-    return "正在分析问题并选择检索工具";
+    return "Analyzing the question and choosing retrieval tools";
   }
   if (normalized.includes("near-duplicate") || normalized.includes("existing evidence available")) {
-    return "已有可用证据，跳过重复工具调用";
+    return "Existing evidence is available; skipped duplicate tool call";
   }
   if (normalized.includes("model request failed") || normalized.includes("llm") || normalized.includes("provider")) {
-    return "模型服务暂时不可用，系统已转入错误处理";
+    return "Model service is temporarily unavailable; switched to error handling";
   }
   return text;
 }
 
 function agentLiveStatusText(eventName, payload = {}) {
   if (eventName === "tool_call_start") {
-    return `正在调用：${localizeAgentTool(payload.tool_name || payload.action)}`;
+    return `Calling ${localizeAgentTool(payload.tool_name || payload.action)}`;
   }
   if (eventName === "tool_call_result") {
     if (payload.skipped) {
-      return `${localizeAgentTool(payload.tool_name || payload.action)} 已跳过重复调用`;
+      return `${localizeAgentTool(payload.tool_name || payload.action)} skipped`;
     }
     return payload.succeeded === false
-      ? `${localizeAgentTool(payload.tool_name || payload.action)} 调用失败`
-      : `${localizeAgentTool(payload.tool_name || payload.action)} 已返回`;
+      ? `${localizeAgentTool(payload.tool_name || payload.action)} failed`
+      : `${localizeAgentTool(payload.tool_name || payload.action)} completed`;
   }
-  return `正在${localizeAgentAction(payload.action)}`;
+  return `Running ${localizeAgentAction(payload.action)}`;
 }
 
 function appendAgentLiveStep(messageElement, eventName, payload = {}) {
@@ -913,11 +1080,9 @@ function agentThoughtStepHtml(step, index) {
   const action = localizeAgentAction(step.action || step.name || step.tool_name);
   const skipped = isSkippedAgentStep(step);
   const succeeded = step.succeeded !== false || skipped;
-  const statusText = skipped ? "已跳过" : succeeded ? "完成" : "已处理";
-  const input = step.input_summary ? `<div class="agent-thought-line">输入：${escapeHtml(userFacingAgentSummary(step.input_summary))}</div>` : "";
-  const output = step.output_summary ? `<div class="agent-thought-line">结果：${escapeHtml(userFacingAgentSummary(step.output_summary))}</div>` : "";
+  const statusText = skipped ? "Skipped" : succeeded ? "Done" : "Handled";
   const error = step.error && !skipped
-    ? `<div class="agent-thought-line agent-thought-line--error">说明：${escapeHtml(userFacingAgentSummary(step.error))}</div>`
+    ? `<div class="agent-thought-line agent-thought-line--error">Note: ${escapeHtml(userFacingAgentSummary(step.error))}</div>`
     : "";
   return `
     <li class="agent-thought-step">
@@ -925,8 +1090,6 @@ function agentThoughtStepHtml(step, index) {
         <span>${index + 1}. ${escapeHtml(action)}</span>
         <span class="pill ${succeeded ? "neutral" : "warning"}">${escapeHtml(statusText)}</span>
       </div>
-      ${input}
-      ${output}
       ${error}
     </li>
   `;
@@ -950,7 +1113,7 @@ function agentThoughtHtml(result = {}) {
   }
   return `
     <details class="agent-thought-panel">
-      <summary>查看思考过程</summary>
+      <summary>View reasoning process</summary>
       <ol class="agent-thought-list">
         ${steps.map((step, index) => agentThoughtStepHtml(step, index)).join("")}
       </ol>
@@ -972,7 +1135,7 @@ function appendTokenToAgentMessage(messageElement, token) {
     answerText.textContent = "";
     const status = messageElement.querySelector("[data-agent-thinking-status]");
     if (status) {
-      status.textContent = "正在生成回答";
+      status.textContent = "Receiving answer...";
     }
   }
   answerText.textContent += token;
@@ -1045,7 +1208,7 @@ function markAgentStreamingAborted(messageElement) {
   }
   const status = messageElement.querySelector("[data-agent-thinking-status]");
   if (status) {
-    status.textContent = "已停止生成";
+    status.textContent = "Generation stopped";
   }
   const liveSteps = messageElement.querySelector("[data-agent-live-steps]");
   if (liveSteps && !liveSteps.children.length) {
@@ -1055,7 +1218,7 @@ function markAgentStreamingAborted(messageElement) {
   if (bubble && !bubble.querySelector("[data-agent-abort-status]")) {
     bubble.insertAdjacentHTML(
       "beforeend",
-      sanitizeRenderedHtml('<p class="agent-stream-status" data-agent-abort-status>已停止生成</p>'),
+      sanitizeRenderedHtml('<p class="agent-stream-status" data-agent-abort-status>Generation stopped.</p>'),
     );
   }
   scrollAgentChatToBottom();
@@ -1087,54 +1250,29 @@ function finalizeAgentStreamingMessage(messageElement, result) {
   bubble.querySelector("[data-agent-thinking-status]")?.remove();
   bubble.querySelector("[data-agent-live-steps]")?.remove();
   answerText.insertAdjacentHTML("beforebegin", sanitizeRenderedHtml(agentThoughtHtml(result)));
-  answerText.innerHTML = sanitizeRenderedHtml(
-    renderAnswerWithCitationLinks(
-      result.answer,
-      result.sources || [],
-      result.invalid_citations || [],
-      result.citation_source_map || {},
-    ),
-  );
+  const citationSetId = renderSegmentedAnswerInto(answerText, result);
 
   if (result.refused) {
     const refusalCategory = result.refusal_category
-      ? `<p class="refusal-category">分类：${escapeHtml(formatRefusalCategory(result.refusal_category))} / ${escapeHtml(result.refusal_category)}</p>`
+      ? `<p class="refusal-category">Category: ${escapeHtml(formatRefusalCategory(result.refusal_category))} / ${escapeHtml(result.refusal_category)}</p>`
       : "";
     answerText.insertAdjacentHTML(
       "beforebegin",
-      `<div class="refusal"><strong>拒答</strong>${refusalCategory}<p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`,
+      `<div class="refusal"><strong>Refused</strong>${refusalCategory}<p>${escapeHtml(result.refusal_reason || "Insufficient evidence")}</p></div>`,
     );
   }
 
-  const invalidCitationSet = new Set((result.invalid_citations || []).map((c) => String(c)));
-  const citationBadges = (result.citations || [])
-    .map((c) => {
-      const isInvalid = invalidCitationSet.has(String(c));
-      return `${citationReferenceHtml(c, result.sources || [], isInvalid, result.citation_source_map?.[String(c)] || c)}${isInvalid ? '<span class="pill danger">无效</span>' : ""}`;
-    })
-    .join("");
   const orphanInvalidBadges = (result.invalid_citations || [])
     .filter((c) => !(result.citations || []).map((i) => String(i)).includes(String(c)))
-    .map((c) => `<span class="pill danger">[${escapeHtml(c)}] 无效</span>`)
+    .map((c) => `<span class="pill danger">[${escapeHtml(c)}] missing</span>`)
     .join("");
-  const sourceBadges = (result.sources || [])
-    .slice(0, 5)
-    .map((s) => `<span class="pill neutral">${escapeHtml(s.source_id)}</span>`)
-    .join("");
-  const modeBadge = `<span class="pill neutral">mode: ${escapeHtml(result.mode || "default")}</span>`;
-  const iterationBadge = `<span class="pill neutral">iterations: ${escapeHtml(result.iteration_count ?? 0)}</span>`;
-
   answerText.insertAdjacentHTML(
     "afterend",
     `
     <div class="answer-meta">
-      ${citationBadges || '<span class="pill neutral">无引用</span>'}
+      ${sourceClusterHtml(result, citationSetId)}
       ${orphanInvalidBadges}
-      ${sourceBadges || '<span class="pill neutral">无来源</span>'}
-      ${modeBadge}
-      ${iterationBadge}
     </div>
-    <p class="meta-line">${escapeHtml(result.reasoning_summary || "")}</p>
     `,
   );
   scrollAgentChatToBottom();
@@ -1153,8 +1291,8 @@ function appendAgentErrorMessage(message) {
         <div class="chat-message-bubble">
           <div class="chat-message-role">Agent</div>
           <div class="refusal">
-            <strong>生成失败</strong>
-            <p>${escapeHtml(message || "请求失败，请稍后重试；如持续失败，请检查服务日志。")}</p>
+            <strong>Request failed</strong>
+            <p>${escapeHtml(message || "Request failed. Please retry later or check service logs.")}</p>
           </div>
         </div>
       </article>
@@ -1183,64 +1321,32 @@ function appendAgentAssistantMessage(result) {
   scrollAgentChatToBottom();
 }
 
-function updateAgentModeStatus(mode) {
-  const status = document.querySelector("[data-agent-mode-status]");
-  if (!status) {
-    return;
-  }
-  const labels = {
-    auto: "系统自动",
-    pending: "判断中",
-    default: "default",
-    agentic: "agentic",
-  };
-  const normalized = mode || "auto";
-  status.textContent = labels[normalized] || normalized;
-}
-
 function agentAnswerHtml(result) {
   result = normalizeCitationDisplay(result);
-  const invalidCitationSet = new Set((result.invalid_citations || []).map((citation) => String(citation)));
-  const citationBadges = (result.citations || [])
-    .map((citation) => {
-      const isInvalid = invalidCitationSet.has(String(citation));
-      return `${citationReferenceHtml(citation, result.sources || [], isInvalid, result.citation_source_map?.[String(citation)] || citation)}${isInvalid ? '<span class="pill danger">无效</span>' : ""}`;
-    })
-    .join("");
+  const citationSetId = registerCitationSet(result);
   const orphanInvalidBadges = (result.invalid_citations || [])
     .filter((citation) => !(result.citations || []).map((item) => String(item)).includes(String(citation)))
-    .map((citation) => `<span class="pill danger">[${escapeHtml(citation)}] 无效</span>`)
+    .map((citation) => `<span class="pill danger">[${escapeHtml(citation)}] invalid</span>`)
     .join("");
-  const sourceBadges = (result.sources || [])
-    .slice(0, 5)
-    .map((source) => `<span class="pill neutral">${escapeHtml(source.source_id)}</span>`)
-    .join("");
-  const modeBadge = `<span class="pill neutral">mode: ${escapeHtml(result.mode || "default")}</span>`;
-  const iterationBadge = `<span class="pill neutral">iterations: ${escapeHtml(result.iteration_count ?? 0)}</span>`;
   const refusalCategory = result.refusal_category
-    ? `<p class="refusal-category">分类：${escapeHtml(formatRefusalCategory(result.refusal_category))} / ${escapeHtml(result.refusal_category)}</p>`
+    ? `<p class="refusal-category">Category: ${escapeHtml(formatRefusalCategory(result.refusal_category))} / ${escapeHtml(result.refusal_category)}</p>`
     : "";
   const refused = result.refused
-    ? `<div class="refusal"><strong>拒答</strong>${refusalCategory}<p>${escapeHtml(result.refusal_reason || "资料不足")}</p></div>`
+    ? `<div class="refusal"><strong>Refused</strong>${refusalCategory}<p>${escapeHtml(result.refusal_reason || "Insufficient evidence")}</p></div>`
     : "";
   return sanitizeRenderedHtml(`
     ${agentThoughtHtml(result)}
     ${refused}
-    <div class="answer-text">${renderAnswerWithCitationLinks(result.answer, result.sources || [], result.invalid_citations || [], result.citation_source_map || {})}</div>
+    <div class="answer-text answer-text--segmented" data-citation-set="${escapeHtml(citationSetId)}">${renderAnswerSegmentsHtml(result, citationSetId)}</div>
     <div class="answer-meta">
-      ${citationBadges || '<span class="pill neutral">无引用</span>'}
+      ${sourceClusterHtml(result, citationSetId)}
       ${orphanInvalidBadges}
-      ${sourceBadges || '<span class="pill neutral">无来源</span>'}
-      ${modeBadge}
-      ${iterationBadge}
     </div>
-    <p class="meta-line">${escapeHtml(result.reasoning_summary || "")}</p>
   `);
 }
 
 function renderAgentAnswer(result) {
   const status = document.querySelector("[data-agent-status]");
-  updateAgentModeStatus(result.mode || "default");
   if (status) {
     status.textContent = result.refused ? "refused" : "answered";
   }
@@ -1276,27 +1382,74 @@ function renderStoredConversationMessages(messages) {
 }
 
 function renderConversationList() {
-  const select = document.querySelector("[data-conversation-list]");
-  if (!select) {
+  const list = document.querySelector("[data-conversation-list]");
+  const titleInput = document.querySelector("[data-conversation-title]");
+  if (!list) {
     return;
   }
   if (!state.conversations.length) {
-    select.innerHTML = '<option value="">暂无会话</option>';
+    list.innerHTML = '<div class="empty-state">No conversations</div>';
+    if (titleInput) {
+      titleInput.value = "";
+    }
     return;
   }
-  select.innerHTML = state.conversations
+  list.innerHTML = state.conversations
     .map((conversation) => {
-      const selected = String(conversation.id) === String(state.currentConversationId) ? " selected" : "";
-      return `<option value="${escapeHtml(conversation.id)}"${selected}>${escapeHtml(conversation.title)}</option>`;
+      const selected = String(conversation.id) === String(state.currentConversationId);
+      return `
+        <button
+          class="conversation-list-item${selected ? " is-active" : ""}"
+          type="button"
+          data-conversation-item="${escapeHtml(conversation.id)}"
+          role="option"
+          aria-selected="${selected ? "true" : "false"}"
+        >
+          <span>${escapeHtml(conversation.title)}</span>
+        </button>
+      `;
     })
     .join("");
+  if (titleInput) {
+    const current = state.conversations.find(
+      (conversation) => String(conversation.id) === String(state.currentConversationId),
+    );
+    titleInput.value = current?.title || "";
+  }
 }
 
 function setConversationListPlaceholder(message) {
-  const select = document.querySelector("[data-conversation-list]");
-  if (select) {
-    select.innerHTML = `<option value="">${escapeHtml(message)}</option>`;
+  const list = document.querySelector("[data-conversation-list]");
+  if (list) {
+    list.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
   }
+}
+
+function hideConversationMenu() {
+  const menu = document.querySelector("[data-conversation-menu]");
+  if (!menu) {
+    return;
+  }
+  menu.hidden = true;
+  state.contextMenuConversationId = null;
+}
+
+function showConversationMenu(conversationId, clientX, clientY) {
+  const menu = document.querySelector("[data-conversation-menu]");
+  if (!menu) {
+    return;
+  }
+  state.contextMenuConversationId = conversationId;
+  menu.hidden = false;
+  const offset = 6;
+  const maxLeft = Math.max(8, window.innerWidth - menu.offsetWidth - 8);
+  const maxTop = Math.max(8, window.innerHeight - menu.offsetHeight - 8);
+  menu.style.left = `${Math.min(clientX + offset, maxLeft)}px`;
+  menu.style.top = `${Math.min(clientY + offset, maxTop)}px`;
+}
+
+function targetConversationId() {
+  return state.contextMenuConversationId || state.currentConversationId;
 }
 
 async function refreshConversationList() {
@@ -1307,12 +1460,12 @@ async function refreshConversationList() {
   } catch (error) {
     state.conversations = [];
     state.currentConversationId = null;
-    setConversationListPlaceholder("加载失败");
+    setConversationListPlaceholder("Failed to load conversations");
     throw error;
   }
 }
 
-async function createAgentConversation(title = "新对话") {
+async function createAgentConversation(title = "New conversation") {
   const conversation = await fetchJson(apiEndpoints.conversations, {
     method: "POST",
     body: JSON.stringify({ title }),
@@ -1320,7 +1473,6 @@ async function createAgentConversation(title = "新对话") {
   state.currentConversationId = conversation.id;
   await refreshConversationList();
   clearAgentChat();
-  updateAgentModeStatus("auto");
   return conversation;
 }
 
@@ -1333,7 +1485,6 @@ async function loadConversationMessages(conversationId) {
   state.currentConversationId = payload.conversation.id;
   renderStoredConversationMessages(payload.messages || []);
   renderConversationList();
-  updateAgentModeStatus("auto");
 }
 
 async function loadAgentConversations() {
@@ -1346,13 +1497,17 @@ async function loadAgentConversations() {
 }
 
 async function deleteCurrentConversation() {
-  if (!state.currentConversationId) {
+  const conversationId = targetConversationId();
+  if (!conversationId) {
     return;
   }
-  await fetchJson(apiEndpoints.conversation(state.currentConversationId), {
+  hideConversationMenu();
+  await fetchJson(apiEndpoints.conversation(conversationId), {
     method: "DELETE",
   });
-  state.currentConversationId = null;
+  if (String(state.currentConversationId) === String(conversationId)) {
+    state.currentConversationId = null;
+  }
   await refreshConversationList();
   if (state.conversations.length) {
     await loadConversationMessages(state.conversations[0].id);
@@ -1361,16 +1516,36 @@ async function deleteCurrentConversation() {
   }
 }
 
+async function renameCurrentConversation() {
+  const conversationId = targetConversationId();
+  if (!conversationId) {
+    return;
+  }
+  const current = state.conversations.find((conversationItem) => String(conversationItem.id) === String(conversationId));
+  const title = window.prompt("重命名会话", current?.title || "New conversation");
+  hideConversationMenu();
+  if (title === null) {
+    return;
+  }
+  const conversation = await fetchJson(apiEndpoints.conversation(conversationId), {
+    method: "PATCH",
+    body: JSON.stringify({ title: title.trim() || "New conversation" }),
+  });
+  state.currentConversationId = conversation.id;
+  await refreshConversationList();
+  setAgentPanelStatus("conversation_renamed");
+}
+
 async function submitChat() {
   const question = document.querySelector("[data-chat-question]")?.value.trim();
   const topK = Number(document.querySelector("[data-chat-top-k]")?.value || 5);
   const retrievalMode = document.querySelector("[data-chat-retrieval-mode]")?.value || "auto";
   const minScore = Number(document.querySelector("[data-chat-min-score]")?.value || 0);
   if (!question) {
-    setApiStatus("请输入问题");
+    setApiStatus("Please enter a question");
     return;
   }
-  setApiStatus("问答中");
+  setApiStatus("Answering...");
   const result = await fetchJson(apiEndpoints.chat, {
     method: "POST",
     body: JSON.stringify({
@@ -1382,7 +1557,7 @@ async function submitChat() {
   });
   renderAnswer(result);
   renderCitations(result.sources || []);
-  setApiStatus(result.refused ? "已拒答" : "已回答");
+  setApiStatus(result.refused ? "Refused" : "Answered");
 }
 
 async function submitAgent() {
@@ -1392,24 +1567,20 @@ async function submitAgent() {
   }
   const questionInput = document.querySelector("[data-agent-question]");
   const question = questionInput?.value.trim();
-  const topK = Number(document.querySelector("[data-agent-top-k]")?.value || 5);
-  const maxToolCalls = Number(document.querySelector("[data-agent-max-tool-calls]")?.value || 2);
-  const sourceId = document.querySelector("[data-agent-source-id]")?.value.trim();
   if (!question) {
-    setApiStatus("请输入 Agent 任务");
+    setApiStatus("Please enter an Agent task");
     return;
   }
   let pendingUserMessage = null;
   let pendingThinkingMessage = null;
   setAgentBusy(true);
   try {
-    setApiStatus("Agent 运行中");
+    setApiStatus("Agent running...");
     setAgentPanelStatus("running");
-    updateAgentModeStatus("pending");
     const body = {
       question,
-      top_k: topK,
-      max_tool_calls: maxToolCalls,
+      top_k: 5,
+      max_tool_calls: 2,
       mode: "tool_calling_agent",
     };
     if (!state.currentConversationId) {
@@ -1422,9 +1593,6 @@ async function submitAgent() {
     }
     pendingThinkingMessage = appendAgentThinkingMessage();
     body.conversation_id = state.currentConversationId;
-    if (sourceId) {
-      body.source_id = sourceId;
-    }
     let streamStarted = false;
     let result = null;
     const abortController = new AbortController();
@@ -1446,7 +1614,6 @@ async function submitAgent() {
           result = metadata;
           finalizeAgentStreamingMessage(pendingThinkingMessage, metadata);
           pendingThinkingMessage = null;
-          updateAgentModeStatus(metadata.mode || "default");
           if ((metadata.workflow_steps || []).length) {
             renderAgentWorkflowSteps(metadata.workflow_steps || []);
           } else {
@@ -1496,13 +1663,12 @@ async function submitAgent() {
         }
       }
     }
-    setApiStatus(result?.aborted ? "Agent 已停止生成" : result?.refused ? "Agent 已拒答" : "Agent 已完成");
+    setApiStatus(result?.aborted ? "Agent stopped" : result?.refused ? "Agent refused" : "Agent completed");
     setAgentPanelStatus(result?.aborted ? "aborted" : result?.refused ? "refused" : "answered");
     await refreshConversationList();
   } catch (error) {
     pendingThinkingMessage?.remove();
     setAgentPanelStatus("error");
-    updateAgentModeStatus("auto");
     appendAgentErrorMessage(userFriendlyErrorMessage(error));
     throw error;
   } finally {
@@ -1536,7 +1702,7 @@ async function streamAgentQuery(body, handlers = {}) {
     throw new Error(Array.isArray(detail) ? detail.map((item) => item.msg).join("; ") : detail);
   }
   if (!response.body || !response.body.getReader) {
-    throw new Error("当前浏览器不支持流式读取，已切换为同步请求");
+    throw new Error("This browser does not support streaming reads; switched to synchronous request.");
   }
 
   const reader = response.body.getReader();
@@ -1570,7 +1736,7 @@ async function streamAgentQuery(body, handlers = {}) {
     }
   }
   if (!metadata) {
-    throw new Error("流式响应缺少 metadata 事件");
+    throw new Error("Stream ended without metadata.");
   }
   return metadata;
 }
@@ -1604,7 +1770,7 @@ async function consumeSseBuffer(buffer, handlers = {}) {
       await handlers.onDone?.(event.data);
     } else if (event.name === "error") {
       await handlers.onError?.(event.data);
-      throw new Error(event.data.detail || "流式响应失败");
+      throw new Error(event.data.detail || "Stream returned an error event.");
     }
   }
   return { remaining, metadata };
@@ -1640,7 +1806,7 @@ function renderAll() {
 }
 
 async function loadWorkspaceData() {
-  setApiStatus("加载中");
+  setApiStatus("Loading...");
   const [sourcesPayload, documentsPayload] = await Promise.all([
     fetchJson(apiEndpoints.sources),
     fetchJson(apiEndpoints.documents),
@@ -1648,7 +1814,7 @@ async function loadWorkspaceData() {
   state.sources = sourcesPayload.sources || [];
   state.documents = documentsPayload.documents || [];
   renderAll();
-  setApiStatus("已加载");
+  setApiStatus("Loaded");
 }
 
 function bindSourceFilters() {
@@ -1695,26 +1861,25 @@ function bindEnterToSubmit() {
 function bindCommands() {
   document.querySelector("[data-refresh-all]")?.addEventListener("click", () => {
     loadWorkspaceData().catch((error) => {
-      setApiStatus(`加载失败：${error.message}`);
+      setApiStatus(`Load failed: ${error.message}`);
     });
   });
   document.querySelector("[data-chat-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     submitChat().catch((error) => {
-      setApiStatus(`问答失败：${error.message}`);
+      setApiStatus(`Question failed: ${error.message}`);
     });
   });
   document.querySelector("[data-search-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     submitSearch().catch((error) => {
-      setApiStatus(`检索失败：${error.message}`);
+      setApiStatus(`Search failed: ${error.message}`);
     });
   });
   document.querySelector("[data-agent-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     submitAgent().catch((error) => {
-      updateAgentModeStatus("auto");
-      setApiStatus(`Agent 失败：${error.message}`);
+      setApiStatus(`Agent failed: ${error.message}`);
     });
   });
   document.querySelector("[data-agent-submit]")?.addEventListener("click", (event) => {
@@ -1726,42 +1891,75 @@ function bindCommands() {
   });
   document.querySelector("[data-new-conversation]")?.addEventListener("click", () => {
     createAgentConversation().catch((error) => {
-      setApiStatus(`新建会话失败：${error.message}`);
+      setApiStatus(`Create conversation failed: ${error.message}`);
     });
   });
   document.querySelector("[data-refresh-conversations]")?.addEventListener("click", () => {
     loadAgentConversations().catch((error) => {
-      setApiStatus(`刷新会话失败：${error.message}`);
+      setApiStatus(`Refresh conversations failed: ${error.message}`);
     });
   });
   document.querySelector("[data-delete-conversation]")?.addEventListener("click", () => {
     deleteCurrentConversation().catch((error) => {
-      setApiStatus(`删除会话失败：${error.message}`);
+      setApiStatus(`Delete conversation failed: ${error.message}`);
     });
   });
-  bindEnterToSubmit();
-  document.querySelector("[data-conversation-list]")?.addEventListener("change", (event) => {
-    loadConversationMessages(event.target.value).catch((error) => {
-      setApiStatus(`切换会话失败：${error.message}`);
+  document.querySelector("[data-rename-conversation]")?.addEventListener("click", () => {
+    renameCurrentConversation().catch((error) => {
+      setApiStatus(`Rename failed: ${error.message}`);
     });
+  });
+  document.querySelector("[data-close-citation-drawer]")?.addEventListener("click", () => {
+    closeCitationDrawer();
+  });
+  bindEnterToSubmit();
+  document.querySelector("[data-conversation-list]")?.addEventListener("click", (event) => {
+    const conversationButton = event.target.closest("[data-conversation-item]");
+    if (!conversationButton) {
+      return;
+    }
+    hideConversationMenu();
+    loadConversationMessages(conversationButton.dataset.conversationItem).catch((error) => {
+      setApiStatus(`Switch conversation failed: ${error.message}`);
+    });
+  });
+  document.querySelector("[data-conversation-list]")?.addEventListener("contextmenu", (event) => {
+    const conversationButton = event.target.closest("[data-conversation-item]");
+    if (!conversationButton) {
+      return;
+    }
+    event.preventDefault();
+    showConversationMenu(conversationButton.dataset.conversationItem, event.clientX, event.clientY);
   });
   document.querySelector("[data-sync-sources]")?.addEventListener("click", () => {
     syncSources().catch((error) => {
-      setApiStatus(`同步失败：${error.message}`);
+      setApiStatus(`Sync failed: ${error.message}`);
     });
   });
   document.addEventListener("click", (event) => {
+    const menu = document.querySelector("[data-conversation-menu]");
+    if (menu && !menu.hidden && !event.target.closest("[data-conversation-menu]")) {
+      hideConversationMenu();
+    }
+    const sourceTrigger = event.target.closest("[data-source-cluster], [data-citation-ref]");
+    if (sourceTrigger) {
+      const citationSetId = sourceTrigger.dataset.citationSet;
+      if (citationSetId) {
+        openCitationDrawer(citationSetId, sourceTrigger.dataset.citationRef || "");
+      }
+      return;
+    }
     const chunkButton = event.target.closest("[data-view-chunks]");
     if (chunkButton) {
       viewDocumentChunks(chunkButton.dataset.viewChunks).catch((error) => {
-        setApiStatus(`片段加载失败：${error.message}`);
+        setApiStatus(`Load chunks failed: ${error.message}`);
       });
       return;
     }
     const reindexButton = event.target.closest("[data-reindex-source]");
     if (reindexButton) {
       reindexSource(reindexButton.dataset.reindexSource).catch((error) => {
-        setApiStatus(`reindex 失败：${error.message}`);
+        setApiStatus(`Reindex failed: ${error.message}`);
       });
     }
   });
@@ -1785,18 +1983,46 @@ function switchView(viewName) {
   });
 }
 
+function setAppMode(isAppMode) {
+  document.querySelector("[data-app-shell]")?.classList.toggle("is-app-mode", isAppMode);
+}
+
+function enterApp(viewName, hashValue) {
+  setAppMode(true);
+  switchView(viewName);
+  window.history.replaceState(null, "", hashValue || (viewName === "library" ? "#library-view" : "#ask-view"));
+  window.requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
+function showLanding() {
+  switchView("ask");
+  setAppMode(false);
+  window.history.replaceState(null, "", window.location.pathname || "/");
+  window.requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
 function bindViewNavigation() {
   document.querySelectorAll("[data-view-target]").forEach((link) => {
     link.addEventListener("click", (event) => {
       event.preventDefault();
-      switchView(link.dataset.viewTarget);
-      window.history.replaceState(null, "", link.getAttribute("href") || "#ask-view");
+      enterApp(link.dataset.viewTarget, link.getAttribute("href") || "#ask-view");
     });
   });
+  document.querySelector("[data-home-link]")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    showLanding();
+  });
   if (window.location.hash === "#library-view" || window.location.hash === "#library-panel") {
-    switchView("library");
+    enterApp("library", "#library-view");
+  } else if (window.location.hash === "#ask-view" || window.location.hash === "#agent-panel") {
+    enterApp("ask", "#ask-view");
   } else {
     switchView("ask");
+    setAppMode(false);
   }
 }
 
@@ -1809,7 +2035,7 @@ async function initializeShell() {
     await loadWorkspaceData();
     await loadAgentConversations();
   } catch (error) {
-    setApiStatus(`连接异常：${error.message}`);
+    setApiStatus(`Connection error: ${error.message}`);
   }
 }
 

@@ -14,6 +14,7 @@ from app.schemas.conversation import (
     ConversationItem,
     ConversationListResponse,
     ConversationMessagesResponse,
+    ConversationUpdateRequest,
     MessageItem,
 )
 
@@ -77,6 +78,22 @@ def delete_conversation(
             detail="conversation not found",
         )
     return ConversationDeleteResponse(deleted=True)
+
+
+@router.patch("/{conversation_id}", response_model=ConversationItem)
+def update_conversation(
+    conversation_id: int,
+    request: ConversationUpdateRequest,
+    db: Session = Depends(get_db),
+) -> ConversationItem:
+    repository = ConversationRepository(db)
+    conversation = repository.rename_conversation(conversation_id, request.title)
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="conversation not found",
+        )
+    return conversation_item_from_model(conversation)
 
 
 def conversation_item_from_model(conversation: Conversation) -> ConversationItem:

@@ -239,3 +239,22 @@ def test_conversation_repository_deletes_messages_with_conversation(tmp_path) ->
     assert deleted is True
     assert missing_deleted is False
     assert remaining_messages == 0
+
+
+def test_conversation_repository_renames_conversation(tmp_path) -> None:
+    database_path = tmp_path / "conversation_rename.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    with TestingSessionLocal() as db:
+        repository = ConversationRepository(db)
+        conversation = repository.create_conversation(ConversationCreate(title="旧标题"))
+        updated = repository.rename_conversation(conversation.id, "阶段 42 新标题")
+        missing = repository.rename_conversation(999, "missing")
+
+    assert updated is not None
+    assert updated.id == conversation.id
+    assert updated.title == "阶段 42 新标题"
+    assert updated.updated_at >= conversation.updated_at
+    assert missing is None

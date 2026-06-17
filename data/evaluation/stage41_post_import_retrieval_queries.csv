@@ -1,0 +1,13 @@
+query_id,question,category,expected_source_type,expected_title_terms,expected_answer_points,notes
+stage41_cn_rfc_flow_filling,自密实堆石混凝土的复杂流动和填充性能可以参考哪些研究？,new_cn_rfc,institutional_access_pdf,自密实混凝土填充性能;堆石混凝土界面微观特性,填充性能;自密实;界面微观,新增中文 RFC 论文主题
+stage41_cn_rfc_mps_dem,基于 MPS-DEM 的堆石混凝土流动填充性能数值模拟关注什么问题？,new_cn_rfc,institutional_access_pdf,MPS-DEM;堆石混凝土流动填充性能,数值模拟;流动;填充性能,新增中文 RFC 数值模拟论文
+stage41_cn_rfc_porosity_damage,孔隙率和孔径如何影响 rock-filled concrete 的损伤表征？,new_en_rfc,open_access_pdf,porosity;aperture;damage characterization;rock-filled concrete,porosity;aperture;damage characterization,新增英文 RFC 论文
+stage41_cn_rfc_scc_rock_composite,有哪些 SCC 与 rock composite specimens 损伤表征研究？,new_en_rfc,open_access_pdf,SCC and rock composite specimens;damage characterization,CPU;GPU;damage characterization,新增英文 RFC/SCC-rock 论文
+stage41_cn_dam_temperature,堆石混凝土坝施工期温度场、应力场和裂缝控制可以参考哪些资料？,new_cn_dam,institutional_access_pdf,施工期温度场;应力场;裂缝控制,温度场;应力场;裂缝控制,新增中文坝工论文
+stage41_cn_dam_seepage,堆石混凝土坝渗流分析和模拟有哪些文献？,new_cn_dam,institutional_access_pdf,堆石混凝土坝渗流;分析;模拟,渗流;分析;模拟,新增中文坝工论文
+stage41_cn_dam_monitoring,堆石混凝土重力坝监测资料正反分析和安全评价可以检索到什么？,new_cn_dam,institutional_access_pdf,监测资料;正反分析;安全评价,监测;安全评价;重力坝,新增中文坝工监测论文
+stage41_cn_quality_control,堆石混凝土坝质量控制与检验应查哪些新增资料？,new_cn_dam,institutional_access_pdf,质量控制;检验,质量控制;检验;堆石混凝土坝,新增中文坝工质量控制论文
+stage41_cn_construction_management,堆石混凝土施工管理中视觉信息处理方法有哪些研究？,new_cn_rfc,institutional_access_pdf,施工管理;视觉信息;处理方法,施工管理;视觉信息;应用研究,新增中文 RFC 施工管理论文
+stage41_cn_carbon_emission,混凝土大坝生命周期碳排放评价可以检索哪些新增中文资料？,new_cn_dam,institutional_access_pdf,生命周期;混凝土大坝;碳排放,生命周期;碳排放;评价方法,新增中文坝工低碳论文
+stage41_en_rockfill_monitoring,Which new paper discusses earth and rock-filled dam monitoring with high-resolution X-band interferometry?,new_en_rfc,open_access_pdf,Earth and Rock-Filled Dam Monitoring;High-Resolution X-Band Interferometry,Gongming Dam;monitoring;interferometry,新增英文 rock-filled dam 监测论文
+stage41_en_stone_concrete,Which new open access paper discusses stone-concrete as material for a rockfill dam face zone?,new_en_rfc,open_access_pdf,Stone-concrete;rockfill dam face zone,stone-concrete;rockfill dam;face zone,新增英文 stone-concrete 论文
