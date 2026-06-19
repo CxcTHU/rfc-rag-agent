@@ -830,6 +830,8 @@ def safe_tool_result_payload(
                 "source_type": source.source_type,
                 "chunk_id": source.chunk_id,
                 "chunk_index": source.chunk_index,
+                "chunk_type": source.chunk_type,
+                "image_url": source.image_url,
                 "score": round(float(source.score), 4) if source.score is not None else None,
                 "snippet": truncate_text(source.content or "", TOOL_RESULT_SNIPPET_LIMIT),
             }
@@ -875,6 +877,8 @@ def safe_sources_payload(
                 "source_type": source.source_type,
                 "chunk_id": source.chunk_id,
                 "chunk_index": source.chunk_index,
+                "chunk_type": source.chunk_type,
+                "image_url": source.image_url,
                 "score": round(float(source.score), 4) if source.score is not None else None,
                 "snippet": truncate_text(source.content or "", TOOL_RESULT_SNIPPET_LIMIT),
             }

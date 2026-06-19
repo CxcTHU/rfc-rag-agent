@@ -54,6 +54,8 @@ class SearchResultLike(Protocol):
     content: str
     heading_path: str | None
     score: float
+    chunk_type: str
+    source_image_path: str | None
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,8 @@ class ContextSource:
     content: str
     heading_path: str | None
     score: float
+    chunk_type: str = "text"
+    source_image_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -137,6 +141,8 @@ def context_source_from_search_result(
         content=result.content.strip(),
         heading_path=result.heading_path,
         score=result.score,
+        chunk_type=getattr(result, "chunk_type", "text"),
+        source_image_path=getattr(result, "source_image_path", None),
     )
 
 

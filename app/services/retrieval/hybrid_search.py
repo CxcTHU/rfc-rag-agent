@@ -34,6 +34,8 @@ class HybridSearchResult:
     score: float
     keyword_score: float
     vector_score: float
+    chunk_type: str = "text"
+    source_image_path: str | None = None
 
 
 @dataclass
@@ -210,6 +212,8 @@ def candidate_to_result(candidate: _HybridCandidate, service: HybridSearchServic
         score=combined_score,
         keyword_score=candidate.keyword_score,
         vector_score=candidate.vector_score,
+        chunk_type=result.chunk_type,
+        source_image_path=result.source_image_path,
     )
 
 

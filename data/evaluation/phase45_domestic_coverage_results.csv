@@ -1,0 +1,21 @@
+﻿query_id,query,corpus,hit_count,phase45_hit_count,top_title,top_source_type,top_document_id
+phase45_cn_001,清华大学 堆石混凝土 技术,baseline_before_phase11,5,0,堆石混凝土技术“引发革命”——清华大学堆石混凝土专利技术将在第六届四川国际水电产业展览会上亮相,metadata_record,32
+phase45_cn_002,堆石混凝土 施工 质量控制,baseline_before_phase11,5,0,堆石混凝土砌体施工质量控制研究及实践,institutional_access_pdf,319
+phase45_cn_003,胶结颗粒料 筑坝 技术,baseline_before_phase11,5,0,胶结颗粒料坝筑坝理论探讨与实践进展,institutional_access_pdf,162
+phase45_cn_004,浇筑点 块石 上游 下游 2m,baseline_before_phase11,5,0,东台子水库工程设计与研究,institutional_access_pdf,1078
+phase45_cn_005,压力试验设备 试件 压板,baseline_before_phase11,5,0,堆石混凝土在某高坝上的应用研究与抗震分析,institutional_access_pdf,441
+phase45_cn_006,堆石混凝土 水库 工程设计,baseline_before_phase11,5,0,Seismic analysis of rock-filled concrete (RFC) dam with various rock-fill ratios,metadata_record,134
+phase45_cn_007,堆石混凝土 技术 标准化,baseline_before_phase11,5,0,堆石混凝土施工技术在新疆公路工程中的应用,institutional_access_pdf,298
+phase45_cn_008,堆石混凝土 坝型 比选,baseline_before_phase11,5,0,Selection of Rock-fill Concrete Dam Type of Mengman Second Cascade Hydropower Station,metadata_record,52
+phase45_cn_009,堆石混凝土 温控 防渗,baseline_before_phase11,5,0,A Study on Adiabatic Temperature Rise Test and Temperature Stress Simulation of Rock-Fill Concrete,metadata_record,62
+phase45_cn_010,自密实 堆石混凝土 现场试验,baseline_before_phase11,5,0,On-site experiment methods on the compaction detection of rock-filled concrete,metadata_record,77
+phase45_cn_001,清华大学 堆石混凝土 技术,current_phase45,5,0,堆石混凝土技术“引发革命”——清华大学堆石混凝土专利技术将在第六届四川国际水电产业展览会上亮相,metadata_record,32
+phase45_cn_002,堆石混凝土 施工 质量控制,current_phase45,5,0,堆石混凝土砌体施工质量控制研究及实践,institutional_access_pdf,319
+phase45_cn_003,胶结颗粒料 筑坝 技术,current_phase45,5,2,"库堆石混凝土工程为例, 对胶结颗粒料筑坝技术应用进行了探究",institutional_access_pdf,1436
+phase45_cn_004,浇筑点 块石 上游 下游 2m,current_phase45,5,0,东台子水库工程设计与研究,institutional_access_pdf,1078
+phase45_cn_005,压力试验设备 试件 压板,current_phase45,5,0,堆石混凝土在某高坝上的应用研究与抗震分析,institutional_access_pdf,441
+phase45_cn_006,堆石混凝土 水库 工程设计,current_phase45,5,4,"先 采 用自密实堆石混凝土技术 (Rock Filled Concrete,简称 RFC )",institutional_access_pdf,1439
+phase45_cn_007,堆石混凝土 技术 标准化,current_phase45,5,3,堆石混凝土施工技术在新疆公路工程中的应用,institutional_access_pdf,298
+phase45_cn_008,堆石混凝土 坝型 比选,current_phase45,5,0,Selection of Rock-fill Concrete Dam Type of Mengman Second Cascade Hydropower Station,metadata_record,52
+phase45_cn_009,堆石混凝土 温控 防渗,current_phase45,5,0,A Study on Adiabatic Temperature Rise Test and Temperature Stress Simulation of Rock-Fill Concrete,metadata_record,62
+phase45_cn_010,自密实 堆石混凝土 现场试验,current_phase45,5,2,On-site experiment methods on the compaction detection of rock-filled concrete,metadata_record,77

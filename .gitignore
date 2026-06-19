@@ -20,12 +20,16 @@ env/
 data/raw/
 data/processed/
 data/faiss/
+data/images/
 data/indexes/
 data/exports/
 data/fulltext/
 data/logs/
+data/incoming/
 *.sqlite
 *.db
+data/app.sqlite*.backup*
+data/app.sqlite-journal.backup*
 
 # Logs
 *.log
@@ -40,6 +44,7 @@ obsidian-vault/**
 # Local AI agent tool configs (Claude Code / Codex) — keep local-only
 .claude/
 .codex/
+.playwright-mcp/
 
 # OS/editor
 .DS_Store

@@ -38,6 +38,8 @@ class ChunkCreate:
     heading_path: str | None
     start_char: int | None
     end_char: int | None
+    chunk_type: str = "text"
+    source_image_path: str | None = None
     parent_chunk_id: int | None = None
 
 
@@ -180,6 +182,8 @@ class DocumentRepository:
                     heading_path=chunk.heading_path,
                     start_char=chunk.start_char,
                     end_char=chunk.end_char,
+                    chunk_type=chunk.chunk_type,
+                    source_image_path=chunk.source_image_path,
                     parent_chunk_id=chunk.parent_chunk_id,
                 )
                 for chunk in chunks_data

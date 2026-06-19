@@ -89,7 +89,17 @@ def seed_agent_api_document(db: Session) -> None:
                 heading_path="Filling",
                 start_char=0,
                 end_char=86,
-            )
+            ),
+            ChunkCreate(
+                chunk_index=1,
+                content="Figure evidence showing interface microstructure and filling paths in rock-filled concrete.",
+                char_count=86,
+                heading_path="Figure",
+                start_char=None,
+                end_char=None,
+                chunk_type="image_description",
+                source_image_path="data/images/1/page2_img3.png",
+            ),
         ],
     )
 
@@ -166,6 +176,23 @@ class FollowupTransformProvider(DeterministicChatModelProvider):
         return super().generate(messages)
 
 
+class OverproducingFollowupTransformProvider(DeterministicChatModelProvider):
+    provider_name = "overproduce-transform-test"
+    model_name = "overproduce-transform-test-v1"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        return ChatModelResult(
+            answer=(
+                "1. 温控措施：堆石混凝土可减少温控需求 [1]。\n"
+                "2. 经济性：材料成本较低 [1]。\n"
+                "3. 施工工艺：可先抛填块石再灌注 [2]。\n"
+                "4. 流动性要求：需要更高流动性的自密实混凝土 [3]。"
+            ),
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+
 def seed_agent_conversation_messages(conversation_id: int, count: int) -> None:
     override_get_db = app.dependency_overrides[get_db]
     db_generator = override_get_db()
@@ -227,6 +254,8 @@ def test_agent_api_defaults_to_tool_calling_with_citations(tmp_path) -> None:
     assert payload["tool_calls"][0]["tool_name"] == "hybrid_search_knowledge"
     assert payload["citations"] == [1]
     assert payload["sources"]
+    assert any(source["chunk_type"] == "image_description" for source in payload["sources"])
+    assert any(source["image_url"] == "/assets/images/1/page2_img3.png" for source in payload["sources"])
     assert payload["mode"] == "tool_calling_agent"
     assert [step["name"] for step in payload["workflow_steps"]] == [
         "hybrid_search_knowledge",
@@ -322,6 +351,37 @@ def test_agent_api_transforms_previous_answer_without_retrieval(tmp_path) -> Non
     assert payload["citations"] == [1]
     assert payload["sources"]
     assert payload["tool_calls"][0]["tool_name"] == "answer_with_citations"
+    assert "followup_transform" in payload["reasoning_summary"]
+
+
+def test_agent_api_followup_respects_requested_point_count(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        conversation = client.post("/conversations", json={"title": "point-count"}).json()
+        first = client.post(
+            "/agent/query",
+            json={
+                "question": "堆石混凝土与自密实混凝土的区别有哪些？",
+                "top_k": 2,
+                "conversation_id": conversation["id"],
+                "mode": "default",
+            },
+        )
+        app.dependency_overrides[get_agent_chat_model_provider] = (
+            lambda: OverproducingFollowupTransformProvider()
+        )
+        second = client.post(
+            "/agent/query",
+            json={"question": "再增加三点", "conversation_id": conversation["id"]},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    payload = second.json()
+    assert payload["refused"] is False
+    assert "1. 温控措施" in payload["answer"]
+    assert "2. 经济性" in payload["answer"]
+    assert "3. 施工工艺" in payload["answer"]
+    assert "4. 流动性要求" not in payload["answer"]
     assert "followup_transform" in payload["reasoning_summary"]
 
 

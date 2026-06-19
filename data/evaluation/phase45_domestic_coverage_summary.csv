@@ -1,0 +1,3 @@
+﻿corpus,queries,queries_with_hits,queries_with_phase45_hits,total_phase45_hits,avg_hit_count
+baseline_before_phase11,10,10,0,0,5.00
+current_phase45,10,10,4,11,5.00

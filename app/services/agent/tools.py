@@ -34,6 +34,9 @@ class AgentSearchItem:
     content: str
     heading_path: str | None
     score: float
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    image_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,9 @@ class AgentSourceReference:
     doi: str | None = None
     content: str | None = None
     score: float | None = None
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    image_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -268,6 +274,7 @@ def failed_tool_result(tool_name: str, user_input: str, error: Exception) -> Age
 
 
 def search_item_from_result(result: KeywordSearchResult | HybridSearchResult) -> AgentSearchItem:
+    source_image_path = getattr(result, "source_image_path", None)
     return AgentSearchItem(
         document_id=result.document_id,
         document_title=result.document_title,
@@ -279,6 +286,9 @@ def search_item_from_result(result: KeywordSearchResult | HybridSearchResult) ->
         content=result.content,
         heading_path=result.heading_path,
         score=result.score,
+        chunk_type=getattr(result, "chunk_type", "text"),
+        source_image_path=source_image_path,
+        image_url=image_url_from_source_image_path(source_image_path),
     )
 
 
@@ -293,6 +303,9 @@ def sources_from_search_results(results: list[AgentSearchItem]) -> list[AgentSou
             chunk_index=result.chunk_index,
             content=result.content,
             score=result.score,
+            chunk_type=result.chunk_type,
+            source_image_path=result.source_image_path,
+            image_url=result.image_url,
         )
         for result in results
     ]
@@ -308,6 +321,9 @@ def source_reference_from_context_source(source: ContextSource) -> AgentSourceRe
         chunk_index=source.chunk_index,
         content=source.content,
         score=source.score,
+        chunk_type=source.chunk_type,
+        source_image_path=source.source_image_path,
+        image_url=image_url_from_source_image_path(source.source_image_path),
     )
 
 
@@ -323,6 +339,16 @@ def source_reference_from_source(source: Source) -> AgentSourceReference:
         url=source.url,
         doi=source.doi,
     )
+
+
+def image_url_from_source_image_path(source_image_path: str | None) -> str | None:
+    if not source_image_path:
+        return None
+    normalized = source_image_path.replace("\\", "/").lstrip("/")
+    prefix = "data/images/"
+    if not normalized.startswith(prefix):
+        return None
+    return f"/assets/images/{normalized[len(prefix):]}"
 
 
 def summarize_input(query: str, top_k: int) -> str:

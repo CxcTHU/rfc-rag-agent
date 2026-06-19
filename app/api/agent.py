@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from collections.abc import Iterator, Sequence
 from queue import Queue
@@ -13,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.security import get_current_user
 from app.core.structured_logging import log_event, safe_text_summary
+from app.db.models import Chunk
+from app.db.models import Document
 from app.db.models import Message
 from app.db.models import User
 from app.db.repositories import ConversationRepository, MessageCreate
@@ -30,6 +33,7 @@ from app.services.agent.chitchat import ChitchatResult, detect_chitchat
 from app.services.agent import intent_router
 from app.services.agent.refusal_explainer import build_refusal_explanation
 from app.services.agent.service import AgentQueryResult, AgentService
+from app.services.agent.tools import image_url_from_source_image_path
 from app.services.agent.react_service import ReActAgentService
 from app.services.agent.tool_calling_service import ToolCallingAgentService
 from app.services.agent.routing import classify_query_complexity
@@ -51,6 +55,8 @@ from app.services.generation.chat_model import (
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
 
 router = APIRouter(prefix="/agent", tags=["agent"])
+
+FIGURE_EVIDENCE_LIMIT = 4
 agent_logger = logging.getLogger("rfc_rag_agent.agent")
 
 
@@ -213,7 +219,11 @@ def query_agent(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="chat model provider is unavailable or timed out",
             ) from exc
-        response = agent_response_from_agentic_result(agentic_result)
+        response = enrich_agent_response_with_figure_evidence(
+            db=db,
+            question=request.question,
+            response=agent_response_from_agentic_result(agentic_result),
+        )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
             repository=conversation_repository,
@@ -247,7 +257,11 @@ def query_agent(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="chat model provider is unavailable or timed out",
             ) from exc
-        response = agent_response_from_result(result)
+        response = enrich_agent_response_with_figure_evidence(
+            db=db,
+            question=request.question,
+            response=agent_response_from_result(result),
+        )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
             repository=conversation_repository,
@@ -280,7 +294,11 @@ def query_agent(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="chat model provider is unavailable or timed out",
             ) from exc
-        response = agent_response_from_result(result)
+        response = enrich_agent_response_with_figure_evidence(
+            db=db,
+            question=request.question,
+            response=agent_response_from_result(result),
+        )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
             repository=conversation_repository,
@@ -314,7 +332,11 @@ def query_agent(
             detail="chat model provider is unavailable or timed out",
         ) from exc
 
-    response = agent_response_from_result(result)
+    response = enrich_agent_response_with_figure_evidence(
+        db=db,
+        question=request.question,
+        response=agent_response_from_result(result),
+    )
     log_agent_response_event(response)
     persist_agent_conversation_messages(
         repository=conversation_repository,
@@ -702,6 +724,14 @@ def build_followup_transform_response(
     if not previous_answer:
         return None
 
+    requested_point_count = requested_point_count_from_instruction(normalized_question)
+    count_instruction = (
+        f" The user's latest instruction requests exactly {requested_point_count} points. "
+        f"Return exactly {requested_point_count} numbered list items; do not add a fourth "
+        "item, extra summary item, or separate conclusion."
+        if requested_point_count is not None
+        else ""
+    )
     result = chat_model_provider.generate(
         [
             ChatMessage(
@@ -712,6 +742,7 @@ def build_followup_transform_response(
                     "Do not add claims. Preserve citation markers like [1] exactly "
                     "when they appear in the previous answer. If the user asks for "
                     "Chinese, answer in Chinese."
+                    f"{count_instruction}"
                 ),
             ),
             ChatMessage(
@@ -723,11 +754,75 @@ def build_followup_transform_response(
             ),
         ]
     )
+    answer = enforce_requested_point_count(
+        result.answer.strip(),
+        requested_point_count=requested_point_count,
+    )
     return response_from_previous_answer_transform(
         question=normalized_question,
-        answer=result.answer.strip(),
+        answer=answer,
         previous_metadata=previous_metadata,
     )
+
+
+CHINESE_DIGITS = {
+    "零": 0,
+    "一": 1,
+    "二": 2,
+    "两": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+}
+
+
+def requested_point_count_from_instruction(question: str) -> int | None:
+    match = re.search(
+        r"([一二三四五六七八九十两\d]+)\s*(?:点|条|个要点|项)",
+        question.strip(),
+    )
+    if not match:
+        return None
+    raw_count = match.group(1)
+    if raw_count.isdigit():
+        count = int(raw_count)
+    elif raw_count == "十":
+        count = 10
+    elif raw_count.startswith("十") and len(raw_count) == 2:
+        count = 10 + CHINESE_DIGITS.get(raw_count[1], 0)
+    elif raw_count.endswith("十") and len(raw_count) == 2:
+        count = CHINESE_DIGITS.get(raw_count[0], 0) * 10
+    elif "十" in raw_count and len(raw_count) == 3:
+        count = CHINESE_DIGITS.get(raw_count[0], 0) * 10 + CHINESE_DIGITS.get(raw_count[2], 0)
+    else:
+        count = CHINESE_DIGITS.get(raw_count)
+    if count is None or count < 1 or count > 10:
+        return None
+    return count
+
+
+def enforce_requested_point_count(answer: str, *, requested_point_count: int | None) -> str:
+    if requested_point_count is None:
+        return answer
+    lines = answer.splitlines()
+    item_pattern = re.compile(r"^(\s*)(?:[-*]|\d+[.)]|[一二三四五六七八九十]+[、.])\s+(.+)$")
+    item_indexes = [
+        index for index, line in enumerate(lines) if item_pattern.match(line.strip())
+    ]
+    if len(item_indexes) <= requested_point_count:
+        return answer
+    keep_item_indexes = set(item_indexes[:requested_point_count])
+    cutoff_index = item_indexes[requested_point_count]
+    kept_lines = [
+        line
+        for index, line in enumerate(lines)
+        if index < cutoff_index and (index not in item_indexes or index in keep_item_indexes)
+    ]
+    return "\n".join(kept_lines).strip()
 
 
 def is_followup_transform_request(question: str) -> bool:
@@ -797,6 +892,128 @@ def response_from_previous_answer_transform(
     return AgentQueryResponse.model_validate(payload)
 
 
+def enrich_agent_response_with_figure_evidence(
+    *,
+    db: Session,
+    question: str,
+    response: AgentQueryResponse,
+) -> AgentQueryResponse:
+    if response.refused or any(source.image_url for source in response.sources):
+        return response
+    document_ids = [
+        source.document_id
+        for source in response.sources
+        if source.document_id is not None
+    ]
+    if not document_ids:
+        return response
+
+    ranked_document_ids = list(dict.fromkeys(document_ids))
+    existing_chunk_ids = {
+        source.chunk_id
+        for source in response.sources
+        if source.chunk_id is not None
+    }
+    existing_image_urls = {
+        source.image_url
+        for source in response.sources
+        if source.image_url
+    }
+    rows = (
+        db.query(Chunk, Document)
+        .join(Document, Chunk.document_id == Document.id)
+        .filter(Chunk.document_id.in_(ranked_document_ids))
+        .filter(Chunk.chunk_type == "image_description")
+        .filter(Chunk.source_image_path.isnot(None))
+        .order_by(Chunk.document_id.asc(), Chunk.chunk_index.asc())
+        .all()
+    )
+    if not rows:
+        return response
+
+    document_rank = {document_id: index for index, document_id in enumerate(ranked_document_ids)}
+    query_terms = figure_query_terms(question)
+    ranked_rows = sorted(
+        rows,
+        key=lambda row: (
+            document_rank.get(row[0].document_id, len(document_rank)),
+            -figure_text_score(row[0].content, query_terms),
+            row[0].chunk_index,
+        ),
+    )
+
+    added_sources: list[AgentSourceItem] = []
+    added_results: list[AgentSearchResultItem] = []
+    for chunk, document in ranked_rows:
+        if chunk.id in existing_chunk_ids:
+            continue
+        image_url = image_url_from_source_image_path(chunk.source_image_path)
+        if not image_url or image_url in existing_image_urls:
+            continue
+        score = float(figure_text_score(chunk.content, query_terms))
+        title = document.title or document.file_name
+        added_sources.append(
+            AgentSourceItem(
+                source_id=f"chunk:{chunk.id}",
+                title=title,
+                source_type=document.source_type,
+                status=None,
+                trust_level=None,
+                fulltext_permission=None,
+                document_id=document.id,
+                chunk_id=chunk.id,
+                chunk_index=chunk.chunk_index,
+                url=None,
+                doi=None,
+                content=chunk.content,
+                score=score,
+                chunk_type=chunk.chunk_type,
+                source_image_path=chunk.source_image_path,
+                image_url=image_url,
+            )
+        )
+        added_results.append(
+            AgentSearchResultItem(
+                document_id=document.id,
+                document_title=title,
+                source_type=document.source_type,
+                source_path=document.source_path,
+                file_name=document.file_name,
+                chunk_id=chunk.id,
+                chunk_index=chunk.chunk_index,
+                content=chunk.content,
+                heading_path=chunk.heading_path,
+                score=score,
+                chunk_type=chunk.chunk_type,
+                source_image_path=chunk.source_image_path,
+                image_url=image_url,
+            )
+        )
+        existing_chunk_ids.add(chunk.id)
+        existing_image_urls.add(image_url)
+        if len(added_sources) >= FIGURE_EVIDENCE_LIMIT:
+            break
+
+    if not added_sources:
+        return response
+    return response.model_copy(
+        update={
+            "sources": [*response.sources, *added_sources],
+            "search_results": [*response.search_results, *added_results],
+        },
+    )
+
+
+def figure_query_terms(question: str) -> list[str]:
+    terms = re.findall(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9]+", question.lower())
+    return [term for term in terms if len(term) >= 2]
+
+
+def figure_text_score(text: str, terms: Sequence[str]) -> int:
+    lowered = text.lower()
+    return sum(1 for term in terms if term in lowered)
+
+
 def build_agent_query_response(
     *,
     request: AgentQueryRequest,
@@ -820,7 +1037,11 @@ def build_agent_query_response(
             chat_model_provider=chat_model_provider,
             history=conversation_history or request.history,
         )
-        response = agent_response_from_agentic_result(agentic_result)
+        response = enrich_agent_response_with_figure_evidence(
+            db=db,
+            question=request.question,
+            response=agent_response_from_agentic_result(agentic_result),
+        )
         log_agent_response_event(response)
         return response
 
@@ -837,7 +1058,11 @@ def build_agent_query_response(
             history=conversation_history or request.history,
             event_sink=event_sink,
         )
-        response = agent_response_from_result(result)
+        response = enrich_agent_response_with_figure_evidence(
+            db=db,
+            question=request.question,
+            response=agent_response_from_result(result),
+        )
         log_agent_response_event(response)
         return response
 
@@ -853,7 +1078,11 @@ def build_agent_query_response(
             history=conversation_history or request.history,
             event_sink=event_sink,
         )
-        response = agent_response_from_result(result)
+        response = enrich_agent_response_with_figure_evidence(
+            db=db,
+            question=request.question,
+            response=agent_response_from_result(result),
+        )
         log_agent_response_event(response)
         return response
 
@@ -868,7 +1097,11 @@ def build_agent_query_response(
         source_id=request.source_id,
         history=conversation_history or request.history,
     )
-    response = agent_response_from_result(result)
+    response = enrich_agent_response_with_figure_evidence(
+        db=db,
+        question=request.question,
+        response=agent_response_from_result(result),
+    )
     log_agent_response_event(response)
     return response
 
@@ -994,6 +1227,9 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
             doi=None,
             content=s.content,
             score=s.score,
+            chunk_type=getattr(s, "chunk_type", "text"),
+            source_image_path=getattr(s, "source_image_path", None),
+            image_url=image_url_from_source_image_path(getattr(s, "source_image_path", None)),
         )
         for s in result.sources
     ]
@@ -1033,6 +1269,9 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
                 content=s.content,
                 heading_path=s.heading_path,
                 score=s.score,
+                chunk_type=getattr(s, "chunk_type", "text"),
+                source_image_path=getattr(s, "source_image_path", None),
+                image_url=image_url_from_source_image_path(getattr(s, "source_image_path", None)),
             )
             for s in result.sources
         ],
@@ -1081,6 +1320,9 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
                 content=item.content,
                 heading_path=item.heading_path,
                 score=item.score,
+                chunk_type=item.chunk_type,
+                source_image_path=item.source_image_path,
+                image_url=item.image_url,
             )
             for item in result.search_results
         ],
@@ -1099,6 +1341,9 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
                 doi=source.doi,
                 content=source.content,
                 score=source.score,
+                chunk_type=source.chunk_type,
+                source_image_path=source.source_image_path,
+                image_url=source.image_url,
             )
             for source in result.sources
         ],

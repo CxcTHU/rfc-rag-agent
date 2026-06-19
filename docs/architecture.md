@@ -1,5 +1,74 @@
 # 架构说明
 
+## Phase 45 Additional Architecture Delta: Local Golden Corpus And Cloud Release Prep
+
+The appended Phase 10-17 work keeps the same retrieval and Agent runtime, but adds a local-first corpus publication lane for the 2026-06-18 domestic paper batch.
+
+```text
+G:\Codex\program\papers_0618
+-> scripts/build_phase45_literature_manifest.py
+-> data/incoming/phase45_literature/manifest.csv/json
+-> scripts/import_phase45_manifest_ready.py
+-> local SQLite documents/chunks only
+-> scripts/audit_phase45_import_quality.py
+-> cloud_candidate / review_required split
+-> scripts/index_phase45_cloud_candidates.py --chunk-type text
+-> local GLM embeddings + FAISS rebuild
+-> scripts/process_phase45_candidate_multimodal.py
+-> image_description chunks
+-> scripts/index_phase45_cloud_candidates.py --chunk-type image_description
+-> local FAISS rebuild
+-> scripts/prepare_phase45_cloud_migration.py
+-> scripts/prepare_phase45_cloud_asset_sync.py
+-> human verification before real PostgreSQL/file sync
+```
+
+Only `cloud_candidate` documents enter the candidate text/image indexing set. `review_required` documents stay in the local review queue until metadata, title/year extraction, scan quality, or text extraction issues are resolved.
+
+Cloud release is intentionally split into PostgreSQL rows and filesystem assets. PostgreSQL stores paths and structured metadata; raw PDFs and extracted images must be synchronized separately. Cloud FAISS remains a derived runtime artifact and must be rebuilt from cloud PostgreSQL embeddings.
+
+## Phase 45 Architecture Delta: Data Migration And Multimodal RAG
+
+Phase 45 adds a database migration path and a multimodal ingestion path without changing the default Agent chain, Stage 30 scoring rules, provider topology, auth behavior, or data-source boundary.
+
+Data migration:
+
+```text
+local SQLite
+-> scripts/migrate_sqlite_to_postgres.py
+-> target database from DATABASE_URL
+-> documents / sources / chunks / chunk_embeddings / qa_logs
+-> scripts/build_faiss_index.py --database-url
+-> target FAISS index rebuilt from target DB embeddings
+```
+
+The migration is idempotent. Documents dedupe by `content_hash`, sources by `source_id`, chunks by mapped `document_id + chunk_index`, embeddings by mapped `chunk_id + provider + model_name`, and QA logs by question/answer/model/retrieval/created_at. Users, conversations, and messages are not migrated because they belong to authenticated cloud runtime state.
+
+Multimodal RAG:
+
+```text
+PDF document.raw_path
+-> PdfImageExtractor (PyMuPDF)
+-> filter images with width or height < 100px
+-> data/images/{document_id}/pageN_imgM.png
+-> VisionModelProvider.describe_image()
+-> Chunk(chunk_type="image_description", source_image_path=...)
+-> VectorIndexService embedding
+-> normal VectorSearchService / HybridSearchService retrieval
+```
+
+`image_description` chunks are text chunks generated from extracted images. They do not introduce a special retrieval route: the existing embedding, FAISS/numpy fallback, rerank, prompt assembly, citation, and refusal contracts continue to apply. The extra fields on `chunks` are `chunk_type` and `source_image_path`.
+
+Vision models follow the existing provider pattern:
+
+```text
+VisionModelProvider
+-> DeterministicVisionModelProvider (tests and local regression)
+-> OpenAICompatibleVisionModelProvider (manual real-provider use)
+```
+
+Automated tests use deterministic vision only. Real vision API calls require explicit local configuration and must not become CI or local full-test prerequisites. Extracted images under `data/images/` are runtime artifacts and are gitignored like `data/raw/`, `data/fulltext/`, and `data/faiss/`.
+
 ## 阶段 43 架构增量：多轮对话质量与生产可观测性强化
 
 阶段 43 不改变 Stage 30 评分规则、不替换 provider、不新增外部资料来源、不引入跨会话长期记忆或用户画像。架构增量集中在两个位置：多轮评测 + 会话内最小分层记忆，以及 request_id 全链路追踪 + 本地诊断端点。
@@ -3954,3 +4023,22 @@ docker-compose.prod.yml
 The native frontend remains static HTML/CSS/JS with no Node/React/Vue build chain. Phase 44 adds a standalone Chinese authentication gate with login and account creation tabs, then reveals the Agent workspace only after sign-in. After login, the JWT is stored in browser `localStorage`; `fetchJson()` and `streamAgentQuery()` inject the `Authorization` header. The frontend must not display or log the full token.
 
 Security boundary: JWT secrets, database passwords, SSH passwords, bearer tokens, API keys, provider raw responses, `raw_response`, `reasoning_content`, and restricted full text must not enter Git, CSV, docs, tests, or Obsidian. The cloud server is a deployment smoke and human-verification target, not a CI or local full-test prerequisite.
+
+## Phase 45 Quality Repair Delta
+
+Phase 18-20 adds a quality repair layer before cloud publication:
+
+```text
+image_description chunks
+-> scripts/clean_phase45_low_value_images.py
+-> remove QR / publisher logo / deterministic template / very short low-information chunks
+-> keep orientation-review chunks for human inspection
+
+phase12 quality audit
+-> stronger title weakness detection
+-> year recovery from early text chunks
+-> expanded cloud_candidate set
+-> candidate-only embeddings and FAISS rebuild
+```
+
+This keeps the architecture local-first. The repair layer changes release eligibility and derived indexes; it does not alter the default Agent chain, auth, provider topology, or cloud runtime contract.

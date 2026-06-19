@@ -1,3 +1,4 @@
+import re
 from typing import Literal
 
 
@@ -31,6 +32,11 @@ FOLLOWUP_TRANSFORM_TRIGGERS = (
     "summarize that",
     "make it shorter",
     "turn that into bullets",
+)
+
+FOLLOWUP_POINT_COUNT_PATTERN = re.compile(
+    r"(?:再)?(?:给|列|补充|增加|整理|总结|改成|输出)?\s*"
+    r"(?:[一二三四五六七八九十两\d]+)\s*(?:点|条|个要点|项)"
 )
 
 FOLLOWUP_PRONOUNS = (
@@ -103,6 +109,8 @@ def is_followup_transform_request(question: str) -> bool:
     normalized = question.casefold().strip()
     if not normalized:
         return False
+    if FOLLOWUP_POINT_COUNT_PATTERN.search(normalized):
+        return len(normalized) <= 120
     if any(trigger in normalized for trigger in FOLLOWUP_TRANSFORM_TRIGGERS):
         return len(normalized) <= 120 or any(
             pronoun in normalized for pronoun in FOLLOWUP_PRONOUNS
