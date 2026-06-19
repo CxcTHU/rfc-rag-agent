@@ -1,5 +1,17 @@
 # RFC-RAG-Agent
 
+## Phase 45 Data Migration And Multimodal RAG Update
+
+Current branch: `codex/phase-45-data-migration-multimodal-rag`.
+
+Phase 45 starts from `origin/main -> de3a96c Merge phase 44 production deployment auth`. It keeps Stage 30 scoring rules, provider topology, auth behavior, data-source boundaries, and the default Agent answer chain unchanged. The phase adds two main capabilities: incremental SQLite to PostgreSQL data migration, and multimodal RAG through PDF image extraction, deterministic/real vision provider abstraction, `image_description` chunks, embeddings, and unified retrieval.
+
+Main changes: `scripts/migrate_sqlite_to_postgres.py` migrates documents, sources, chunks, chunk embeddings, and QA logs with idempotent dedupe; `scripts/build_faiss_index.py --database-url` can rebuild FAISS from a target database; chunks now include `chunk_type` and `source_image_path` with Alembic migration `20260618_0002`; `app/services/ingestion/image_extractor.py` extracts valid PDF images with PyMuPDF and skips images below 100px; `app/services/generation/vision_model.py` adds `VisionModelProvider`, deterministic vision, and OpenAI-compatible vision; `app/services/ingestion/multimodal_pipeline.py` creates searchable `image_description` chunks and embeddings; `scripts/process_multimodal.py` provides a batch entry point.
+
+Verification: focused Stage 45 tests `18 passed`; full `python -m pytest -q` -> `912 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; `python scripts/run_production_smoke.py` -> `rows=11 execute=false failed=0`; browser smoke passed desktop and 390x844 mobile with console errors=0 and horizontal overflow=false, and a temporary browser API smoke confirmed an `image_description` chunk is returned by normal `/search/vector`.
+
+Boundary: Stage 45 is complete through development, tests, normal docs, and Obsidian drafts, and is intentionally stopped before user human verification. Do not run `git add`, commit, tag, push, or create a PR until the user explicitly approves.
+
 ## Phase 44 Production Deployment Auth Update
 
 Current branch: `codex/phase-44-cloud-deployment-auth`.
@@ -1682,6 +1694,22 @@ rfc-rag-agent/
 ## 安全说明
 
 真实 API Key 只允许写入本地 `.env`，不得提交到 GitHub。
+
+## Phase 45 追加：新增文献导入与多模态云端发布准备
+
+Phase 45 追加 Phase 10-17 处理 `G:\Codex\program\papers_0618` 下 458 个新增文献文件。执行策略是先本地 SQLite 黄金语料库，再准备云端 PostgreSQL；不并行写本地和云端。
+
+当前结果：
+
+- Manifest：458 files，455 PDF，3 CAJ；`ready=324`，`duplicate_candidate=134`。
+- 本地预导入：新增 documents=302，新增 text chunks=3,237，empty=22，failed=0。
+- 质量审计：标题/年份等元数据校准后，cloud_candidate=20，review_required 进入人工复核队列。
+- Text embedding：20 篇候选文献的 238 个 text chunks 已进入 GLM-Embedding-3。
+- 多模态：20 篇候选 PDF 提取 51 张有效图片，生成 51 个 `image_description` chunks，并进入 GLM-Embedding-3 与 FAISS。
+- 本地 FAISS：paratera / GLM-Embedding-3 / 2048 维，vectors=19,589。
+- Stage 30：`91.52 / A / pass`，不退化。
+
+云端迁移当前停在 readiness 状态：已生成迁移和资产同步清单，但未执行 PostgreSQL 迁移、未同步服务器文件、未重建云端 FAISS、未跑云端 smoke。必须等待用户人工核验和明确授权。
 
 ## 阶段 0 面试表达
 

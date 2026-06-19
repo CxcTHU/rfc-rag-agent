@@ -1,5 +1,63 @@
 # 项目进度
 
+## Latest Status: 2026-06-18 Phase 45 Additional Literature Import And Cloud Release Prep Complete Before Human Verification
+
+Current branch: `codex/phase-45-data-migration-multimodal-rag`.
+
+Phase 45 now includes the appended Phase 10-17 work for `G:\Codex\program\papers_0618`. The added corpus used the agreed local-first strategy: manifest -> local SQLite import -> quality audit -> candidate embeddings/FAISS -> PDF image extraction and GLM-4.6V descriptions -> coverage evaluation -> cloud migration readiness -> asset sync manifest. No real PostgreSQL migration, server file copy, tag, commit, push, or PR was executed.
+
+```text
+manifest: total=458, pdf=455, caj=3, ready=324, duplicate_candidate=134
+local SQLite import: imported=302, skipped_not_ready=134, empty=22, failed=0, new_chunks=3237
+quality audit after title calibration: cloud_candidate=20, review_required=304, suspected_scanned=160, sources_upserted=302
+text candidate index: candidate_documents=20, text_chunks=238, GLM-Embedding-3 dim=2048
+multimodal candidate processing: processed_documents=20, extracted_images=51, image_description_chunks=51, failed_documents=0
+FAISS: vectors=19589 (19300 baseline + 238 Phase 13 text + 51 image_description)
+coverage eval: 10/10 queries still hit existing corpus, 2 queries gained Phase 45 hits
+Stage 30: overall=91.52, grade=A, release_decision=pass
+migration readiness: documents=1055, sources=982, chunks=32276, chunk_embeddings=51605, qa_logs=215
+asset sync readiness: raw_pdf_files=20, extracted_image_files=51, missing=0
+```
+
+Cloud boundary: readiness artifacts were generated only. The authorized cloud migration command remains `scripts/migrate_sqlite_to_postgres.py`; cloud FAISS must be rebuilt from PostgreSQL embeddings instead of copying local `data/faiss/` files.
+
+Current boundary: Phase 45 Phase 10-17 development, local data processing, ordinary docs, and Obsidian drafts are complete. The branch is intentionally stopped before `git add`, commit, tag, push, PR creation, real cloud PostgreSQL migration, or server asset sync pending user human verification.
+
+## Latest Status: 2026-06-18 Phase 45 Data Migration And Multimodal RAG Complete Before Human Verification
+
+Current branch: `codex/phase-45-data-migration-multimodal-rag`.
+
+Phase 45 starts from `origin/main -> de3a96c Merge phase 44 production deployment auth`. It preserves Stage 30 scoring rules, provider topology, auth behavior, data-source boundaries, and the default Agent answer chain. The phase completes two tracks: Track A migrates local SQLite corpus data into PostgreSQL incrementally; Track B upgrades text-only RAG into multimodal RAG by extracting PDF images, describing them with a vision provider, storing them as `image_description` chunks, embedding them, and retrieving them through the existing vector/hybrid path.
+
+Completed:
+
+```text
+docs/stage45_data_migration_multimodal_rag.md -> design and safety boundary
+scripts/migrate_sqlite_to_postgres.py -> idempotent SQLite to target DB migration
+scripts/build_faiss_index.py --database-url -> rebuild FAISS from target DB embeddings
+app/db/models.py + alembic/versions/20260618_0002_chunk_multimodal_fields.py -> chunk_type/source_image_path
+app/services/ingestion/image_extractor.py -> PyMuPDF image extraction and <100px filtering
+app/services/generation/vision_model.py -> deterministic and OpenAI-compatible vision provider
+app/services/ingestion/multimodal_pipeline.py -> image_description chunk + embedding pipeline
+scripts/process_multimodal.py -> batch multimodal processing entry point
+tests/test_stage45_* -> design, migration, schema, image extraction, vision, pipeline tests
+docs/phase_reviews/phase-45.md + Obsidian drafts
+```
+
+Verification:
+
+```text
+python -m pytest tests/test_stage45_design.py tests/test_stage45_migration.py tests/test_stage45_chunk_schema.py tests/test_stage45_image_extractor.py tests/test_stage45_vision_model.py tests/test_stage45_multimodal_pipeline.py -q -> 18 passed
+python -m pytest -q -> 912 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/run_production_smoke.py -> rows=11 execute=false failed=0
+desktop browser smoke -> page rendered, console errors=0, horizontal overflow=false
+temporary browser API smoke -> /search/vector returned an image_description chunk
+mobile browser smoke 390x844 -> content rendered, console errors=0, horizontal overflow=false
+```
+
+Current boundary: Phase 45 development, tests, normal docs, and local Obsidian drafts are complete. The branch is intentionally stopped before `git add`, commit, tag, push, or PR creation pending user human verification.
+
 ## Latest Status: 2026-06-17 Phase 43 Multi-Turn Judge And Production Observability Complete Before Human Verification
 
 Current branch: `codex/phase-43-multi-turn-quality-and-observability`.
@@ -3358,3 +3416,52 @@ Verification:
 - Frontend follow-up: the first inline auth controls were replaced with a Chinese standalone auth gate. A later user-reported registration `Not Found` was traced to a likely stale static asset mix because `/auth/register` returned 200 directly; static asset URLs were bumped to `phase44-auth-gate-zh-fix1`, and frontend 404 errors now include the failed API path for diagnosis.
 
 State: user manual verification has completed in chat on 2026-06-18. User explicitly authorized submitting Phase 44, pushing to GitHub, merging, and tagging. Data migration is intentionally deferred to a later phase.
+
+## Latest Status: 2026-06-18 Phase 45 Quality Repair Complete Before Human Verification
+
+Phase 45追加 Phase 18-20 已完成 Claude 复核提出的质量修复：低价值图片过滤、标题/年份 metadata repair、候选集扩容、FAISS/覆盖评估/迁移 readiness 重算。
+
+```text
+image cleanup: removed low-value/QR/logo/template image chunks, retained 46 effective image_description chunks
+metadata repair: cloud_candidate=235, review_required=89
+text embeddings: candidate text chunks=2660, indexed this repair=2441, skipped=219
+FAISS: vectors=22006
+coverage eval: Phase45 query coverage 4/10, total Phase45 hits=11
+migration readiness: documents=1055, chunks=32271, chunk_embeddings=54022, GLM embeddings=22006
+asset sync readiness: raw_pdf_files=235, extracted_image_files=46, missing=0
+```
+
+Boundary remains unchanged: no real PostgreSQL migration, no server file sync, no git add/commit/tag/push, and no PR before user human verification.
+## Latest Status: 2026-06-19 Phase 45 Data Migration And Multimodal RAG Complete, User-Approved For Submit
+
+Current branch: `codex/phase-45-data-migration-multimodal-rag`.
+
+Phase 45 now covers the original SQLite-to-PostgreSQL migration readiness and multimodal RAG foundation, plus the later full local literature ingestion and PDF figure evidence work requested during manual review.
+
+Completed highlights:
+
+- Incremental SQLite-to-PostgreSQL migration script for `documents`, `sources`, `chunks`, `chunk_embeddings`, and `qa_logs`, excluding users/conversations/messages.
+- `chunks.chunk_type` and `chunks.source_image_path` with Alembic migration and model/schema propagation.
+- PyMuPDF image extraction, deterministic and OpenAI-compatible vision providers, multimodal ingestion, image-description chunks, embeddings, and FAISS rebuild support.
+- Local golden-corpus import from the three paper directories, with manifesting, deduplication, quality audit, metadata repair, text chunk indexing, and domestic coverage evaluation.
+- Full-corpus image-level multimodal processing with staging CSV import, low-value image cleanup, orientation repair, image-description embedding, and FAISS rebuild.
+- Agent response and frontend support for real PDF-extracted figure evidence, including `/assets/images/...`, figure cards, citation previews, same-document figure fallback, and in-page lightbox.
+
+Final verified local state:
+
+```text
+documents include 853 local PDF records
+image_description_chunks=14158
+image_description_embeddings=14158
+total_embeddings=68857
+FAISS vectors=36841
+Stage30=91.52 / A / pass
+full_pytest=944 passed
+production_smoke_dry_run=passed
+```
+
+Known deferred issue: some PDF-extracted images can still be cropped or fragment-like. The user accepted deferring stronger cropped-fragment filtering/page-region repair to the next phase.
+
+Boundary: runtime data remains local-only and is not committed (`data/raw/`, `data/images/`, `data/faiss/`, `data/incoming/`, SQLite DBs/backups, Playwright runtime cache). Cloud PostgreSQL migration and server asset sync remain operational actions gated by explicit runtime authorization and are not CI prerequisites.
+
+User manual verification has completed in chat on 2026-06-19. User explicitly authorized submitting Phase 45, pushing to GitHub, merging, and tagging.

@@ -31,8 +31,8 @@ def test_frontend_index_is_served() -> None:
     assert "data-auth-logout" in response.text
     assert "data-auth-status" in response.text
     assert "data-auth-username" in response.text
-    assert "/static/app.js?v=phase44-auth-gate-zh-fix1" in response.text
-    assert "/static/styles.css?v=phase44-auth-gate-zh-fix1" in response.text
+    assert "/static/app.js?v=phase45-figure-lightbox-fix1" in response.text
+    assert "/static/styles.css?v=phase45-figure-lightbox-fix1" in response.text
     assert 'class="hero-layout"' in response.text
     assert "hero-kicker" not in response.text
     assert 'class="demo-panel agent-workspace-panel"' in response.text
@@ -92,6 +92,8 @@ def test_frontend_static_assets_are_served() -> None:
     assert "/auth/login" in response.text
     assert "/auth/me" in response.text
     assert "AUTH_TOKEN_STORAGE_KEY" in response.text
+    assert "authRememberMeSelected" in response.text
+    assert "window.sessionStorage" in response.text
     assert "authHeaders" in response.text
     assert "Authorization" in response.text
     assert "Bearer" in response.text
@@ -235,8 +237,18 @@ def test_frontend_static_assets_are_served() -> None:
     assert "userFriendlyErrorMessage" in response.text
     assert "citationReferenceHtml" in response.text
     assert "sourceClusterHtml" in response.text
+    assert "figureEvidenceHtml" in response.text
+    assert "data-figure-open" in response.text
+    assert "openFigureLightbox" in response.text
+    assert "closeFigureLightbox" in response.text
+    assert "data-close-figure-lightbox" in response.text
+    assert 'event.key === "Escape"' in response.text
+    assert "Figure ${index + 1}" in response.text
+    assert "Figure [${escapeHtml(citation)}] /" not in response.text
     assert "openCitationDrawer" in response.text
     assert "closeCitationDrawer" in response.text
+    assert "const activeCitation = preferredCitation || citations[0] || \"\"" in response.text
+    assert "activeItem?.classList.add(\"is-active\")" in response.text
     assert "data-source-cluster" in response.text
     assert "data-citation-set" in response.text
     assert "data-citation-drawer-item" in response.text
@@ -246,6 +258,10 @@ def test_frontend_static_assets_are_served() -> None:
     assert "citation_source_map" in response.text
     assert "citationNumbersInAnswer" in response.text
     assert "renderAnswerWithCitationLinks" in response.text
+    assert "renderMarkdownBlocks" in response.text
+    assert "messageElement._streamedAnswerText" in response.text
+    assert "answerText.innerHTML = renderMarkdownBlocks" in response.text
+    assert "blocks.push(`<ol>" in response.text
     assert "renderInlineMarkdown" in response.text
     assert "sanitizeRenderedHtml" in response.text
     assert "SAFE_RENDERED_TAGS" in response.text
@@ -299,6 +315,8 @@ def test_frontend_static_assets_are_served() -> None:
     assert "agent-stream-status" in styles.text
     assert "answer-text--segmented" in styles.text
     assert "answer-segment + .answer-segment" in styles.text
+    assert ".answer-text ol" in styles.text
+    assert ".answer-text li + li" in styles.text
     assert "agent-chat-layout" in styles.text
     assert "conversation-sidebar" in styles.text
     assert "conversation-list-item" in styles.text
@@ -311,6 +329,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "auth-tab.is-active" in styles.text
     assert "auth-help.is-error" in styles.text
     assert "auth-form" in styles.text
+    assert "auth-remember" in styles.text
     assert "auth-summary" in styles.text
     assert "height: calc(100vh - 108px)" in styles.text
     assert "grid-template-rows: auto minmax(0, 1fr)" in styles.text

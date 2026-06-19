@@ -19,6 +19,8 @@ class KeywordSearchResult:
     content: str
     heading_path: str | None
     score: float
+    chunk_type: str = "text"
+    source_image_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,8 @@ class KeywordSearchService:
                     content=chunk.content,
                     heading_path=chunk.heading_path,
                     score=score,
+                    chunk_type=chunk.chunk_type,
+                    source_image_path=chunk.source_image_path,
                 )
             )
 

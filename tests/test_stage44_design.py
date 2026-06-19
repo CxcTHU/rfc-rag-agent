@@ -26,9 +26,9 @@ def test_stage44_design_document_keeps_sensitive_values_out() -> None:
 
 
 def test_stage44_planning_records_nine_phases_and_server_boundary() -> None:
-    task_plan = Path("task_plan.md").read_text(encoding="utf-8")
+    progress = Path("docs/progress.md").read_text(encoding="utf-8")
 
-    assert "Phase 0-8（9 个 Phase）" in task_plan
-    assert "origin/main -> 5596d27" in task_plan
-    assert "Docker-ready 初始化" in task_plan
-    assert "远端服务器只用于人工核验前部署验证" in task_plan
+    assert "Phase 44 Production Deployment Auth Complete" in progress
+    assert "origin/main -> 5596d27" in progress
+    assert "Remote deployment smoke" in progress
+    assert "cloud inbound TCP 8044" in progress

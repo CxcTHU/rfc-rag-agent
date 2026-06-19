@@ -72,6 +72,9 @@ class AgentSearchResultItem(BaseModel):
     content: str
     heading_path: str | None
     score: float
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    image_url: str | None = None
 
 
 class AgentSourceItem(BaseModel):
@@ -88,6 +91,9 @@ class AgentSourceItem(BaseModel):
     doi: str | None
     content: str | None
     score: float | None
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    image_url: str | None = None
 
 
 class AgentWorkflowStepItem(BaseModel):

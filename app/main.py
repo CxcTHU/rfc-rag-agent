@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 import time
 
 from fastapi import FastAPI, Request
@@ -108,6 +109,13 @@ def create_app() -> FastAPI:
     app.include_router(conversations_router)
     app.include_router(sources_router)
     app.include_router(agent_router)
+    image_assets_dir = Path("data/images")
+    image_assets_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/assets/images",
+        StaticFiles(directory=image_assets_dir),
+        name="image-assets",
+    )
     app.mount(
         "/static",
         StaticFiles(directory=FRONTEND_DIR / "static"),

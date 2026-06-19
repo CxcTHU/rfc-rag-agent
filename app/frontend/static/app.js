@@ -20,10 +20,20 @@ const apiEndpoints = {
 
 const AUTH_TOKEN_STORAGE_KEY = "rfc-rag-agent.authToken";
 
+function storedAuthToken() {
+  return window.localStorage?.getItem(AUTH_TOKEN_STORAGE_KEY) || window.sessionStorage?.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
+}
+
+function authRememberMeSelected() {
+  const activeForm = document.querySelector(".auth-form:not([hidden])");
+  const checkbox = activeForm?.querySelector("[data-auth-remember]");
+  return checkbox ? Boolean(checkbox.checked) : true;
+}
+
 const state = {
   sources: [],
   documents: [],
-  authToken: window.localStorage?.getItem(AUTH_TOKEN_STORAGE_KEY) || "",
+  authToken: storedAuthToken(),
   currentUser: null,
   sourceFilters: {
     keyword: "",
@@ -189,13 +199,17 @@ function renderAuthState() {
   }
 }
 
-function setAuthSession(token, user) {
+function setAuthSession(token, user, { remember = true } = {}) {
   state.authToken = token || "";
   state.currentUser = user || null;
   if (state.authToken) {
-    window.localStorage?.setItem(AUTH_TOKEN_STORAGE_KEY, state.authToken);
+    const storage = remember ? window.localStorage : window.sessionStorage;
+    const fallbackStorage = remember ? window.sessionStorage : window.localStorage;
+    storage?.setItem(AUTH_TOKEN_STORAGE_KEY, state.authToken);
+    fallbackStorage?.removeItem(AUTH_TOKEN_STORAGE_KEY);
   } else {
     window.localStorage?.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    window.sessionStorage?.removeItem(AUTH_TOKEN_STORAGE_KEY);
   }
   renderAuthState();
 }
@@ -235,7 +249,7 @@ async function submitAuthLogin() {
       method: "POST",
       body: JSON.stringify({ username_or_email: identity, password }),
     });
-    setAuthSession(payload.access_token, payload.user);
+    setAuthSession(payload.access_token, payload.user, { remember: authRememberMeSelected() });
     setAuthHelp("登录成功，正在加载工作台...");
     setApiStatus("已登录");
     enterApp("ask", "#ask-view");
@@ -275,7 +289,7 @@ async function submitAuthRegister() {
       method: "POST",
       body: JSON.stringify({ username_or_email: username, password }),
     });
-    setAuthSession(payload.access_token, payload.user);
+    setAuthSession(payload.access_token, payload.user, { remember: authRememberMeSelected() });
     setAuthHelp("账号创建成功，正在进入工作台...");
     setApiStatus("已创建账号并登录");
     enterApp("ask", "#ask-view");
@@ -327,13 +341,17 @@ function escapeHtml(value) {
 
 const SAFE_RENDERED_TAGS = new Set([
   "A",
+  "ARTICLE",
   "BUTTON",
+  "BR",
   "CODE",
   "DETAILS",
   "DIV",
+  "IMG",
   "LI",
   "OL",
   "P",
+  "SECTION",
   "SMALL",
   "SPAN",
   "STRONG",
@@ -343,16 +361,23 @@ const SAFE_RENDERED_TAGS = new Set([
 const SAFE_RENDERED_ATTRS = new Set([
   "aria-hidden",
   "aria-label",
+  "alt",
   "class",
   "data-agent-abort-status",
   "data-citation-ref",
   "data-citation-set",
   "data-citation-source",
+  "data-figure-meta",
+  "data-figure-open",
+  "data-figure-src",
+  "data-figure-title",
   "data-source-cluster",
   "href",
+  "loading",
   "open",
   "rel",
   "role",
+  "src",
   "target",
   "type",
 ]);
@@ -561,6 +586,55 @@ function renderAnswerWithCitationLinks(answer, sources = [], invalidCitations = 
   return sanitizeRenderedHtml(rendered);
 }
 
+function renderMarkdownBlocks(answer, sources = [], invalidCitations = [], citationSourceMap = {}, citationSetId = "") {
+  const lines = String(answer || "").replace(/\r\n/g, "\n").split("\n");
+  const blocks = [];
+  let paragraphLines = [];
+  let listItems = [];
+
+  const inline = (text) =>
+    renderAnswerWithCitationLinks(text, sources, invalidCitations, citationSourceMap, citationSetId);
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) {
+      return;
+    }
+    const html = paragraphLines.map((line) => inline(line)).join("<br>");
+    blocks.push(`<p>${html}</p>`);
+    paragraphLines = [];
+  };
+
+  const flushList = () => {
+    if (!listItems.length) {
+      return;
+    }
+    blocks.push(`<ol>${listItems.map((item) => `<li>${inline(item)}</li>`).join("")}</ol>`);
+    listItems = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
+    const numbered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+    if (bullet || numbered) {
+      flushParagraph();
+      listItems.push((bullet || numbered)[1]);
+      continue;
+    }
+    flushList();
+    paragraphLines.push(trimmed);
+  }
+
+  flushParagraph();
+  flushList();
+  return sanitizeRenderedHtml(blocks.join(""));
+}
+
 function splitLongTextSegment(segment, maxChars = ANSWER_SEGMENT_MAX_CHARS) {
   const chunks = [];
   let remaining = String(segment || "").trim();
@@ -608,7 +682,14 @@ function renderAnswerSegmentsHtml(result = {}, citationSetId = "") {
         result.citation_source_map || {},
         citationSetId,
       );
-      return `<div class="answer-segment">${html}</div>`;
+      const blockHtml = renderMarkdownBlocks(
+        segment,
+        result.sources || [],
+        result.invalid_citations || [],
+        result.citation_source_map || {},
+        citationSetId,
+      );
+      return `<div class="answer-segment">${blockHtml || html}</div>`;
     })
     .join("");
 }
@@ -640,6 +721,80 @@ function sourceClusterHtml(result = {}, citationSetId = "") {
     .join("");
   const more = citations.length > 3 ? `<span class="source-more">+${citations.length - 3}</span>` : "";
   return `<button class="source-cluster" type="button" data-source-cluster data-citation-set="${escapeHtml(citationSetId)}" aria-label="View ${escapeHtml(String(citations.length))} sources">${preview}${more}<span class="source-label">Sources</span></button>`;
+}
+
+function imageEvidenceSources(result = {}) {
+  const sources = result.sources || [];
+  const citations = (result.citations || []).map((citation) => String(citation));
+  const citedSources = citations
+    .map((citation) => {
+      const sourceCitation = result.citation_source_map?.[citation] || citation;
+      const source = sourceForCitation(sources, citation, sourceCitation);
+      return source ? { source, citation } : null;
+    })
+    .filter(Boolean);
+  const fallbackSources = sources.map((source, index) => ({ source, citation: String(index + 1) }));
+  const candidates = [...citedSources, ...fallbackSources];
+  const seen = new Set();
+  const figures = [];
+  for (const candidate of candidates) {
+    const imageUrl = candidate.source?.image_url;
+    if (!imageUrl || candidate.source?.chunk_type !== "image_description") {
+      continue;
+    }
+    if (seen.has(imageUrl)) {
+      continue;
+    }
+    seen.add(imageUrl);
+    figures.push({ ...candidate, imageUrl });
+    if (figures.length >= 4) {
+      break;
+    }
+  }
+  return figures;
+}
+
+function figureOriginalLabel(source = {}) {
+  const imagePath = String(source.source_image_path || source.image_url || "");
+  const pageMatch = imagePath.match(/page(\d+)_img(\d+)/i);
+  if (!pageMatch) {
+    return "原文图";
+  }
+  return `第 ${pageMatch[1]} 页 / 原文图 ${pageMatch[2]}`;
+}
+
+function figureSourceLine(source = {}) {
+  const title = sourceTitle(source);
+  return `${title} · ${figureOriginalLabel(source)}`;
+}
+
+function figureEvidenceHtml(result = {}) {
+  const figures = imageEvidenceSources(result);
+  if (!figures.length) {
+    return "";
+  }
+  const cards = figures
+    .map(({ source, imageUrl }, index) => {
+      const title = sourceTitle(source);
+      const summary = sourceSummary(source);
+      const figureLabel = `Figure ${index + 1}`;
+      const sourceLine = figureSourceLine(source);
+      return `
+        <article class="figure-card">
+          <button class="figure-thumb" type="button" data-figure-open data-figure-src="${escapeHtml(imageUrl)}" data-figure-title="${escapeHtml(title)}" data-figure-meta="${escapeHtml(sourceLine)}" aria-label="放大查看 ${escapeHtml(title)}">
+            <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}" loading="lazy">
+          </button>
+          <div class="figure-body">
+            <div class="figure-kicker">${escapeHtml(figureLabel)}</div>
+            <strong>${escapeHtml(title)}</strong>
+            <small>来源：${escapeHtml(sourceLine)}</small>
+            <p>${escapeHtml(summary)}</p>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+  return `<section class="figure-evidence" aria-label="Related paper figures">${cards}</section>`;
 }
 
 function formatRefusalCategory(category) {
@@ -957,6 +1112,7 @@ function citationDrawerItemHtml(displayCitation, source, isInvalid = false) {
     : "Chunk unavailable";
   const score = source.score !== undefined && source.score !== null ? ` / score ${Number(source.score || 0).toFixed(3)}` : "";
   const summary = compactText(source.content || source.snippet, "No summary available");
+  const sourceLine = figureSourceLine(source);
   return `
     <article class="citation-drawer-item${isInvalid ? " citation-drawer-item--invalid" : ""}" data-citation-drawer-item="${escapeHtml(displayCitation)}">
       <div class="citation-drawer-item-head">
@@ -964,6 +1120,7 @@ function citationDrawerItemHtml(displayCitation, source, isInvalid = false) {
         <strong>${escapeHtml(title)}</strong>
       </div>
       <p>${escapeHtml(sourceType)} / ${chunkInfo}${score}</p>
+      ${source.image_url ? `<button class="citation-drawer-image-button" type="button" data-figure-open data-figure-src="${escapeHtml(source.image_url)}" data-figure-title="${escapeHtml(title)}" data-figure-meta="${escapeHtml(sourceLine)}" aria-label="放大查看 ${escapeHtml(title)}"><img class="citation-drawer-image" src="${escapeHtml(source.image_url)}" alt="${escapeHtml(title)}" loading="lazy"></button>` : ""}
       <div class="citation-drawer-snippet">${escapeHtml(summary)}</div>
     </article>
   `;
@@ -993,15 +1150,14 @@ function openCitationDrawer(citationSetId, preferredCitation = "") {
     : '<div class="empty-state">No sources</div>';
   drawer.hidden = false;
   drawer.classList.add("is-open");
-  if (preferredCitation) {
-    const activeItem = list.querySelector(`[data-citation-drawer-item="${CSS.escape(String(preferredCitation))}"]`);
-    if (activeItem) {
-      list.querySelectorAll(".citation-drawer-item.is-active").forEach((item) => {
-        item.classList.remove("is-active");
-      });
-      activeItem.classList.add("is-active");
-      activeItem.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
+  const activeCitation = preferredCitation || citations[0] || "";
+  list.querySelectorAll(".citation-drawer-item.is-active").forEach((item) => {
+    item.classList.remove("is-active");
+  });
+  if (activeCitation) {
+    const activeItem = list.querySelector(`[data-citation-drawer-item="${CSS.escape(String(activeCitation))}"]`);
+    activeItem?.classList.add("is-active");
+    activeItem?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 }
 
@@ -1012,6 +1168,68 @@ function closeCitationDrawer() {
   }
   drawer.classList.remove("is-open");
   drawer.hidden = true;
+}
+
+function ensureFigureLightbox() {
+  let lightbox = document.querySelector("[data-figure-lightbox]");
+  if (lightbox) {
+    return lightbox;
+  }
+  lightbox = document.createElement("div");
+  lightbox.className = "figure-lightbox";
+  lightbox.dataset.figureLightbox = "";
+  lightbox.hidden = true;
+  lightbox.innerHTML = `
+    <button class="figure-lightbox-backdrop" type="button" data-close-figure-lightbox aria-label="关闭图片预览"></button>
+    <div class="figure-lightbox-panel" role="dialog" aria-modal="true" aria-label="论文图片预览">
+      <button class="figure-lightbox-close" type="button" data-close-figure-lightbox aria-label="关闭图片预览">×</button>
+      <img data-figure-lightbox-image alt="">
+      <div class="figure-lightbox-caption">
+        <strong data-figure-lightbox-title></strong>
+        <small data-figure-lightbox-meta></small>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(lightbox);
+  return lightbox;
+}
+
+function openFigureLightbox({ src = "", title = "", meta = "" } = {}) {
+  if (!src) {
+    return;
+  }
+  const lightbox = ensureFigureLightbox();
+  const image = lightbox.querySelector("[data-figure-lightbox-image]");
+  const titleNode = lightbox.querySelector("[data-figure-lightbox-title]");
+  const metaNode = lightbox.querySelector("[data-figure-lightbox-meta]");
+  if (image) {
+    image.src = src;
+    image.alt = title || "论文图片";
+  }
+  if (titleNode) {
+    titleNode.textContent = title || "论文图片";
+  }
+  if (metaNode) {
+    metaNode.textContent = meta || "";
+  }
+  lightbox.hidden = false;
+  lightbox.classList.add("is-open");
+  document.body.classList.add("has-figure-lightbox");
+  lightbox.querySelector("[data-close-figure-lightbox]")?.focus();
+}
+
+function closeFigureLightbox() {
+  const lightbox = document.querySelector("[data-figure-lightbox]");
+  if (!lightbox) {
+    return;
+  }
+  lightbox.classList.remove("is-open");
+  lightbox.hidden = true;
+  document.body.classList.remove("has-figure-lightbox");
+  const image = lightbox.querySelector("[data-figure-lightbox-image]");
+  if (image) {
+    image.removeAttribute("src");
+  }
 }
 
 function renderAgentToolCalls(toolCalls) {
@@ -1153,7 +1371,7 @@ function appendAgentThinkingMessage() {
           <div class="chat-message-role">Agent</div>
           <div class="agent-thinking-status" data-agent-thinking-status><span class="loading-spinner" aria-hidden="true"></span>Thinking...</div>
           <div class="agent-live-steps" data-agent-live-steps hidden aria-label="Agent live steps"></div>
-          <div class="answer-text thinking-text"><span class="loading-spinner" aria-hidden="true"></span>Thinking...</div>
+          <div class="answer-text thinking-text"></div>
         </div>
       </article>
     `,
@@ -1345,7 +1563,8 @@ function appendTokenToAgentMessage(messageElement, token) {
       status.textContent = "Receiving answer...";
     }
   }
-  answerText.textContent += token;
+  messageElement._streamedAnswerText = `${messageElement._streamedAnswerText || ""}${token}`;
+  answerText.innerHTML = renderMarkdownBlocks(messageElement._streamedAnswerText);
   scrollAgentChatToBottom();
 }
 
@@ -1445,7 +1664,8 @@ function finalizeAgentStreamingMessage(messageElement, result) {
   messageElement.classList.remove("chat-message--thinking");
 
   const answerText = bubble.querySelector(".answer-text");
-  if (!answerText || !answerText.textContent.trim()) {
+  const streamedAnswer = String(messageElement._streamedAnswerText || answerText.textContent || "").trim();
+  if (!answerText || !streamedAnswer) {
     bubble.innerHTML = sanitizeRenderedHtml(`
       <div class="chat-message-role">Agent</div>
       ${agentAnswerHtml(result)}
@@ -1476,6 +1696,7 @@ function finalizeAgentStreamingMessage(messageElement, result) {
   answerText.insertAdjacentHTML(
     "afterend",
     `
+    ${figureEvidenceHtml(result)}
     <div class="answer-meta">
       ${sourceClusterHtml(result, citationSetId)}
       ${orphanInvalidBadges}
@@ -1545,6 +1766,7 @@ function agentAnswerHtml(result) {
     ${agentThoughtHtml(result)}
     ${refused}
     <div class="answer-text answer-text--segmented" data-citation-set="${escapeHtml(citationSetId)}">${renderAnswerSegmentsHtml(result, citationSetId)}</div>
+    ${figureEvidenceHtml(result)}
     <div class="answer-meta">
       ${sourceClusterHtml(result, citationSetId)}
       ${orphanInvalidBadges}
@@ -2165,6 +2387,11 @@ function bindCommands() {
   document.querySelector("[data-close-citation-drawer]")?.addEventListener("click", () => {
     closeCitationDrawer();
   });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeFigureLightbox();
+    }
+  });
   bindEnterToSubmit();
   document.querySelector("[data-conversation-list]")?.addEventListener("click", (event) => {
     const conversationButton = event.target.closest("[data-conversation-item]");
@@ -2193,6 +2420,21 @@ function bindCommands() {
     const menu = document.querySelector("[data-conversation-menu]");
     if (menu && !menu.hidden && !event.target.closest("[data-conversation-menu]")) {
       hideConversationMenu();
+    }
+    const figureTrigger = event.target.closest("[data-figure-open]");
+    if (figureTrigger) {
+      event.preventDefault();
+      openFigureLightbox({
+        src: figureTrigger.dataset.figureSrc || "",
+        title: figureTrigger.dataset.figureTitle || "",
+        meta: figureTrigger.dataset.figureMeta || "",
+      });
+      return;
+    }
+    if (event.target.closest("[data-close-figure-lightbox]")) {
+      event.preventDefault();
+      closeFigureLightbox();
+      return;
     }
     const sourceTrigger = event.target.closest("[data-source-cluster], [data-citation-ref]");
     if (sourceTrigger) {

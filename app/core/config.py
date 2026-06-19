@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     reranking_timeout_seconds: float = 30.0
     reranking_recall_k: int = 25
 
+    vision_model_provider: str = ""
+    vision_model_name: str = ""
+    vision_model_api_key: str = ""
+    vision_model_base_url: str = ""
+    vision_model_timeout_seconds: float = 30.0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

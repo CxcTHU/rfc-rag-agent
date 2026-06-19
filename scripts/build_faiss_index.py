@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from sqlalchemy import select
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import aliased
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 from app.core.config import get_settings  # noqa: E402
 from app.db.models import Chunk, ChunkEmbedding  # noqa: E402
 from app.db.repositories import deserialize_embedding  # noqa: E402
-from app.db.session import SessionLocal, init_db  # noqa: E402
+from app.db.session import SessionLocal, create_database_engine, init_db  # noqa: E402
 from app.services.retrieval.faiss_index import (  # noqa: E402
     FaissVectorIndex,
     default_faiss_paths,
@@ -28,6 +29,11 @@ def main() -> None:
     parser.add_argument("--dimension", type=int, default=0, help="Embedding dimension.")
     parser.add_argument("--output-dir", default="data/faiss", help="Directory for .index and ids metadata files.")
     parser.add_argument("--limit", type=int, default=0, help="Maximum embeddings to index. 0 means all.")
+    parser.add_argument(
+        "--database-url",
+        default="",
+        help="Optional database URL to read embeddings from instead of app settings.",
+    )
     args = parser.parse_args()
 
     if args.limit < 0:
@@ -42,8 +48,15 @@ def main() -> None:
     if not dimension:
         raise ValueError("dimension must be provided with --dimension or EMBEDDING_DIMENSION")
 
-    init_db()
-    with SessionLocal() as db:
+    session_factory = SessionLocal
+    if args.database_url:
+        database_engine = create_database_engine(args.database_url)
+        session_factory = sessionmaker(autocommit=False, autoflush=False, bind=database_engine)
+        init_db(database_engine)
+    else:
+        init_db()
+
+    with session_factory() as db:
         chunk_ids, embeddings = list_current_embeddings(
             db=db,
             provider=provider,

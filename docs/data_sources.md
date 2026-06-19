@@ -1,5 +1,39 @@
 # 数据来源登记
 
+## Phase 45 Additional Literature Batch Data Note
+
+Source directory: `G:\Codex\program\papers_0618`.
+
+This batch is user-provided local literature for domestic rock-filled concrete coverage. It was not crawled or downloaded by the system. The batch was first registered in `data/incoming/phase45_literature/manifest.csv/json`, then only `ready` rows were imported into local SQLite.
+
+Derived artifacts include the Phase 10 manifest, Phase 11 import summaries, Phase 12 quality audit/review queue, Phase 13/14 embedding summaries, Phase 14 multimodal summaries, Phase 16 migration readiness, and Phase 17 asset sync manifest.
+
+Safety boundary: raw PDFs, extracted images, SQLite DB state, FAISS indexes, full chunk bodies, API keys, bearer tokens, JWT secrets, plaintext passwords, provider raw responses, `raw_response`, `reasoning_content`, hidden reasoning, and restricted full text remain out of Git, docs, tests, public CSVs, and Obsidian. Real GLM-4.6V was used only for local batch processing; automated tests continue to use `DeterministicVisionModelProvider`.
+
+## Phase 45 Data Migration And Multimodal RAG Data Note
+
+Phase 45 adds no crawler, no new external source registry category, no new PDF download, and no restricted full text to Git. It operates on existing local corpus rows and local PDF files already represented by `documents.raw_path`.
+
+New derived runtime artifacts:
+
+- `data/images/{document_id}/pageN_imgM.png`: extracted PDF images, gitignored runtime files.
+- `chunk_type="image_description"` rows in `chunks`: text descriptions generated from extracted images.
+- chunk embeddings for those image-description rows, generated through the existing embedding provider.
+- optional FAISS indexes rebuilt from target DB embeddings through `scripts/build_faiss_index.py --database-url`.
+
+Data migration artifacts:
+
+- `scripts/migrate_sqlite_to_postgres.py` copies existing local rows into a target database.
+- Migrated tables: documents, sources, chunks, chunk_embeddings, qa_logs.
+- Non-migrated runtime identity tables: users, conversations, messages.
+
+Safety boundary:
+
+- Extracted images are local runtime artifacts and remain out of Git.
+- Vision provider tests use `DeterministicVisionModelProvider`.
+- Real vision API calls require explicit local configuration and are not CI or full-test prerequisites.
+- API keys, bearer tokens, JWT secrets, plaintext passwords, provider raw responses, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, and full vendor responses must not be written to Git, CSV, docs, tests, or Obsidian.
+
 本文件用于记录后续采集的堆石混凝土相关资料来源。
 
 ## 阶段 43 多轮对话质量与生产可观测性说明
@@ -1529,3 +1563,17 @@ Data safety boundary:
 - No API key, Bearer token, Authorization header, vendor raw response, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, or full chunk body is written to Git, CSV, tests, docs, or Obsidian.
 - Runtime corpus and index state remains local and gitignored: `data/app.sqlite`, `data/raw/`, `data/fulltext/`, and `data/faiss/`.
 - Evaluation CSVs contain only ids, categories, source types, metric numbers, top titles, and sanitized error summaries.
+
+## Phase 45 Quality Repair Data Note
+
+Phase 18-20 does not add a new external source. It cleans and reclassifies the same user-provided `papers_0618` batch. New artifacts are local quality-review derivatives:
+
+- `phase18_image_quality_review.csv`
+- `phase18_image_quality_summary.json`
+- `phase19_embedding_summary.json`
+- `phase19_image_embedding_summary.json`
+- `phase20_image_embedding_summary.json`
+- `phase20_migration_readiness.json`
+- `phase20_asset_sync_manifest.json`
+
+The repair removed deterministic template image descriptions from the real candidate corpus because those descriptions are test-provider artifacts, not genuine visual understanding. Real vision API responses and secrets are still not stored in docs, tests, Git, public CSVs, or Obsidian.

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RFC-RAG-Agent</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase44-auth-gate-zh-fix1" />
+    <link rel="stylesheet" href="/static/styles.css?v=phase45-figure-lightbox-fix1" />
   </head>
   <body>
     <main class="app-shell" data-app-shell>
@@ -38,6 +38,10 @@
               <span>密码</span>
               <input data-auth-login-password type="password" autocomplete="current-password" placeholder="至少 8 位字符" />
             </label>
+            <label class="auth-remember">
+              <input data-auth-remember type="checkbox" checked />
+              <span>记住我</span>
+            </label>
             <button class="command-button auth-submit" type="submit">登录</button>
           </form>
           <form class="auth-form auth-form--register" data-auth-register-form hidden>
@@ -52,6 +56,10 @@
             <label>
               <span>密码</span>
               <input data-auth-register-password type="password" autocomplete="new-password" minlength="8" maxlength="72" placeholder="8 到 72 位字符" />
+            </label>
+            <label class="auth-remember">
+              <input data-auth-remember type="checkbox" checked />
+              <span>记住我</span>
             </label>
             <button class="command-button auth-submit" type="submit">创建账号</button>
           </form>
@@ -422,6 +430,6 @@
       <button type="button" data-rename-conversation role="menuitem">重命名</button>
       <button type="button" class="danger-menu-item" data-delete-conversation role="menuitem">删除</button>
     </div>
-    <script src="/static/app.js?v=phase44-auth-gate-zh-fix1" type="module"></script>
+    <script src="/static/app.js?v=phase45-figure-lightbox-fix1" type="module"></script>
   </body>
 </html>
