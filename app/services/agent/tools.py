@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 import re
 
@@ -11,6 +11,7 @@ from app.services.generation.answer_service import CitationAnswerService
 from app.services.generation.chat_model import ChatModelProvider
 from app.services.generation.prompt_builder import ContextSource
 from app.services.retrieval.embedding import EmbeddingProvider
+from app.services.retrieval.citation_locator import CitationLocator
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.keyword_search import KeywordSearchResult, KeywordSearchService
 from app.services.retrieval.query_embedding_cache import get_query_embedding_cache
@@ -146,6 +147,7 @@ class AgentSearchItem:
     image_url: str | None = None
     caption: str | None = None
     page_number: int | None = None
+    content_bbox: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -168,6 +170,7 @@ class AgentSourceReference:
     image_url: str | None = None
     caption: str | None = None
     page_number: int | None = None
+    content_bbox: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -216,7 +219,14 @@ class AgentToolbox:
         except ValueError as exc:
             return failed_tool_result(tool_name, query, exc)
 
-        search_results = [search_item_from_result(result) for result in results]
+        search_results = _enrich_results_with_citation_location(
+            [search_item_from_result(result) for result in results],
+            self.db,
+        )
+        sources = _enrich_sources_with_citation_location(
+            sources_from_search_results(search_results),
+            self.db,
+        )
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -226,7 +236,7 @@ class AgentToolbox:
                 succeeded=True,
             ),
             search_results=search_results,
-            sources=sources_from_search_results(search_results),
+            sources=sources,
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No keyword results were found.",
         )
@@ -241,7 +251,14 @@ class AgentToolbox:
         except (RuntimeError, ValueError) as exc:
             return failed_tool_result(tool_name, query, exc)
 
-        search_results = [search_item_from_result(result) for result in results]
+        search_results = _enrich_results_with_citation_location(
+            [search_item_from_result(result) for result in results],
+            self.db,
+        )
+        sources = _enrich_sources_with_citation_location(
+            sources_from_search_results(search_results),
+            self.db,
+        )
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -251,7 +268,7 @@ class AgentToolbox:
                 succeeded=True,
             ),
             search_results=search_results,
-            sources=sources_from_search_results(search_results),
+            sources=sources,
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No hybrid results were found.",
         )
@@ -354,6 +371,11 @@ class AgentToolbox:
             f"skipped_quality={skipped_quality}; "
             f"skipped_specific_mismatch={skipped_specific_mismatch}"
         )
+        search_results = _enrich_results_with_citation_location(search_results, self.db)
+        sources = _enrich_sources_with_citation_location(
+            sources_from_search_results(search_results),
+            self.db,
+        )
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -364,7 +386,7 @@ class AgentToolbox:
             ),
             search_results=search_results,
             figure_results=figure_results,
-            sources=sources_from_search_results(search_results),
+            sources=sources,
             refused=not bool(figure_results),
             refusal_reason=None if figure_results else "No relevant figure results were found.",
         )
@@ -394,7 +416,10 @@ class AgentToolbox:
         except ValueError as exc:
             return failed_tool_result(tool_name, question, exc)
 
-        sources = [source_reference_from_context_source(source) for source in answer.sources]
+        sources = _enrich_sources_with_citation_location(
+            [source_reference_from_context_source(source) for source in answer.sources],
+            self.db,
+        )
         if answer.refused and not sources:
             sources = self._safe_refusal_search_sources(
                 question=question,
@@ -429,7 +454,10 @@ class AgentToolbox:
         except (RuntimeError, ValueError):
             return []
         return sources_from_search_results(
-            [search_item_from_result(result) for result in results[:top_k]]
+            _enrich_results_with_citation_location(
+                [search_item_from_result(result) for result in results[:top_k]],
+                self.db,
+            )
         )
 
     def list_sources(
@@ -568,6 +596,7 @@ def sources_from_search_results(results: list[AgentSearchItem]) -> list[AgentSou
             image_url=result.image_url,
             caption=result.caption,
             page_number=result.page_number,
+            content_bbox=result.content_bbox,
         )
         for result in results
     ]
@@ -717,3 +746,47 @@ def truncate_text(text: str, limit: int = 120) -> str:
     if len(stripped) <= limit:
         return stripped
     return stripped[: limit - 3] + "..."
+
+
+def _enrich_results_with_citation_location(
+    results: list[AgentSearchItem],
+    db: Session,
+) -> list[AgentSearchItem]:
+    """Attach batch citation-location payloads to agent search results."""
+    locations = CitationLocator().locate_batch([result.chunk_id for result in results], db)
+    enriched: list[AgentSearchItem] = []
+    for result in results:
+        location = locations.get(result.chunk_id)
+        if location is None:
+            enriched.append(result)
+            continue
+        enriched.append(
+            replace(
+                result,
+                page_number=result.page_number or location.page_number,
+                content_bbox=location.to_dict(),
+            )
+        )
+    return enriched
+
+
+def _enrich_sources_with_citation_location(
+    sources: list[AgentSourceReference],
+    db: Session,
+) -> list[AgentSourceReference]:
+    chunk_ids = [source.chunk_id for source in sources if source.chunk_id is not None]
+    locations = CitationLocator().locate_batch(chunk_ids, db)
+    enriched: list[AgentSourceReference] = []
+    for source in sources:
+        location = locations.get(source.chunk_id or 0)
+        if location is None:
+            enriched.append(source)
+            continue
+        enriched.append(
+            replace(
+                source,
+                page_number=source.page_number or location.page_number,
+                content_bbox=location.to_dict(),
+            )
+        )
+    return enriched
