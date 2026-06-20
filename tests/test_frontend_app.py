@@ -31,8 +31,8 @@ def test_frontend_index_is_served() -> None:
     assert "data-auth-logout" in response.text
     assert "data-auth-status" in response.text
     assert "data-auth-username" in response.text
-    assert "/static/app.js?v=phase45-figure-lightbox-fix1" in response.text
-    assert "/static/styles.css?v=phase45-figure-lightbox-fix1" in response.text
+    assert "/static/app.js?v=phase48-figure-card-block-fix1" in response.text
+    assert "/static/styles.css?v=phase48-figure-card-block-fix1" in response.text
     assert 'class="hero-layout"' in response.text
     assert "hero-kicker" not in response.text
     assert 'class="demo-panel agent-workspace-panel"' in response.text

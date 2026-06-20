@@ -103,8 +103,18 @@ FIGURE_SPECIFIC_PHRASES = (
     "aggregate gradation",
     "particle size",
     "void filling",
+    "cement loss",
+    "slump flow",
+    "t500",
+    "passing factor",
+    "fluxes",
     "\u5e94\u529b\u5e94\u53d8",
     "\u6297\u538b\u5f3a\u5ea6",
+    "\u5f3a\u5ea6",
+    "\u8bd5\u9a8c\u7ed3\u679c",
+    "\u529b\u5b66\u6027\u80fd",
+    "\u8bd5\u9a8c\u65b9\u6cd5",
+    "\u88c5\u7f6e",
     "\u6297\u62c9\u5f3a\u5ea6",
     "\u5288\u88c2\u6297\u62c9",
     "\u6e29\u5ea6\u5e94\u529b",
@@ -121,8 +131,36 @@ FIGURE_SPECIFIC_PHRASES = (
     "\u5766\u843d\u5ea6",
     "\u586b\u5145\u6027",
     "\u7ea7\u914d",
+    "\u7ea7\u914d\u5bf9",
     "\u7c92\u5f84",
     "\u5b54\u9699",
+    "\u6c34\u6ce5\u6d41\u5931\u91cf",
+    "\u5761\u843d\u6269\u5c55\u5ea6",
+    "\u6269\u5c55\u65f6\u95f4",
+    "\u900f\u8fc7\u7cfb\u6570",
+    "\u901a\u91cf",
+    "\u80f6\u7ed3\u4eba\u5de5\u7802\u77f3",
+)
+FIGURE_NEGATIVE_INTENT_TERMS = (
+    "\u4e0d\u8981\u914d\u56fe",
+    "\u4e0d\u9700\u8981\u56fe\u7247",
+    "\u4e0d\u8981\u56fe\u7247",
+    "\u4e0d\u8981\u53ec\u56de\u56fe\u7247",
+    "\u4e0d\u8981\u67e5\u8be2\u56fe\u7247",
+    "\u4e0d\u8981\u8fd4\u56de\u56fe",
+    "\u8bf7\u4e0d\u8981\u8fd4\u56de\u56fe",
+    "\u4e0d\u8981\u5c55\u793a\u4efb\u4f55\u56fe",
+    "\u4e0d\u542b\u56fe\u7247",
+    "\u4e0d\u770b\u56fe",
+    "\u4e0d\u8981\u5c55\u793a\u56fe\u7247",
+    "\u56fe\u7247 chunk",
+    "\u56fe\u7247\u9898\u6ce8",
+    "caption \u5b57\u6bb5",
+    "\u53ea\u7528\u6587\u5b57",
+    "\u53ea\u8981\u6587\u5b57",
+    "no image",
+    "without image",
+    "text only",
 )
 
 
@@ -290,8 +328,37 @@ class AgentToolbox:
             return failed_tool_result(tool_name, query, ValueError("query must not be empty"))
         if top_k <= 0:
             return failed_tool_result(tool_name, query, ValueError("top_k must be greater than 0"))
-
         like_terms = table_query_terms(normalized_query)
+        vector_rows: list[tuple[Chunk, Document, float]] = []
+        vector_error: str | None = None
+        try:
+            query_embedding = get_query_embedding_cache().get_or_embed(
+                self.embedding_provider,
+                normalized_query,
+            )
+            index_cache = get_vector_index_cache(self.db, self.embedding_provider)
+            matches = index_cache.search(query_embedding, top_k=max(top_k * 50, 200))
+            table_chunk_ids = [
+                match.entry.chunk_id for match in matches if match.entry.chunk_type == "table"
+            ]
+            vector_scores = {
+                match.entry.chunk_id: match.score
+                for match in matches
+                if match.entry.chunk_type == "table"
+            }
+            if table_chunk_ids:
+                vector_statement = (
+                    select(Chunk, Document)
+                    .join(Document, Document.id == Chunk.document_id)
+                    .where(Chunk.id.in_(table_chunk_ids))
+                )
+                vector_rows = [
+                    (chunk, document, vector_scores.get(chunk.id, 0.0))
+                    for chunk, document in self.db.execute(vector_statement).all()
+                ]
+        except (RuntimeError, ValueError) as exc:
+            vector_error = str(exc)
+
         statement = (
             select(Chunk, Document)
             .join(Document, Document.id == Chunk.document_id)
@@ -299,9 +366,25 @@ class AgentToolbox:
             .where(or_(*(Chunk.content.ilike(f"%{term}%") for term in like_terms)))
             .order_by(Chunk.id.asc())
         )
+        keyword_rows = [
+            (chunk, document, 0.0) for chunk, document in self.db.execute(statement).all()
+        ]
+        merged_rows: dict[int, tuple[Chunk, Document, float, float]] = {}
+        for chunk, document, vector_score in [*vector_rows, *keyword_rows]:
+            keyword_score = table_match_score(chunk.content, like_terms)
+            previous = merged_rows.get(chunk.id)
+            if previous is None:
+                merged_rows[chunk.id] = (chunk, document, vector_score, keyword_score)
+            else:
+                merged_rows[chunk.id] = (
+                    chunk,
+                    document,
+                    max(previous[2], vector_score),
+                    max(previous[3], keyword_score),
+                )
         rows = sorted(
-            self.db.execute(statement).all(),
-            key=lambda row: table_match_score(row[0].content, like_terms),
+            merged_rows.values(),
+            key=lambda row: (row[2] + min(row[3], 20.0) * 0.02, row[3], -row[0].id),
             reverse=True,
         )[:top_k]
         search_results = _enrich_results_with_citation_location(
@@ -309,9 +392,9 @@ class AgentToolbox:
                 search_item_from_table_chunk(
                     chunk=chunk,
                     document=document,
-                    score=table_match_score(chunk.content, like_terms),
+                    score=vector_score + min(keyword_score, 20.0) * 0.02,
                 )
-                for chunk, document in rows
+                for chunk, document, vector_score, keyword_score in rows
             ],
             self.db,
         )
@@ -324,7 +407,12 @@ class AgentToolbox:
             call=AgentToolCallRecord(
                 tool_name=tool_name,
                 input_summary=summarize_input(normalized_query, top_k),
-                output_summary=f"returned {len(search_results)} table results",
+                output_summary=(
+                    f"returned {len(search_results)} table results; "
+                    f"vector_candidates={len(vector_rows)}; "
+                    f"keyword_candidates={len(keyword_rows)}"
+                    + (f"; vector_error={vector_error[:80]}" if vector_error else "")
+                ),
                 succeeded=True,
             ),
             search_results=search_results,
@@ -340,6 +428,18 @@ class AgentToolbox:
             return failed_tool_result(tool_name, query, ValueError("query must not be empty"))
         if top_k <= 0:
             return failed_tool_result(tool_name, query, ValueError("top_k must be greater than 0"))
+        if not query_requests_figure(normalized_query):
+            return AgentToolResult(
+                tool_name=tool_name,
+                call=AgentToolCallRecord(
+                    tool_name=tool_name,
+                    input_summary=summarize_input(normalized_query, top_k),
+                    output_summary="returned 0 figure results; visual_intent=false",
+                    succeeded=True,
+                ),
+                refused=True,
+                refusal_reason="The query does not request figure evidence.",
+            )
 
         try:
             query_embedding = get_query_embedding_cache().get_or_embed(
@@ -813,6 +913,32 @@ def page_number_from_source_image_path(source_image_path: str | None) -> int | N
     if not match:
         return None
     return int(match.group("page"))
+
+
+def query_requests_figure(query: str) -> bool:
+    normalized = query.casefold()
+    if any(term in normalized for term in FIGURE_NEGATIVE_INTENT_TERMS):
+        return False
+    generic_terms = [term for term in FIGURE_GENERIC_QUERY_TERMS if term != "\u56fe"]
+    if any(term in normalized for term in generic_terms):
+        return True
+    if "\u56fe" in normalized and any(
+        term in normalized
+        for term in (
+            "\u627e",
+            "\u8fd4\u56de",
+            "\u53ec\u56de",
+            "\u770b",
+            "\u5c55\u793a",
+            "\u7ed9\u6211",
+            "\u54ea\u5f20",
+            "\u54ea\u4e9b",
+            "\u53c2\u8003",
+            "\u5e2e\u52a9",
+        )
+    ):
+        return True
+    return False
 
 
 def figure_specific_requirement_satisfied(

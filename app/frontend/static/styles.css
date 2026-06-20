@@ -1490,26 +1490,31 @@ td {
 
 .figure-card {
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(128px, 0.38fr) minmax(0, 1fr);
-  gap: 12px;
-  align-items: stretch;
+  width: 100%;
+  display: block;
   border: 1px solid rgba(141, 202, 230, 0.22);
   border-radius: 8px;
   background: rgba(13, 27, 44, 0.68);
   padding: 10px;
+  overflow: hidden;
 }
 
 .figure-thumb {
-  min-width: 0;
-  aspect-ratio: 4 / 3;
+  width: 100%;
+  max-width: 100%;
   display: block;
+  height: clamp(150px, 28vw, 260px);
   overflow: hidden;
   border: 1px solid rgba(141, 202, 230, 0.18);
   border-radius: 6px;
   background: rgba(5, 10, 18, 0.78);
   cursor: zoom-in;
   padding: 0;
+  margin: 0 0 12px;
+}
+
+.figure-evidence .figure-thumb {
+  height: clamp(150px, 28vw, 260px);
 }
 
 .figure-thumb img,
@@ -1522,12 +1527,15 @@ td {
 
 .figure-body {
   min-width: 0;
-  display: grid;
-  align-content: start;
-  gap: 5px;
+  max-width: 100%;
+  display: block;
+  overflow: hidden;
+  clear: both;
 }
 
 .figure-kicker {
+  display: block;
+  margin-bottom: 5px;
   color: #93ecff;
   font-size: 11px;
   font-weight: 900;
@@ -1535,7 +1543,10 @@ td {
 }
 
 .figure-body strong {
+  display: block;
+  max-width: 100%;
   overflow-wrap: anywhere;
+  word-break: break-word;
   line-height: 1.35;
 }
 
@@ -1549,6 +1560,7 @@ td {
 .figure-source-title,
 .figure-source-meta {
   display: block;
+  margin-top: 5px;
   color: #b7d0df;
   font-size: 12px;
   line-height: 1.45;
@@ -1565,6 +1577,14 @@ td {
   color: #bed0df;
   font-size: 12px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 760px) {
+  .figure-thumb {
+    height: clamp(150px, 48vw, 240px);
+  }
 }
 
 .citation-drawer-image {

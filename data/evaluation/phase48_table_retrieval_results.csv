@@ -1,0 +1,51 @@
+query_id,category,expected_has_table,returned_count,precision_hit,recall,format_correctness,value_accuracy,keyword_hits,value_hits,top_chunk_ids
+table_mix_001,mix_ratio,true,5,true,1.0000,1.0000,1.0000,MIX PROPORTION|Cement|Silica fume|Water|aggregate,500|175|1150,53551|53553|53826|53831|54629
+table_mix_002,mix_ratio,true,5,true,1.0000,1.0000,1.0000,SF0|SF10|Silica fume|Cement,SF0|SF10|500,53551|54448|53826|53831|54771
+table_mix_003,mix_ratio,true,5,true,1.0000,1.0000,1.0000,MIX PROPORTIONS|Water/Cement Ratio|Strength Grade,Water|Cement|Medium Sand,53553|54454|53551|53826|53831
+table_mix_004,mix_ratio,true,5,true,1.0000,1.0000,1.0000,Water|Cement|Medium Sand|Small Stone|Middle Stone,Water/Cement Ratio,53826|53831|53553|54629|54626
+table_mix_005,mix_ratio,true,5,true,1.0000,1.0000,1.0000,Materials|Cement|Fine aggregate|Coarse aggregate,Superplasticizer,53553|53551|54629|53826|53831
+table_mix_006,mix_ratio,true,5,true,1.0000,1.0000,1.0000,Rock|SCC|ITZ|ACU,Elastic modulus|Density,53556|54635|54030|53554|54277
+table_mix_007,mix_ratio,true,5,true,1.0000,1.0000,1.0000,Elastic modulus|Rock|SCC|ITZ|ACU,9562,53556|54688|53557|54659|53868
+table_mix_008,mix_ratio,true,5,true,1.0000,1.0000,1.0000,IOT sand|phosphogypsum|Accumulation states,ore tailing,53558|54866|54779|54072|54829
+table_strength_001,strength_parameter,true,5,true,1.0000,1.0000,1.0000,28-DAY COMPRESSIVE STRENGTH|Elastic Modulus|Axial compressive strength,34.3|33.2|35.8,53552|53633|54454|54625|53553
+table_strength_002,strength_parameter,true,5,true,1.0000,1.0000,1.0000,Axial compressive strength|SF0|Group 1|Group 2|Avg,33.2|35.8|34.3,53552|54658|54571|54572|54657
+table_strength_003,strength_parameter,true,5,true,1.0000,1.0000,1.0000,compressive strength|confining pressure|RFC|strain rates,Fig. 2|Relationships,53574|53576|54635|54659|53552
+table_strength_004,strength_parameter,true,5,false,0.0000,1.0000,0.0000,,,53633|54659|53552|54610|53868
+table_strength_005,strength_parameter,true,5,true,1.0000,1.0000,1.0000,Maximum and minimum|stresses|face slab|interface,Table 2,53568|54290|54285|54707|54288
+table_strength_006,strength_parameter,true,5,true,1.0000,1.0000,0.0000,Lianghekou|CFRD|MPa,,53570|53571|54285|54916|53633
+table_strength_007,strength_parameter,true,5,true,1.0000,1.0000,1.0000,joint types|Lianghekou CFRD|stress,MPa,53570|53571|54658|54574|53556
+table_strength_008,strength_parameter,true,5,true,1.0000,1.0000,1.0000,widths|Lianghekou CFRD,MPa,53571|53570|54457|54658|54290
+table_strength_009,strength_parameter,true,5,true,1.0000,1.0000,1.0000,Ultrasonic velocity|borehole|Depth,1000|5000,53550|54704|53951|54947|53947
+table_strength_010,strength_parameter,true,5,true,1.0000,1.0000,1.0000,No.6 borehole|Ultrasonic velocity|Depth,m/s,53550|53549|53834|53829|54714
+table_material_001,material_dosage,true,5,true,1.0000,1.0000,1.0000,Silica fume|Superplasticizer|Cement|Water,1.5|SF10,53551|54629|53553|54454|53826
+table_material_002,material_dosage,true,5,true,1.0000,1.0000,1.0000,Silica fume|Fine aggregate|Coarse aggregate|Materials,SF0,53551|53826|53831|53553|54541
+table_material_003,material_dosage,true,5,true,1.0000,1.0000,1.0000,Water/Cement Ratio|kg/m3|Water|Cement,Strength Grade,53553|54454|53551|53826|53831
+table_material_004,material_dosage,true,5,true,1.0000,1.0000,0.0000,Cement|Water|aggregate,,54629|53826|53831|54454|53553
+table_material_005,material_dosage,true,5,true,1.0000,1.0000,1.0000,Superplasticizer|MIX PROPORTION|Concrete,1.5,53551|54454|53553|53826|53831
+table_material_006,material_dosage,true,5,true,1.0000,1.0000,1.0000,iron|ore tailing|phosphogypsum|IOT sand,Accumulation states,53558|54629|53826|53831|53551
+table_compare_001,comparison,true,5,true,1.0000,1.0000,1.0000,SF0|SF10|Silica fume|MIX PROPORTION,500|175,53551|53553|53826|53831|53552
+table_compare_002,comparison,true,5,true,1.0000,1.0000,1.0000,Group 1|Group 2|Group 3|Avg|compressive strength,33.2|35.8|34.3,53552|53862|54657|54313|54571
+table_compare_003,comparison,true,5,true,1.0000,1.0000,1.0000,Rock|SCC|ITZ|ACU|Parameter,Elastic modulus,53556|53557|53746|54046|53727
+table_compare_004,comparison,true,5,true,1.0000,1.0000,1.0000,No.4 borehole|No.5 borehole|No.6 borehole,borehole,53549|54647|54779|54714|54713
+table_compare_005,comparison,true,5,true,1.0000,1.0000,0.0000,dam,,53559|53560|54216|54254|54244
+table_compare_006,comparison,true,5,true,1.0000,1.0000,0.0000,reservoir,,53560|53559|54250|54232|54246
+table_compare_007,comparison,true,5,true,1.0000,1.0000,1.0000,measurement|calculation|deformation,cm,53566|54659|54191|53607|54290
+table_compare_008,comparison,true,5,true,1.0000,1.0000,1.0000,SCC|pouring|producing,pouring,53548|53551|54689|53624|53746
+table_engineering_001,engineering_parameter,true,5,true,1.0000,1.0000,1.0000,length,m,54045|54617|54259|54255|54619
+table_engineering_002,engineering_parameter,true,5,true,1.0000,1.0000,1.0000,deformation|measurement|calculation|cm,Fig. 4,53566|54276|54216|54254|54255
+table_engineering_003,engineering_parameter,true,5,true,1.0000,1.0000,1.0000,design,2002|178,53569|54250|54837|54917|54779
+table_engineering_004,engineering_parameter,true,5,false,0.0000,1.0000,0.0000,,,54065|54917|53857|54443|54566
+table_engineering_005,engineering_parameter,true,5,true,0.0000,1.0000,1.0000,,K,54647|53633|53800|54458|54454
+table_engineering_006,engineering_parameter,true,5,false,0.0000,1.0000,0.0000,,,54255|54030|54045|53552|54208
+table_engineering_007,engineering_parameter,true,5,true,1.0000,1.0000,1.0000,parameter,x|y|z,54465|54954|54290|54443|53556
+table_engineering_008,engineering_parameter,true,5,true,1.0000,1.0000,0.0000,SCC,,54646|54946|54947|53623|53629
+table_engineering_009,engineering_parameter,true,5,true,1.0000,1.0000,1.0000,Ultrasonic velocity|Depth|borehole,m/s|No.6,53550|53834|53829|54704|53828
+table_engineering_010,engineering_parameter,true,5,false,0.0000,1.0000,0.0000,,,54285|54290|54659|54658|54064
+table_engineering_011,engineering_parameter,true,5,true,1.0000,1.0000,1.0000,face slab|interface|Maximum and minimum|stresses,Table 2|stress,53568|53633|53552|53723|54290
+table_mix_009,mix_ratio,true,5,true,1.0000,1.0000,1.0000,rock block|SCC|pouring,Erect|producing,53548|53553|53551|53547|54689
+table_negative_001,negative,false,5,true,1.0000,1.0000,1.0000,,,54457|54454|54065|53898|53710
+table_negative_002,negative,false,5,true,1.0000,1.0000,1.0000,,,54106|54061|53857|54692|54062
+table_negative_003,negative,false,5,false,1.0000,1.0000,1.0000,cat,,54275|53553|53857|54269|54629
+table_negative_004,negative,false,5,true,1.0000,1.0000,1.0000,,,54443|54581|53857|54074|54054
+table_negative_005,negative,false,5,false,1.0000,1.0000,1.0000,,180,53603|54778|53604|54764|54772
+table_negative_006,negative,false,5,true,1.0000,1.0000,1.0000,,,53953|54159|54160|54152|54153

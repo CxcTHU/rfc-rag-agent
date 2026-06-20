@@ -1,44 +1,58 @@
-# 阶段 48 Findings
+# 阶段 49 Findings
 
-## 阶段 47 基线确认
+## 阶段 48 基线确认
 
-- 全量测试: 1029 passed
+- 全量测试: 1033 passed
 - Stage 30: 91.52 / A / pass
 - Alembic head: `20260621_0005`
-- 图片检索 Phase 46 基线: precision=0.9305, must_have_recall=1.0000, suppression=1.0000
-- 表格提取: Phase 47 已实现 `table_extractor.py` + `backfill_phase47_tables.py`，待回填统计
-- 用户图片分析: Phase 47 已实现 `UserImageAnalyzer` + 领域门控，无评测基线
-- image_description chunks: 15628 条（以图搜图的检索目标）
+- FAISS 向量: 40563（含 1440 table embeddings + 14158 image_description embeddings）
+- 数据库引擎: SQLite `./data/app.sqlite`
+- 云端状态: Phase 44 时 `36.103.199.132:8044` smoke 通过（Docker + PostgreSQL + 认证），但数据仅为 smoke 测试数据，Phase 45-48 的数据未同步
 
-## 评测策略决策
+## 现有基础设施盘点
 
-### 两轮评测 + Decision Gate
+### 已就绪（可直接复用）
 
-- 第一轮：小规模建立基线（20-30 条），用真实 API 验证功能有效性
-- Decision Gate：机器可判定的指标门槛，无人值守自动决策
-- 第二轮（条件触发）：扩展到 50 条，聚焦弱项类别
-- 最多两轮，不无限循环
+| 组件 | 文件 | 状态 |
+|---|---|---|
+| PostgreSQL 双引擎支持 | `app/db/session.py:create_database_engine()` | Phase 44 已实现，支持 `sqlite` 和 `postgresql` backend |
+| SQLite → PostgreSQL 迁移脚本 | `scripts/migrate_sqlite_to_postgres.py` | Phase 45 已实现，幂等设计 |
+| 生产 Docker Compose | `docker-compose.prod.yml` | Phase 44 已配置 PostgreSQL 16 + FastAPI |
+| FAISS 构建脚本 | `scripts/build_faiss_index.py` | 支持从任意 DATABASE_URL 重建 |
+| Alembic 迁移 | 所有迁移文件 | 支持 SQLite 和 PostgreSQL |
+| 认证系统 | JWT + bcrypt | Phase 44 已实现 |
+| HTTPS 模板 | `deploy/nginx-https.example.conf`、`deploy/Caddyfile.example` | Phase 39/44 已提供 |
 
-### 真实工程图片来源
+### 需要新建
 
-- 优先使用公开学术论文配图（知网/万方预览页、Google Scholar）
-- 公开混凝土缺陷检测数据集（SDNET2018、GitHub 上的 Concrete Crack Dataset）
-- 公开工程报告和技术标准文档中的配图
-- 不使用付费数据集、不下载受版权保护的商业图片
-- 图片存储在 gitignored 目录，只在本地评测使用
+| 组件 | 用途 |
+|---|---|
+| `docker-compose.dev.yml` | 本地开发用 PostgreSQL 容器 |
+| `.env.dev.example` | 本地 PostgreSQL 开发环境模板 |
 
-### 评测集规模逻辑
+## 关键决策
 
-| 评测组 | 初始规模 | 扩展条件 | 扩展规模 |
-|---|---|---|---|
-| 图片检索 | 复跑 100 + 新增 20 边缘 | Gate 1 任一 FAIL | 边缘集扩到 50 |
-| 用户图片分析 | 20 | Gate 2 任一 FAIL | 扩到 50 |
-| 表格检索 | 20-30（视回填量） | Gate 3 任一 FAIL | 扩到 50 |
+### 本地 SQLite → PostgreSQL
+
+- 动机: 消除 dev/prod 差异。Phase 45 曾因 SQLite `database is locked` 问题不得不用串行 importer
+- 方案: 本地用 Docker 跑 PostgreSQL 16 容器，端口 5433（避免与生产端口冲突）
+- SQLite 保留: 不删除 `data/app.sqlite`，保留作为备份和回滚参考；`config.py` 的默认值仍为 SQLite，通过 `.env` 切换
+
+### 云端数据同步
+
+- 数据差距: 云端 PostgreSQL 只有 Phase 44 smoke 数据，缺少 Phase 45-48 的全部语料、table chunks、image_description chunks 和 embedding
+- 方案: 用现有 `migrate_sqlite_to_postgres.py` 直连云端 PostgreSQL（或本地 PostgreSQL → 云端 PostgreSQL dump/restore）
+- 图片资产: `data/images/` 约 14000+ 文件需要 rsync/scp 到云端
+
+### 测试策略
+
+- pytest 使用 `sqlite:///:memory:` 的测试需要审计，确保不依赖 SQLite-only 特性
+- 全量 pytest 和 Stage 30 在切换后必须通过
+- 浏览器 smoke 需要在本地 PostgreSQL 环境下重新验证
 
 ## 供应商与 API 约束
 
-- 视觉模型: GLM-4.6V via Paratera（5 路分片 `/v1/p001` ~ `/v1/p005`）
-- Embedding: GLM-Embedding-3 via Paratera
-- Rerank: GLM-Rerank via Paratera `/v1/p002/rerank`
-- api.jina.ai 仍然 TLS 不可用
-- 本阶段所有评测使用真实 API，不使用 deterministic mock
+- Embedding: GLM-Embedding-3 via Paratera（不变）
+- Rerank: GLM-Rerank via Paratera `/v1/p002/rerank`（不变）
+- Vision: GLM-4.6V via Paratera 5 路分片（不变）
+- api.jina.ai 仍然 TLS 不可用（不变）

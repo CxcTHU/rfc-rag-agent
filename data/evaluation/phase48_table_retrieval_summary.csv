@@ -1,0 +1,9 @@
+metric,value
+question_count,50
+elapsed_seconds,16.5003
+precision,0.8800
+recall,0.8864
+format_correctness,1.0000
+value_accuracy,0.7955
+gate_decision,PASS
+category_counts,comparison:8;engineering_parameter:11;material_dosage:6;mix_ratio:9;negative:6;strength_parameter:10

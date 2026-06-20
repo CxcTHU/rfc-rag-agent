@@ -5,12 +5,16 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.models import Chunk, Document
-from app.db.repositories import ChunkCreate, DocumentRepository
+from app.db.repositories import ChunkCreate
 from app.db.session import SessionLocal
 from app.services.ingestion.table_extractor import TableChunk, extract_tables_with_stats
+
+
+TABLE_EMBEDDING_TEXT_LIMIT = 3000
 
 
 @dataclass(frozen=True)
@@ -38,8 +42,6 @@ def backfill_tables(
     created = 0
     skipped_existing = 0
     errors: list[str] = []
-    repository = DocumentRepository(db)
-
     for document in documents:
         if db.query(Chunk.id).filter(Chunk.document_id == document.id, Chunk.chunk_type == "table").first():
             skipped_existing += 1
@@ -59,12 +61,12 @@ def backfill_tables(
         if dry_run:
             created += len(result.tables)
             continue
-        existing_count = db.query(Chunk).filter(Chunk.document_id == document.id).count()
+        next_index = next_chunk_index(db, document.id)
         chunks = [
-            chunk_create_from_table(table, chunk_index=existing_count + offset)
+            chunk_create_from_table(table, chunk_index=next_index + offset)
             for offset, table in enumerate(result.tables)
         ]
-        repository.create_chunks(document, chunks, commit=False)
+        db.add_all(chunk_from_create(document.id, chunk) for chunk in chunks)
         created += len(chunks)
 
     if not dry_run:
@@ -76,6 +78,33 @@ def backfill_tables(
         tables_created=created,
         skipped_existing=skipped_existing,
         errors=tuple(errors),
+    )
+
+
+def next_chunk_index(db: Session, document_id: int) -> int:
+    max_index = (
+        db.query(func.max(Chunk.chunk_index))
+        .filter(Chunk.document_id == document_id)
+        .scalar()
+    )
+    return int(max_index or 0) + 1
+
+
+def chunk_from_create(document_id: int, chunk: ChunkCreate) -> Chunk:
+    return Chunk(
+        document_id=document_id,
+        chunk_index=chunk.chunk_index,
+        content=chunk.content,
+        char_count=chunk.char_count,
+        heading_path=chunk.heading_path,
+        start_char=chunk.start_char,
+        end_char=chunk.end_char,
+        chunk_type=chunk.chunk_type,
+        source_image_path=chunk.source_image_path,
+        caption=chunk.caption,
+        page_number=chunk.page_number,
+        content_bbox_json=chunk.content_bbox_json,
+        parent_chunk_id=chunk.parent_chunk_id,
     )
 
 
@@ -94,6 +123,7 @@ def chunk_create_from_table(table: TableChunk, *, chunk_index: int) -> ChunkCrea
     }
     heading = table.header_text or f"Table on page {table.page_number}"
     content = f"{heading}\n\n{table.markdown_content}" if table.header_text else table.markdown_content
+    content = limit_table_content(content)
     return ChunkCreate(
         chunk_index=chunk_index,
         content=content,
@@ -105,6 +135,12 @@ def chunk_create_from_table(table: TableChunk, *, chunk_index: int) -> ChunkCrea
         page_number=table.page_number,
         content_bbox_json=json.dumps(metadata, ensure_ascii=False),
     )
+
+
+def limit_table_content(content: str, limit: int = TABLE_EMBEDDING_TEXT_LIMIT) -> str:
+    if len(content) <= limit:
+        return content
+    return content[:limit].rstrip() + "\n\n[table truncated for embedding safety]"
 
 
 def parse_args() -> argparse.Namespace:

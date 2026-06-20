@@ -2091,6 +2091,15 @@ async function createAgentConversation(title = "New conversation") {
   return conversation;
 }
 
+function startDraftConversation() {
+  state.currentConversationId = null;
+  state.contextMenuConversationId = null;
+  hideConversationMenu();
+  clearAgentChat();
+  renderConversationList();
+  setAgentPanelStatus("draft");
+}
+
 async function loadConversationMessages(conversationId) {
   if (!conversationId) {
     clearAgentChat();
@@ -2110,7 +2119,7 @@ async function loadAgentConversations() {
   if (state.conversations.length) {
     await loadConversationMessages(state.conversations[0].id);
   } else {
-    await createAgentConversation();
+    startDraftConversation();
   }
 }
 
@@ -2133,7 +2142,7 @@ async function deleteCurrentConversation() {
   if (state.conversations.length) {
     await loadConversationMessages(state.conversations[0].id);
   } else {
-    await createAgentConversation();
+    startDraftConversation();
   }
 }
 
@@ -2612,9 +2621,7 @@ function bindCommands() {
     abortAgentStream();
   });
   document.querySelector("[data-new-conversation]")?.addEventListener("click", () => {
-    createAgentConversation().catch((error) => {
-      setApiStatus(`Create conversation failed: ${error.message}`);
-    });
+    startDraftConversation();
   });
   document.querySelector("[data-refresh-conversations]")?.addEventListener("click", () => {
     loadAgentConversations().catch((error) => {

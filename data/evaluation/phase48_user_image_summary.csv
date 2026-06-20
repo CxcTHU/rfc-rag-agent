@@ -1,0 +1,9 @@
+metric,value
+question_count,20
+elapsed_seconds,407.5676
+description_accuracy,0.3360
+text_retrieval_relevance,0.5049
+image_to_image_hit_rate,1.0000
+refusal_correctness,0.8500
+gate_decision,FAIL
+category_counts,aggregate_surface:3;chart:3;construction_site:3;crack:5;negative:3;test_equipment:3

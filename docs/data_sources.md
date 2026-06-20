@@ -1,5 +1,28 @@
 # 数据来源登记
 
+## Phase 48 Real Multimodal Evaluation Data Note
+
+Phase 48 adds no new literature corpus, crawler, restricted full text, or production source registry. It operates on the existing local corpus plus a local-only public-image evaluation set for uploaded-image analysis.
+
+New derived artifacts include:
+
+- `data/evaluation/phase48_summary.json`
+- `data/evaluation/phase48_table_backfill_summary.json`
+- `data/evaluation/phase48_image_edge_questions.csv`
+- `data/evaluation/phase48_user_image_questions.csv`
+- `data/evaluation/phase48_table_retrieval_questions.csv`
+- `data/evaluation/phase48_*_results.csv`
+- `data/evaluation/phase48_*_summary.csv`
+- `scripts/evaluate_phase48_image_edge.py`
+- `scripts/evaluate_phase48_user_image.py`
+- `scripts/evaluate_phase48_table_retrieval.py`
+- `docs/phase48_evaluation_report.md`
+- `docs/phase_reviews/phase-48.md`
+
+`data/evaluation/phase48_user_images/` contains local downloaded public evaluation images and is gitignored. Repository files intentionally do not record original image download URLs. The set is for evaluation only and does not enter the production knowledge base.
+
+Real GLM-4.6V and GLM-Embedding-3 were used for Phase 48 evaluation runs and local derived embeddings. CSVs and docs store only local filenames, ids, counts, metrics, and keyword-hit summaries. They do not store API keys, bearer tokens, Authorization headers, vendor raw responses, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, or original public image URLs.
+
 ## Phase 46 Image Repair And Caption Data Note
 
 Phase 46 adds no new external literature source, crawler, PDF download, or restricted full text. It operates on the existing Phase 45 local PDF corpus, extracted images, SQLite rows, and derived embeddings.
