@@ -41,6 +41,10 @@ class ChatSourceItem(BaseModel):
     heading_path: str | None
     content: str
     score: float
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 class ChatResponse(BaseModel):

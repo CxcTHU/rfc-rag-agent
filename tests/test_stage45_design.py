@@ -1,8 +1,11 @@
 from pathlib import Path
 
 
+STAGE45_DESIGN_DOC = Path("docs/stage45_data_migration_multimodal_rag.md")
+
+
 def test_stage45_design_document_records_two_tracks_and_boundaries() -> None:
-    document = Path("docs/stage45_data_migration_multimodal_rag.md").read_text(encoding="utf-8")
+    document = STAGE45_DESIGN_DOC.read_text(encoding="utf-8")
 
     assert "Track A: incremental SQLite to PostgreSQL data migration" in document
     assert "Track B: PDF image extraction" in document
@@ -13,33 +16,34 @@ def test_stage45_design_document_records_two_tracks_and_boundaries() -> None:
 
 
 def test_stage45_design_document_keeps_sensitive_values_out() -> None:
-    document = Path("docs/stage45_data_migration_multimodal_rag.md").read_text(encoding="utf-8")
+    document = STAGE45_DESIGN_DOC.read_text(encoding="utf-8")
 
     forbidden_literals = [
         "Bearer ey",
         "sk-",
         "JWT_SECRET_KEY=",
         "password=",
-        "raw_response\":",
-        "reasoning_content\":",
+        'raw_response":',
+        'reasoning_content":',
     ]
     for literal in forbidden_literals:
         assert literal not in document
 
 
-def test_stage45_planning_records_ten_phases_and_main_baseline() -> None:
-    task_plan = Path("task_plan.md").read_text(encoding="utf-8")
+def test_stage45_planning_records_main_baseline_and_boundaries() -> None:
+    document = STAGE45_DESIGN_DOC.read_text(encoding="utf-8")
+    readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "10 个 Phase" in task_plan
-    assert "origin/main -> de3a96c" in task_plan
-    assert "codex/phase-45-data-migration-multimodal-rag" in task_plan
-    assert "不要执行 git add、git commit、git tag、git push" in task_plan
+    assert "Phase 45 starts from `origin/main -> de3a96c" in readme
+    assert "Track A: incremental SQLite to PostgreSQL data migration" in document
+    assert "Track B: PDF image extraction" in document
+    assert "stops before `git add`, commit, tag, push, or PR creation" in document
 
 
 def test_stage45_findings_records_deterministic_vision_and_incremental_migration() -> None:
-    findings = Path("findings.md").read_text(encoding="utf-8")
+    document = STAGE45_DESIGN_DOC.read_text(encoding="utf-8")
 
-    assert "数据迁移按表增量" in findings
-    assert "PyMuPDF" in findings
-    assert "DeterministicVisionModelProvider" in findings
-    assert "image_description chunk 统一检索" in findings
+    assert "The script reports inserted, skipped, and failed counts per table" in document
+    assert "PyMuPDF" in document
+    assert "DeterministicVisionModelProvider" in document
+    assert "image_description" in document

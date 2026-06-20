@@ -39,6 +39,10 @@ class BM25SearchResult:
     title_score: float
     heading_score: float
     content_score: float
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 @dataclass(frozen=True)
@@ -184,6 +188,10 @@ def score_document(
         title_score=title_score,
         heading_score=heading_score,
         content_score=content_score,
+        chunk_type=item.chunk.chunk_type,
+        source_image_path=item.chunk.source_image_path,
+        caption=item.chunk.caption,
+        page_number=item.chunk.page_number,
     )
 
 

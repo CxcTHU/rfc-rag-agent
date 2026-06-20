@@ -11,6 +11,7 @@ from app.services.agent.tools import AgentToolResult, truncate_text
 
 ReActActionType = Literal[
     "search_knowledge",
+    "search_figures",
     "rewrite_query",
     "answer_with_citations",
     "refuse",
@@ -19,6 +20,7 @@ ReActActionType = Literal[
 
 READ_ONLY_REACT_ACTIONS: tuple[ReActActionType, ...] = (
     "search_knowledge",
+    "search_figures",
     "rewrite_query",
     "answer_with_citations",
     "refuse",
@@ -27,6 +29,7 @@ READ_ONLY_REACT_ACTIONS: tuple[ReActActionType, ...] = (
 
 REACT_TOOL_TO_AGENT_TOOL: dict[ReActActionType, str | None] = {
     "search_knowledge": "hybrid_search_knowledge",
+    "search_figures": "search_figures",
     "rewrite_query": None,
     "answer_with_citations": "answer_with_citations",
     "refuse": None,
@@ -60,7 +63,7 @@ class ReActAction(BaseModel):
 
     @model_validator(mode="after")
     def validate_action_payload(self) -> ReActAction:
-        if self.action in {"search_knowledge", "rewrite_query"} and not self.query:
+        if self.action in {"search_knowledge", "search_figures", "rewrite_query"} and not self.query:
             raise ValueError(f"{self.action} requires query")
         if self.action == "answer_with_citations" and not (self.question or self.query):
             raise ValueError("answer_with_citations requires question or query")
@@ -133,6 +136,8 @@ def parse_react_action_json(
         decoded = payload
     if not isinstance(decoded, dict):
         raise ValueError("ReAct action must be a JSON object")
+    if "action" not in decoded and "next_action" in decoded:
+        decoded["action"] = decoded.pop("next_action")
     if (
         decoded.get("action") == "refuse"
         and not decoded.get("refusal_reason")
@@ -142,7 +147,7 @@ def parse_react_action_json(
     if decoded.get("action") == "refuse" and not decoded.get("refusal_reason"):
         decoded["refusal_reason"] = "The agent could not produce a reliable answer from the available evidence."
     if (
-        decoded.get("action") in {"search_knowledge", "rewrite_query"}
+        decoded.get("action") in {"search_knowledge", "search_figures", "rewrite_query"}
         and not decoded.get("query")
         and default_query
     ):
@@ -210,6 +215,13 @@ class DeterministicReActPlanner:
             raise ValueError("question must not be empty")
 
         previous_queries = previous_queries or set()
+        if not observations and should_search_figures(question):
+            return ReActAction(
+                action="search_figures",
+                query=normalized_question,
+                reasoning_summary="The question asks for visual evidence; search figure evidence first.",
+            )
+
         if not observations:
             return ReActAction(
                 action="search_knowledge",
@@ -230,6 +242,13 @@ class DeterministicReActPlanner:
                 action="answer_with_citations",
                 question=normalized_question,
                 reasoning_summary="Retrieved evidence is available; answer with citations.",
+            )
+
+        if last.action == "search_figures":
+            return ReActAction(
+                action="answer_with_citations",
+                question=normalized_question,
+                reasoning_summary="Figure evidence search is complete; answer with cited text evidence and available figures.",
             )
 
         if last.action == "search_knowledge" and last.search_result_count == 0:
@@ -265,3 +284,37 @@ class DeterministicReActPlanner:
             refusal_reason=last.refusal_reason or "Reliable evidence was not available.",
             reasoning_summary="The loop converged to refusal.",
         )
+
+
+FIGURE_QUERY_TERMS = (
+    "figure",
+    "fig.",
+    "image",
+    "photo",
+    "picture",
+    "chart",
+    "plot",
+    "curve",
+    "diagram",
+    "flowchart",
+    "microstructure",
+    "show me",
+    "visual",
+    "图",
+    "图片",
+    "图表",
+    "曲线",
+    "流程图",
+    "示意图",
+    "照片",
+    "形态",
+    "破坏",
+    "微观",
+    "给我看",
+    "展示",
+)
+
+
+def should_search_figures(question: str) -> bool:
+    normalized = question.casefold()
+    return any(term in normalized for term in FIGURE_QUERY_TERMS)

@@ -1,0 +1,11 @@
+{
+  "documents": 1146,
+  "chunks": 48810,
+  "chunk_embeddings": 71139,
+  "image_chunks": 15628,
+  "image_embeddings": 15628,
+  "render_image_chunks": 1995,
+  "render_image_embeddings": 1995,
+  "captioned_image_chunks": 7853,
+  "orphan_embeddings": 0
+}

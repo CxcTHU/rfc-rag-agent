@@ -30,6 +30,16 @@ data/incoming/
 *.db
 data/app.sqlite*.backup*
 data/app.sqlite-journal.backup*
+*.pid
+
+# Phase 46 runtime/staging artifacts
+data/evaluation/phase46_redescribe_staging/
+data/evaluation/phase46_redescribe_staging_resume*/
+data/evaluation/phase46_redescribe_smoke/
+data/evaluation/phase46_redescribe_remaining_manifests/
+data/evaluation/phase46_redescribe_remaining_manifests_resume*/
+data/evaluation/phase46_redescribe_manifests/
+data/evaluation/phase46_redescribe_import/
 
 # Logs
 *.log

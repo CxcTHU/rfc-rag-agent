@@ -36,6 +36,8 @@ class HybridSearchResult:
     vector_score: float
     chunk_type: str = "text"
     source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 @dataclass
@@ -214,6 +216,8 @@ def candidate_to_result(candidate: _HybridCandidate, service: HybridSearchServic
         vector_score=candidate.vector_score,
         chunk_type=result.chunk_type,
         source_image_path=result.source_image_path,
+        caption=getattr(result, "caption", None),
+        page_number=getattr(result, "page_number", None),
     )
 
 

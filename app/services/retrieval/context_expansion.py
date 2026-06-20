@@ -23,6 +23,10 @@ class ExpandedSearchResult(SearchResultLike):
     core_content: str
     context_chunk_ids: tuple[int, ...]
     context_window: int
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 class ContextExpansionService:
@@ -124,6 +128,10 @@ def expanded_result_from_parts(
         core_content=result.content,
         context_chunk_ids=context_chunk_ids,
         context_window=window,
+        chunk_type=getattr(result, "chunk_type", "text"),
+        source_image_path=getattr(result, "source_image_path", None),
+        caption=getattr(result, "caption", None),
+        page_number=getattr(result, "page_number", None),
     )
 
 

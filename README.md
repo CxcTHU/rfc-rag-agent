@@ -1,5 +1,19 @@
 # RFC-RAG-Agent
 
+## Phase 46 Image Quality Repair And Caption Association Update
+
+Current branch: `codex/phase-46-image-quality-caption`.
+
+Phase 46 starts from the Phase 45 merge on `main / origin/main -> e1ff05da`, with `phase-45-complete -> 35127e44` confirmed as an ancestor. It keeps Stage 30 scoring rules, provider boundaries, and local-data safety rules unchanged while repairing Phase 45 image quality issues and associating PDF figure/table captions with image evidence.
+
+Main changes: generated `data/evaluation/phase46_image_quality_manifest.csv` for 14,996 images; cleaned Type A decorative chunks and Type C empty/small files; replaced Type B fragmented figures with 1,995 page-rendered images; redescribed all 1,995 repaired images through GLM-4.6V route staging, imported them serially, rebuilt paratera embeddings and FAISS; audited orientation residuals with a subagent; added nullable `chunks.caption` and `chunks.page_number` with Alembic migrations, `caption_extractor.py`, full caption/page-number backfills, caption coverage reports, retrieval/agent/API schema propagation, prompt context caption lines, and frontend figure evidence card caption titles with `图 X — 第 N 页 — 《文档标题》`.
+
+Phase 46 extension: figure retrieval is now explicit and precision-first. ReAct has a read-only `search_figures(query, top_k=4)` tool over `image_description` chunks, with runtime image-quality checks, page metadata, caption propagation, and `MIN_IMAGE_RELEVANCE_SCORE=0.50`. Automatic `enrich_agent_response_with_figure_evidence()` is disabled by default through `ENABLE_AUTO_FIGURE_ENRICHMENT=false`; `react_agent` never uses that fallback. The first 32-question deterministic fixture evaluation remains as unit coverage, and Phase 16-21 added a 100-question real-corpus evaluation set from actual image chunks/captions/page numbers. The real-corpus offline baseline produced `image_precision=0.9305`, `must_have_recall=1.0000`, `image_suppression=1.0000`, `topk_caption_match_rate=0.8800`, and `wrong_generic_curve_rate=0.0000`, so caption-weighted rerank and caption-enhanced embedding rebuild were not triggered.
+
+Verification: full `python -m pytest -q` -> `996 passed`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; `python scripts/evaluate_phase46_real_image_retrieval.py --query-embedding-mode stored_embedding_proxy --top-k 4 --min-score 0.50` -> `threshold_decision=pass`. The Phase 16-21 closeout did not change API or frontend behavior, so no new 8000 smoke was required in this extension pass.
+
+Boundary: Phase 46 development, tests, normal docs, and Obsidian drafts are complete and intentionally stopped before user human verification. Do not run `git add`, commit, tag, push, or create a PR until the user explicitly approves.
+
 ## Phase 45 Data Migration And Multimodal RAG Update
 
 Current branch: `codex/phase-45-data-migration-multimodal-rag`.

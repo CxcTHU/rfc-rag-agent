@@ -243,7 +243,8 @@ def test_frontend_static_assets_are_served() -> None:
     assert "closeFigureLightbox" in response.text
     assert "data-close-figure-lightbox" in response.text
     assert 'event.key === "Escape"' in response.text
-    assert "Figure ${index + 1}" in response.text
+    assert "Figure ${figureNumber}" in response.text
+    assert "figureSourceLine(source, figureNumber)" in response.text
     assert "Figure [${escapeHtml(citation)}] /" not in response.text
     assert "openCitationDrawer" in response.text
     assert "closeCitationDrawer" in response.text

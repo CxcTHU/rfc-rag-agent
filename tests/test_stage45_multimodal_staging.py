@@ -4,10 +4,12 @@ from scripts.import_multimodal_staging import import_rows
 from app.services.generation.vision_model import DeterministicVisionModelProvider
 from scripts.process_multimodal_to_staging import (
     StagingImageRow,
+    build_vision_provider,
     process_image_manifests,
     summarize,
     write_document_status_outputs,
 )
+from argparse import Namespace
 from sqlalchemy.orm import sessionmaker
 
 
@@ -116,3 +118,52 @@ def test_process_image_manifest_uses_workers_and_writes_timing(tmp_path) -> None
     assert all(row.status == "described" for row in rows)
     assert sum(1 for event in timing_events if event.event_type == "describe_image") == 2
     assert {event.provider for event in timing_events} == {"test_provider"}
+
+
+def test_build_vision_provider_uses_phase45_route_env(monkeypatch) -> None:
+    monkeypatch.setenv("PARATERA_GLM_KEY", "route-secret")
+
+    provider = build_vision_provider(
+        FakeVisionSettings(),
+        Namespace(
+            vision_provider="paratera",
+            vision_model_name="GLM-4.6V",
+            vision_api_key_env="PARATERA_GLM_KEY",
+            vision_api_key="",
+            vision_base_url="https://llmapi.paratera.com",
+            vision_timeout_seconds=45.0,
+        ),
+    )
+
+    assert provider.provider_name == "paratera"
+    assert provider.model_name == "GLM-4.6V"
+    assert provider.base_url == "https://llmapi.paratera.com"
+    assert provider.api_key == "route-secret"
+    assert provider.timeout_seconds == 45.0
+
+
+def test_build_vision_provider_falls_back_to_settings() -> None:
+    provider = build_vision_provider(
+        FakeVisionSettings(),
+        Namespace(
+            vision_provider="",
+            vision_model_name="",
+            vision_api_key_env="",
+            vision_api_key="",
+            vision_base_url="",
+            vision_timeout_seconds=0.0,
+        ),
+    )
+
+    assert provider.provider_name == "openai-compatible"
+    assert provider.model_name == "settings-model"
+    assert provider.base_url == "https://settings.example/v1"
+    assert provider.api_key == "settings-secret"
+
+
+class FakeVisionSettings:
+    vision_model_provider = "openai-compatible"
+    vision_model_name = "settings-model"
+    vision_model_api_key = "settings-secret"
+    vision_model_base_url = "https://settings.example/v1"
+    vision_model_timeout_seconds = 30.0

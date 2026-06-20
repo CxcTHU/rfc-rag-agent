@@ -23,6 +23,9 @@ class FakeSearchResult:
     content: str
     heading_path: str | None
     score: float
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    caption: str | None = None
 
 
 def test_build_rag_prompt_numbers_sources_in_order() -> None:
@@ -139,6 +142,22 @@ def test_format_source_includes_traceable_metadata() -> None:
     assert "Score: 0.8500" in formatted
 
 
+def test_format_source_includes_image_caption_when_available() -> None:
+    source = build_rag_prompt(
+        "question",
+        [
+            fake_result(
+                content="Image description.",
+                chunk_type="image_description",
+                source_image_path="data/images/1/page2_img3.png",
+                caption="Fig. 2 Image caption",
+            )
+        ],
+    ).sources[0]
+
+    assert "Caption: Fig. 2 Image caption" in format_source(source)
+
+
 def test_truncate_text_keeps_short_text_unchanged() -> None:
     assert truncate_text(" short text ", 20) == "short text"
 
@@ -147,6 +166,9 @@ def fake_result(
     chunk_id: int = 10,
     title: str = "Rock-filled concrete overview",
     content: str = "Rock-filled concrete uses large rockfill and self-compacting concrete.",
+    chunk_type: str = "text",
+    source_image_path: str | None = None,
+    caption: str | None = None,
 ) -> FakeSearchResult:
     return FakeSearchResult(
         document_id=1,
@@ -159,4 +181,7 @@ def fake_result(
         content=content,
         heading_path="Overview",
         score=0.85,
+        chunk_type=chunk_type,
+        source_image_path=source_image_path,
+        caption=caption,
     )

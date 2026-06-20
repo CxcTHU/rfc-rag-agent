@@ -109,6 +109,8 @@ class Chunk(Base):
     end_char: Mapped[int | None] = mapped_column(Integer, nullable=True)
     chunk_type: Mapped[str] = mapped_column(String(30), nullable=False, default="text", index=True)
     source_image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parent_chunk_id: Mapped[int | None] = mapped_column(
         ForeignKey("chunks.id", ondelete="SET NULL"),
         nullable=True,

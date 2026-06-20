@@ -28,6 +28,8 @@ class VectorSearchResult:
     score: float
     chunk_type: str = "text"
     source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 class VectorSearchService:
@@ -79,6 +81,8 @@ class VectorSearchService:
                     score=match.score,
                     chunk_type=entry.chunk_type,
                     source_image_path=entry.source_image_path,
+                    caption=entry.caption,
+                    page_number=entry.page_number,
                 )
             )
 

@@ -56,6 +56,8 @@ class SearchResultLike(Protocol):
     score: float
     chunk_type: str
     source_image_path: str | None
+    caption: str | None
+    page_number: int | None
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,8 @@ class ContextSource:
     score: float
     chunk_type: str = "text"
     source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 @dataclass(frozen=True)
@@ -143,6 +147,8 @@ def context_source_from_search_result(
         score=result.score,
         chunk_type=getattr(result, "chunk_type", "text"),
         source_image_path=getattr(result, "source_image_path", None),
+        caption=getattr(result, "caption", None),
+        page_number=getattr(result, "page_number", None),
     )
 
 
@@ -181,6 +187,7 @@ def format_context(sources: Sequence[ContextSource]) -> str:
 def format_source(source: ContextSource) -> str:
     heading = source.heading_path or "None"
     source_path = source.source_path or "None"
+    caption_line = [f"Caption: {source.caption}"] if source.caption else []
     return "\n".join(
         [
             f"[{source.source_id}]",
@@ -190,6 +197,7 @@ def format_source(source: ContextSource) -> str:
             f"File name: {source.file_name}",
             f"Chunk: {source.chunk_id} / index {source.chunk_index}",
             f"Heading: {heading}",
+            *caption_line,
             f"Score: {source.score:.4f}",
             "Content:",
             source.content,

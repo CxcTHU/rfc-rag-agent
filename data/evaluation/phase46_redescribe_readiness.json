@@ -1,0 +1,25 @@
+{
+  "render_manifest": "G:/Codex/program/rfc-rag-agent/data/evaluation/phase46_rendered_image_manifest.csv",
+  "total_rows": 1995,
+  "pending_images": 1995,
+  "existing_images": 0,
+  "failed_images": 0,
+  "vision_provider_configured": false,
+  "vision_model_configured": false,
+  "vision_base_url_configured": false,
+  "vision_api_key_configured": false,
+  "vision_provider_is_real": false,
+  "phase45_route_vision_configured": true,
+  "configured_vision_routes": [
+    "official_a",
+    "official_b",
+    "paratera_c"
+  ],
+  "missing_vision_route_key_envs": [],
+  "embedding_provider_configured": true,
+  "embedding_model_configured": true,
+  "embedding_api_key_configured": true,
+  "status": "ready",
+  "reason": "ready_for_real_vision_redescription",
+  "next_command": "python scripts\\process_multimodal_to_staging.py --image-manifest data\\evaluation\\phase46_rendered_image_manifest.csv --workers 5 --vision-provider openai-compatible --vision-model-name GLM-4.6V --vision-api-key-env OFFICIAL_GLM_KEY --vision-base-url https://open.bigmodel.cn/api/paas/v4 --provider-label official_new_a --output-dir data\\evaluation\\phase46_redescribe_staging"
+}

@@ -1,5 +1,88 @@
 # 架构说明
 
+## Phase 46 Architecture Delta: Image Repair And Caption Metadata
+
+Phase 46 keeps the Phase 45 multimodal RAG shape but adds a targeted image-quality repair lane and a caption metadata lane.
+
+Image repair lane:
+
+```text
+data/images + chunks.source_image_path
+-> scripts/classify_phase46_problem_images.py
+-> normal / type_a / type_b / type_c manifest
+-> Type A/C cleanup
+-> Type B page-level rendering
+   page.get_image_info(xref=True)
+   -> merge display bboxes
+   -> page.get_pixmap(clip=merged_rect, dpi=150)
+-> GLM-4.6V route staging
+-> serial SQLite import
+-> paratera embeddings + FAISS rebuild
+```
+
+Caption lane:
+
+```text
+PDF page text blocks via page.get_text("dict")
+-> image display bbox from original xref or rendered-page merge
+-> search below image bbox and top of next page
+-> caption regex for Chinese 图/表 and English Fig/Figure/Table
+-> chunks.caption nullable Text
+-> retrieval result metadata
+-> prompt ContextSource Caption line
+-> AgentSearchItem / AgentSourceReference / API schemas
+-> frontend figure evidence card title
+```
+
+Captions are metadata on `image_description` chunks. They do not replace the GLM visual description in `chunks.content`, and they do not change embedding vectors. FAISS remains derived from chunk embeddings; caption backfill does not require a vector rebuild unless content is changed.
+
+The orientation residual audit was handled as Phase 5a by a subagent and reviewed by the main agent. It produced an audit report only: no remaining non-cleanup orientation candidate required additional page rendering or redescription.
+
+Phase 46 extension decouples figure retrieval from text retrieval:
+
+```text
+ReAct planner
+-> search_knowledge / hybrid_search_knowledge for text evidence
+-> search_figures(query, top_k=4) only when visual evidence is useful
+-> answer_with_citations
+```
+
+`search_figures` is a read-only Agent tool over `image_description` chunks. It embeds the visual query, searches the vector cache, filters to image chunks, enforces `MIN_IMAGE_RELEVANCE_SCORE=0.50`, verifies that the image file exists and is Pillow-readable with dimensions greater than 50px, deduplicates by `(document_id, page_number)`, and returns caption/page/document/image URL metadata. It does not depend on text-hit document ids.
+
+Automatic `enrich_agent_response_with_figure_evidence()` is now gated by `ENABLE_AUTO_FIGURE_ENRICHMENT`, default `false`. `mode="react_agent"` never calls the automatic fallback, even if the flag is enabled; ReAct figure evidence must come from the `search_figures` tool. `/agent/query` and `/agent/query/stream` share the same helper. `/chat` remains unchanged.
+
+The chunk metadata lane now includes nullable `chunks.page_number`, backfilled from `pageN_imgM.*` and `pageN_renderM.*` paths. Retrieval result objects, prompt context, Agent schemas, chat/document schemas, and frontend cards propagate this field. The frontend figure card source line is `图 X — 第 N 页 — 《文档标题》`.
+
+Phase 46 image retrieval quality is measured by `data/evaluation/phase46_image_retrieval_questions.csv` and `scripts/evaluate_phase46_image_retrieval.py`. The script builds a temporary deterministic SQLite fixture and calls the real `AgentToolbox.search_figures()` without real API calls. The calibrated result is `image_precision=1.0000`, `image_recall=1.0000`, `image_suppression=1.0000`, with `threshold_decision=keep_current_threshold`.
+
+Phase 16-21 adds a second, real-corpus image retrieval evaluation layer:
+
+```text
+local SQLite image_description chunks
++ caption / page_number / source_image_path / document title
+-> scripts/build_phase46_real_image_retrieval_questions.py
+-> 100-row real evaluation CSV
+-> scripts/evaluate_phase46_real_image_retrieval.py
+-> AgentToolbox.search_figures()
+-> deterministic keyword/path/caption metrics
+-> pass/fail gate for rerank or embedding readiness
+```
+
+The default evaluation mode is `stored_embedding_proxy`: it uses existing DB image embeddings as query-vector proxies for positive rows and zero vectors for suppression rows. This keeps the baseline offline and verifies the local FAISS/vector cache, threshold, image quality checks, deduplication, caption/page metadata, and deterministic relevance metrics without calling a real embedding API. The script also supports `--query-embedding-mode real` for later manually authorized natural-query embedding calibration; that mode is not a CI or full-test prerequisite.
+
+The Phase 18 real-corpus offline baseline passed the requested gates:
+
+```text
+image_precision=0.9305
+must_have_recall=1.0000
+image_suppression=1.0000
+topk_caption_match_rate=0.8800
+wrong_generic_curve_rate=0.0000
+threshold_decision=pass
+```
+
+Because the gate passed, Phase 19 did not change `search_figures` into caption-weighted soft rerank, and Phase 20 did not run embedding readiness. No text chunks, image descriptions, embeddings, DB rows, FAISS files, API handlers, or frontend code were changed by Phase 19-20.
+
 ## Phase 45 Additional Architecture Delta: Local Golden Corpus And Cloud Release Prep
 
 The appended Phase 10-17 work keeps the same retrieval and Agent runtime, but adds a local-first corpus publication lane for the 2026-06-18 domestic paper batch.

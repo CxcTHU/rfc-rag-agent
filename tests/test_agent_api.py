@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from contextlib import contextmanager
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
@@ -99,6 +100,7 @@ def seed_agent_api_document(db: Session) -> None:
                 end_char=None,
                 chunk_type="image_description",
                 source_image_path="data/images/1/page2_img3.png",
+                caption="Fig. 1 Interface microstructure",
             ),
         ],
     )
@@ -256,6 +258,7 @@ def test_agent_api_defaults_to_tool_calling_with_citations(tmp_path) -> None:
     assert payload["sources"]
     assert any(source["chunk_type"] == "image_description" for source in payload["sources"])
     assert any(source["image_url"] == "/assets/images/1/page2_img3.png" for source in payload["sources"])
+    assert any(source["caption"] == "Fig. 1 Interface microstructure" for source in payload["sources"])
     assert payload["mode"] == "tool_calling_agent"
     assert [step["name"] for step in payload["workflow_steps"]] == [
         "hybrid_search_knowledge",
@@ -738,6 +741,94 @@ def test_refusal_category_marks_tool_service_error() -> None:
             refusal_reason="Retrieved chunks did not provide enough evidence.",
         )
         == "evidence_insufficient"
+    )
+
+
+def test_auto_figure_enrichment_is_disabled_by_default(monkeypatch) -> None:
+    response = agent_api_module.AgentQueryResponse(
+        question="What affects filling capacity?",
+        answer="Answer [1].",
+        tool_calls=[],
+        search_results=[],
+        sources=[],
+        citations=[1],
+        refused=False,
+        refusal_reason=None,
+        reasoning_summary="test",
+        mode="default",
+        workflow_steps=[],
+        iteration_count=0,
+        invalid_citations=[],
+        refusal_category=None,
+        latency_trace={},
+    )
+
+    def fail_enrich(**kwargs):
+        raise AssertionError("automatic figure enrichment should be disabled")
+
+    monkeypatch.setattr(
+        agent_api_module,
+        "get_settings",
+        lambda: SimpleNamespace(enable_auto_figure_enrichment=False),
+    )
+    monkeypatch.setattr(
+        agent_api_module,
+        "enrich_agent_response_with_figure_evidence",
+        fail_enrich,
+    )
+
+    assert (
+        agent_api_module.maybe_enrich_agent_response_with_figure_evidence(
+            db=None,
+            question=response.question,
+            response=response,
+            effective_mode="default",
+        )
+        is response
+    )
+
+
+def test_react_agent_never_uses_auto_figure_enrichment(monkeypatch) -> None:
+    response = agent_api_module.AgentQueryResponse(
+        question="Show the interface microstructure figure.",
+        answer="Answer [1].",
+        tool_calls=[],
+        search_results=[],
+        sources=[],
+        citations=[1],
+        refused=False,
+        refusal_reason=None,
+        reasoning_summary="test",
+        mode="react_agent",
+        workflow_steps=[],
+        iteration_count=0,
+        invalid_citations=[],
+        refusal_category=None,
+        latency_trace={},
+    )
+
+    def fail_enrich(**kwargs):
+        raise AssertionError("react_agent must use search_figures instead")
+
+    monkeypatch.setattr(
+        agent_api_module,
+        "get_settings",
+        lambda: SimpleNamespace(enable_auto_figure_enrichment=True),
+    )
+    monkeypatch.setattr(
+        agent_api_module,
+        "enrich_agent_response_with_figure_evidence",
+        fail_enrich,
+    )
+
+    assert (
+        agent_api_module.maybe_enrich_agent_response_with_figure_evidence(
+            db=None,
+            question=response.question,
+            response=response,
+            effective_mode="react_agent",
+        )
+        is response
     )
 
 

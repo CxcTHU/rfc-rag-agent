@@ -30,6 +30,8 @@ class VectorIndexEntry:
     heading_path: str | None
     chunk_type: str = "text"
     source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 @dataclass(frozen=True)
@@ -185,6 +187,8 @@ class VectorIndexCache:
                     heading_path=chunk.heading_path,
                     chunk_type=chunk.chunk_type,
                     source_image_path=chunk.source_image_path,
+                    caption=chunk.caption,
+                    page_number=chunk.page_number,
                 )
             )
             embeddings.append(embedding)
@@ -237,6 +241,8 @@ class VectorIndexCache:
                     heading_path=chunk.heading_path,
                     chunk_type=chunk.chunk_type,
                     source_image_path=chunk.source_image_path,
+                    caption=chunk.caption,
+                    page_number=chunk.page_number,
                 )
             )
         return entries

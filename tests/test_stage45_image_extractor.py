@@ -4,7 +4,11 @@ from pathlib import Path
 
 import fitz
 
-from app.services.ingestion.image_extractor import PdfImageExtractionConfig, PdfImageExtractor
+from app.services.ingestion.image_extractor import (
+    PdfImageExtractionConfig,
+    PdfImageExtractor,
+    merge_image_rects,
+)
 
 
 def test_pdf_image_extractor_saves_valid_images_and_skips_small_images(tmp_path) -> None:
@@ -68,6 +72,47 @@ def test_pdf_image_extractor_skips_one_bad_pixmap_and_continues(tmp_path, monkey
 
     assert len(extracted) == 1
     assert extracted[0].image_path.endswith("images/42/page1_img2.png")
+
+
+def test_merge_image_rects_combines_nearby_regions() -> None:
+    rects = [
+        fitz.Rect(10, 10, 60, 60),
+        fitz.Rect(65, 10, 120, 60),
+        fitz.Rect(250, 250, 300, 300),
+    ]
+
+    merged = merge_image_rects(rects, iou_threshold=0.3, gap_points=10)
+
+    assert len(merged) == 2
+    assert merged[0] == fitz.Rect(10, 10, 120, 60)
+    assert merged[1] == fitz.Rect(250, 250, 300, 300)
+
+
+def test_pdf_image_extractor_page_render_merges_display_regions(tmp_path) -> None:
+    pdf_path = tmp_path / "figures.pdf"
+    document = fitz.open()
+    page = document.new_page(width=360, height=240)
+    page.insert_image(fitz.Rect(20, 20, 100, 100), stream=make_png_bytes(80, 80, (30, 120, 220)))
+    page.insert_image(fitz.Rect(108, 20, 188, 100), stream=make_png_bytes(80, 80, (200, 80, 40)))
+    page.insert_image(fitz.Rect(260, 20, 330, 90), stream=make_png_bytes(70, 70, (80, 160, 90)))
+    document.save(pdf_path)
+    document.close()
+    extractor = PdfImageExtractor(
+        PdfImageExtractionConfig(
+            output_dir=tmp_path / "images",
+            min_width=50,
+            min_height=50,
+            page_render_dpi=72,
+            merge_gap_points=10,
+        )
+    )
+
+    extracted = extractor.extract_images_page_render(pdf_path, document_id=42)
+
+    assert len(extracted) == 2
+    assert extracted[0].image_path.endswith("images/42/page1_render1.png")
+    assert extracted[0].width >= 160
+    assert Path(extracted[0].image_path).exists()
 
 
 def write_pdf_with_images(path: Path) -> None:

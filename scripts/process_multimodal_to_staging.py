@@ -118,16 +118,16 @@ def main() -> None:
     parser.add_argument("--checkpoint-every", type=int, default=1)
     parser.add_argument("--provider-label", default="", help="Optional safe label used in timing summaries.")
     parser.add_argument("--workers", type=int, default=1, help="Concurrent vision API workers for image-manifest mode.")
+    parser.add_argument("--vision-provider", default="", help="Override VISION_MODEL_PROVIDER for this run.")
+    parser.add_argument("--vision-model-name", default="", help="Override VISION_MODEL_NAME for this run.")
+    parser.add_argument("--vision-api-key-env", default="", help="Read the vision API key from this env var.")
+    parser.add_argument("--vision-api-key", default="", help="Direct API key override; prefer --vision-api-key-env.")
+    parser.add_argument("--vision-base-url", default="", help="Override VISION_MODEL_BASE_URL for this run.")
+    parser.add_argument("--vision-timeout-seconds", type=float, default=0.0)
     args = parser.parse_args()
 
     settings = get_settings()
-    vision_provider = create_vision_model_provider(
-        provider_name=settings.vision_model_provider,
-        model_name=settings.vision_model_name,
-        api_key=settings.vision_model_api_key,
-        base_url=settings.vision_model_base_url,
-        timeout_seconds=settings.vision_model_timeout_seconds,
-    )
+    vision_provider = build_vision_provider(settings, args)
     provider_label = args.provider_label.strip() or vision_provider.provider_name
     if args.image_manifest:
         rows, timing_events, summary = process_image_manifests(
@@ -703,7 +703,20 @@ def write_outputs(
         print(f"wrote {csv_path}")
         print(f"wrote {timing_path}")
         print(f"wrote {summary_path}")
-        print("summary:", " ".join(f"{key}={value}" for key, value in asdict(summary).items()))
+    print("summary:", " ".join(f"{key}={value}" for key, value in asdict(summary).items()))
+
+
+def build_vision_provider(settings, args):
+    api_key = args.vision_api_key or settings.vision_model_api_key
+    if args.vision_api_key_env:
+        api_key = os.environ.get(args.vision_api_key_env, "")
+    return create_vision_model_provider(
+        provider_name=args.vision_provider or settings.vision_model_provider,
+        model_name=args.vision_model_name or settings.vision_model_name,
+        api_key=api_key,
+        base_url=args.vision_base_url or settings.vision_model_base_url,
+        timeout_seconds=args.vision_timeout_seconds or settings.vision_model_timeout_seconds,
+    )
 
 
 def atomic_write_csv(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
