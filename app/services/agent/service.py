@@ -44,6 +44,7 @@ class AgentQueryResult:
     workflow_steps: list[AgentToolCallRecord] = field(default_factory=list)
     iteration_count: int = 0
     latency_trace: dict[str, object] = field(default_factory=dict)
+    image_analysis: dict[str, object] | None = None
 
 
 class AgentService:

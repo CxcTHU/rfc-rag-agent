@@ -6,11 +6,15 @@ import re
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.models import Chunk, Document, Source
 from app.db.repositories import SourceRepository
+from app.services.agent.image_analysis import UserImageAnalyzer
+from app.services.agent.image_storage import ImageStorageError, UserImageStorage
 from app.services.generation.answer_service import CitationAnswerService
 from app.services.generation.chat_model import ChatModelProvider
 from app.services.generation.prompt_builder import ContextSource
+from app.services.generation.vision_model import create_vision_model_provider
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.citation_locator import CitationLocator
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
@@ -200,6 +204,7 @@ class AgentToolResult:
     figure_results: list[FigureSearchResult] = field(default_factory=list)
     sources: list[AgentSourceReference] = field(default_factory=list)
     citations: list[int] = field(default_factory=list)
+    image_analysis: dict[str, object] | None = None
     refused: bool = False
     refusal_reason: str | None = None
 
@@ -444,6 +449,60 @@ class AgentToolbox:
             sources=sources,
             refused=not bool(figure_results),
             refusal_reason=None if figure_results else "No relevant figure results were found.",
+        )
+
+    def analyze_user_image(
+        self,
+        image_path: str,
+        question: str,
+        top_k: int = 5,
+    ) -> AgentToolResult:
+        tool_name = "analyze_user_image"
+        settings = get_settings()
+        try:
+            validated_path = UserImageStorage(
+                max_size_mb=settings.user_image_max_size_mb
+            ).validate_existing_upload_path(image_path)
+            vision_provider = create_vision_model_provider(
+                provider_name=settings.vision_model_provider,
+                model_name=settings.vision_model_name,
+                api_key=settings.vision_model_api_key,
+                base_url=settings.vision_model_base_url,
+                timeout_seconds=settings.vision_model_timeout_seconds,
+            )
+            analysis = UserImageAnalyzer(
+                vision_provider=vision_provider,
+                knowledge_searcher=self.hybrid_search_knowledge,
+                figure_searcher=self.search_figures,
+                text_top_k=top_k,
+            ).analyze(validated_path, question)
+        except (ImageStorageError, RuntimeError, ValueError, FileNotFoundError) as exc:
+            return failed_tool_result(tool_name, "image_path=<user_upload>", exc)
+
+        search_results = [
+            replace(item, image_analysis=analysis.to_payload())
+            for item in analysis.search_results
+        ]
+        sources = [
+            replace(source, image_analysis=analysis.to_payload())
+            for source in analysis.sources
+        ]
+        return AgentToolResult(
+            tool_name=tool_name,
+            call=AgentToolCallRecord(
+                tool_name=tool_name,
+                input_summary="image_path=<user_upload>",
+                output_summary=(
+                    f"image described; text_results={len(analysis.related_text_chunks)}; "
+                    f"similar_figures={len(analysis.similar_figures)}"
+                ),
+                succeeded=True,
+            ),
+            answer=analysis.fused_context,
+            search_results=search_results,
+            sources=sources,
+            image_analysis=analysis.to_payload(),
+            refused=False,
         )
 
     def answer_with_citations(

@@ -26,6 +26,7 @@ data/exports/
 data/fulltext/
 data/logs/
 data/incoming/
+data/user_uploads/
 *.sqlite
 *.db
 data/app.sqlite*.backup*

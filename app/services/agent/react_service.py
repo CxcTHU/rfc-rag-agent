@@ -100,6 +100,7 @@ class ReActAgentService:
         top_k: int = 5,
         max_tool_calls: int = REACT_DEFAULT_MAX_ITERATIONS,
         history: Sequence[str] | None = None,
+        image_path: str | None = None,
         event_sink: ReActEventSink | None = None,
     ) -> AgentQueryResult:
         normalized_question = question.strip()
@@ -117,6 +118,7 @@ class ReActAgentService:
         search_results: list[AgentSearchItem] = []
         sources: list[AgentSourceReference] = []
         citations: list[int] = []
+        image_analysis: dict[str, object] | None = None
         previous_queries: set[str] = set()
         latency_trace = LatencyTrace()
         latency_token = set_current_latency_trace(latency_trace)
@@ -125,7 +127,14 @@ class ReActAgentService:
             llm_driven = self.planner_chat_provider is not None
             for iteration in range(1, max_iterations + 1):
                 planner_started = time.perf_counter()
-                if observations and observations[-1].error:
+                if image_path and not observations:
+                    action = ReActAction(
+                        action="analyze_user_image",
+                        image_path=image_path,
+                        question=normalized_question,
+                        reasoning_summary="A user-uploaded image is attached; analyze it before answering.",
+                    )
+                elif observations and observations[-1].error:
                     action = ReActAction(
                         action="refuse",
                         refusal_reason="Tool execution failed before reliable evidence was available.",
@@ -234,6 +243,31 @@ class ReActAgentService:
                     sources = merge_sources(sources, tool_result.sources)
                     continue
 
+                if action.action == "analyze_user_image":
+                    self._emit_tool_start(event_sink, action, iteration)
+                    tool_started = time.perf_counter()
+                    tool_result = self.toolbox.analyze_user_image(
+                        action.image_path or image_path or "",
+                        action.question or action.query or normalized_question,
+                        top_k=top_k,
+                    )
+                    latency_trace.add_duration(
+                        "tool_latency_ms",
+                        (time.perf_counter() - tool_started) * 1000.0,
+                    )
+                    observation = observation_from_tool_result(
+                        action=action,
+                        tool_result=tool_result,
+                    )
+                    self._emit_tool_result(event_sink, action, observation, iteration)
+                    observations.append(observation)
+                    workflow_steps.append(step_from_observation(action, observation, iteration))
+                    tool_calls.append(tool_result.call)
+                    search_results = merge_search_results(search_results, tool_result.search_results)
+                    sources = merge_sources(sources, tool_result.sources)
+                    image_analysis = tool_result.image_analysis
+                    continue
+
                 if action.action == "search_tables":
                     query = action.query or normalized_question
                     table_query_key = f"table:{query}"
@@ -317,6 +351,7 @@ class ReActAgentService:
                             iteration_count=len(workflow_steps),
                             tool_call_count=len(tool_calls),
                         ),
+                        image_analysis=image_analysis,
                     )
 
                 if action.action == "refuse":
@@ -344,6 +379,7 @@ class ReActAgentService:
                             iteration_count=len(workflow_steps),
                             tool_call_count=len(tool_calls),
                         ),
+                        image_analysis=image_analysis,
                     )
 
                 if action.action == "final_answer":
@@ -371,6 +407,7 @@ class ReActAgentService:
                             iteration_count=len(workflow_steps),
                             tool_call_count=len(tool_calls),
                         ),
+                        image_analysis=image_analysis,
                     )
 
             return result_from_react_tool(
@@ -387,6 +424,7 @@ class ReActAgentService:
                     iteration_count=len(workflow_steps),
                     tool_call_count=len(tool_calls),
                 ),
+                image_analysis=image_analysis,
             )
         finally:
             reset_current_latency_trace(latency_token)
@@ -615,6 +653,7 @@ def result_from_react_tool(
     refused: bool,
     refusal_reason: str | None,
     latency_trace: dict[str, object] | None = None,
+    image_analysis: dict[str, object] | None = None,
 ) -> AgentQueryResult:
     return AgentQueryResult(
         question=question,
@@ -642,6 +681,7 @@ def result_from_react_tool(
         ],
         iteration_count=len(workflow_steps),
         latency_trace=latency_trace or {},
+        image_analysis=image_analysis,
     )
 
 

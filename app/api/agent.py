@@ -247,6 +247,7 @@ def query_agent(
                 top_k=request.top_k,
                 max_tool_calls=request.max_tool_calls,
                 history=conversation_history or request.history,
+                image_path=request.image_path,
             )
         except ValueError as exc:
             raise HTTPException(
@@ -1415,6 +1416,7 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
         iteration_count=result.iteration_count,
         refusal_category=refusal_category,
         latency_trace=result.latency_trace,
+        image_analysis=result.image_analysis,
     )
     return with_refusal_explanation(response)
 

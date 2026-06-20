@@ -9,6 +9,7 @@ class AgentQueryRequest(BaseModel):
     history: list[str] = Field(default_factory=list, max_length=50)
     mode: str | None = None
     conversation_id: int | None = Field(default=None, ge=1)
+    image_path: str | None = None
 
     @field_validator("question")
     @classmethod
@@ -50,6 +51,18 @@ class AgentQueryRequest(BaseModel):
                 "mode must be 'default', 'agentic', 'react_agent', or "
                 "'tool_calling_agent'"
             )
+        return normalized
+
+    @field_validator("image_path")
+    @classmethod
+    def image_path_must_be_user_upload(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().replace("\\", "/")
+        if not normalized:
+            return None
+        if not normalized.startswith("data/user_uploads/"):
+            raise ValueError("image_path must point to data/user_uploads/")
         return normalized
 
 
