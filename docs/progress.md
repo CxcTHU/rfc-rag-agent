@@ -3572,18 +3572,20 @@ Completed:
 
 - Alembic `20260621_0005` adds `chunks.content_bbox_json` and `qa_feedback`.
 - Table workflow adds `TableChunk`, PyMuPDF table extraction, `scripts/backfill_phase47_tables.py`, and `search_tables`.
-- User image workflow adds `/agent/upload-image`, `UserImageStorage`, `UserImageAnalyzer`, and ReAct `analyze_user_image`.
+- User image workflow adds `/agent/upload-image`, `UserImageStorage`, `UserImageAnalyzer`, and ReAct `analyze_user_image`. The analyzer now performs vision description, domain-relevance gating, and then retrieval only for in-scope RFC/hydraulic concrete/dam/concrete defect/table/curve/engineering-diagram images.
 - Citation workflow adds `CitationLocator`, `scripts/backfill_phase47_chunk_bbox.py`, and `content_bbox` propagation to API responses.
 - Feedback workflow adds `FeedbackService`, keyword extraction, `/feedback/export`, and sanitized eval CSV export.
-- Frontend adds image attachment, table evidence cards, image analysis cards, citation location links, and feedback buttons.
+- Frontend adds image attachment, drag-and-drop image upload, table evidence cards, image analysis cards, citation location links, and feedback buttons. Refused image-analysis responses suppress normal evidence cards and feedback controls, and deterministic vision descriptions are labeled as test mode.
+- A post-review image-orientation investigation found that upside-down returned figures were already present in local `data/images/{document_id}/pageN_imgM.png` assets from raw PDF xref extraction. The original PDF pages render upright, so the root cause is extraction without applying the PDF display transform, not frontend output. `scripts/fix_phase45_orientation_images.py` now supports `--all-image-chunks`; the local repair re-rendered 13,574 of 13,633 image chunks from display rectangles and left 59 no-display-rect/invalid-render failures for later audit.
+- Phase 48 is the right place to add the three requested real-model measurement sets: 50 image-returning retrieval cases, 50 real user-uploaded image conversations, and table-returning cases.
 
 Verification:
 
 ```text
-python -m pytest -q -> 1024 passed
+python -m pytest -q -> 1029 passed
 python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
 python -m alembic current -> 20260621_0005 (head)
 node --check app/frontend/static/app.js -> passed
 ```
 
-Boundary: user uploads stay under `data/user_uploads/` and are gitignored. Real API calls are not required for tests. API keys, bearer tokens, raw provider responses, and raw feedback-sensitive material are not committed.
+Boundary: user uploads stay under `data/user_uploads/` and are gitignored. Phase 47 orientation repair reports/backups under `data/evaluation/phase47_*orientation*` are local runtime artifacts and are not committed. Real API calls are not required for tests. API keys, bearer tokens, raw provider responses, and raw feedback-sensitive material are not committed.

@@ -266,7 +266,23 @@ class ReActAgentService:
                     search_results = merge_search_results(search_results, tool_result.search_results)
                     sources = merge_sources(sources, tool_result.sources)
                     image_analysis = tool_result.image_analysis
-                    continue
+                    citations = list(range(1, len(sources) + 1)) if sources else []
+                    return result_from_react_tool(
+                        question=normalized_question,
+                        answer="" if tool_result.refused else (tool_result.answer or ""),
+                        tool_calls=tool_calls,
+                        workflow_steps=workflow_steps,
+                        search_results=search_results,
+                        sources=sources,
+                        citations=citations,
+                        refused=tool_result.refused,
+                        refusal_reason=tool_result.refusal_reason,
+                        latency_trace=latency_trace.finalize(
+                            iteration_count=len(workflow_steps),
+                            tool_call_count=len(tool_calls),
+                        ),
+                        image_analysis=image_analysis,
+                    )
 
                 if action.action == "search_tables":
                     query = action.query or normalized_question

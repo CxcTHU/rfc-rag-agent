@@ -10,17 +10,64 @@ from app.services.generation.vision_model import VisionModelProvider
 
 IMAGE_TO_IMAGE_MIN_SCORE = 0.55
 IMAGE_TO_IMAGE_TOP_K = 5
+IMAGE_OUT_OF_SCOPE_REFUSAL = (
+    "当前系统只支持堆石混凝土、水工混凝土、坝工、混凝土裂缝、骨料、配合比、"
+    "强度试验、表格/曲线/工程图等相关图片分析。上传图片与问题未命中这些领域锚点，"
+    "因此不进行相似图片召回。"
+)
+TEST_VISION_REFUSAL = (
+    "当前启用的是 deterministic 测试视觉模型，它不具备真实看图能力。"
+    "请配置真实视觉模型后再进行用户图片分析。"
+)
 USER_IMAGE_ANALYSIS_PROMPT = (
-    "Analyze this user-uploaded engineering image objectively. Describe visible "
-    "concrete structure features, cracks, defects, specimen or site context, and "
-    "possible RFC/hydraulic concrete relevance. Do not invent information that is "
-    "not visible; state uncertainty when needed."
+    "请用中文客观分析这张用户上传的工程图片。只输出 3-5 条短要点，"
+    "每条不超过 40 个汉字。重点说明：可见的混凝土/堆石/坝工或试验内容、"
+    "是否有裂缝缺陷、与堆石混凝土或水工混凝土的关系、无法确认的不确定点。"
+    "不要写长篇报告，不要编造图片中不可见的信息。"
+)
+DOMAIN_ANCHORS = (
+    "rock-filled concrete",
+    "rock filled concrete",
+    "rfc",
+    "hydraulic concrete",
+    "dam",
+    "concrete",
+    "crack",
+    "aggregate",
+    "mix ratio",
+    "compressive strength",
+    "strength test",
+    "stress strain",
+    "curve",
+    "data table",
+    "tabulated",
+    "table chart",
+    "engineering drawing",
+    "堆石混凝土",
+    "水工混凝土",
+    "坝",
+    "坝工",
+    "混凝土",
+    "裂缝",
+    "骨料",
+    "配合比",
+    "抗压强度",
+    "强度试验",
+    "应力应变",
+    "表格",
+    "曲线",
+    "工程图",
 )
 
 
 @dataclass(frozen=True)
 class ImageAnalysisResult:
     image_description: str
+    domain_relevance: str = "in_scope"
+    refusal_reason: str | None = None
+    vision_provider: str | None = None
+    vision_model: str | None = None
+    is_test_vision: bool = False
     related_text_chunks: list[Any] = field(default_factory=list)
     similar_figures: list[Any] = field(default_factory=list)
     search_results: list[Any] = field(default_factory=list)
@@ -30,6 +77,11 @@ class ImageAnalysisResult:
     def to_payload(self) -> dict[str, object]:
         return {
             "image_description": self.image_description,
+            "domain_relevance": self.domain_relevance,
+            "refusal_reason": self.refusal_reason,
+            "vision_provider": self.vision_provider,
+            "vision_model": self.vision_model,
+            "is_test_vision": self.is_test_vision,
             "related_text_count": len(self.related_text_chunks),
             "similar_figure_count": len(self.similar_figures),
             "fused_context": self.fused_context,
@@ -70,6 +122,32 @@ class UserImageAnalyzer:
         if not image_description:
             raise RuntimeError("vision model returned an empty image description")
 
+        provider_name = getattr(self.vision_provider, "provider_name", None)
+        model_name = getattr(self.vision_provider, "model_name", None)
+        is_test_vision = str(provider_name or "").casefold() in {"deterministic", "fake", "local"}
+        if is_test_vision:
+            return ImageAnalysisResult(
+                image_description=image_description,
+                domain_relevance="test_vision",
+                refusal_reason=TEST_VISION_REFUSAL,
+                vision_provider=provider_name,
+                vision_model=model_name,
+                is_test_vision=True,
+                fused_context=TEST_VISION_REFUSAL,
+            )
+
+        relevance = assess_image_domain_relevance(image_description, normalized_question)
+        if relevance != "in_scope":
+            return ImageAnalysisResult(
+                image_description=image_description,
+                domain_relevance=relevance,
+                refusal_reason=IMAGE_OUT_OF_SCOPE_REFUSAL,
+                vision_provider=provider_name,
+                vision_model=model_name,
+                is_test_vision=False,
+                fused_context=IMAGE_OUT_OF_SCOPE_REFUSAL,
+            )
+
         retrieval_query = build_image_retrieval_query(
             image_description=image_description,
             user_question=normalized_question,
@@ -104,12 +182,33 @@ class UserImageAnalyzer:
         )
         return ImageAnalysisResult(
             image_description=image_description,
+            domain_relevance=relevance,
+            vision_provider=provider_name,
+            vision_model=model_name,
+            is_test_vision=False,
             related_text_chunks=related_text_chunks,
             similar_figures=similar_figures,
             search_results=[*related_text_chunks, *figure_items],
             sources=sources,
             fused_context=fused_context,
         )
+
+
+def assess_image_domain_relevance(image_description: str, question: str) -> str:
+    haystack = f"{image_description}\n{question}".casefold()
+    if any(anchor.casefold() in haystack for anchor in DOMAIN_ANCHORS):
+        return "in_scope"
+    uncertainty_terms = (
+        "uncertain",
+        "cannot determine",
+        "not enough information",
+        "无法判断",
+        "不能判断",
+        "不确定",
+    )
+    if any(term in haystack for term in uncertainty_terms):
+        return "uncertain"
+    return "out_of_scope"
 
 
 def build_image_retrieval_query(*, image_description: str, user_question: str) -> str:
@@ -141,6 +240,78 @@ def build_fused_context(
     if not related_text_chunks and not similar_figures:
         lines.append("\nNo related text evidence or similar corpus figures were found.")
     return "\n".join(lines)
+
+
+def build_concise_image_answer(
+    *,
+    image_description: str,
+    related_text_chunks: list[Any],
+    similar_figures: list[Any],
+    max_points: int = 4,
+    max_chars: int = 520,
+) -> str:
+    points = extract_image_description_points(image_description, max_points=max_points)
+    lines = ["图片分析要点："]
+    for point in points:
+        lines.append(f"- {point}")
+    if related_text_chunks or similar_figures:
+        lines.append(
+            f"- 已结合知识库检索到 {len(related_text_chunks)} 条文本证据、"
+            f"{len(similar_figures)} 张相似图，可在来源中进一步核对。"
+        )
+    answer = "\n".join(lines)
+    if len(answer) <= max_chars:
+        return answer
+    return answer[: max_chars - 3].rstrip() + "..."
+
+
+def extract_image_description_points(description: str, *, max_points: int) -> list[str]:
+    points: list[str] = []
+    for raw_line in description.splitlines():
+        line = clean_image_description_line(raw_line)
+        if not line:
+            continue
+        if is_low_value_image_heading(line):
+            continue
+        points.append(truncate_for_context(line, limit=110))
+        if len(points) >= max_points:
+            return points
+
+    fallback = " ".join(description.split())
+    for separator in ("。", "；", ";", ". "):
+        if separator in fallback:
+            for part in fallback.split(separator):
+                line = clean_image_description_line(part)
+                if line:
+                    points.append(truncate_for_context(line, limit=110))
+                if len(points) >= max_points:
+                    return points
+            break
+    if not points and fallback:
+        points.append(truncate_for_context(fallback, limit=110))
+    return points[:max_points]
+
+
+def clean_image_description_line(line: str) -> str:
+    cleaned = line.strip()
+    cleaned = cleaned.lstrip("#").strip()
+    cleaned = cleaned.lstrip("-*• ").strip()
+    while cleaned and cleaned[0].isdigit():
+        cleaned = cleaned[1:].lstrip(".、) ").strip()
+    cleaned = cleaned.replace("**", "").replace("__", "").strip()
+    return cleaned
+
+
+def is_low_value_image_heading(line: str) -> bool:
+    normalized = line.casefold().strip(":： ")
+    return normalized in {
+        "objective analysis of the image",
+        "visible concrete structure features",
+        "cracks, defects, or imperfections",
+        "contextual/engineering observations",
+        "relevance to rfc (roller-compacted concrete) or hydraulic concrete",
+        "uncertainty",
+    }
 
 
 def truncate_for_context(text: str, limit: int = 240) -> str:

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.models import Chunk, Document, Source
 from app.db.repositories import SourceRepository
-from app.services.agent.image_analysis import UserImageAnalyzer
+from app.services.agent.image_analysis import UserImageAnalyzer, build_concise_image_answer
 from app.services.agent.image_storage import ImageStorageError, UserImageStorage
 from app.services.generation.answer_service import CitationAnswerService
 from app.services.generation.chat_model import ChatModelProvider
@@ -479,6 +479,21 @@ class AgentToolbox:
         except (ImageStorageError, RuntimeError, ValueError, FileNotFoundError) as exc:
             return failed_tool_result(tool_name, "image_path=<user_upload>", exc)
 
+        if analysis.domain_relevance != "in_scope":
+            return AgentToolResult(
+                tool_name=tool_name,
+                call=AgentToolCallRecord(
+                    tool_name=tool_name,
+                    input_summary="image_path=<user_upload>",
+                    output_summary=f"image refused by domain gate: {analysis.domain_relevance}",
+                    succeeded=True,
+                ),
+                answer="",
+                image_analysis=analysis.to_payload(),
+                refused=True,
+                refusal_reason=analysis.refusal_reason,
+            )
+
         search_results = [
             replace(item, image_analysis=analysis.to_payload())
             for item in analysis.search_results
@@ -487,6 +502,11 @@ class AgentToolbox:
             replace(source, image_analysis=analysis.to_payload())
             for source in analysis.sources
         ]
+        concise_answer = build_concise_image_answer(
+            image_description=analysis.image_description,
+            related_text_chunks=analysis.related_text_chunks,
+            similar_figures=analysis.similar_figures,
+        )
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -498,7 +518,7 @@ class AgentToolbox:
                 ),
                 succeeded=True,
             ),
-            answer=analysis.fused_context,
+            answer=concise_answer,
             search_results=search_results,
             sources=sources,
             image_analysis=analysis.to_payload(),

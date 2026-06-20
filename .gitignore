@@ -42,6 +42,10 @@ data/evaluation/phase46_redescribe_remaining_manifests_resume*/
 data/evaluation/phase46_redescribe_manifests/
 data/evaluation/phase46_redescribe_import/
 
+# Phase 47 local orientation repair reports/backups
+data/evaluation/phase47_doc1193_orientation_fix/
+data/evaluation/phase47_orientation_*/
+
 # Logs
 *.log
 

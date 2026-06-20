@@ -1792,8 +1792,8 @@ Phase 45 追加 Phase 10-17 处理 `G:\Codex\program\papers_0618` 下 458 个新
 Phase 47 adds four user-facing multimodal interaction paths on top of the Phase 46 baseline:
 
 - Extracted PDF tables can be stored as `table` chunks and retrieved through `search_tables`.
-- User images can be uploaded to `data/user_uploads/` and analyzed through the ReAct `analyze_user_image` path.
+- User images can be uploaded to `data/user_uploads/` and analyzed through the ReAct `analyze_user_image` path. The image path now describes the upload first, applies a domain-relevance gate for RFC/hydraulic concrete/dam/concrete defect/table/curve/engineering-diagram anchors, and only then runs knowledge and similar-figure retrieval.
 - Text citations can carry `content_bbox` metadata for page-level or bbox-level source navigation.
 - Positive/negative answer feedback is stored in `qa_feedback` and can be exported into a sanitized evaluation CSV.
 
-The native frontend now renders uploaded-image analysis cards, table evidence cards, citation location links, and feedback buttons. Verification on the local baseline: `1024 passed`, Stage 30 remains `91.52 / A / pass`, and Alembic head is `20260621_0005`.
+The native frontend now renders uploaded-image analysis cards, table evidence cards, citation location links, and feedback buttons. Refused image-analysis responses do not render normal evidence cards or feedback buttons, and deterministic vision output is labeled as test-mode behavior rather than real image understanding. Verification on the local baseline: `1029 passed`, Stage 30 remains `91.52 / A / pass`, and Alembic head is `20260621_0005`.

@@ -51,6 +51,7 @@ const state = {
   nextCitationSetId: 1,
   contextMenuConversationId: null,
   pendingUploadedImage: null,
+  figureLightboxRotation: 0,
 };
 
 const ANSWER_SEGMENT_MAX_CHARS = 1200;
@@ -732,6 +733,9 @@ function renderSegmentedAnswerInto(answerText, result = {}) {
 }
 
 function sourceClusterHtml(result = {}, citationSetId = "") {
+  if (result.refused) {
+    return "";
+  }
   const citations = (result.citations || []).map((citation) => String(citation));
   if (!citations.length || !citationSetId) {
     return '<span class="source-cluster source-cluster--empty">No sources</span>';
@@ -794,6 +798,9 @@ function figureSourceLine(source = {}, figureNumber = 1) {
 }
 
 function figureEvidenceHtml(result = {}) {
+  if (result.refused) {
+    return "";
+  }
   const figures = imageEvidenceSources(result);
   if (!figures.length) {
     return "";
@@ -806,15 +813,21 @@ function figureEvidenceHtml(result = {}) {
       const figureNumber = index + 1;
       const figureLabel = `Figure ${figureNumber}`;
       const sourceLine = figureSourceLine(source, figureNumber);
+      const articleTitle = sourceTitle(source);
+      const pageNumber = Number(source.page_number);
+      const pageLabel = Number.isFinite(pageNumber) && pageNumber > 0
+        ? `第 ${pageNumber} 页`
+        : figureOriginalLabel(source);
       return `
         <article class="figure-card">
-          <button class="figure-thumb" type="button" data-figure-open data-figure-src="${escapeHtml(imageUrl)}" data-figure-title="${escapeHtml(title)}" data-figure-meta="${escapeHtml(sourceLine)}" aria-label="放大查看 ${escapeHtml(title)}">
-            <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}" loading="lazy">
+          <button class="figure-thumb" type="button" data-figure-open data-figure-src="${escapeHtml(imageUrl)}" data-figure-title="${escapeHtml(title)}" data-figure-meta="${escapeHtml(sourceLine)}" data-figure-rotation="0" aria-label="放大查看 ${escapeHtml(title)}">
+            <img class="figure-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}" loading="lazy">
           </button>
           <div class="figure-body">
             <div class="figure-kicker">${escapeHtml(figureLabel)}</div>
             <strong>${escapeHtml(title)}</strong>
-            <small>来源：${escapeHtml(sourceLine)}</small>
+            <span class="figure-source-title">来源文章：《${escapeHtml(articleTitle)}》</span>
+            <span class="figure-source-meta">${escapeHtml(pageLabel)} / ${escapeHtml(figureOriginalLabel(source))}</span>
             ${summaryHtml}
           </div>
         </article>
@@ -841,6 +854,9 @@ function tableEvidenceSources(result = {}) {
 }
 
 function tableEvidenceHtml(result = {}) {
+  if (result.refused) {
+    return "";
+  }
   const tables = tableEvidenceSources(result);
   if (!tables.length) {
     return "";
@@ -865,15 +881,24 @@ function tableEvidenceHtml(result = {}) {
 
 function imageAnalysisHtml(result = {}) {
   const analysis = result.image_analysis;
-  if (!analysis) {
+  if (!analysis || result.refused) {
     return "";
   }
-  const description = analysis.image_description || analysis.fused_context || "";
+  const description = analysis.is_test_vision
+    ? "当前为测试模式视觉描述，不代表真实图片理解。请配置真实视觉模型后再分析上传图片。"
+    : (analysis.image_description || analysis.fused_context || "");
+  const status = result.refused
+    ? "图片已处理，但最终拒答"
+    : analysis.is_test_vision
+      ? "测试模式视觉描述"
+      : "Uploaded image analysis";
+  const provider = analysis.vision_provider ? ` / ${analysis.vision_provider}` : "";
+  const relevance = analysis.domain_relevance ? ` / ${analysis.domain_relevance}` : "";
   return `
     <section class="image-analysis-card" aria-label="Uploaded image analysis">
       <div class="evidence-card-head">
-        <span>Uploaded image analysis</span>
-        <small>${escapeHtml(String(analysis.related_text_count || 0))} text / ${escapeHtml(String(analysis.similar_figure_count || 0))} figures</small>
+        <span>${escapeHtml(status)}</span>
+        <small>${escapeHtml(String(analysis.related_text_count || 0))} text / ${escapeHtml(String(analysis.similar_figure_count || 0))} figures${escapeHtml(provider)}${escapeHtml(relevance)}</small>
       </div>
       <p>${escapeHtml(description)}</p>
     </section>
@@ -907,6 +932,9 @@ async function submitFeedback(result = {}, rating) {
 }
 
 function feedbackControlsHtml(result = {}) {
+  if (result.refused) {
+    return "";
+  }
   if (!result.answer || !result.question) {
     return "";
   }
@@ -1245,7 +1273,7 @@ function citationDrawerItemHtml(displayCitation, source, isInvalid = false) {
         <strong>${escapeHtml(title)}</strong>
       </div>
       <p>${escapeHtml(sourceType)} / ${chunkInfo}${score}</p>
-      ${source.image_url ? `<button class="citation-drawer-image-button" type="button" data-figure-open data-figure-src="${escapeHtml(source.image_url)}" data-figure-title="${escapeHtml(title)}" data-figure-meta="${escapeHtml(sourceLine)}" aria-label="放大查看 ${escapeHtml(title)}"><img class="citation-drawer-image" src="${escapeHtml(source.image_url)}" alt="${escapeHtml(title)}" loading="lazy"></button>` : ""}
+      ${source.image_url ? `<button class="citation-drawer-image-button" type="button" data-figure-open data-figure-src="${escapeHtml(source.image_url)}" data-figure-title="${escapeHtml(title)}" data-figure-meta="${escapeHtml(sourceLine)}" data-figure-rotation="0" aria-label="放大查看 ${escapeHtml(title)}"><img class="citation-drawer-image" src="${escapeHtml(source.image_url)}" alt="${escapeHtml(title)}" loading="lazy"></button>` : ""}
       ${citationLocationButtonHtml(source)}
       <div class="citation-drawer-snippet">${escapeHtml(summary)}</div>
     </article>
@@ -1310,6 +1338,7 @@ function ensureFigureLightbox() {
     <div class="figure-lightbox-panel" role="dialog" aria-modal="true" aria-label="论文图片预览">
       <button class="figure-lightbox-close" type="button" data-close-figure-lightbox aria-label="关闭图片预览">×</button>
       <img data-figure-lightbox-image alt="">
+      <button class="figure-lightbox-rotate" type="button" data-rotate-figure-lightbox title="旋转图片">旋转</button>
       <div class="figure-lightbox-caption">
         <strong data-figure-lightbox-title></strong>
         <small data-figure-lightbox-meta></small>
@@ -1320,17 +1349,26 @@ function ensureFigureLightbox() {
   return lightbox;
 }
 
-function openFigureLightbox({ src = "", title = "", meta = "" } = {}) {
+function applyFigureLightboxRotation(lightbox) {
+  const image = lightbox?.querySelector("[data-figure-lightbox-image]");
+  if (image) {
+    image.style.transform = `rotate(${state.figureLightboxRotation}deg)`;
+  }
+}
+
+function openFigureLightbox({ src = "", title = "", meta = "", rotation = 0 } = {}) {
   if (!src) {
     return;
   }
   const lightbox = ensureFigureLightbox();
+  state.figureLightboxRotation = Number(rotation) || 0;
   const image = lightbox.querySelector("[data-figure-lightbox-image]");
   const titleNode = lightbox.querySelector("[data-figure-lightbox-title]");
   const metaNode = lightbox.querySelector("[data-figure-lightbox-meta]");
   if (image) {
     image.src = src;
     image.alt = title || "论文图片";
+    image.style.transform = `rotate(${state.figureLightboxRotation}deg)`;
   }
   if (titleNode) {
     titleNode.textContent = title || "论文图片";
@@ -1344,6 +1382,15 @@ function openFigureLightbox({ src = "", title = "", meta = "" } = {}) {
   lightbox.querySelector("[data-close-figure-lightbox]")?.focus();
 }
 
+function rotateFigureLightbox() {
+  const lightbox = document.querySelector("[data-figure-lightbox]");
+  if (!lightbox || lightbox.hidden) {
+    return;
+  }
+  state.figureLightboxRotation = (state.figureLightboxRotation + 90) % 360;
+  applyFigureLightboxRotation(lightbox);
+}
+
 function closeFigureLightbox() {
   const lightbox = document.querySelector("[data-figure-lightbox]");
   if (!lightbox) {
@@ -1355,6 +1402,7 @@ function closeFigureLightbox() {
   const image = lightbox.querySelector("[data-figure-lightbox-image]");
   if (image) {
     image.removeAttribute("src");
+    image.style.transform = "";
   }
 }
 
@@ -2145,18 +2193,47 @@ function setUploadStatus(text, hidden = false) {
   status.hidden = hidden || !text;
 }
 
+function clearPendingAgentImage() {
+  state.pendingUploadedImage = null;
+  const input = document.querySelector("[data-agent-image-input]");
+  if (input) {
+    input.value = "";
+  }
+  setUploadStatus("", true);
+}
+
+function selectedAgentImageFile() {
+  return state.pendingUploadedImage?.file || document.querySelector("[data-agent-image-input]")?.files?.[0] || null;
+}
+
+function setPendingAgentImage(file) {
+  if (!file) {
+    clearPendingAgentImage();
+    return;
+  }
+  if (!String(file.type || "").startsWith("image/")) {
+    setApiStatus("请拖入或选择图片文件");
+    return;
+  }
+  state.pendingUploadedImage = { file };
+  setUploadStatus(`已添加图片：${file.name || "未命名图片"}`);
+}
+
 async function uploadSelectedAgentImage() {
   const input = document.querySelector("[data-agent-image-input]");
-  const file = input?.files?.[0];
+  if (state.pendingUploadedImage?.path && !state.pendingUploadedImage.file) {
+    return state.pendingUploadedImage;
+  }
+  const file = selectedAgentImageFile();
   if (!file) {
     return null;
   }
-  setUploadStatus("Uploading image...");
+  setUploadStatus("正在上传图片...");
   const formData = new FormData();
   formData.append("file", file);
   const uploaded = await fetchMultipartJson(apiEndpoints.imageUpload, formData);
   state.pendingUploadedImage = uploaded;
-  setUploadStatus(uploaded.filename || "Image attached");
+  setUploadStatus(`已上传：${uploaded.filename || "图片"}`);
   if (input) {
     input.value = "";
   }
@@ -2184,6 +2261,7 @@ async function submitAgent() {
   try {
     setApiStatus("Agent running...");
     setAgentPanelStatus("running");
+    let imageWasSubmitted = false;
     const body = {
       question,
       top_k: 5,
@@ -2195,6 +2273,7 @@ async function submitAgent() {
       body.image_path = uploadedImage.path;
       body.mode = "react_agent";
       body.max_tool_calls = 2;
+      imageWasSubmitted = true;
     }
     if (!state.currentConversationId) {
       const conversation = await createAgentConversation(conversationTitleFromQuestion(question));
@@ -2279,6 +2358,9 @@ async function submitAgent() {
     }
     setApiStatus(result?.aborted ? "Agent stopped" : result?.refused ? "Agent refused" : "Agent completed");
     setAgentPanelStatus(result?.aborted ? "aborted" : result?.refused ? "refused" : "answered");
+    if (imageWasSubmitted && !result?.aborted) {
+      clearPendingAgentImage();
+    }
     await refreshConversationList();
   } catch (error) {
     pendingThinkingMessage?.remove();
@@ -2593,7 +2675,13 @@ function bindCommands() {
         src: figureTrigger.dataset.figureSrc || "",
         title: figureTrigger.dataset.figureTitle || "",
         meta: figureTrigger.dataset.figureMeta || "",
+        rotation: Number(figureTrigger.dataset.figureRotation || 0),
       });
+      return;
+    }
+    if (event.target.closest("[data-rotate-figure-lightbox]")) {
+      event.preventDefault();
+      rotateFigureLightbox();
       return;
     }
     if (event.target.closest("[data-close-figure-lightbox]")) {
@@ -2704,10 +2792,54 @@ function bindViewNavigation() {
   }
 }
 
+function bindAgentImageInput() {
+  const imageInput = document.querySelector("[data-agent-image-input]");
+  const imageButton = document.querySelector("[data-agent-image-button]");
+  const dropTargets = [
+    document.querySelector("[data-agent-form]"),
+    document.querySelector("[data-agent-question]"),
+    document.querySelector("[data-agent-chat-list]"),
+  ].filter(Boolean);
+
+  imageButton?.addEventListener("click", () => {
+    imageInput?.click();
+  });
+  imageInput?.addEventListener("change", () => {
+    setPendingAgentImage(imageInput.files?.[0] || null);
+  });
+
+  for (const target of dropTargets) {
+    target.addEventListener("dragover", (event) => {
+      if (!Array.from(event.dataTransfer?.items || []).some((item) => item.type.startsWith("image/"))) {
+        return;
+      }
+      event.preventDefault();
+      target.classList.add("is-image-drop-target");
+      setUploadStatus("松开即可添加图片");
+    });
+    target.addEventListener("dragleave", () => {
+      target.classList.remove("is-image-drop-target");
+      if (!selectedAgentImageFile()) {
+        setUploadStatus("", true);
+      }
+    });
+    target.addEventListener("drop", (event) => {
+      const file = Array.from(event.dataTransfer?.files || []).find((item) => item.type.startsWith("image/"));
+      if (!file) {
+        return;
+      }
+      event.preventDefault();
+      target.classList.remove("is-image-drop-target");
+      setPendingAgentImage(file);
+    });
+  }
+}
+
 async function initializeShell() {
   bindViewNavigation();
   bindSourceFilters();
   bindCommands();
+  bindAgentImageInput();
   setAuthMode("login");
   renderAuthState();
   try {
