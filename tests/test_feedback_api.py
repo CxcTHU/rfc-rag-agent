@@ -51,12 +51,12 @@ def test_feedback_api_creates_feedback_and_reports_stats(tmp_path) -> None:
     assert payload["reason"] is None
 
     assert stats_response.status_code == 200
-    assert stats_response.json() == {
-        "total": 1,
-        "positive": 1,
-        "negative": 0,
-        "positive_rate": 1.0,
-    }
+    stats_payload = stats_response.json()
+    assert stats_payload["total"] == 1
+    assert stats_payload["positive"] == 1
+    assert stats_payload["negative"] == 0
+    assert stats_payload["positive_rate"] == 1.0
+    assert stats_payload["exportable_count"] == 1
 
 
 def test_feedback_api_rejects_negative_feedback_without_reason(tmp_path) -> None:

@@ -62,3 +62,7 @@ class FeedbackStatsResponse(BaseModel):
     positive: int
     negative: int
     positive_rate: float
+    top_negative_reasons: dict[str, int] = Field(default_factory=dict)
+    recent_7d_total: int = 0
+    recent_7d_positive_rate: float = 0.0
+    exportable_count: int = 0
