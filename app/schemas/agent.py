@@ -77,6 +77,9 @@ class AgentSearchResultItem(BaseModel):
     image_url: str | None = None
     caption: str | None = None
     page_number: int | None = None
+    table_content: str | None = None
+    image_analysis: dict[str, object] | None = None
+    content_bbox: dict[str, object] | None = None
 
 
 class AgentSourceItem(BaseModel):
@@ -98,6 +101,9 @@ class AgentSourceItem(BaseModel):
     image_url: str | None = None
     caption: str | None = None
     page_number: int | None = None
+    table_content: str | None = None
+    image_analysis: dict[str, object] | None = None
+    content_bbox: dict[str, object] | None = None
 
 
 class FigureSearchResultItem(BaseModel):
@@ -136,3 +142,4 @@ class AgentQueryResponse(BaseModel):
     invalid_citations: list[int] = Field(default_factory=list)
     refusal_category: str | None = None
     latency_trace: dict[str, object] = Field(default_factory=dict)
+    image_analysis: dict[str, object] | None = None

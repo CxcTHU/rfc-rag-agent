@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     vision_model_timeout_seconds: float = 30.0
 
     enable_auto_figure_enrichment: bool = False
+    enable_table_extraction: bool = True
+    enable_user_image_upload: bool = True
+    table_extraction_min_rows: int = 2
+    user_image_max_size_mb: float = 10.0
 
     model_config = SettingsConfigDict(
         env_file=".env",
