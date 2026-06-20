@@ -234,6 +234,41 @@ class ReActAgentService:
                     sources = merge_sources(sources, tool_result.sources)
                     continue
 
+                if action.action == "search_tables":
+                    query = action.query or normalized_question
+                    table_query_key = f"table:{query}"
+                    if is_repeated_query(table_query_key, previous_queries):
+                        observation = ReActObservation(
+                            action="search_tables",
+                            query=query,
+                            observation_summary="repeated table query skipped",
+                            succeeded=False,
+                            error="repeated table query skipped",
+                        )
+                        observations.append(observation)
+                        workflow_steps.append(step_from_observation(action, observation, iteration))
+                        continue
+
+                    previous_queries.add(normalize_react_query(table_query_key))
+                    self._emit_tool_start(event_sink, action, iteration)
+                    tool_started = time.perf_counter()
+                    tool_result = self.toolbox.search_tables(query, top_k=top_k)
+                    latency_trace.add_duration(
+                        "tool_latency_ms",
+                        (time.perf_counter() - tool_started) * 1000.0,
+                    )
+                    observation = observation_from_tool_result(
+                        action=action,
+                        tool_result=tool_result,
+                    )
+                    self._emit_tool_result(event_sink, action, observation, iteration)
+                    observations.append(observation)
+                    workflow_steps.append(step_from_observation(action, observation, iteration))
+                    tool_calls.append(tool_result.call)
+                    search_results = merge_search_results(search_results, tool_result.search_results)
+                    sources = merge_sources(sources, tool_result.sources)
+                    continue
+
                 if action.action == "rewrite_query":
                     observation = ReActObservation(
                         action="rewrite_query",
@@ -496,8 +531,8 @@ def react_planner_messages(
             content=(
                 "You are a controlled ReAct planner for a rock-filled concrete (RFC) "
                 "and hydraulic engineering knowledge base. Return only one JSON object. "
-                "Allowed actions: search_knowledge, search_figures, rewrite_query, "
-                "answer_with_citations, refuse, final_answer.\n\n"
+                "Allowed actions: search_knowledge, search_figures, search_tables, "
+                "rewrite_query, answer_with_citations, refuse, final_answer.\n\n"
                 "Decision policy:\n"
                 "- DEFAULT: if there are no observations, choose search_knowledge with "
                 "  a precise query. Always search first when the topic could plausibly "
@@ -512,6 +547,9 @@ def react_planner_messages(
                 "  rewrite the figure query for visual terms. Do not call search_figures "
                 "  for pure definitions, conceptual comparisons, casual chat, thanks, "
                 "  or unrelated questions.\n"
+                "- Choose search_tables when the user asks for table rows, tabulated "
+                "  data, mix-ratio tables, parameter tables, or comparisons that are "
+                "  likely stored as table chunks.\n"
                 "- If search_figures already returned results, choose "
                 "  answer_with_citations next; the figure evidence remains available "
                 "  in sources while answer_with_citations retrieves text evidence.\n"
