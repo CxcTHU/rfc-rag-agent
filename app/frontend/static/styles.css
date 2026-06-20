@@ -904,7 +904,45 @@ textarea::placeholder {
 
 .agent-controls {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
   justify-content: flex-end;
+}
+
+.image-upload-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(141, 202, 230, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.image-upload-button input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.upload-chip {
+  max-inline-size: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(84, 214, 255, 0.1);
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .chat-controls {
@@ -1378,6 +1416,76 @@ td {
   display: grid;
   gap: 10px;
   margin-top: 14px;
+}
+
+.image-analysis-card,
+.table-evidence-card {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(141, 202, 230, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 17, 30, 0.74);
+}
+
+.evidence-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.table-evidence {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.table-evidence-card pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: 10px 0 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.location-link {
+  color: #9ee8fb;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.location-link:hover {
+  text-decoration: underline;
+}
+
+.feedback-controls {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.feedback-button {
+  inline-size: 32px;
+  block-size: 32px;
+  border: 1px solid rgba(141, 202, 230, 0.26);
+  border-radius: 8px;
+  background: rgba(13, 27, 44, 0.82);
+  cursor: pointer;
+}
+
+.feedback-button.is-selected {
+  border-color: #9ee8fb;
+  background: rgba(84, 214, 255, 0.16);
 }
 
 .figure-card {

@@ -13,6 +13,8 @@ const apiEndpoints = {
   chat: "/chat",
   agent: "/agent/query",
   agentStream: "/agent/query/stream",
+  imageUpload: "/agent/upload-image",
+  feedback: "/feedback",
   conversations: "/conversations",
   conversation: (conversationId) => `/conversations/${encodeURIComponent(conversationId)}`,
   conversationMessages: (conversationId) => `/conversations/${encodeURIComponent(conversationId)}/messages`,
@@ -48,6 +50,7 @@ const state = {
   citationSets: {},
   nextCitationSetId: 1,
   contextMenuConversationId: null,
+  pendingUploadedImage: null,
 };
 
 const ANSWER_SEGMENT_MAX_CHARS = 1200;
@@ -92,6 +95,24 @@ async function fetchJson(url, options = {}) {
       window.clearTimeout(timeoutId);
     }
   }
+}
+
+async function fetchMultipartJson(url, formData, options = {}) {
+  const response = await fetch(url, {
+    method: options.method || "POST",
+    headers: authHeaders(),
+    body: formData,
+    signal: options.signal,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload.detail || `HTTP ${response.status}`;
+    const error = new Error(Array.isArray(detail) ? detail.map((item) => item.msg).join("; ") : detail);
+    error.status = response.status;
+    error.url = url;
+    throw error;
+  }
+  return payload;
 }
 
 function setApiStatus(message) {
@@ -803,6 +824,104 @@ function figureEvidenceHtml(result = {}) {
   return `<section class="figure-evidence" aria-label="Related paper figures">${cards}</section>`;
 }
 
+function tableEvidenceSources(result = {}) {
+  const sources = result.sources || [];
+  const seen = new Set();
+  return sources
+    .filter((source) => source?.chunk_type === "table" || source?.table_content)
+    .filter((source) => {
+      const key = source.source_id || source.chunk_id || source.content;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 3);
+}
+
+function tableEvidenceHtml(result = {}) {
+  const tables = tableEvidenceSources(result);
+  if (!tables.length) {
+    return "";
+  }
+  const cards = tables
+    .map((source, index) => {
+      const tableText = source.table_content || source.content || "";
+      return `
+        <article class="table-evidence-card">
+          <div class="evidence-card-head">
+            <span>Table ${index + 1}</span>
+            ${citationLocationButtonHtml(source)}
+          </div>
+          <strong>${escapeHtml(sourceTitle(source))}</strong>
+          <pre>${escapeHtml(tableText)}</pre>
+        </article>
+      `;
+    })
+    .join("");
+  return `<section class="table-evidence" aria-label="Table evidence">${cards}</section>`;
+}
+
+function imageAnalysisHtml(result = {}) {
+  const analysis = result.image_analysis;
+  if (!analysis) {
+    return "";
+  }
+  const description = analysis.image_description || analysis.fused_context || "";
+  return `
+    <section class="image-analysis-card" aria-label="Uploaded image analysis">
+      <div class="evidence-card-head">
+        <span>Uploaded image analysis</span>
+        <small>${escapeHtml(String(analysis.related_text_count || 0))} text / ${escapeHtml(String(analysis.similar_figure_count || 0))} figures</small>
+      </div>
+      <p>${escapeHtml(description)}</p>
+    </section>
+  `;
+}
+
+function citationLocationButtonHtml(source = {}) {
+  const location = source.content_bbox;
+  if (!location?.pdf_url && !location?.page_number) {
+    return "";
+  }
+  const label = location.page_number ? `Page ${location.page_number}` : "Open source";
+  const href = location.pdf_url || "#";
+  return `<a class="location-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" data-citation-location>${escapeHtml(label)}</a>`;
+}
+
+async function submitFeedback(result = {}, rating) {
+  const payload = {
+    question: result.question || "",
+    answer: result.answer || "",
+    rating,
+  };
+  if (rating === "negative") {
+    payload.reason = "other";
+  }
+  await fetchJson(apiEndpoints.feedback, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  setApiStatus("Feedback saved");
+}
+
+function feedbackControlsHtml(result = {}) {
+  if (!result.answer || !result.question) {
+    return "";
+  }
+  const encoded = encodeURIComponent(JSON.stringify({
+    question: result.question,
+    answer: result.answer,
+  }));
+  return `
+    <div class="feedback-controls" data-feedback-payload="${escapeHtml(encoded)}">
+      <button type="button" class="feedback-button" data-feedback-rating="positive" title="Helpful">👍</button>
+      <button type="button" class="feedback-button" data-feedback-rating="negative" title="Needs work">👎</button>
+    </div>
+  `;
+}
+
 function formatRefusalCategory(category) {
   const labels = {
     responsibility_gate_triggered: "Responsibility gate",
@@ -1127,6 +1246,7 @@ function citationDrawerItemHtml(displayCitation, source, isInvalid = false) {
       </div>
       <p>${escapeHtml(sourceType)} / ${chunkInfo}${score}</p>
       ${source.image_url ? `<button class="citation-drawer-image-button" type="button" data-figure-open data-figure-src="${escapeHtml(source.image_url)}" data-figure-title="${escapeHtml(title)}" data-figure-meta="${escapeHtml(sourceLine)}" aria-label="放大查看 ${escapeHtml(title)}"><img class="citation-drawer-image" src="${escapeHtml(source.image_url)}" alt="${escapeHtml(title)}" loading="lazy"></button>` : ""}
+      ${citationLocationButtonHtml(source)}
       <div class="citation-drawer-snippet">${escapeHtml(summary)}</div>
     </article>
   `;
@@ -1702,10 +1822,13 @@ function finalizeAgentStreamingMessage(messageElement, result) {
   answerText.insertAdjacentHTML(
     "afterend",
     `
+    ${imageAnalysisHtml(result)}
     ${figureEvidenceHtml(result)}
+    ${tableEvidenceHtml(result)}
     <div class="answer-meta">
       ${sourceClusterHtml(result, citationSetId)}
       ${orphanInvalidBadges}
+      ${feedbackControlsHtml(result)}
     </div>
     `,
   );
@@ -1772,10 +1895,13 @@ function agentAnswerHtml(result) {
     ${agentThoughtHtml(result)}
     ${refused}
     <div class="answer-text answer-text--segmented" data-citation-set="${escapeHtml(citationSetId)}">${renderAnswerSegmentsHtml(result, citationSetId)}</div>
+    ${imageAnalysisHtml(result)}
     ${figureEvidenceHtml(result)}
+    ${tableEvidenceHtml(result)}
     <div class="answer-meta">
       ${sourceClusterHtml(result, citationSetId)}
       ${orphanInvalidBadges}
+      ${feedbackControlsHtml(result)}
     </div>
   `);
 }
@@ -2010,6 +2136,33 @@ async function submitChat() {
   setApiStatus(result.refused ? "Refused" : "Answered");
 }
 
+function setUploadStatus(text, hidden = false) {
+  const status = document.querySelector("[data-agent-upload-status]");
+  if (!status) {
+    return;
+  }
+  status.textContent = text || "";
+  status.hidden = hidden || !text;
+}
+
+async function uploadSelectedAgentImage() {
+  const input = document.querySelector("[data-agent-image-input]");
+  const file = input?.files?.[0];
+  if (!file) {
+    return null;
+  }
+  setUploadStatus("Uploading image...");
+  const formData = new FormData();
+  formData.append("file", file);
+  const uploaded = await fetchMultipartJson(apiEndpoints.imageUpload, formData);
+  state.pendingUploadedImage = uploaded;
+  setUploadStatus(uploaded.filename || "Image attached");
+  if (input) {
+    input.value = "";
+  }
+  return uploaded;
+}
+
 async function submitAgent() {
   if (state.agentRequestInFlight) {
     abortAgentStream();
@@ -2037,6 +2190,12 @@ async function submitAgent() {
       max_tool_calls: 2,
       mode: "tool_calling_agent",
     };
+    const uploadedImage = await uploadSelectedAgentImage();
+    if (uploadedImage?.path) {
+      body.image_path = uploadedImage.path;
+      body.mode = "react_agent";
+      body.max_tool_calls = 2;
+    }
     if (!state.currentConversationId) {
       const conversation = await createAgentConversation(conversationTitleFromQuestion(question));
       state.currentConversationId = conversation.id;
@@ -2447,6 +2606,24 @@ function bindCommands() {
       const citationSetId = sourceTrigger.dataset.citationSet;
       if (citationSetId) {
         openCitationDrawer(citationSetId, sourceTrigger.dataset.citationRef || "");
+      }
+      return;
+    }
+    const feedbackButton = event.target.closest("[data-feedback-rating]");
+    if (feedbackButton) {
+      const wrapper = feedbackButton.closest("[data-feedback-payload]");
+      const encodedPayload = wrapper?.dataset.feedbackPayload || "";
+      try {
+        const payload = JSON.parse(decodeURIComponent(encodedPayload));
+        submitFeedback(payload, feedbackButton.dataset.feedbackRating).catch((error) => {
+          setApiStatus(`Feedback failed: ${error.message}`);
+        });
+        wrapper?.querySelectorAll("[data-feedback-rating]").forEach((button) => {
+          button.disabled = true;
+        });
+        feedbackButton.classList.add("is-selected");
+      } catch (error) {
+        setApiStatus("Feedback payload is invalid");
       }
       return;
     }

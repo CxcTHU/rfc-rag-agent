@@ -1084,6 +1084,7 @@ def build_agent_query_response(
             top_k=request.top_k,
             max_tool_calls=request.max_tool_calls,
             history=conversation_history or request.history,
+            image_path=request.image_path,
             event_sink=event_sink,
         )
         response = maybe_enrich_agent_response_with_figure_evidence(
