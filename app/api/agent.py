@@ -33,7 +33,7 @@ from app.services.agent.chitchat import ChitchatResult, detect_chitchat
 from app.services.agent import intent_router
 from app.services.agent.refusal_explainer import build_refusal_explanation
 from app.services.agent.service import AgentQueryResult, AgentService
-from app.services.agent.tools import image_url_from_source_image_path
+from app.services.agent.tools import image_url_from_source_image_path, page_number_from_source_image_path
 from app.services.agent.react_service import ReActAgentService
 from app.services.agent.tool_calling_service import ToolCallingAgentService
 from app.services.agent.routing import classify_query_complexity
@@ -219,10 +219,11 @@ def query_agent(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="chat model provider is unavailable or timed out",
             ) from exc
-        response = enrich_agent_response_with_figure_evidence(
+        response = maybe_enrich_agent_response_with_figure_evidence(
             db=db,
             question=request.question,
             response=agent_response_from_agentic_result(agentic_result),
+            effective_mode=effective_mode,
         )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
@@ -257,10 +258,11 @@ def query_agent(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="chat model provider is unavailable or timed out",
             ) from exc
-        response = enrich_agent_response_with_figure_evidence(
+        response = maybe_enrich_agent_response_with_figure_evidence(
             db=db,
             question=request.question,
             response=agent_response_from_result(result),
+            effective_mode=effective_mode,
         )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
@@ -294,10 +296,11 @@ def query_agent(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="chat model provider is unavailable or timed out",
             ) from exc
-        response = enrich_agent_response_with_figure_evidence(
+        response = maybe_enrich_agent_response_with_figure_evidence(
             db=db,
             question=request.question,
             response=agent_response_from_result(result),
+            effective_mode=effective_mode,
         )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
@@ -332,10 +335,11 @@ def query_agent(
             detail="chat model provider is unavailable or timed out",
         ) from exc
 
-    response = enrich_agent_response_with_figure_evidence(
+    response = maybe_enrich_agent_response_with_figure_evidence(
         db=db,
         question=request.question,
         response=agent_response_from_result(result),
+        effective_mode=effective_mode,
     )
     log_agent_response_event(response)
     persist_agent_conversation_messages(
@@ -892,6 +896,24 @@ def response_from_previous_answer_transform(
     return AgentQueryResponse.model_validate(payload)
 
 
+def maybe_enrich_agent_response_with_figure_evidence(
+    *,
+    db: Session,
+    question: str,
+    response: AgentQueryResponse,
+    effective_mode: str,
+) -> AgentQueryResponse:
+    if effective_mode == "react_agent":
+        return response
+    if not get_settings().enable_auto_figure_enrichment:
+        return response
+    return enrich_agent_response_with_figure_evidence(
+        db=db,
+        question=question,
+        response=response,
+    )
+
+
 def enrich_agent_response_with_figure_evidence(
     *,
     db: Session,
@@ -970,6 +992,8 @@ def enrich_agent_response_with_figure_evidence(
                 chunk_type=chunk.chunk_type,
                 source_image_path=chunk.source_image_path,
                 image_url=image_url,
+                caption=chunk.caption,
+                page_number=page_number_from_source_image_path(chunk.source_image_path),
             )
         )
         added_results.append(
@@ -987,6 +1011,8 @@ def enrich_agent_response_with_figure_evidence(
                 chunk_type=chunk.chunk_type,
                 source_image_path=chunk.source_image_path,
                 image_url=image_url,
+                caption=chunk.caption,
+                page_number=page_number_from_source_image_path(chunk.source_image_path),
             )
         )
         existing_chunk_ids.add(chunk.id)
@@ -1037,10 +1063,11 @@ def build_agent_query_response(
             chat_model_provider=chat_model_provider,
             history=conversation_history or request.history,
         )
-        response = enrich_agent_response_with_figure_evidence(
+        response = maybe_enrich_agent_response_with_figure_evidence(
             db=db,
             question=request.question,
             response=agent_response_from_agentic_result(agentic_result),
+            effective_mode=effective_mode,
         )
         log_agent_response_event(response)
         return response
@@ -1058,10 +1085,11 @@ def build_agent_query_response(
             history=conversation_history or request.history,
             event_sink=event_sink,
         )
-        response = enrich_agent_response_with_figure_evidence(
+        response = maybe_enrich_agent_response_with_figure_evidence(
             db=db,
             question=request.question,
             response=agent_response_from_result(result),
+            effective_mode=effective_mode,
         )
         log_agent_response_event(response)
         return response
@@ -1078,10 +1106,11 @@ def build_agent_query_response(
             history=conversation_history or request.history,
             event_sink=event_sink,
         )
-        response = enrich_agent_response_with_figure_evidence(
+        response = maybe_enrich_agent_response_with_figure_evidence(
             db=db,
             question=request.question,
             response=agent_response_from_result(result),
+            effective_mode=effective_mode,
         )
         log_agent_response_event(response)
         return response
@@ -1097,10 +1126,11 @@ def build_agent_query_response(
         source_id=request.source_id,
         history=conversation_history or request.history,
     )
-    response = enrich_agent_response_with_figure_evidence(
+    response = maybe_enrich_agent_response_with_figure_evidence(
         db=db,
         question=request.question,
         response=agent_response_from_result(result),
+        effective_mode=effective_mode,
     )
     log_agent_response_event(response)
     return response
@@ -1230,6 +1260,8 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
             chunk_type=getattr(s, "chunk_type", "text"),
             source_image_path=getattr(s, "source_image_path", None),
             image_url=image_url_from_source_image_path(getattr(s, "source_image_path", None)),
+            caption=getattr(s, "caption", None),
+            page_number=page_number_from_source_image_path(getattr(s, "source_image_path", None)),
         )
         for s in result.sources
     ]
@@ -1272,6 +1304,8 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
                 chunk_type=getattr(s, "chunk_type", "text"),
                 source_image_path=getattr(s, "source_image_path", None),
                 image_url=image_url_from_source_image_path(getattr(s, "source_image_path", None)),
+                caption=getattr(s, "caption", None),
+                page_number=page_number_from_source_image_path(getattr(s, "source_image_path", None)),
             )
             for s in result.sources
         ],
@@ -1323,6 +1357,8 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
                 chunk_type=item.chunk_type,
                 source_image_path=item.source_image_path,
                 image_url=item.image_url,
+                caption=item.caption,
+                page_number=item.page_number,
             )
             for item in result.search_results
         ],
@@ -1344,6 +1380,8 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
                 chunk_type=source.chunk_type,
                 source_image_path=source.source_image_path,
                 image_url=source.image_url,
+                caption=source.caption,
+                page_number=source.page_number,
             )
             for source in result.sources
         ],

@@ -75,6 +75,8 @@ class AgentSearchResultItem(BaseModel):
     chunk_type: str = "text"
     source_image_path: str | None = None
     image_url: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 class AgentSourceItem(BaseModel):
@@ -94,6 +96,20 @@ class AgentSourceItem(BaseModel):
     chunk_type: str = "text"
     source_image_path: str | None = None
     image_url: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
+
+
+class FigureSearchResultItem(BaseModel):
+    image_url: str
+    caption: str | None
+    page_number: int | None
+    document_title: str
+    relevance_score: float
+    description_snippet: str
+    document_id: int
+    chunk_id: int
+    source_image_path: str
 
 
 class AgentWorkflowStepItem(BaseModel):

@@ -33,6 +33,10 @@ class RRFHybridSearchResult:
     rrf_score: float
     matched_channels: tuple[str, ...]
     provenance: str
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
     core_content: str = ""
     context_chunk_ids: tuple[int, ...] = ()
     context_window: int = 0
@@ -161,6 +165,10 @@ def candidate_to_rrf_result(candidate: _FusionCandidate, rank_constant: int) -> 
         rrf_score=rrf_score,
         matched_channels=matched_channels,
         provenance=provenance,
+        chunk_type=getattr(result, "chunk_type", "text"),
+        source_image_path=getattr(result, "source_image_path", None),
+        caption=getattr(result, "caption", None),
+        page_number=getattr(result, "page_number", None),
         core_content=result.content,
         context_chunk_ids=(result.chunk_id,),
         context_window=0,

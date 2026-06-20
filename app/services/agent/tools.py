@@ -1,5 +1,7 @@
-from dataclasses import dataclass, field
 from collections.abc import Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+import re
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,111 @@ from app.services.generation.prompt_builder import ContextSource
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.keyword_search import KeywordSearchResult, KeywordSearchService
+from app.services.retrieval.query_embedding_cache import get_query_embedding_cache
+from app.services.retrieval.vector_cache import VectorIndexEntry, get_vector_index_cache
+
+try:
+    from PIL import Image, UnidentifiedImageError
+except ImportError:  # pragma: no cover - Pillow is available in normal runtime/tests.
+    Image = None  # type: ignore[assignment]
+
+    class UnidentifiedImageError(Exception):
+        pass
+
+
+MIN_IMAGE_RELEVANCE_SCORE = 0.50
+FIGURE_DESCRIPTION_SNIPPET_CHARS = 100
+FIGURE_VECTOR_CANDIDATE_MULTIPLIER = 50
+FIGURE_VECTOR_MIN_CANDIDATES = 200
+IMAGE_PAGE_RE = re.compile(r"page(?P<page>\d+)_(?:img|render)\d+\.(?:png|jpg|jpeg|webp)$", re.IGNORECASE)
+FIGURE_STRESS_STRAIN_QUERY_TERMS = ("应力应变", "stress strain", "stress-strain")
+FIGURE_STRESS_STRAIN_MATCH_TERMS = (
+    "应力应变",
+    "stress strain",
+    "stress-strain",
+)
+
+
+FIGURE_GENERIC_QUERY_TERMS = frozenset(
+    {
+        "figure",
+        "fig",
+        "image",
+        "photo",
+        "picture",
+        "chart",
+        "plot",
+        "curve",
+        "diagram",
+        "show",
+        "visual",
+        "\u56fe",
+        "\u56fe\u7247",
+        "\u56fe\u8868",
+        "\u66f2\u7ebf",
+        "\u793a\u610f\u56fe",
+        "\u7167\u7247",
+        "\u5c55\u793a",
+    }
+)
+FIGURE_DOMAIN_STOP_TERMS = frozenset(
+    {
+        "rock",
+        "filled",
+        "concrete",
+        "rfc",
+        "scc",
+        "self",
+        "compacting",
+        "\u5806\u77f3\u6df7\u51dd\u571f",
+        "\u6df7\u51dd\u571f",
+        "\u81ea\u5bc6\u5b9e\u6df7\u51dd\u571f",
+    }
+)
+FIGURE_SPECIFIC_PHRASES = (
+    "stress strain",
+    "stress-strain",
+    "compressive strength",
+    "compression failure",
+    "tensile strength",
+    "splitting tensile",
+    "temperature stress",
+    "adiabatic temperature rise",
+    "hydration heat",
+    "fly ash",
+    "microstructure",
+    "interface transition zone",
+    "failure morphology",
+    "crack pattern",
+    "construction process",
+    "pouring process",
+    "flowability",
+    "slump flow",
+    "filling capacity",
+    "aggregate gradation",
+    "particle size",
+    "void filling",
+    "\u5e94\u529b\u5e94\u53d8",
+    "\u6297\u538b\u5f3a\u5ea6",
+    "\u6297\u62c9\u5f3a\u5ea6",
+    "\u5288\u88c2\u6297\u62c9",
+    "\u6e29\u5ea6\u5e94\u529b",
+    "\u7edd\u70ed\u6e29\u5347",
+    "\u6c34\u5316\u70ed",
+    "\u7c89\u7164\u7070",
+    "\u5fae\u89c2\u7ed3\u6784",
+    "\u754c\u9762\u8fc7\u6e21\u533a",
+    "\u7834\u574f\u5f62\u6001",
+    "\u88c2\u7f1d",
+    "\u65bd\u5de5\u6d41\u7a0b",
+    "\u6d47\u7b51",
+    "\u6d41\u52a8\u6027",
+    "\u5766\u843d\u5ea6",
+    "\u586b\u5145\u6027",
+    "\u7ea7\u914d",
+    "\u7c92\u5f84",
+    "\u5b54\u9699",
+)
 
 
 @dataclass(frozen=True)
@@ -37,6 +144,8 @@ class AgentSearchItem:
     chunk_type: str = "text"
     source_image_path: str | None = None
     image_url: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 @dataclass(frozen=True)
@@ -57,6 +166,21 @@ class AgentSourceReference:
     chunk_type: str = "text"
     source_image_path: str | None = None
     image_url: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
+
+
+@dataclass(frozen=True)
+class FigureSearchResult:
+    image_url: str
+    caption: str | None
+    page_number: int | None
+    document_title: str
+    relevance_score: float
+    description_snippet: str
+    document_id: int
+    chunk_id: int
+    source_image_path: str
 
 
 @dataclass(frozen=True)
@@ -65,6 +189,7 @@ class AgentToolResult:
     call: AgentToolCallRecord
     answer: str | None = None
     search_results: list[AgentSearchItem] = field(default_factory=list)
+    figure_results: list[FigureSearchResult] = field(default_factory=list)
     sources: list[AgentSourceReference] = field(default_factory=list)
     citations: list[int] = field(default_factory=list)
     refused: bool = False
@@ -129,6 +254,119 @@ class AgentToolbox:
             sources=sources_from_search_results(search_results),
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No hybrid results were found.",
+        )
+
+    def search_figures(self, query: str, top_k: int = 4) -> AgentToolResult:
+        tool_name = "search_figures"
+        normalized_query = query.strip()
+        if not normalized_query:
+            return failed_tool_result(tool_name, query, ValueError("query must not be empty"))
+        if top_k <= 0:
+            return failed_tool_result(tool_name, query, ValueError("top_k must be greater than 0"))
+
+        try:
+            query_embedding = get_query_embedding_cache().get_or_embed(
+                self.embedding_provider,
+                normalized_query,
+            )
+            index_cache = get_vector_index_cache(self.db, self.embedding_provider)
+            candidate_count = max(
+                FIGURE_VECTOR_MIN_CANDIDATES,
+                top_k * FIGURE_VECTOR_CANDIDATE_MULTIPLIER,
+            )
+            matches = index_cache.search(query_embedding, top_k=candidate_count)
+        except (RuntimeError, ValueError) as exc:
+            return failed_tool_result(tool_name, query, exc)
+
+        candidate_items: list[tuple[float, VectorIndexEntry, int | None, str]] = []
+        seen_document_pages: set[tuple[int, int | None]] = set()
+        seen_image_urls: set[str] = set()
+        skipped_low_score = 0
+        skipped_quality = 0
+        skipped_specific_mismatch = 0
+        for match in matches:
+            entry = match.entry
+            if entry.chunk_type != "image_description":
+                continue
+            if match.score < MIN_IMAGE_RELEVANCE_SCORE:
+                skipped_low_score += 1
+                continue
+            image_url = image_url_from_source_image_path(entry.source_image_path)
+            if not image_url or image_url in seen_image_urls:
+                continue
+            specific_match_count = figure_specific_match_count(normalized_query, entry)
+            if not figure_specific_requirement_satisfied(
+                normalized_query,
+                entry,
+                specific_match_count=specific_match_count,
+            ):
+                skipped_specific_mismatch += 1
+                continue
+            if not image_file_is_usable(entry.source_image_path):
+                skipped_quality += 1
+                continue
+            page_number = entry.page_number or page_number_from_source_image_path(entry.source_image_path)
+            adjusted_score = adjusted_figure_relevance_score(
+                match.score,
+                specific_match_count=specific_match_count,
+            )
+            candidate_items.append((adjusted_score, entry, page_number, image_url))
+
+        search_results: list[AgentSearchItem] = []
+        figure_results: list[FigureSearchResult] = []
+        for adjusted_score, entry, page_number, image_url in sorted(
+            candidate_items,
+            key=lambda item: item[0],
+            reverse=True,
+        ):
+            document_page_key = (entry.document_id, page_number)
+            if document_page_key in seen_document_pages:
+                continue
+            if image_url in seen_image_urls:
+                continue
+            seen_document_pages.add(document_page_key)
+            seen_image_urls.add(image_url)
+            item = search_item_from_vector_entry(entry, score=adjusted_score)
+            search_results.append(item)
+            figure_results.append(
+                FigureSearchResult(
+                    image_url=image_url,
+                    caption=entry.caption,
+                    page_number=page_number,
+                    document_title=entry.document_title,
+                    relevance_score=adjusted_score,
+                    description_snippet=truncate_text(
+                        entry.content,
+                        FIGURE_DESCRIPTION_SNIPPET_CHARS,
+                    ),
+                    document_id=entry.document_id,
+                    chunk_id=entry.chunk_id,
+                    source_image_path=entry.source_image_path or "",
+                )
+            )
+            if len(search_results) >= top_k:
+                break
+
+        output_summary = (
+            f"returned {len(figure_results)} figure results; "
+            f"threshold={MIN_IMAGE_RELEVANCE_SCORE:.2f}; "
+            f"skipped_low_score={skipped_low_score}; "
+            f"skipped_quality={skipped_quality}; "
+            f"skipped_specific_mismatch={skipped_specific_mismatch}"
+        )
+        return AgentToolResult(
+            tool_name=tool_name,
+            call=AgentToolCallRecord(
+                tool_name=tool_name,
+                input_summary=summarize_input(normalized_query, top_k),
+                output_summary=output_summary,
+                succeeded=True,
+            ),
+            search_results=search_results,
+            figure_results=figure_results,
+            sources=sources_from_search_results(search_results),
+            refused=not bool(figure_results),
+            refusal_reason=None if figure_results else "No relevant figure results were found.",
         )
 
     def answer_with_citations(
@@ -289,6 +527,28 @@ def search_item_from_result(result: KeywordSearchResult | HybridSearchResult) ->
         chunk_type=getattr(result, "chunk_type", "text"),
         source_image_path=source_image_path,
         image_url=image_url_from_source_image_path(source_image_path),
+        caption=getattr(result, "caption", None),
+        page_number=page_number_from_source_image_path(source_image_path),
+    )
+
+
+def search_item_from_vector_entry(entry: VectorIndexEntry, *, score: float) -> AgentSearchItem:
+    return AgentSearchItem(
+        document_id=entry.document_id,
+        document_title=entry.document_title,
+        source_type=entry.source_type,
+        source_path=entry.source_path,
+        file_name=entry.file_name,
+        chunk_id=entry.chunk_id,
+        chunk_index=entry.chunk_index,
+        content=entry.content,
+        heading_path=entry.heading_path,
+        score=score,
+        chunk_type=entry.chunk_type,
+        source_image_path=entry.source_image_path,
+        image_url=image_url_from_source_image_path(entry.source_image_path),
+        caption=entry.caption,
+        page_number=entry.page_number or page_number_from_source_image_path(entry.source_image_path),
     )
 
 
@@ -306,6 +566,8 @@ def sources_from_search_results(results: list[AgentSearchItem]) -> list[AgentSou
             chunk_type=result.chunk_type,
             source_image_path=result.source_image_path,
             image_url=result.image_url,
+            caption=result.caption,
+            page_number=result.page_number,
         )
         for result in results
     ]
@@ -324,6 +586,8 @@ def source_reference_from_context_source(source: ContextSource) -> AgentSourceRe
         chunk_type=source.chunk_type,
         source_image_path=source.source_image_path,
         image_url=image_url_from_source_image_path(source.source_image_path),
+        caption=source.caption,
+        page_number=source.page_number or page_number_from_source_image_path(source.source_image_path),
     )
 
 
@@ -349,6 +613,99 @@ def image_url_from_source_image_path(source_image_path: str | None) -> str | Non
     if not normalized.startswith(prefix):
         return None
     return f"/assets/images/{normalized[len(prefix):]}"
+
+
+def page_number_from_source_image_path(source_image_path: str | None) -> int | None:
+    if not source_image_path:
+        return None
+    match = IMAGE_PAGE_RE.search(Path(source_image_path.replace("\\", "/")).name)
+    if not match:
+        return None
+    return int(match.group("page"))
+
+
+def figure_specific_requirement_satisfied(
+    query: str,
+    entry: VectorIndexEntry,
+    *,
+    specific_match_count: int | None = None,
+) -> bool:
+    specific_terms = figure_specific_query_terms(query)
+    if not specific_terms:
+        return True
+    if specific_match_count is None:
+        specific_match_count = figure_specific_match_count(query, entry)
+    return specific_match_count > 0
+
+
+def adjusted_figure_relevance_score(
+    vector_score: float,
+    *,
+    specific_match_count: int,
+) -> float:
+    boost = min(specific_match_count, 4) * 0.05
+    return min(1.0, vector_score + boost)
+
+
+def figure_specific_match_count(query: str, entry: VectorIndexEntry) -> int:
+    terms = figure_specific_query_terms(query)
+    if not terms:
+        return 0
+    haystack = figure_match_haystack(entry)
+    return sum(1 for term in terms if term in haystack)
+
+
+def figure_specific_query_terms(query: str) -> list[str]:
+    normalized = query.casefold()
+    terms: list[str] = []
+    for phrase in FIGURE_SPECIFIC_PHRASES:
+        normalized_phrase = phrase.casefold()
+        if normalized_phrase in normalized:
+            terms.append(normalized_phrase)
+
+    for token in re.findall(r"[a-z0-9]+", normalized):
+        if len(token) < 3:
+            continue
+        if token in FIGURE_GENERIC_QUERY_TERMS or token in FIGURE_DOMAIN_STOP_TERMS:
+            continue
+        terms.append(token)
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        if term in seen:
+            continue
+        seen.add(term)
+        deduped.append(term)
+    return deduped
+
+
+def figure_match_haystack(entry: VectorIndexEntry) -> str:
+    return " ".join(
+        [
+            entry.caption or "",
+            entry.content or "",
+            entry.document_title or "",
+        ]
+    ).casefold()
+
+
+def image_file_is_usable(source_image_path: str | None) -> bool:
+    if not source_image_path:
+        return False
+    path = Path(source_image_path)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists() or path.stat().st_size <= 0:
+        return False
+    if Image is None:
+        return True
+    try:
+        with Image.open(path) as image:
+            width, height = image.size
+    except (OSError, UnidentifiedImageError):
+        return False
+    return width > 50 and height > 50
 
 
 def summarize_input(query: str, top_k: int) -> str:

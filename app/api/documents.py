@@ -130,6 +130,8 @@ def list_document_chunks(
                 end_char=chunk.end_char,
                 chunk_type=chunk.chunk_type,
                 source_image_path=chunk.source_image_path,
+                caption=chunk.caption,
+                page_number=chunk.page_number,
                 created_at=chunk.created_at,
             )
             for chunk in chunks

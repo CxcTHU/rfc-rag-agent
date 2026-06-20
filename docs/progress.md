@@ -1,5 +1,101 @@
 # 项目进度
 
+## Latest Status: 2026-06-19 Phase 46 Image Quality Repair And Caption Association Complete Before Human Verification
+
+Current branch: `codex/phase-46-image-quality-caption`.
+
+Phase 46 starts from the Phase 45-complete main state. The phase repaired image-quality debt from Phase 45 and added PDF caption association for image evidence without changing Stage 30 scoring rules, provider topology, or data-source boundaries.
+
+## Latest Status: 2026-06-20 Phase 46 Extension Complete Before Human Verification
+
+Current branch: `codex/phase-46-image-quality-caption`.
+
+Phase 46 now includes the original image-quality repair and caption association work plus the Phase 10-15 extension for precision-first figure retrieval.
+
+## Latest Status: 2026-06-20 Phase 46 Real Image Retrieval Evaluation Complete Before Human Verification
+
+Current branch: `codex/phase-46-image-quality-caption`.
+
+Phase 46 Phase 16-21 added a true-corpus image retrieval evaluation pass after the initial 32-row fixture evaluation. The new set is `data/evaluation/phase46_real_image_retrieval_questions.csv` with 100 rows, balanced as `must_have_image=25`, `image_helpful=25`, `text_only=25`, and `no_image=25`. Positive rows are grounded in real `image_description` chunks and include actual `source_image_path`, `page_number`, and caption keywords.
+
+New evaluation tooling:
+
+```text
+scripts/build_phase46_real_image_retrieval_questions.py
+scripts/evaluate_phase46_real_image_retrieval.py
+tests/test_phase46_real_image_retrieval_eval.py
+data/evaluation/phase46_real_image_retrieval_results.csv
+data/evaluation/phase46_real_image_retrieval_summary.csv
+```
+
+Baseline result in default offline `stored_embedding_proxy` mode:
+
+```text
+image_precision=0.9305
+image_recall=0.9600
+must_have_recall=1.0000
+image_helpful_hit_rate=0.9200
+image_suppression=1.0000
+top1_caption_match_rate=0.8800
+topk_caption_match_rate=0.8800
+expected_path_hit_rate=0.5200
+caption_coverage_in_results=0.7968
+page_number_coverage_in_results=1.0000
+wrong_generic_curve_rate=0.0000
+threshold_decision=pass
+```
+
+Because the real-corpus offline gate passed the requested thresholds, Phase 19 caption-weighted soft rerank and Phase 20 caption-enhanced embedding readiness were not triggered. No DB rows, embeddings, FAISS files, API behavior, or frontend behavior were changed in Phase 19-20. Final verification for this extension pass: focused tests `6 passed`, full `python -m pytest -q -> 996 passed`, Stage 30 remains `91.52 / A / pass`, and final real image retrieval evaluation remains `threshold_decision=pass`.
+
+Boundary: still stopped before user human verification. No `git add`, commit, tag, push, or PR has been performed for Phase 46.
+
+Completed extension highlights:
+
+- ReAct read-only `search_figures(query, top_k=4)` tool over `image_description` chunks.
+- `MIN_IMAGE_RELEVANCE_SCORE=0.50`, calibrated from the image retrieval evaluation results.
+- Nullable `chunks.page_number` migration and full local backfill: `15628/15628` image chunks parsed and updated, `failed_to_parse=0`.
+- Agent/search/chat/document schemas and retrieval result objects propagate `page_number`.
+- Frontend figure evidence cards show `图 X — 第 N 页 — 《文档标题》` and use captions as figure titles.
+- `ENABLE_AUTO_FIGURE_ENRICHMENT=false` by default; `react_agent` never calls the legacy automatic enrich fallback.
+- 32-question image retrieval evaluation set covers `must_have_image`, `image_helpful`, `text_only`, and `no_image`.
+- Deterministic evaluation output: `image_precision=1.0000`, `image_recall=1.0000`, `image_suppression=1.0000`, `image_quality_rate=1.0000`, `caption_coverage=1.0000`, `page_number_coverage=1.0000`.
+
+Verification:
+
+```text
+python -m pytest -q -> 989 passed
+python scripts\score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts\evaluate_phase46_image_retrieval.py -> threshold_decision=keep_current_threshold
+API smoke -> /health, /search/hybrid, /chat, /agent/query, /agent/query/stream all 200
+```
+
+Boundary: still stopped before user human verification. No `git add`, commit, tag, push, or PR has been performed for Phase 46.
+
+Completed:
+
+```text
+image manifest: total=14996 normal=14243 type_a=159 type_b=565 type_c=29
+Type A/C cleanup: deleted_chunks=132 deleted_embeddings=132 deleted_files=29
+fragment repair: rendered_images=1995 deleted_old_fragment_chunks=393 deleted_old_fragment_embeddings=393
+GLM-4.6V redescription: expected_images=1995 described_images=1995 missing_images=0
+redescription import: created_chunks=1995 skipped_invalid_rows=0
+FAISS: paratera / GLM-Embedding-3 / dim2048 vectors=39123
+orientation residual audit: candidates_total=88 fixed=86 cleanup_resolved=2 still_candidate=0 failed=0
+caption backfill: total_images=15628 captioned=7853 no_caption=7741 failed=34
+DB final image state: image_chunks=15628 image_embeddings=15628 render_image_chunks=1995 render_image_embeddings=1995 orphan_embeddings=0
+```
+
+Verification:
+
+```text
+python -m pytest -q -> 982 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+API smoke -> /health, /search, /chat, /agent/query, /agent/query/stream all 200 on local deterministic server
+browser smoke -> desktop and 390x844 mobile caption figure-card titles visible, horizontal overflow=false, console errors=[]
+```
+
+Current boundary: Phase 46 development, tests, normal docs, and local Obsidian drafts are complete. The branch is intentionally stopped before `git add`, commit, tag, push, or PR creation pending user human verification.
+
 ## Latest Status: 2026-06-18 Phase 45 Additional Literature Import And Cloud Release Prep Complete Before Human Verification
 
 Current branch: `codex/phase-45-data-migration-multimodal-rag`.

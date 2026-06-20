@@ -57,6 +57,10 @@ class MergedEvidence(SearchResultLike):
     both_match: bool
     final_score: float
     explanation: str
+    chunk_type: str = "text"
+    source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
 
 
 @dataclass(frozen=True)
@@ -260,6 +264,10 @@ def build_merged_evidence(
         both_match=both_match,
         final_score=final_score,
         explanation=explanation,
+        chunk_type=getattr(representative, "chunk_type", "text"),
+        source_image_path=getattr(representative, "source_image_path", None),
+        caption=getattr(representative, "caption", None),
+        page_number=getattr(representative, "page_number", None),
     )
 
 

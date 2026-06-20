@@ -38,6 +38,8 @@ class DocumentChunkItem(BaseModel):
     end_char: int | None
     chunk_type: str = "text"
     source_image_path: str | None = None
+    caption: str | None = None
+    page_number: int | None = None
     created_at: datetime
 
 

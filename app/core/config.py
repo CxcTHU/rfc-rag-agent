@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     vision_model_base_url: str = ""
     vision_model_timeout_seconds: float = 30.0
 
+    enable_auto_figure_enrichment: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

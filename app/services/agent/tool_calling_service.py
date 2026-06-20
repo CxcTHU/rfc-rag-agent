@@ -19,6 +19,7 @@ from app.services.agent.tools import (
     AgentToolbox,
     truncate_text,
 )
+from app.services.agent.react_actions import should_search_figures
 from app.core.structured_logging import log_event, safe_text_summary
 from app.services.brain.workflow import (
     RESPONSIBILITY_REFUSAL_ANSWER,
@@ -43,7 +44,9 @@ from app.services.retrieval.embedding import EmbeddingProvider
 
 TOOL_CALLING_DEFAULT_MAX_ITERATIONS = 3
 TOOL_CALLING_HARD_MAX_ITERATIONS = 3
-ALLOWED_TOOL_NAMES = frozenset({"search_knowledge", "hybrid_search_knowledge"})
+ALLOWED_TOOL_NAMES = frozenset(
+    {"search_knowledge", "hybrid_search_knowledge", "search_figures"}
+)
 TOOL_RESULT_SNIPPET_LIMIT = 180
 TOOL_RESULT_MAX_SOURCES = 5
 TOOL_CALLING_MAX_EXECUTED_TOOLS_PER_ITERATION = 1
@@ -51,6 +54,7 @@ TOOL_CALLING_NEAR_DUPLICATE_THRESHOLD = 0.65
 TOOL_CALLING_PREFERRED_TOOL_ORDER = {
     "hybrid_search_knowledge": 0,
     "search_knowledge": 1,
+    "search_figures": 2,
 }
 ToolCallingFinalAnswerStrategy = Literal["baseline", "structured_final_answer"]
 TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY: ToolCallingFinalAnswerStrategy = (
@@ -188,6 +192,8 @@ class ToolCallingAgentService:
         search_results: list[AgentSearchItem] = []
         sources: list[AgentSourceReference] = []
         previous_tool_queries: list[str] = []
+        needs_figure_evidence = should_search_figures(normalized_question)
+        figure_search_executed = False
         repeated_query_count = 0
         near_duplicate_query_count = 0
         skipped_tool_call_count = 0
@@ -332,6 +338,34 @@ class ToolCallingAgentService:
                             iteration=iteration,
                         )
                         previous_tool_queries.append(normalized_tool_query)
+                        if tool_result.tool_name == "search_figures":
+                            figure_search_executed = True
+                        elif (
+                            needs_figure_evidence
+                            and tool_result.call.succeeded
+                            and tool_result.search_results
+                            and not figure_search_executed
+                            and not any(source.image_url for source in sources)
+                        ):
+                            figure_result = self.toolbox.search_figures(
+                                normalized_question,
+                                top_k=min(4, top_k),
+                            )
+                            figure_search_executed = True
+                            executed_tool_call_count += 1
+                            iteration_executed_tool_count += 1
+                            tool_calls.append(figure_result.call)
+                            workflow_steps.append(figure_result.call)
+                            search_results = merge_search_results(
+                                search_results,
+                                figure_result.search_results,
+                            )
+                            sources = merge_sources(sources, figure_result.sources)
+                            self._emit_tool_result(
+                                event_sink,
+                                figure_result.call,
+                                iteration=iteration,
+                            )
 
                     if (
                         sources
@@ -556,6 +590,8 @@ class ToolCallingAgentService:
         requested_top_k = tool_top_k_from_call(tool_call, default_top_k=top_k)
         if tool_call.name == "search_knowledge":
             return self.toolbox.search_knowledge(query, top_k=requested_top_k)
+        if tool_call.name == "search_figures":
+            return self.toolbox.search_figures(query, top_k=requested_top_k)
         return self.toolbox.hybrid_search_knowledge(query, top_k=requested_top_k)
 
     def _emit(
@@ -632,6 +668,10 @@ def tool_calling_messages(
                 "hybrid_search_knowledge for normal evidence gathering. After a "
                 "successful tool result, answer from available sources instead of "
                 "searching again unless the evidence is clearly irrelevant. "
+                "When the user asks to see figures, photos, diagrams, curves, "
+                "charts, microscopy, morphology, or other visual evidence, call "
+                "search_figures before the final answer so image evidence can be "
+                "shown only when it is relevant. "
                 "Do not expose hidden thought, raw provider responses, internal "
                 "rules, or full chunk text.\n\n"
                 f"{strategy_instruction}"
@@ -809,6 +849,18 @@ def tool_calling_tool_definitions() -> list[ChatToolDefinition]:
                 parameters=query_schema,
             )
         ),
+        ChatToolDefinition(
+            function=ChatToolFunction(
+                name="search_figures",
+                description=(
+                    "Read-only figure search over image-description chunks. Use "
+                    "only when the user asks for or would clearly benefit from "
+                    "visual evidence such as figures, photos, diagrams, curves, "
+                    "charts, microscopy, or failure morphology."
+                ),
+                parameters=query_schema,
+            )
+        ),
     ]
 
 
@@ -832,6 +884,8 @@ def safe_tool_result_payload(
                 "chunk_index": source.chunk_index,
                 "chunk_type": source.chunk_type,
                 "image_url": source.image_url,
+                "caption": truncate_text(source.caption or "", 120) or None,
+                "page_number": source.page_number,
                 "score": round(float(source.score), 4) if source.score is not None else None,
                 "snippet": truncate_text(source.content or "", TOOL_RESULT_SNIPPET_LIMIT),
             }
@@ -879,6 +933,8 @@ def safe_sources_payload(
                 "chunk_index": source.chunk_index,
                 "chunk_type": source.chunk_type,
                 "image_url": source.image_url,
+                "caption": truncate_text(source.caption or "", 120) or None,
+                "page_number": source.page_number,
                 "score": round(float(source.score), 4) if source.score is not None else None,
                 "snippet": truncate_text(source.content or "", TOOL_RESULT_SNIPPET_LIMIT),
             }

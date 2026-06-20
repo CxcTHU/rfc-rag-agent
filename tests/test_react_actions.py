@@ -25,7 +25,9 @@ def test_react_action_schema_accepts_only_controlled_actions() -> None:
 
     assert action.action == "search_knowledge"
     assert "search_knowledge" in READ_ONLY_REACT_ACTIONS
+    assert "search_figures" in READ_ONLY_REACT_ACTIONS
     assert REACT_TOOL_TO_AGENT_TOOL["search_knowledge"] == "hybrid_search_knowledge"
+    assert REACT_TOOL_TO_AGENT_TOOL["search_figures"] == "search_figures"
     assert REACT_TOOL_TO_AGENT_TOOL["answer_with_citations"] == "answer_with_citations"
 
 
@@ -61,6 +63,9 @@ def test_react_action_schema_rejects_invalid_or_write_actions() -> None:
 
     with pytest.raises(ValueError, match="requires query"):
         ReActAction(action="search_knowledge", reasoning_summary="Missing query.")
+
+    with pytest.raises(ValueError, match="requires query"):
+        ReActAction(action="search_figures", reasoning_summary="Missing query.")
 
 
 def test_react_action_summaries_are_trimmed_and_safe() -> None:
@@ -141,6 +146,29 @@ def test_deterministic_react_planner_covers_search_rewrite_answer_and_refuse() -
         question="What affects filling capacity?",
         observations=[successful_search],
     )
+    assert answer.action == "answer_with_citations"
+
+
+def test_deterministic_react_planner_uses_search_figures_for_visual_questions() -> None:
+    planner = DeterministicReActPlanner()
+
+    first = planner.plan(question="Show me the stress strain curve figure.", observations=[])
+
+    assert first.action == "search_figures"
+    assert first.query == "Show me the stress strain curve figure."
+
+    figure_search = ReActObservation(
+        action="search_figures",
+        query=first.query,
+        observation_summary="returned 1 results",
+        succeeded=True,
+        search_result_count=1,
+    )
+    answer = planner.plan(
+        question="Show me the stress strain curve figure.",
+        observations=[figure_search],
+    )
+
     assert answer.action == "answer_with_citations"
 
 

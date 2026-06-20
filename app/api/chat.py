@@ -87,6 +87,10 @@ def chat_response_from_result(result: CitationAnswerResult) -> ChatResponse:
                 heading_path=source.heading_path,
                 content=source.content,
                 score=source.score,
+                chunk_type=source.chunk_type,
+                source_image_path=source.source_image_path,
+                caption=source.caption,
+                page_number=source.page_number,
             )
             for source in result.sources
         ],

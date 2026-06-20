@@ -763,9 +763,13 @@ function figureOriginalLabel(source = {}) {
   return `第 ${pageMatch[1]} 页 / 原文图 ${pageMatch[2]}`;
 }
 
-function figureSourceLine(source = {}) {
+function figureSourceLine(source = {}, figureNumber = 1) {
   const title = sourceTitle(source);
-  return `${title} · ${figureOriginalLabel(source)}`;
+  const pageNumber = Number(source.page_number);
+  const pagePart = Number.isFinite(pageNumber) && pageNumber > 0
+    ? `\u7b2c ${pageNumber} \u9875`
+    : figureOriginalLabel(source);
+  return `\u56fe ${figureNumber} \u2014 ${pagePart} \u2014 \u300a${title}\u300b`;
 }
 
 function figureEvidenceHtml(result = {}) {
@@ -775,10 +779,12 @@ function figureEvidenceHtml(result = {}) {
   }
   const cards = figures
     .map(({ source, imageUrl }, index) => {
-      const title = sourceTitle(source);
-      const summary = sourceSummary(source);
-      const figureLabel = `Figure ${index + 1}`;
-      const sourceLine = figureSourceLine(source);
+      const title = compactText(source.caption, sourceTitle(source));
+      const summary = source.caption ? "" : sourceSummary(source);
+      const summaryHtml = summary ? `<p>${escapeHtml(summary)}</p>` : "";
+      const figureNumber = index + 1;
+      const figureLabel = `Figure ${figureNumber}`;
+      const sourceLine = figureSourceLine(source, figureNumber);
       return `
         <article class="figure-card">
           <button class="figure-thumb" type="button" data-figure-open data-figure-src="${escapeHtml(imageUrl)}" data-figure-title="${escapeHtml(title)}" data-figure-meta="${escapeHtml(sourceLine)}" aria-label="放大查看 ${escapeHtml(title)}">
@@ -788,7 +794,7 @@ function figureEvidenceHtml(result = {}) {
             <div class="figure-kicker">${escapeHtml(figureLabel)}</div>
             <strong>${escapeHtml(title)}</strong>
             <small>来源：${escapeHtml(sourceLine)}</small>
-            <p>${escapeHtml(summary)}</p>
+            ${summaryHtml}
           </div>
         </article>
       `;

@@ -1,5 +1,40 @@
 # 数据来源登记
 
+## Phase 46 Image Repair And Caption Data Note
+
+Phase 46 adds no new external literature source, crawler, PDF download, or restricted full text. It operates on the existing Phase 45 local PDF corpus, extracted images, SQLite rows, and derived embeddings.
+
+New derived artifacts include:
+
+- `data/evaluation/phase46_image_quality_manifest.csv`
+- `data/evaluation/phase46_cleanup_report.csv`
+- `data/evaluation/phase46_fragment_fix_report.csv`
+- `data/evaluation/phase46_rendered_image_manifest.csv`
+- `data/evaluation/phase46_redescribe_*`
+- `data/evaluation/phase46_orientation_residual_*`
+- `data/evaluation/phase46_caption_coverage.csv`
+- `data/evaluation/phase46_caption_coverage_summary.json`
+- `data/evaluation/phase46_db_stats.json`
+- `data/evaluation/phase46_image_page_number_summary.json`
+- `data/evaluation/phase46_image_retrieval_questions.csv`
+- `data/evaluation/phase46_image_retrieval_results.csv`
+- `data/evaluation/phase46_image_retrieval_summary.csv`
+- `data/evaluation/phase46_real_image_retrieval_questions.csv`
+- `data/evaluation/phase46_real_image_retrieval_results.csv`
+- `data/evaluation/phase46_real_image_retrieval_summary.csv`
+- deterministic evaluation fixture images generated under `data/images/phase46_eval_fixture/`
+- page-rendered image files under `data/images/{document_id}/pageN_renderM.png`
+- nullable `chunks.caption` values derived from source PDF text blocks
+- nullable `chunks.page_number` values parsed from local image paths
+
+Real GLM-4.6V was used only for local redescription of the 1,995 repaired render images through explicit route staging. CSVs and docs store only local paths, ids, statuses, counts, captions, and sanitized summaries; they must not store API keys, bearer tokens, Authorization headers, vendor raw responses, `raw_response`, `reasoning_content`, hidden reasoning, or full restricted text.
+
+Caption extraction reads PDF text block geometry from local PDFs via PyMuPDF. Captions are derived metadata for existing image chunks and are not a new source corpus. Caption association does not change source ownership, license status, or external data boundaries.
+
+The first Phase 46 image retrieval evaluation set and fixture images are derived local test artifacts. The fixture evaluation script uses deterministic embeddings and a temporary SQLite database, then calls the real `search_figures` tool without real provider APIs. These artifacts calibrate retrieval precision/suppression only; they do not add external literature or production corpus rows.
+
+Phase 16-21 adds a true-corpus evaluation set derived from existing local image chunks, captions, page numbers, document titles, and image paths. It is not a new source corpus and does not add external literature. `scripts/evaluate_phase46_real_image_retrieval.py` defaults to `stored_embedding_proxy`, which uses already stored image embeddings and does not call real provider APIs. The optional `--query-embedding-mode real` path may call the configured embedding provider only when manually authorized. Results store ids, local paths, page numbers, captions/short titles, counts, and metrics; they do not store API keys, bearer tokens, vendor raw responses, `raw_response`, `reasoning_content`, hidden reasoning, or restricted full text.
+
 ## Phase 45 Additional Literature Batch Data Note
 
 Source directory: `G:\Codex\program\papers_0618`.

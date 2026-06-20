@@ -1,0 +1,33 @@
+query_id,category,expected_has_image,returned_image_count,relevant_image_count,suppressed,top_score,top_caption,top_page_number,top_document_title,top_image_url,quality_ok,caption_present,page_number_present
+must_001,must_have_image,True,1,1,False,0.527046,Fig. 1 interface microstructure ITZ aggregate SCC,1,Phase 46 Image Retrieval Fixture 1,/assets/images/phase46_eval_fixture/page1_img1.png,True,True,True
+must_002,must_have_image,True,1,1,False,0.884615,Fig. 2 construction process placement pouring SCC,2,Phase 46 Image Retrieval Fixture 2,/assets/images/phase46_eval_fixture/page2_img1.png,True,True,True
+must_003,must_have_image,True,1,1,False,0.785825,Fig. 3 stress strain curve specimen RFC,3,Phase 46 Image Retrieval Fixture 3,/assets/images/phase46_eval_fixture/page3_img1.png,True,True,True
+must_004,must_have_image,True,2,2,False,0.862911,Fig. 4 compressive strength cube SCC RFC,4,Phase 46 Image Retrieval Fixture 4,/assets/images/phase46_eval_fixture/page4_img1.png,True,True,True
+must_005,must_have_image,True,1,1,False,0.730297,Fig. 5 temperature hydration heat distribution field,5,Phase 46 Image Retrieval Fixture 5,/assets/images/phase46_eval_fixture/page5_img1.png,True,True,True
+must_006,must_have_image,True,1,1,False,0.796098,Fig. 6 void skeleton filling self-compacting aggregate,6,Phase 46 Image Retrieval Fixture 6,/assets/images/phase46_eval_fixture/page6_img1.png,True,True,True
+must_007,must_have_image,True,1,1,False,0.795147,Fig. 7 aggregate size filling capacity curve,7,Phase 46 Image Retrieval Fixture 7,/assets/images/phase46_eval_fixture/page7_img1.png,True,True,True
+must_008,must_have_image,True,1,1,False,0.83957,Fig. 8 SEM microscopic interface transition zone,8,Phase 46 Image Retrieval Fixture 8,/assets/images/phase46_eval_fixture/page8_img1.png,True,True,True
+help_001,image_helpful,True,1,1,False,0.84683,Fig. 9 flowability slump filling capacity SCC,9,Phase 46 Image Retrieval Fixture 9,/assets/images/phase46_eval_fixture/page9_img1.png,True,True,True
+help_002,image_helpful,True,1,1,False,0.630488,Fig. 10 strength development RFC conventional chart,10,Phase 46 Image Retrieval Fixture 10,/assets/images/phase46_eval_fixture/page10_img1.png,True,True,True
+help_003,image_helpful,True,1,1,False,0.822981,Fig. 11 thermal temperature control heat curve,11,Phase 46 Image Retrieval Fixture 11,/assets/images/phase46_eval_fixture/page11_img1.png,True,True,True
+help_004,image_helpful,True,1,1,False,0.78072,Fig. 12 test setup specimen loading photo,12,Phase 46 Image Retrieval Fixture 12,/assets/images/phase46_eval_fixture/page12_img1.png,True,True,True
+help_005,image_helpful,True,1,1,False,0.793091,Fig. 13 gradation void filling schematic aggregate,13,Phase 46 Image Retrieval Fixture 13,/assets/images/phase46_eval_fixture/page13_img1.png,True,True,True
+help_006,image_helpful,True,1,1,False,0.844926,Fig. 14 interface bond SCC rock microstructure,14,Phase 46 Image Retrieval Fixture 14,/assets/images/phase46_eval_fixture/page14_img1.png,True,True,True
+help_007,image_helpful,True,1,1,False,0.802897,Fig. 15 crack failure loading specimen pattern,15,Phase 46 Image Retrieval Fixture 15,/assets/images/phase46_eval_fixture/page15_img1.png,True,True,True
+help_008,image_helpful,True,1,1,False,0.852116,Fig. 16 curing age strength curve RFC,16,Phase 46 Image Retrieval Fixture 16,/assets/images/phase46_eval_fixture/page16_img1.png,True,True,True
+text_001,text_only,False,0,0,True,0.0,,,,,False,False,False
+text_002,text_only,False,0,0,True,0.0,,,,,False,False,False
+text_003,text_only,False,0,0,True,0.0,,,,,False,False,False
+text_004,text_only,False,0,0,True,0.0,,,,,False,False,False
+text_005,text_only,False,0,0,True,0.0,,,,,False,False,False
+text_006,text_only,False,0,0,True,0.0,,,,,False,False,False
+text_007,text_only,False,0,0,True,0.0,,,,,False,False,False
+text_008,text_only,False,0,0,True,0.0,,,,,False,False,False
+none_001,no_image,False,0,0,True,0.0,,,,,False,False,False
+none_002,no_image,False,0,0,True,0.0,,,,,False,False,False
+none_003,no_image,False,0,0,True,0.0,,,,,False,False,False
+none_004,no_image,False,0,0,True,0.0,,,,,False,False,False
+none_005,no_image,False,0,0,True,0.0,,,,,False,False,False
+none_006,no_image,False,0,0,True,0.0,,,,,False,False,False
+none_007,no_image,False,0,0,True,0.0,,,,,False,False,False
+none_008,no_image,False,0,0,True,0.0,,,,,False,False,False

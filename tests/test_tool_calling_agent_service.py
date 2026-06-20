@@ -3,12 +3,19 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db.models import Base
 from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository
 from app.db.session import create_sqlite_engine
+from app.services.agent.tools import (
+    AgentSearchItem,
+    AgentSourceReference,
+    AgentToolCallRecord,
+    AgentToolResult,
+)
 from app.services.agent.tool_calling_service import (
     ToolCallingAgentService,
     ToolCallingRuntimeEvent,
     citation_repair_messages,
     evidence_answer_messages,
     final_answer_strategy_instruction,
+    tool_calling_tool_definitions,
     tool_calling_messages,
 )
 from app.services.generation.chat_model import (
@@ -53,6 +60,45 @@ def seed_tool_calling_documents(db: Session) -> None:
                 start_char=0,
                 end_char=98,
             )
+        ],
+    )
+
+
+def seed_tool_calling_figure_documents(db: Session) -> None:
+    DocumentRepository(db).create_with_chunks(
+        DocumentCreate(
+            title="Rock-filled concrete stress strain figure",
+            source_type="local_file",
+            source_path="stress-strain.pdf",
+            file_name="stress-strain.pdf",
+            file_extension=".pdf",
+            content_hash="tool-calling-agent-stress-strain-hash",
+            raw_path="data/raw/stress-strain.pdf",
+        ),
+        [
+            ChunkCreate(
+                chunk_index=0,
+                content="Rock-filled concrete stress strain behavior is evaluated from axial loading tests.",
+                char_count=83,
+                heading_path="Stress strain",
+                start_char=0,
+                end_char=83,
+            ),
+            ChunkCreate(
+                chunk_index=1,
+                content=(
+                    "Stress strain curve figure for rock-filled concrete specimens "
+                    "under compression loading and failure morphology."
+                ),
+                char_count=108,
+                heading_path="Figure",
+                start_char=None,
+                end_char=None,
+                chunk_type="image_description",
+                source_image_path="data/images/tool_calling_fixture/page3_img1.png",
+                caption="图3-4 堆石混凝土应力应变曲线",
+                page_number=3,
+            ),
         ],
     )
 
@@ -142,6 +188,91 @@ def test_tool_calling_agent_searches_then_returns_cited_answer(tmp_path) -> None
     assert result.latency_trace["llm_call_count"] == 2
     assert result.latency_trace["tool_call_count"] == 1
     assert "tool_calling_agent" in result.reasoning_summary
+
+
+def test_tool_calling_agent_adds_figures_for_visual_queries(tmp_path, monkeypatch) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    figure_item = AgentSearchItem(
+        document_id=2,
+        document_title="Rock-filled concrete stress strain figure",
+        source_type="local_file",
+        source_path="stress-strain.pdf",
+        file_name="stress-strain.pdf",
+        chunk_id=20,
+        chunk_index=1,
+        content="Stress strain curve figure for rock-filled concrete specimens.",
+        heading_path="Figure",
+        score=0.82,
+        chunk_type="image_description",
+        source_image_path="data/images/tool_calling_fixture/page3_img1.png",
+        image_url="/assets/images/tool_calling_fixture/page3_img1.png",
+        caption="图3-4 堆石混凝土应力应变曲线",
+        page_number=3,
+    )
+    figure_source = AgentSourceReference(
+        source_id="chunk:20",
+        title=figure_item.document_title,
+        source_type=figure_item.source_type,
+        document_id=figure_item.document_id,
+        chunk_id=figure_item.chunk_id,
+        chunk_index=figure_item.chunk_index,
+        content=figure_item.content,
+        score=figure_item.score,
+        chunk_type=figure_item.chunk_type,
+        source_image_path=figure_item.source_image_path,
+        image_url=figure_item.image_url,
+        caption=figure_item.caption,
+        page_number=figure_item.page_number,
+    )
+
+    def fake_search_figures(self, query: str, top_k: int = 4) -> AgentToolResult:
+        return AgentToolResult(
+            tool_name="search_figures",
+            call=AgentToolCallRecord(
+                tool_name="search_figures",
+                input_summary=f"query={query}; top_k={top_k}",
+                output_summary="returned 1 figure results",
+                succeeded=True,
+            ),
+            search_results=[figure_item],
+            sources=[figure_source],
+        )
+
+    monkeypatch.setattr(
+        "app.services.agent.tools.AgentToolbox.search_figures",
+        fake_search_figures,
+    )
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        chat_provider = DeterministicChatModelProvider(
+            tool_call_rounds=(
+                (
+                    ChatToolCall(
+                        id="call_1",
+                        name="hybrid_search_knowledge",
+                        arguments={
+                            "query": "filling capacity in rock-filled concrete",
+                            "top_k": 1,
+                        },
+                    ),
+                ),
+            )
+        )
+        result = make_service(db, chat_provider=chat_provider).query(
+            "Show the rock-filled concrete stress strain curve figure.",
+            top_k=1,
+            max_tool_calls=3,
+        )
+
+    assert not result.refused
+    assert "search_figures" in [call.tool_name for call in result.tool_calls]
+    image_sources = [source for source in result.sources if source.image_url]
+    assert image_sources
+    assert image_sources[0].caption == "图3-4 堆石混凝土应力应变曲线"
+    assert image_sources[0].page_number == 3
+    assert image_sources[0].image_url == "/assets/images/tool_calling_fixture/page3_img1.png"
 
 
 def test_tool_calling_agent_emits_safe_runtime_events(tmp_path) -> None:
@@ -415,6 +546,16 @@ def test_tool_calling_structured_final_answer_prompt_is_default() -> None:
     assert "cite each side separately" in messages[0].content
     assert "evidence gap" in messages[0].content
     assert "Do not reveal internal outline" in messages[0].content
+
+
+def test_tool_calling_tools_include_search_figures() -> None:
+    tool_names = [tool.function.name for tool in tool_calling_tool_definitions()]
+
+    assert tool_names == [
+        "hybrid_search_knowledge",
+        "search_knowledge",
+        "search_figures",
+    ]
 
 
 def test_tool_calling_baseline_prompt_remains_available() -> None:

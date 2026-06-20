@@ -15,6 +15,7 @@ from app.services.agent.react_actions import (
     normalize_react_query,
     observation_from_tool_result,
     parse_react_action_json,
+    should_search_figures,
 )
 from app.services.agent.service import AgentQueryResult
 from app.services.agent.tools import (
@@ -198,6 +199,41 @@ class ReActAgentService:
                     sources = merge_sources(sources, tool_result.sources)
                     continue
 
+                if action.action == "search_figures":
+                    query = action.query or normalized_question
+                    figure_query_key = f"figure:{query}"
+                    if is_repeated_query(figure_query_key, previous_queries):
+                        observation = ReActObservation(
+                            action="search_figures",
+                            query=query,
+                            observation_summary="repeated figure query skipped",
+                            succeeded=False,
+                            error="repeated figure query skipped",
+                        )
+                        observations.append(observation)
+                        workflow_steps.append(step_from_observation(action, observation, iteration))
+                        continue
+
+                    previous_queries.add(normalize_react_query(figure_query_key))
+                    self._emit_tool_start(event_sink, action, iteration)
+                    tool_started = time.perf_counter()
+                    tool_result = self.toolbox.search_figures(query, top_k=min(top_k, 4))
+                    latency_trace.add_duration(
+                        "tool_latency_ms",
+                        (time.perf_counter() - tool_started) * 1000.0,
+                    )
+                    observation = observation_from_tool_result(
+                        action=action,
+                        tool_result=tool_result,
+                    )
+                    self._emit_tool_result(event_sink, action, observation, iteration)
+                    observations.append(observation)
+                    workflow_steps.append(step_from_observation(action, observation, iteration))
+                    tool_calls.append(tool_result.call)
+                    search_results = merge_search_results(search_results, tool_result.search_results)
+                    sources = merge_sources(sources, tool_result.sources)
+                    continue
+
                 if action.action == "rewrite_query":
                     observation = ReActObservation(
                         action="rewrite_query",
@@ -347,28 +383,52 @@ class ReActAgentService:
         )
         result = planner_provider.generate(messages)
         try:
-            return parse_react_action_json(result.answer, default_query=question)
+            action = parse_react_action_json(result.answer, default_query=question)
         except ValueError:
-            if observations and any(
-                obs.action == "search_knowledge" and obs.search_result_count > 0
-                for obs in observations
+            action = None
+
+        if action is not None:
+            if (
+                action.action == "answer_with_citations"
+                and should_search_figures(question)
+                and not any(obs.action == "search_figures" for obs in observations)
             ):
                 return ReActAction(
-                    action="answer_with_citations",
-                    question=question,
-                    reasoning_summary="Planner output was unparseable; answer with already retrieved evidence.",
-                )
-            if not observations and should_search_after_unparseable_planner(question):
-                return ReActAction(
-                    action="search_knowledge",
+                    action="search_figures",
                     query=question,
-                    reasoning_summary="Planner output was unparseable; search first for in-scope evidence.",
+                    reasoning_summary="Visual query needs figure evidence before answering.",
+                )
+            return action
+
+        if observations and any(
+            obs.action in {"search_knowledge", "search_figures"} and obs.search_result_count > 0
+            for obs in observations
+        ):
+            if (
+                should_search_figures(question)
+                and not any(obs.action == "search_figures" for obs in observations)
+            ):
+                return ReActAction(
+                    action="search_figures",
+                    query=question,
+                    reasoning_summary="Visual query needs figure evidence before answering.",
                 )
             return ReActAction(
-                action="refuse",
-                refusal_reason="Planner output was unparseable; refusing safely.",
-                reasoning_summary="Planner output was unparseable; refuse safely.",
+                action="answer_with_citations",
+                question=question,
+                reasoning_summary="Planner output was unparseable; answer with already retrieved evidence.",
             )
+        if not observations and should_search_after_unparseable_planner(question):
+            return ReActAction(
+                action="search_knowledge",
+                query=question,
+                reasoning_summary="Planner output was unparseable; search first for in-scope evidence.",
+            )
+        return ReActAction(
+            action="refuse",
+            refusal_reason="Planner output was unparseable; refusing safely.",
+            reasoning_summary="Planner output was unparseable; refuse safely.",
+        )
 
     def _emit(
         self,
@@ -436,7 +496,7 @@ def react_planner_messages(
             content=(
                 "You are a controlled ReAct planner for a rock-filled concrete (RFC) "
                 "and hydraulic engineering knowledge base. Return only one JSON object. "
-                "Allowed actions: search_knowledge, rewrite_query, "
+                "Allowed actions: search_knowledge, search_figures, rewrite_query, "
                 "answer_with_citations, refuse, final_answer.\n\n"
                 "Decision policy:\n"
                 "- DEFAULT: if there are no observations, choose search_knowledge with "
@@ -445,6 +505,16 @@ def react_planner_messages(
                 "  filling, flowability, self-compacting, rock-filled, RCC, RFC, dam, "
                 "  concrete, mix design, thermal control, hydration, durability, etc. — "
                 "  in Chinese OR English OR mixed — IS in scope).\n"
+                "- Choose search_figures only when the user asks for or would clearly "
+                "  benefit from visual evidence: figures, photos, charts, curves, plots, "
+                "  diagrams, flowcharts, experimental data visualizations, failure "
+                "  morphology, microstructure, or requests like 'show me'. You may "
+                "  rewrite the figure query for visual terms. Do not call search_figures "
+                "  for pure definitions, conceptual comparisons, casual chat, thanks, "
+                "  or unrelated questions.\n"
+                "- If search_figures already returned results, choose "
+                "  answer_with_citations next; the figure evidence remains available "
+                "  in sources while answer_with_citations retrieves text evidence.\n"
                 "- Choose refuse on iteration 1 ONLY in these narrow cases: the question "
                 "  is unsafe (asks for harmful, illegal, or credential info); the question "
                 "  is clearly unrelated to civil/hydraulic engineering (e.g., cooking, "
