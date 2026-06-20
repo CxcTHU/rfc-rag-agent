@@ -61,3 +61,25 @@ python scripts/score_stage30_quality.py -> 91.52 / A / pass
 ```
 
 当前停在 Phase 3 并行开发等待状态：已做本地公共基线 commit 与四个 Track 分支/worktree；尚未 `git push` / `git tag` / 创建 PR。下一步等待四个 subagent 完成后，主 agent 按 A → B → C → D review + merge，并在每次 merge 后跑回归测试。
+
+## 收尾进展（2026-06-20）
+
+- Phase 3: 四个 subagent 已调度；产物存在跨 track 混杂。主 agent 暂停并审计后，保留可用实现，避免污染合并。
+- Phase 4: 完成 A/B/C/D 集成：
+  - A: table extraction/backfill/search_tables/tests。
+  - B: image upload/image analysis/ReAct analyze_user_image/tests。
+  - C: citation locator/content_bbox/backfill/tests。
+  - D: feedback service/export/API/tests。
+- Phase 5: 前端完成 image attach、table evidence card、image analysis card、citation location link、feedback buttons。
+- Phase 6: 文档与 Obsidian 收尾完成。
+
+验证结果：
+
+```text
+python -m pytest -q -> 1024 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m alembic current -> 20260621_0005 (head)
+node --check app/frontend/static/app.js -> passed
+```
+
+当前状态：停在用户人工核验前。本地未执行 `git push`、未创建/移动 tag、未创建 PR。

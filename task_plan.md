@@ -171,3 +171,15 @@ Phase 7     主 agent：全量回归验证 + 文档 + Obsidian 收尾
 - 反馈数据不保存 API key 或供应商敏感响应
 - 未经用户人工核验，不 git add/commit/tag/push/建 PR
 - 共享文件（models、schemas、migrations、frontend）只由主 agent 修改
+
+## Phase 47 Closeout Update
+
+- [x] Phase 4 review/merge completed. Track C was merged from the clean citation-location worktree. Tracks A, B, and D were completed or rewritten by the main agent after subagent output was found mixed across worktrees.
+- [x] Phase 5 frontend integration completed: image attach, table evidence cards, image analysis card, citation location links, and feedback buttons.
+- [x] Phase 6 verification completed:
+  - `python -m pytest -q -> 1024 passed`
+  - `python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`
+  - `python -m alembic current -> 20260621_0005 (head)`
+  - `node --check app/frontend/static/app.js -> passed`
+- [x] Documentation and Obsidian closeout completed.
+- [x] Stopped before human verification: no push, no tag, no PR.

@@ -104,3 +104,14 @@
 - Rerank: GLM-Rerank via Paratera `/v1/p002/rerank`
 - api.jina.ai 仍然 TLS 不可用
 - 所有测试 mock API 调用，不依赖真实供应商
+
+## Phase 47 Completion Findings
+
+- Subagent outputs were useful but mixed across worktrees. Main agent salvaged the stable Track C implementation and manually completed/cleaned Tracks A, B, and D to avoid merging contaminated files.
+- Final local branch contains shared baseline, subagent dispatch record, citation location, table extraction, user image analysis, feedback loop, frontend integration, and documentation commits.
+- Verification:
+  - `python -m pytest -q -> 1024 passed`
+  - `python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`
+  - `python -m alembic current -> 20260621_0005 (head)`
+  - `node --check app/frontend/static/app.js -> passed`
+- Safety: no push/tag/PR; `phase-46-complete` not moved; uploads are gitignored under `data/user_uploads/`; feedback export filters sensitive token patterns.

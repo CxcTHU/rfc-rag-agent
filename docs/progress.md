@@ -3561,3 +3561,29 @@ Known deferred issue: some PDF-extracted images can still be cropped or fragment
 Boundary: runtime data remains local-only and is not committed (`data/raw/`, `data/images/`, `data/faiss/`, `data/incoming/`, SQLite DBs/backups, Playwright runtime cache). Cloud PostgreSQL migration and server asset sync remain operational actions gated by explicit runtime authorization and are not CI prerequisites.
 
 User manual verification has completed in chat on 2026-06-19. User explicitly authorized submitting Phase 45, pushing to GitHub, merging, and tagging.
+
+## Latest Status: 2026-06-20 Phase 47 Multimodal Interaction Upgrade Complete Before Human Verification
+
+Current branch: `codex/phase-47-multimodal-interaction-upgrade`.
+
+Phase 47 was started from the Phase 46 complete baseline. `phase-46-complete` remains at `ba44a68a` and was not moved. The main Phase 47 branch contains local commits only; no push, tag, or PR has been created.
+
+Completed:
+
+- Alembic `20260621_0005` adds `chunks.content_bbox_json` and `qa_feedback`.
+- Table workflow adds `TableChunk`, PyMuPDF table extraction, `scripts/backfill_phase47_tables.py`, and `search_tables`.
+- User image workflow adds `/agent/upload-image`, `UserImageStorage`, `UserImageAnalyzer`, and ReAct `analyze_user_image`.
+- Citation workflow adds `CitationLocator`, `scripts/backfill_phase47_chunk_bbox.py`, and `content_bbox` propagation to API responses.
+- Feedback workflow adds `FeedbackService`, keyword extraction, `/feedback/export`, and sanitized eval CSV export.
+- Frontend adds image attachment, table evidence cards, image analysis cards, citation location links, and feedback buttons.
+
+Verification:
+
+```text
+python -m pytest -q -> 1024 passed
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m alembic current -> 20260621_0005 (head)
+node --check app/frontend/static/app.js -> passed
+```
+
+Boundary: user uploads stay under `data/user_uploads/` and are gitignored. Real API calls are not required for tests. API keys, bearer tokens, raw provider responses, and raw feedback-sensitive material are not committed.

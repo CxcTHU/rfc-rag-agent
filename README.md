@@ -1786,3 +1786,14 @@ Phase 45 追加 Phase 10-17 处理 `G:\Codex\program\papers_0618` 下 458 个新
 我先写 `docs/agent_design.md` 固定工具边界和权限约束，然后新增 `AgentToolbox`，把关键词检索、混合检索、引用式问答和来源查询封装成只读工具。`AgentService` 使用保守规则做意图路由：搜索类任务调用 `hybrid_search_knowledge`，问答类任务调用 `answer_with_citations`，来源类任务调用 sources 工具。API 通过 `POST /agent/query` 返回 answer、tool_calls、sources、citations、refused 和 reasoning_summary，前端也能展示工具调用记录。
 
 这个阶段的重点不是让 Agent “自由发挥”，而是让它不能绕过 sources、documents/chunks、hybrid search、引用和拒答链路。验证上我新增 Agent 评测集和脚本，结果 5/5 通过，同时复跑 keyword 15/15、vector 11/15、hybrid 15/15、chat 6/6 和全量 163 个测试。面试里可以强调：这是一个可审计、可回归、只读优先的 RAG Agent，而不是不可控的多工具 demo。
+
+## Phase 47 Update: Multimodal Interaction Upgrade
+
+Phase 47 adds four user-facing multimodal interaction paths on top of the Phase 46 baseline:
+
+- Extracted PDF tables can be stored as `table` chunks and retrieved through `search_tables`.
+- User images can be uploaded to `data/user_uploads/` and analyzed through the ReAct `analyze_user_image` path.
+- Text citations can carry `content_bbox` metadata for page-level or bbox-level source navigation.
+- Positive/negative answer feedback is stored in `qa_feedback` and can be exported into a sanitized evaluation CSV.
+
+The native frontend now renders uploaded-image analysis cards, table evidence cards, citation location links, and feedback buttons. Verification on the local baseline: `1024 passed`, Stage 30 remains `91.52 / A / pass`, and Alembic head is `20260621_0005`.
