@@ -58,6 +58,26 @@ DOMAIN_ANCHORS = (
     "曲线",
     "工程图",
 )
+OUT_OF_SCOPE_IMAGE_TERMS = (
+    "landscape",
+    "mountain",
+    "forest",
+    "tree",
+    "sky",
+    "cat",
+    "animal",
+    "smartphone",
+    "phone",
+    "mobile phone",
+    "\u98ce\u666f",
+    "\u5c71",
+    "\u6811",
+    "\u5929\u7a7a",
+    "\u732b",
+    "\u52a8\u7269",
+    "\u624b\u673a",
+    "\u667a\u80fd\u624b\u673a",
+)
 
 
 @dataclass(frozen=True)
@@ -195,7 +215,13 @@ class UserImageAnalyzer:
 
 
 def assess_image_domain_relevance(image_description: str, question: str) -> str:
-    haystack = f"{image_description}\n{question}".casefold()
+    description_haystack = image_description.casefold()
+    question_haystack = question.casefold()
+    if any(term.casefold() in description_haystack for term in OUT_OF_SCOPE_IMAGE_TERMS):
+        return "out_of_scope"
+    if any(anchor.casefold() in description_haystack for anchor in DOMAIN_ANCHORS):
+        return "in_scope"
+    haystack = f"{description_haystack}\n{question_haystack}"
     if any(anchor.casefold() in haystack for anchor in DOMAIN_ANCHORS):
         return "in_scope"
     uncertainty_terms = (

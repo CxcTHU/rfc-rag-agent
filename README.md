@@ -1,5 +1,19 @@
 # RFC-RAG-Agent
 
+## Phase 48 Multimodal Real Evaluation And Quality Loop Update
+
+Current branch: `codex/phase-48-multimodal-evaluation`.
+
+Phase 48 starts from `main -> 5ba89a65 Merge phase 47 multimodal interaction upgrade`; `phase-47-complete` was verified at the same commit and was not moved. The current merged baseline is `python -m pytest -q -> 1031 passed`, `python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`, and `python -m alembic current -> 20260621_0005 (head)`.
+
+Main changes: repaired full-corpus table backfill, created 1440 table chunks, generated 1440/1440 GLM-Embedding-3 table embeddings, rebuilt FAISS to 40563 vectors, added Phase 48 real evaluation scripts/datasets, added text-only visual-intent suppression for `search_figures`, upgraded `search_tables` to combine GLM vector candidates with keyword candidates, and tightened uploaded-image domain gating for clear non-engineering images.
+
+Gate results: Phase 46 real image retrieval rerun in real mode passed the user Gate 1 thresholds (`image_precision=0.8878`, `must_have_recall=1.0000`, `image_suppression=1.0000`). The new 50-row edge image set remained a known limitation after the allowed second round (`image_precision=0.6545`, `must_have_recall=0.8400`). Gate 2 passed after one repair/rerun (`description_accuracy=0.9000`, `text_retrieval_relevance=0.9412`, `image_to_image_hit_rate=0.9412`, `refusal_correctness=0.9000`). Gate 3 passed on the first run (`precision=0.8800`, `recall=0.8864`, `format_correctness=1.0000`).
+
+Post-review closeout also fixed figure evidence card overlap by forcing a block image-preview layout and changed the new-conversation button into a draft state so the first user question generates the conversation title.
+
+Submission boundary: Phase 48 was stopped before user human verification, then explicitly approved for commit, tag, push, and GitHub merge on 2026-06-20. Public evaluation images are local-only under gitignored `data/evaluation/phase48_user_images/`; repository files do not record original image URLs or raw provider responses.
+
 ## Phase 46 Image Quality Repair And Caption Association Update
 
 Current branch: `codex/phase-46-image-quality-caption`.

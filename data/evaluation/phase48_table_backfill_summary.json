@@ -1,0 +1,129 @@
+{
+  "phase": "48",
+  "created_at": "2026-06-20",
+  "dry_run": {
+    "documents_seen": 853,
+    "documents_processed": 853,
+    "tables_detected": 1440,
+    "skipped_existing": 0,
+    "errors": 0
+  },
+  "formal_backfill": {
+    "table_chunks": 1440,
+    "documents_with_tables": 261,
+    "table_embeddings": 1440,
+    "embedding_provider": "paratera",
+    "embedding_model": "GLM-Embedding-3",
+    "embedding_dimension": 2048,
+    "faiss_vectors": 40563,
+    "content_length": {
+      "min": 32,
+      "max": 3040,
+      "avg": 441.8638888888889
+    },
+    "long_table_chunks_limited": 13
+  },
+  "evaluation_scale": 50,
+  "top_documents": [
+    {
+      "document_id": 430,
+      "title": "基于某实际工程的堆石混凝土力学性能的试验研究",
+      "table_count": 122
+    },
+    {
+      "document_id": 1166,
+      "title": "自密实混凝土在新疆地区堆石混凝土中的研究及应用",
+      "table_count": 91
+    },
+    {
+      "document_id": 448,
+      "title": "堆石混凝土强度性能及冻融耐久性的研究",
+      "table_count": 47
+    },
+    {
+      "document_id": 1067,
+      "title": "FEMA Dam Safety Inundation Mapping and Flood Risks",
+      "table_count": 38
+    },
+    {
+      "document_id": 1105,
+      "title": "堆石混凝土坝渗流的分析及模拟研究",
+      "table_count": 38
+    },
+    {
+      "document_id": 1174,
+      "title": "金平水电站碾压式沥青混凝土心墙堆石坝施工方案研究",
+      "table_count": 38
+    },
+    {
+      "document_id": 1539,
+      "title": "摘 要:堆石混凝土 (RFC) 中堆石与自密实混凝土 (SCC) 形成的骨-胶界面处的粘结性能",
+      "table_count": 28
+    },
+    {
+      "document_id": 446,
+      "title": "堆石混凝土层间界面剪切力学性能研究",
+      "table_count": 27
+    },
+    {
+      "document_id": 1316,
+      "title": "在工程实践中,堆石混凝土依靠自身独特的施工工艺,",
+      "table_count": 27
+    },
+    {
+      "document_id": 452,
+      "title": "堆石混凝土拱坝施工期温度应力研究",
+      "table_count": 21
+    },
+    {
+      "document_id": 1117,
+      "title": "堆石混凝土施工管理中视觉信息的处理方法及应用研究",
+      "table_count": 19
+    },
+    {
+      "document_id": 435,
+      "title": "基于随机骨料投放的堆石混凝土断裂性能研究",
+      "table_count": 18
+    },
+    {
+      "document_id": 460,
+      "title": "堆石混凝土结构施工冷缝抗剪性能的研究",
+      "table_count": 18
+    },
+    {
+      "document_id": 1152,
+      "title": "混凝土砂浆性能研究及工程应用",
+      "table_count": 17
+    },
+    {
+      "document_id": 1151,
+      "title": "混凝土温度效应下的损伤塑性耦合数值模拟与应用研究",
+      "table_count": 16
+    },
+    {
+      "document_id": 437,
+      "title": "堆石混凝土中自密实混凝土充填性能的离散元模拟研究",
+      "table_count": 15
+    },
+    {
+      "document_id": 1064,
+      "title": "FEMA Dam Incident Planning Guide",
+      "table_count": 14
+    },
+    {
+      "document_id": 185,
+      "title": "北疆严寒地区堆石混凝土围堰施工技术的试验及研究",
+      "table_count": 13
+    },
+    {
+      "document_id": 393,
+      "title": "绿塘水库堆石混凝土大试件力学性能试验研究",
+      "table_count": 12
+    },
+    {
+      "document_id": 1086,
+      "title": "基于GA-SVM的混凝土施工期温度快速预测",
+      "table_count": 12
+    }
+  ]
+}

@@ -1,5 +1,72 @@
 # 架构说明
 
+## Phase 48 Architecture Delta: Real Multimodal Evaluation And Table Hybrid Retrieval
+
+Phase 48 keeps the Phase 47 interaction surface but adds real-model quality gates and tightens three multimodal runtime paths.
+
+Table backfill lane:
+
+```text
+PDF corpus
+-> scripts/backfill_phase47_tables.py --dry-run
+-> table_extractor rows
+-> Chunk(chunk_type="table")
+-> GLM-Embedding-3 chunk embeddings
+-> FAISS rebuild
+-> search_tables()
+```
+
+`backfill_phase47_tables.py` now writes `Chunk` rows directly and chooses the next table chunk index with `max(chunk_index)+1` per document. This avoids collisions when earlier text/image chunks have non-contiguous indexes. Long table content is capped for embedding safety before GLM-Embedding-3 indexing.
+
+Table retrieval lane:
+
+```text
+query
+-> GLM-Embedding-3 query embedding
+-> VectorIndexCache / FAISS table candidates
+-> keyword table candidates
+-> merged score
+-> AgentSearchItem(table_content, bbox, citation metadata)
+```
+
+The vector candidate path is now the primary way Phase 48 table evaluation exercises real GLM embeddings. Keyword candidates remain as a precision and recall stabilizer for exact values, group labels, and engineering terms.
+
+Figure retrieval lane:
+
+```text
+query
+-> visual intent gate
+-> GLM-Embedding-3 query embedding
+-> image_description vector search
+-> image quality checks
+-> caption/page/source metadata
+```
+
+The visual intent gate blocks explicit text-only/no-image requests before vector search. This improved no-image suppression in the 100-row real regression while keeping must-have recall above threshold.
+
+User image lane:
+
+```text
+local uploaded/evaluation image
+-> GLM-4.6V short objective description
+-> domain relevance gate
+-> hybrid text retrieval
+-> search_figures similar-image retrieval
+-> concise analysis payload
+```
+
+The domain gate now prioritizes the visual description for obvious non-engineering objects such as landscapes, animals, or smartphones. A concrete-related user question alone no longer forces an unrelated image into the in-scope path.
+
+Evaluation artifacts:
+
+```text
+scripts/evaluate_phase48_image_edge.py
+scripts/evaluate_phase48_user_image.py
+scripts/evaluate_phase48_table_retrieval.py
+data/evaluation/phase48_summary.json
+docs/phase48_evaluation_report.md
+```
+
 ## Phase 46 Architecture Delta: Image Repair And Caption Metadata
 
 Phase 46 keeps the Phase 45 multimodal RAG shape but adds a targeted image-quality repair lane and a caption metadata lane.

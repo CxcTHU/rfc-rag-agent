@@ -1,30 +1,35 @@
-# 阶段 48 Session Progress
+# 阶段 49 Session Progress
 
 ## 阶段信息
 
-- 阶段: 48 — 多模态能力真实评测与质量闭环
-- 目标分支: `codex/phase-48-multimodal-evaluation`
-- 基线: 阶段 47 合并后的 `main`
+- 阶段: 49 — 本地 PostgreSQL 迁移与云端数据同步
+- 目标分支: `codex/phase-49-local-postgresql-cloud-sync`
+- 基线: 阶段 48 合并后的 `main`
+- 状态: 尚未创建开发分支，等待 Codex 启动
+- Git 边界: 未经用户人工核验，不 git add/commit/tag/push/建 PR
 
-## 规划阶段（2026-06-20）
+## 启动校准
 
-- [x] 与用户讨论评测集方向和规模
-- [x] 确认两轮评测 + Decision Gate 自主推进模式
-- [x] 编写 task_plan.md — 含三组评测 + 自动扩展逻辑
-- [x] 编写 findings.md — 基线确认和评测策略
-- [x] 编写 progress.md — 本文件
+- [ ] 阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md
+- [ ] 阅读根目录 task_plan.md、findings.md、progress.md
+- [ ] 运行 `git status -sb` 与 `git log --oneline -5`
+- [ ] 确认阶段 48 已合并到 `main`，`phase-48-complete` tag 存在且未移动
+- [ ] 从 `main` 创建 `codex/phase-49-local-postgresql-cloud-sync`
+- [ ] 校准基线
 
-## 待执行
+## 执行进展
 
-- [ ] Phase 0: 启动校准（确认阶段 47 合并、创建分支）
-- [ ] Phase 1: 表格回填与统计
-- [ ] Phase 2: 知识库图片检索回归评测 + Gate 1
-- [ ] Phase 3: 用户图片分析评测 + Gate 2
-- [ ] Phase 4: 表格检索评测 + Gate 3
-- [ ] Phase 5: 扩展评测执行（条件触发）
-- [ ] Phase 6: 质量问题修复（条件触发）
-- [ ] Phase 7: 文档 + Obsidian 收尾
+- [ ] Phase 0: 启动校准
+- [ ] Phase 1: 本地 PostgreSQL 容器搭建
+- [ ] Phase 2: 本地数据库切换与数据迁移
+- [ ] Phase 3: 本地 FAISS 重建与回归验证
+- [ ] Phase 4: SQLite 双引擎边界清理
+- [ ] Phase 5: 云端 PostgreSQL 数据同步
+- [ ] Phase 6: 云端图片资产同步
+- [ ] Phase 7: 云端 FAISS 重建与应用部署
+- [ ] Phase 8: 云端功能 smoke 验证
+- [ ] Phase 9: 文档 + Obsidian 收尾
 
-## 状态
+## 当前状态
 
-尚未创建开发分支。当前处于规划完成状态，等待阶段 47 合并后启动。
+规划文件已由 Claude 编写完成。等待用户确认后由 Codex 启动开发。

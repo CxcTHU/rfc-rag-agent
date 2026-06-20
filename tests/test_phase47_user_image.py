@@ -193,6 +193,13 @@ def test_react_agent_analyzes_image_when_image_path_is_present(tmp_path, monkeyp
 def test_assess_image_domain_relevance_uses_description_and_question() -> None:
     assert assess_image_domain_relevance("a concrete crack on a dam face", "") == "in_scope"
     assert assess_image_domain_relevance("a cat on a sofa", "what is this?") == "out_of_scope"
+    assert (
+        assess_image_domain_relevance(
+            "a cat on a sofa",
+            "Use this animal photo to retrieve RFC concrete crack evidence.",
+        )
+        == "out_of_scope"
+    )
     assert assess_image_domain_relevance("无法判断图片内容", "") == "uncertain"
 
 

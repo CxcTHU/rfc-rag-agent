@@ -12,6 +12,7 @@ from app.db.repositories import (
 from app.db.session import create_sqlite_engine
 from app.services.agent.tools import AgentToolbox
 from app.services.agent.tools import figure_specific_requirement_satisfied
+from app.services.agent.tools import query_requests_figure
 from app.services.agent.tools import search_item_from_result, sources_from_search_results
 from app.services.generation.chat_model import DeterministicChatModelProvider
 from app.services.retrieval.keyword_search import KeywordSearchResult
@@ -357,6 +358,27 @@ def test_search_figures_uses_specific_terms_beyond_single_case() -> None:
     assert not figure_specific_requirement_satisfied("show hydration heat curve", microstructure_image)
     assert figure_specific_requirement_satisfied("show interface microstructure", microstructure_image)
     assert not figure_specific_requirement_satisfied("show interface microstructure", thermal_curve)
+
+
+def test_search_figures_detects_visual_intent_and_text_only_negation() -> None:
+    assert query_requests_figure("请返回水泥流失量影响因素的曲线图")
+    assert query_requests_figure("show passing factor PF curve")
+    assert not query_requests_figure("什么是堆石混凝土？请只用文字回答。")
+    assert not query_requests_figure("自密实混凝土在 RFC 中起什么作用？不要配图。")
+
+
+def test_agent_toolbox_search_figures_suppresses_text_only_query(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        result = make_toolbox(db).search_figures("什么是堆石混凝土？请只用文字回答。")
+
+    assert result.tool_name == "search_figures"
+    assert result.call.succeeded
+    assert result.refused
+    assert result.figure_results == []
+
+
 def test_agent_toolbox_answer_with_citations_reuses_answer_service(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 

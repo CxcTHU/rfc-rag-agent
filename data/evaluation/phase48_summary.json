@@ -1,0 +1,98 @@
+{
+  "phase": "48",
+  "title": "Multimodal real evaluation and quality loop",
+  "branch": "codex/phase-48-multimodal-evaluation",
+  "created_at": "2026-06-20",
+  "baseline": {
+    "main_commit": "5ba89a65",
+    "phase_47_tag_verified": true,
+    "phase_47_tag_commit": "5ba89a65",
+    "pytest_baseline": "1031 passed",
+    "stage30": {
+      "overall": 91.52,
+      "grade": "A",
+      "release_decision": "pass"
+    },
+    "alembic_head": "20260621_0005"
+  },
+  "providers": {
+    "vision": "GLM-4.6V",
+    "embedding": "GLM-Embedding-3",
+    "rerank_boundary": "GLM-Rerank configured boundary unchanged; Phase 48 evaluators used retrieval/tool paths that do not persist reranker raw responses."
+  },
+  "phase1_table_backfill": {
+    "dry_run_tables_detected": 1440,
+    "formal_table_chunks": 1440,
+    "table_embeddings": 1440,
+    "embedding_provider": "paratera",
+    "embedding_model": "GLM-Embedding-3",
+    "embedding_dimension": 2048,
+    "faiss_vectors": 40563,
+    "long_table_chunks_limited": 13,
+    "evaluation_scale": 50
+  },
+  "gate1_knowledge_base_image_retrieval": {
+    "phase46_real_round2": {
+      "question_count": 100,
+      "image_precision": 0.8878,
+      "image_recall": 0.98,
+      "must_have_recall": 1.0,
+      "image_suppression": 1.0,
+      "decision_against_user_gate": "PASS"
+    },
+    "phase48_edge_round2": {
+      "question_count": 50,
+      "image_precision": 0.6545,
+      "must_have_recall": 0.84,
+      "topk_caption_match_rate": 0.32,
+      "wrong_generic_curve_rate": 0.125,
+      "decision": "known_limit_after_second_round"
+    },
+    "top_failure_modes": [
+      "Natural-language queries still confuse same-page or same-topic competing figures.",
+      "Table/chart-like images often have generic visual descriptions and weak caption discrimination.",
+      "Some extracted figures have repeated or sparse captions, lowering caption/path hit rates."
+    ]
+  },
+  "gate2_user_image_analysis": {
+    "round": 2,
+    "question_count": 20,
+    "description_accuracy": 0.9,
+    "text_retrieval_relevance": 0.9412,
+    "image_to_image_hit_rate": 0.9412,
+    "refusal_correctness": 0.9,
+    "decision": "PASS"
+  },
+  "gate3_table_retrieval": {
+    "round": 1,
+    "question_count": 50,
+    "precision": 0.88,
+    "recall": 0.8864,
+    "format_correctness": 1.0,
+    "value_accuracy": 0.7955,
+    "decision": "PASS"
+  },
+  "quality_repairs": [
+    "Table backfill now writes Chunk rows directly and uses max(chunk_index)+1 to avoid non-contiguous index collisions.",
+    "Table chunk content is capped for embedding-safety before GLM-Embedding-3 indexing.",
+    "Figure retrieval suppresses text-only visual-negative queries before vector search.",
+    "User-image domain gating rejects clear non-engineering images even when the user question contains concrete terms.",
+    "Table retrieval now combines GLM vector candidates with keyword table candidates."
+  ],
+  "final_verification": {
+    "pytest": "1033 passed",
+    "stage30": {
+      "overall": 91.52,
+      "grade": "A",
+      "release_decision": "pass"
+    },
+    "alembic_head": "20260621_0005"
+  },
+  "final_boundary": {
+    "git_push": false,
+    "git_tag": false,
+    "pull_request": false,
+    "commit": false,
+    "awaiting_user_human_verification": true
+  }
+}

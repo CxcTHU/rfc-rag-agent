@@ -46,6 +46,9 @@ data/evaluation/phase46_redescribe_import/
 data/evaluation/phase47_doc1193_orientation_fix/
 data/evaluation/phase47_orientation_*/
 
+# Phase 48 local user-image evaluation assets
+data/evaluation/phase48_user_images/
+
 # Logs
 *.log
 

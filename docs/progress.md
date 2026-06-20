@@ -1,5 +1,41 @@
 # 项目进度
 
+## Latest Status: 2026-06-20 Phase 48 Multimodal Real Evaluation And Quality Loop Complete Before Human Verification
+
+Current branch: `codex/phase-48-multimodal-evaluation`.
+
+Phase 48 starts from `main -> 5ba89a65 Merge phase 47 multimodal interaction upgrade`; `phase-47-complete` was verified at that commit and was not moved. Baseline calibration: current full pytest baseline is `1031 passed`, Stage 30 remains `91.52 / A / pass`, and Alembic head is `20260621_0005`.
+
+Completed:
+
+```text
+table dry-run: documents_seen=853 documents_processed=853 tables_detected=1440 errors=0
+table formal backfill: table_chunks=1440 documents_with_tables=261
+table embeddings: paratera / GLM-Embedding-3 / dim2048 = 1440/1440
+FAISS rebuild: vectors=40563
+Phase 48 table evaluation scale: 50 questions
+```
+
+Gate results:
+
+```text
+Gate 1 Phase 46 real regression round 2: image_precision=0.8878 must_have_recall=1.0000 image_suppression=1.0000 -> PASS against user thresholds
+Gate 1 Phase 48 edge set round 2: image_precision=0.6545 must_have_recall=0.8400 topk_caption_match_rate=0.3200 -> known limitation after second round
+Gate 2 user image round 2: description_accuracy=0.9000 text_retrieval_relevance=0.9412 image_to_image_hit_rate=0.9412 refusal_correctness=0.9000 -> PASS
+Gate 3 table retrieval round 1: precision=0.8800 recall=0.8864 format_correctness=1.0000 value_accuracy=0.7955 -> PASS
+```
+
+Quality changes:
+
+- `scripts/backfill_phase47_tables.py` now creates table `Chunk` rows directly, uses `max(chunk_index)+1`, and caps very long table content before embedding.
+- `AgentToolbox.search_figures()` suppresses explicit text-only/no-image queries before vector search.
+- `AgentToolbox.search_tables()` merges GLM vector table candidates with keyword candidates.
+- `UserImageAnalyzer` rejects clear non-engineering uploaded images even if the user question includes concrete-related words.
+- Frontend figure evidence cards now use a block image-preview layout to avoid evidence text covering images.
+- The new-conversation button now creates a draft state; the first user question becomes the generated conversation title.
+
+Submission boundary: Phase 48 was stopped before user human verification, then explicitly approved for commit, tag, push, and GitHub merge on 2026-06-20. Public user-image evaluation assets are local and gitignored under `data/evaluation/phase48_user_images/`; original image URLs and provider raw responses are not recorded.
+
 ## Latest Status: 2026-06-19 Phase 46 Image Quality Repair And Caption Association Complete Before Human Verification
 
 Current branch: `codex/phase-46-image-quality-caption`.
