@@ -4125,3 +4125,35 @@ phase12 quality audit
 ```
 
 This keeps the architecture local-first. The repair layer changes release eligibility and derived indexes; it does not alter the default Agent chain, auth, provider topology, or cloud runtime contract.
+
+## Phase 47 Architecture Delta: Multimodal Interaction Layer
+
+Phase 47 adds an interaction layer above the existing multimodal retrieval substrate without changing Stage 30 scoring, provider defaults, auth isolation, or the cloud migration boundary.
+
+```text
+PDF text/table/image chunks
+-> search_knowledge / search_tables / search_figures
+-> ReAct or tool-calling agent
+-> AgentQueryResponse sources with table_content, image_analysis, content_bbox
+-> native frontend evidence cards and citation drawer
+```
+
+User-uploaded images follow a guarded single-step path:
+
+```text
+upload -> data/user_uploads/
+-> vision describe image
+-> assess_image_domain_relevance(description, question)
+   -> out_of_scope / uncertain / test_vision: refused response, no similar-figure recall
+   -> in_scope: hybrid_search_knowledge + search_figures -> fused image context
+```
+
+The new schema surface is:
+
+- `chunks.content_bbox_json`: optional JSON payload for page number, bbox list, and confidence.
+- `qa_feedback`: answer-level user feedback with rating, optional reason/comment, and optional links to conversation/message/QA log ids.
+- `AgentSearchResultItem` and `AgentSourceItem`: optional `table_content`, `image_analysis`, and `content_bbox`.
+
+Table extraction uses PyMuPDF `page.find_tables()` and stores extracted Markdown as `chunk_type="table"`. User uploads are validated with Pillow and saved under `data/user_uploads/`; the ReAct path calls the configured vision provider through the existing provider abstraction, records `vision_provider` / `vision_model` in `image_analysis`, and refuses deterministic test vision as non-real image understanding. Citation location is best-effort: exact bbox, partial bbox, page-only, or none. Feedback export is local and sanitized before writing `data/evaluation/phase47_user_feedback_eval.csv`.
+
+The frontend remains a static FastAPI-served HTML/CSS/JS app. It does not introduce a Node build chain. New controls are thin API clients for upload, feedback, and evidence rendering.

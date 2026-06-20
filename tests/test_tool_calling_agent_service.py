@@ -555,6 +555,7 @@ def test_tool_calling_tools_include_search_figures() -> None:
         "hybrid_search_knowledge",
         "search_knowledge",
         "search_figures",
+        "search_tables",
     ]
 
 

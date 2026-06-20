@@ -180,6 +180,9 @@
                     ></textarea>
                   </label>
                   <div class="agent-controls">
+                    <input data-agent-image-input class="agent-image-input" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden />
+                    <button class="image-upload-button" type="button" data-agent-image-button title="添加图片">添加图片</button>
+                    <span class="upload-chip" data-agent-upload-status hidden></span>
                     <button class="command-button" type="submit" data-agent-submit>运行</button>
                   </div>
                 </form>

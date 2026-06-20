@@ -1612,3 +1612,21 @@ Phase 18-20 does not add a new external source. It cleans and reclassifies the s
 - `phase20_asset_sync_manifest.json`
 
 The repair removed deterministic template image descriptions from the real candidate corpus because those descriptions are test-provider artifacts, not genuine visual understanding. Real vision API responses and secrets are still not stored in docs, tests, Git, public CSVs, or Obsidian.
+
+## Phase 47 Multimodal Interaction Data Note
+
+Phase 47 does not add an external literature corpus, crawler, PDF download, or restricted full-text source. It adds interaction metadata and local runtime artifacts derived from existing documents and user actions.
+
+New local/runtime data surfaces:
+
+- `chunks.content_bbox_json`: optional page/bbox metadata derived from local PDFs for citation navigation.
+- `qa_feedback`: local answer feedback rows with rating and optional sanitized reason/comment.
+- `data/user_uploads/`: gitignored user-uploaded images used only for runtime image analysis.
+- `data/evaluation/phase47_user_feedback_eval.csv`: sanitized positive-feedback export for future evaluation-set growth.
+- `data/evaluation/phase47_orientation_*/` and `data/evaluation/phase47_doc1193_orientation_fix/`: local-only orientation repair reports and backups generated while re-rendering existing image assets from PDF display rectangles.
+
+User-uploaded image analysis first creates a vision description, applies a domain-relevance gate, and only runs knowledge or similar-figure retrieval for in-scope RFC/hydraulic concrete/dam/concrete defect/table/curve/engineering-diagram images. Out-of-scope, uncertain, or deterministic test-vision cases return a refusal and do not recall corpus images.
+
+Data safety boundary: no API key, Bearer token, Authorization header, vendor raw response, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, raw uploaded image bytes, or full feedback-sensitive material is written to Git, docs, tests, public CSVs, or Obsidian. Automated tests use deterministic/local providers only; real vision/model APIs are not a test prerequisite.
+
+The orientation repair does not add a new source corpus. It rewrites derived local files under gitignored `data/images/` from the existing local PDFs and records local audit artifacts under ignored Phase 47 orientation directories.

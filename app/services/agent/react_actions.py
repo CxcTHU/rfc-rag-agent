@@ -12,6 +12,8 @@ from app.services.agent.tools import AgentToolResult, truncate_text
 ReActActionType = Literal[
     "search_knowledge",
     "search_figures",
+    "search_tables",
+    "analyze_user_image",
     "rewrite_query",
     "answer_with_citations",
     "refuse",
@@ -21,6 +23,8 @@ ReActActionType = Literal[
 READ_ONLY_REACT_ACTIONS: tuple[ReActActionType, ...] = (
     "search_knowledge",
     "search_figures",
+    "search_tables",
+    "analyze_user_image",
     "rewrite_query",
     "answer_with_citations",
     "refuse",
@@ -30,6 +34,8 @@ READ_ONLY_REACT_ACTIONS: tuple[ReActActionType, ...] = (
 REACT_TOOL_TO_AGENT_TOOL: dict[ReActActionType, str | None] = {
     "search_knowledge": "hybrid_search_knowledge",
     "search_figures": "search_figures",
+    "search_tables": "search_tables",
+    "analyze_user_image": "analyze_user_image",
     "rewrite_query": None,
     "answer_with_citations": "answer_with_citations",
     "refuse": None,
@@ -41,6 +47,7 @@ class ReActAction(BaseModel):
     action: ReActActionType
     query: str | None = None
     question: str | None = None
+    image_path: str | None = None
     answer: str | None = None
     refusal_reason: str | None = None
     reasoning_summary: str = Field(min_length=1)
@@ -49,6 +56,7 @@ class ReActAction(BaseModel):
     @field_validator(
         "query",
         "question",
+        "image_path",
         "answer",
         "refusal_reason",
         "reasoning_summary",
@@ -63,8 +71,15 @@ class ReActAction(BaseModel):
 
     @model_validator(mode="after")
     def validate_action_payload(self) -> ReActAction:
-        if self.action in {"search_knowledge", "search_figures", "rewrite_query"} and not self.query:
+        if self.action in {
+            "search_knowledge",
+            "search_figures",
+            "search_tables",
+            "rewrite_query",
+        } and not self.query:
             raise ValueError(f"{self.action} requires query")
+        if self.action == "analyze_user_image" and not (self.image_path and (self.question or self.query)):
+            raise ValueError("analyze_user_image requires image_path and question or query")
         if self.action == "answer_with_citations" and not (self.question or self.query):
             raise ValueError("answer_with_citations requires question or query")
         if self.action == "refuse" and not self.refusal_reason:
@@ -80,6 +95,8 @@ class ReActAction(BaseModel):
             return f"query={truncate_text(self.query)}"
         if self.question:
             return f"question={truncate_text(self.question)}"
+        if self.image_path:
+            return "image_path=<user_upload>"
         if self.refusal_reason:
             return f"refusal_reason={truncate_text(self.refusal_reason)}"
         return self.action

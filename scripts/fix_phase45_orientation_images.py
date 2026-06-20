@@ -62,13 +62,25 @@ def main() -> None:
     parser.add_argument("--db-path", default=str(DEFAULT_DB_PATH))
     parser.add_argument("--review-csv", default=str(DEFAULT_REVIEW_CSV))
     parser.add_argument("--document-id", type=int, action="append", default=[])
+    parser.add_argument(
+        "--all-image-chunks",
+        action="store_true",
+        help="Target all image_description chunks named pageN_imgM.png that have a source PDF.",
+    )
+    parser.add_argument("--limit", type=int, default=0, help="Limit target rows for batch dry-runs.")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--zoom", type=float, default=2.0)
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
-    rows = load_target_rows(Path(args.review_csv), args.document_id, args.db_path)
+    rows = load_target_rows(
+        Path(args.review_csv),
+        args.document_id,
+        args.db_path,
+        all_image_chunks=args.all_image_chunks,
+        limit=args.limit,
+    )
     with sqlite3.connect(args.db_path) as connection:
         report_rows = [
             fix_row(row, connection, output_dir=output_dir, zoom=args.zoom, apply=args.apply)
@@ -85,20 +97,40 @@ def load_orientation_rows(review_csv: Path) -> list[dict[str, str]]:
     return [row for row in rows if row.get("decision") == "review"]
 
 
-def load_target_rows(review_csv: Path, document_ids: list[int], db_path: str) -> list[dict[str, str]]:
-    if not document_ids:
+def load_target_rows(
+    review_csv: Path,
+    document_ids: list[int],
+    db_path: str,
+    *,
+    all_image_chunks: bool = False,
+    limit: int = 0,
+) -> list[dict[str, str]]:
+    if not document_ids and not all_image_chunks:
         return load_orientation_rows(review_csv)
     document_id_set = {str(document_id) for document_id in document_ids}
     with sqlite3.connect(db_path) as connection:
-        rows = connection.execute(
-            """
-            select id, document_id, chunk_index, char_count, source_image_path
-            from chunks
-            where chunk_type = 'image_description'
-            order by document_id, source_image_path, id
-            """
-        ).fetchall()
-    return [
+        statement = """
+            select c.id, c.document_id, c.chunk_index, c.char_count, c.source_image_path
+            from chunks c
+            join documents d on d.id = c.document_id
+            where c.chunk_type = 'image_description'
+              and c.source_image_path is not null
+              and c.source_image_path != ''
+              and c.source_image_path like '%page%_img%.png'
+              and d.raw_path is not null
+              and d.raw_path != ''
+        """
+        params: list[object] = []
+        if document_id_set:
+            placeholders = ",".join("?" for _ in document_id_set)
+            statement += f" and c.document_id in ({placeholders})"
+            params.extend(int(document_id) for document_id in sorted(document_id_set, key=int))
+        statement += " order by c.document_id, c.source_image_path, c.id"
+        if limit > 0:
+            statement += " limit ?"
+            params.append(limit)
+        rows = connection.execute(statement, params).fetchall()
+    target_rows = [
         {
             "chunk_id": str(row[0]),
             "document_id": str(row[1]),
@@ -109,8 +141,11 @@ def load_target_rows(review_csv: Path, document_ids: list[int], db_path: str) ->
             "reason": "manual_document_orientation_fix",
         }
         for row in rows
-        if str(row[1]) in document_id_set and row[4]
     ]
+    if all_image_chunks:
+        for row in target_rows:
+            row["reason"] = "batch_display_bbox_rerender"
+    return target_rows
 
 
 def fix_row(
@@ -177,7 +212,7 @@ def render_displayed_image(pdf_path: Path, page_num: int, image_num: int, output
             raise ValueError(f"image xref {xref} has no display rect on page {page_num}")
         rect = max(rects, key=lambda item: item.width * item.height)
         pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=rect, alpha=False)
-        temp_path = output_path.with_name(f"{output_path.name}.tmp")
+        temp_path = output_path.with_name(f"{output_path.stem}.tmp{output_path.suffix}")
         try:
             pixmap.save(temp_path)
             temp_path.replace(output_path)

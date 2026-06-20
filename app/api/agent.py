@@ -247,6 +247,7 @@ def query_agent(
                 top_k=request.top_k,
                 max_tool_calls=request.max_tool_calls,
                 history=conversation_history or request.history,
+                image_path=request.image_path,
             )
         except ValueError as exc:
             raise HTTPException(
@@ -1083,6 +1084,7 @@ def build_agent_query_response(
             top_k=request.top_k,
             max_tool_calls=request.max_tool_calls,
             history=conversation_history or request.history,
+            image_path=request.image_path,
             event_sink=event_sink,
         )
         response = maybe_enrich_agent_response_with_figure_evidence(
@@ -1262,6 +1264,9 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
             image_url=image_url_from_source_image_path(getattr(s, "source_image_path", None)),
             caption=getattr(s, "caption", None),
             page_number=page_number_from_source_image_path(getattr(s, "source_image_path", None)),
+            table_content=getattr(s, "content", None) if getattr(s, "chunk_type", "text") == "table" else None,
+            image_analysis=getattr(s, "image_analysis", None),
+            content_bbox=getattr(s, "content_bbox", None),
         )
         for s in result.sources
     ]
@@ -1306,6 +1311,9 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
                 image_url=image_url_from_source_image_path(getattr(s, "source_image_path", None)),
                 caption=getattr(s, "caption", None),
                 page_number=page_number_from_source_image_path(getattr(s, "source_image_path", None)),
+                table_content=getattr(s, "content", None) if getattr(s, "chunk_type", "text") == "table" else None,
+                image_analysis=getattr(s, "image_analysis", None),
+                content_bbox=getattr(s, "content_bbox", None),
             )
             for s in result.sources
         ],
@@ -1359,6 +1367,9 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
                 image_url=item.image_url,
                 caption=item.caption,
                 page_number=item.page_number,
+                table_content=item.table_content,
+                image_analysis=item.image_analysis,
+                content_bbox=item.content_bbox,
             )
             for item in result.search_results
         ],
@@ -1382,6 +1393,9 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
                 image_url=source.image_url,
                 caption=source.caption,
                 page_number=source.page_number,
+                table_content=source.table_content,
+                image_analysis=source.image_analysis,
+                content_bbox=source.content_bbox,
             )
             for source in result.sources
         ],
@@ -1403,6 +1417,7 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
         iteration_count=result.iteration_count,
         refusal_category=refusal_category,
         latency_trace=result.latency_trace,
+        image_analysis=result.image_analysis,
     )
     return with_refusal_explanation(response)
 

@@ -111,6 +111,7 @@ class Chunk(Base):
     source_image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    content_bbox_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     parent_chunk_id: Mapped[int | None] = mapped_column(
         ForeignKey("chunks.id", ondelete="SET NULL"),
         nullable=True,
@@ -240,3 +241,30 @@ class QuestionAnswerLog(Base):
     refused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     refusal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class QAFeedback(Base):
+    __tablename__ = "qa_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    question_answer_log_id: Mapped[int | None] = mapped_column(
+        ForeignKey("qa_logs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    conversation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    rating: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    reason: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)

@@ -42,6 +42,7 @@ class ChunkCreate:
     source_image_path: str | None = None
     caption: str | None = None
     page_number: int | None = None
+    content_bbox_json: str | None = None
     parent_chunk_id: int | None = None
 
 
@@ -188,6 +189,7 @@ class DocumentRepository:
                     source_image_path=chunk.source_image_path,
                     caption=chunk.caption,
                     page_number=chunk.page_number,
+                    content_bbox_json=chunk.content_bbox_json,
                     parent_chunk_id=chunk.parent_chunk_id,
                 )
                 for chunk in chunks_data

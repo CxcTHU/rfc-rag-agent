@@ -1,16 +1,22 @@
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 import re
 
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Source
+from app.core.config import get_settings
+from app.db.models import Chunk, Document, Source
 from app.db.repositories import SourceRepository
+from app.services.agent.image_analysis import UserImageAnalyzer, build_concise_image_answer
+from app.services.agent.image_storage import ImageStorageError, UserImageStorage
 from app.services.generation.answer_service import CitationAnswerService
 from app.services.generation.chat_model import ChatModelProvider
 from app.services.generation.prompt_builder import ContextSource
+from app.services.generation.vision_model import create_vision_model_provider
 from app.services.retrieval.embedding import EmbeddingProvider
+from app.services.retrieval.citation_locator import CitationLocator
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.keyword_search import KeywordSearchResult, KeywordSearchService
 from app.services.retrieval.query_embedding_cache import get_query_embedding_cache
@@ -146,6 +152,9 @@ class AgentSearchItem:
     image_url: str | None = None
     caption: str | None = None
     page_number: int | None = None
+    table_content: str | None = None
+    image_analysis: dict[str, object] | None = None
+    content_bbox: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -168,6 +177,9 @@ class AgentSourceReference:
     image_url: str | None = None
     caption: str | None = None
     page_number: int | None = None
+    table_content: str | None = None
+    image_analysis: dict[str, object] | None = None
+    content_bbox: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -192,6 +204,7 @@ class AgentToolResult:
     figure_results: list[FigureSearchResult] = field(default_factory=list)
     sources: list[AgentSourceReference] = field(default_factory=list)
     citations: list[int] = field(default_factory=list)
+    image_analysis: dict[str, object] | None = None
     refused: bool = False
     refusal_reason: str | None = None
 
@@ -216,7 +229,14 @@ class AgentToolbox:
         except ValueError as exc:
             return failed_tool_result(tool_name, query, exc)
 
-        search_results = [search_item_from_result(result) for result in results]
+        search_results = _enrich_results_with_citation_location(
+            [search_item_from_result(result) for result in results],
+            self.db,
+        )
+        sources = _enrich_sources_with_citation_location(
+            sources_from_search_results(search_results),
+            self.db,
+        )
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -226,7 +246,7 @@ class AgentToolbox:
                 succeeded=True,
             ),
             search_results=search_results,
-            sources=sources_from_search_results(search_results),
+            sources=sources,
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No keyword results were found.",
         )
@@ -241,7 +261,14 @@ class AgentToolbox:
         except (RuntimeError, ValueError) as exc:
             return failed_tool_result(tool_name, query, exc)
 
-        search_results = [search_item_from_result(result) for result in results]
+        search_results = _enrich_results_with_citation_location(
+            [search_item_from_result(result) for result in results],
+            self.db,
+        )
+        sources = _enrich_sources_with_citation_location(
+            sources_from_search_results(search_results),
+            self.db,
+        )
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -251,9 +278,59 @@ class AgentToolbox:
                 succeeded=True,
             ),
             search_results=search_results,
-            sources=sources_from_search_results(search_results),
+            sources=sources,
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No hybrid results were found.",
+        )
+
+    def search_tables(self, query: str, top_k: int = 5) -> AgentToolResult:
+        tool_name = "search_tables"
+        normalized_query = query.strip()
+        if not normalized_query:
+            return failed_tool_result(tool_name, query, ValueError("query must not be empty"))
+        if top_k <= 0:
+            return failed_tool_result(tool_name, query, ValueError("top_k must be greater than 0"))
+
+        like_terms = table_query_terms(normalized_query)
+        statement = (
+            select(Chunk, Document)
+            .join(Document, Document.id == Chunk.document_id)
+            .where(Chunk.chunk_type == "table")
+            .where(or_(*(Chunk.content.ilike(f"%{term}%") for term in like_terms)))
+            .order_by(Chunk.id.asc())
+        )
+        rows = sorted(
+            self.db.execute(statement).all(),
+            key=lambda row: table_match_score(row[0].content, like_terms),
+            reverse=True,
+        )[:top_k]
+        search_results = _enrich_results_with_citation_location(
+            [
+                search_item_from_table_chunk(
+                    chunk=chunk,
+                    document=document,
+                    score=table_match_score(chunk.content, like_terms),
+                )
+                for chunk, document in rows
+            ],
+            self.db,
+        )
+        sources = _enrich_sources_with_citation_location(
+            sources_from_search_results(search_results),
+            self.db,
+        )
+        return AgentToolResult(
+            tool_name=tool_name,
+            call=AgentToolCallRecord(
+                tool_name=tool_name,
+                input_summary=summarize_input(normalized_query, top_k),
+                output_summary=f"returned {len(search_results)} table results",
+                succeeded=True,
+            ),
+            search_results=search_results,
+            sources=sources,
+            refused=not bool(search_results),
+            refusal_reason=None if search_results else "No matching table chunks were found.",
         )
 
     def search_figures(self, query: str, top_k: int = 4) -> AgentToolResult:
@@ -354,6 +431,11 @@ class AgentToolbox:
             f"skipped_quality={skipped_quality}; "
             f"skipped_specific_mismatch={skipped_specific_mismatch}"
         )
+        search_results = _enrich_results_with_citation_location(search_results, self.db)
+        sources = _enrich_sources_with_citation_location(
+            sources_from_search_results(search_results),
+            self.db,
+        )
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -364,9 +446,83 @@ class AgentToolbox:
             ),
             search_results=search_results,
             figure_results=figure_results,
-            sources=sources_from_search_results(search_results),
+            sources=sources,
             refused=not bool(figure_results),
             refusal_reason=None if figure_results else "No relevant figure results were found.",
+        )
+
+    def analyze_user_image(
+        self,
+        image_path: str,
+        question: str,
+        top_k: int = 5,
+    ) -> AgentToolResult:
+        tool_name = "analyze_user_image"
+        settings = get_settings()
+        try:
+            validated_path = UserImageStorage(
+                max_size_mb=settings.user_image_max_size_mb
+            ).validate_existing_upload_path(image_path)
+            vision_provider = create_vision_model_provider(
+                provider_name=settings.vision_model_provider,
+                model_name=settings.vision_model_name,
+                api_key=settings.vision_model_api_key,
+                base_url=settings.vision_model_base_url,
+                timeout_seconds=settings.vision_model_timeout_seconds,
+            )
+            analysis = UserImageAnalyzer(
+                vision_provider=vision_provider,
+                knowledge_searcher=self.hybrid_search_knowledge,
+                figure_searcher=self.search_figures,
+                text_top_k=top_k,
+            ).analyze(validated_path, question)
+        except (ImageStorageError, RuntimeError, ValueError, FileNotFoundError) as exc:
+            return failed_tool_result(tool_name, "image_path=<user_upload>", exc)
+
+        if analysis.domain_relevance != "in_scope":
+            return AgentToolResult(
+                tool_name=tool_name,
+                call=AgentToolCallRecord(
+                    tool_name=tool_name,
+                    input_summary="image_path=<user_upload>",
+                    output_summary=f"image refused by domain gate: {analysis.domain_relevance}",
+                    succeeded=True,
+                ),
+                answer="",
+                image_analysis=analysis.to_payload(),
+                refused=True,
+                refusal_reason=analysis.refusal_reason,
+            )
+
+        search_results = [
+            replace(item, image_analysis=analysis.to_payload())
+            for item in analysis.search_results
+        ]
+        sources = [
+            replace(source, image_analysis=analysis.to_payload())
+            for source in analysis.sources
+        ]
+        concise_answer = build_concise_image_answer(
+            image_description=analysis.image_description,
+            related_text_chunks=analysis.related_text_chunks,
+            similar_figures=analysis.similar_figures,
+        )
+        return AgentToolResult(
+            tool_name=tool_name,
+            call=AgentToolCallRecord(
+                tool_name=tool_name,
+                input_summary="image_path=<user_upload>",
+                output_summary=(
+                    f"image described; text_results={len(analysis.related_text_chunks)}; "
+                    f"similar_figures={len(analysis.similar_figures)}"
+                ),
+                succeeded=True,
+            ),
+            answer=concise_answer,
+            search_results=search_results,
+            sources=sources,
+            image_analysis=analysis.to_payload(),
+            refused=False,
         )
 
     def answer_with_citations(
@@ -394,7 +550,10 @@ class AgentToolbox:
         except ValueError as exc:
             return failed_tool_result(tool_name, question, exc)
 
-        sources = [source_reference_from_context_source(source) for source in answer.sources]
+        sources = _enrich_sources_with_citation_location(
+            [source_reference_from_context_source(source) for source in answer.sources],
+            self.db,
+        )
         if answer.refused and not sources:
             sources = self._safe_refusal_search_sources(
                 question=question,
@@ -429,7 +588,10 @@ class AgentToolbox:
         except (RuntimeError, ValueError):
             return []
         return sources_from_search_results(
-            [search_item_from_result(result) for result in results[:top_k]]
+            _enrich_results_with_citation_location(
+                [search_item_from_result(result) for result in results[:top_k]],
+                self.db,
+            )
         )
 
     def list_sources(
@@ -527,9 +689,10 @@ def search_item_from_result(result: KeywordSearchResult | HybridSearchResult) ->
         chunk_type=getattr(result, "chunk_type", "text"),
         source_image_path=source_image_path,
         image_url=image_url_from_source_image_path(source_image_path),
-        caption=getattr(result, "caption", None),
-        page_number=page_number_from_source_image_path(source_image_path),
-    )
+            caption=getattr(result, "caption", None),
+            page_number=page_number_from_source_image_path(source_image_path),
+            table_content=result.content if getattr(result, "chunk_type", "text") == "table" else None,
+        )
 
 
 def search_item_from_vector_entry(entry: VectorIndexEntry, *, score: float) -> AgentSearchItem:
@@ -549,6 +712,30 @@ def search_item_from_vector_entry(entry: VectorIndexEntry, *, score: float) -> A
         image_url=image_url_from_source_image_path(entry.source_image_path),
         caption=entry.caption,
         page_number=entry.page_number or page_number_from_source_image_path(entry.source_image_path),
+        table_content=entry.content if entry.chunk_type == "table" else None,
+    )
+
+
+def search_item_from_table_chunk(
+    *,
+    chunk: Chunk,
+    document: Document,
+    score: float,
+) -> AgentSearchItem:
+    return AgentSearchItem(
+        document_id=document.id,
+        document_title=document.title,
+        source_type=document.source_type,
+        source_path=document.source_path,
+        file_name=document.file_name,
+        chunk_id=chunk.id,
+        chunk_index=chunk.chunk_index,
+        content=chunk.content,
+        heading_path=chunk.heading_path,
+        score=score,
+        chunk_type="table",
+        page_number=chunk.page_number,
+        table_content=chunk.content,
     )
 
 
@@ -568,6 +755,9 @@ def sources_from_search_results(results: list[AgentSearchItem]) -> list[AgentSou
             image_url=result.image_url,
             caption=result.caption,
             page_number=result.page_number,
+            table_content=result.table_content,
+            image_analysis=result.image_analysis,
+            content_bbox=result.content_bbox,
         )
         for result in results
     ]
@@ -588,6 +778,7 @@ def source_reference_from_context_source(source: ContextSource) -> AgentSourceRe
         image_url=image_url_from_source_image_path(source.source_image_path),
         caption=source.caption,
         page_number=source.page_number or page_number_from_source_image_path(source.source_image_path),
+        table_content=source.content if source.chunk_type == "table" else None,
     )
 
 
@@ -717,3 +908,60 @@ def truncate_text(text: str, limit: int = 120) -> str:
     if len(stripped) <= limit:
         return stripped
     return stripped[: limit - 3] + "..."
+
+
+def table_query_terms(query: str) -> list[str]:
+    terms = [term for term in re.findall(r"[\w\u4e00-\u9fff]+", query.casefold()) if len(term) >= 2]
+    if not terms:
+        return [query.casefold()]
+    return terms[:8]
+
+
+def table_match_score(content: str, terms: list[str]) -> float:
+    normalized = content.casefold()
+    matches = sum(1 for term in terms if term in normalized)
+    return matches / max(len(terms), 1)
+
+
+def _enrich_results_with_citation_location(
+    results: list[AgentSearchItem],
+    db: Session,
+) -> list[AgentSearchItem]:
+    """Attach batch citation-location payloads to agent search results."""
+    locations = CitationLocator().locate_batch([result.chunk_id for result in results], db)
+    enriched: list[AgentSearchItem] = []
+    for result in results:
+        location = locations.get(result.chunk_id)
+        if location is None:
+            enriched.append(result)
+            continue
+        enriched.append(
+            replace(
+                result,
+                page_number=result.page_number or location.page_number,
+                content_bbox=location.to_dict(),
+            )
+        )
+    return enriched
+
+
+def _enrich_sources_with_citation_location(
+    sources: list[AgentSourceReference],
+    db: Session,
+) -> list[AgentSourceReference]:
+    chunk_ids = [source.chunk_id for source in sources if source.chunk_id is not None]
+    locations = CitationLocator().locate_batch(chunk_ids, db)
+    enriched: list[AgentSourceReference] = []
+    for source in sources:
+        location = locations.get(source.chunk_id or 0)
+        if location is None:
+            enriched.append(source)
+            continue
+        enriched.append(
+            replace(
+                source,
+                page_number=source.page_number or location.page_number,
+                content_bbox=location.to_dict(),
+            )
+        )
+    return enriched

@@ -14,7 +14,10 @@ from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
 from app.api.frontend import FRONTEND_DIR
 from app.api.frontend import router as frontend_router
+from app.api.feedback import router as feedback_router
+from app.api.feedback_export import router as feedback_export_router
 from app.api.health import router as health_router
+from app.api.image_upload import router as image_upload_router
 from app.api.search import router as search_router
 from app.api.sources import router as sources_router
 from app.core.config import get_settings
@@ -109,6 +112,9 @@ def create_app() -> FastAPI:
     app.include_router(conversations_router)
     app.include_router(sources_router)
     app.include_router(agent_router)
+    app.include_router(image_upload_router)
+    app.include_router(feedback_router)
+    app.include_router(feedback_export_router)
     image_assets_dir = Path("data/images")
     image_assets_dir.mkdir(parents=True, exist_ok=True)
     app.mount(
