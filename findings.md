@@ -18,7 +18,8 @@
 - Phase 1 全量回归：`python -m pytest -q -> 999 passed`。
 - Phase 2 全量回归：`python -m pytest -q -> 1002 passed`。
 - Stage 30 校验：`python scripts/score_stage30_quality.py -> 91.52 / A / pass`。
-- 当前未执行 `git add`、`git commit`、`git tag`、`git push` 或 PR；Phase 2 公共基线提交等待用户确认。
+- Phase 2 公共基线已本地提交：`25674308 Add phase 47 shared multimodal baseline`。
+- 当前未执行 `git tag`、`git push` 或 PR。
 
 ## Phase 1-2 新增共享文件
 
@@ -35,8 +36,17 @@
 
 ## 当前阻塞点
 
-- 四个 subagent worktree 应从 Phase 2 公共基线提交点创建。
-- 由于项目安全边界写明“未经用户确认不 commit/tag/push”，当前停在未提交状态，等待用户确认是否允许提交 Phase 2 公共基线。
+- 四个 subagent worktree 已从 Phase 2 公共基线提交点创建并派发。
+- 当前等待 Track A/B/C/D 完成；主 agent 后续按 A → B → C → D review + merge。
+
+## Phase 3 Subagent 调度记录
+
+| Track | 分支 | Worktree | Worker | 状态 |
+|---|---|---|---|---|
+| A 表格提取 | `codex/phase-47-track-a-table-extraction` | `C:\Users\admin\.codex\worktrees\2ff9\rfc-rag-agent` | Zeno | running |
+| B 图片上传分析 | `codex/phase-47-track-b-user-image-upload` | `C:\Users\admin\.codex\worktrees\5e65\rfc-rag-agent` | Hume | running |
+| C 引用定位 | `codex/phase-47-track-c-citation-location` | `C:\Users\admin\.codex\worktrees\cafa\rfc-rag-agent` | Singer | running |
+| D 反馈闭环 | `codex/phase-47-track-d-feedback-loop` | `C:\Users\admin\.codex\worktrees\faf2\rfc-rag-agent` | Poincare | running |
 
 ## 四 Track 独立性分析
 

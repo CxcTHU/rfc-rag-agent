@@ -12,16 +12,16 @@
 
 ## Current Phase
 
-Phase 2：共享 API 路由与配置预留已完成，等待用户确认是否允许提交公共基线并创建四个 subagent worktree。
+Phase 3：四个 subagent 已从 Phase 2 公共基线并行启动，等待 Track A/B/C/D 完成后主 agent review + merge。
 
 ## 当前基线与工作区状态
 
 - Git 基线：`main / origin/main` 应为阶段 46 合并后状态；`phase-46-complete` tag 是 `main` 的祖先。
-- 当前分支：待创建 `codex/phase-47-multimodal-interaction-upgrade`。
+- 当前分支：`codex/phase-47-multimodal-interaction-upgrade`。
 - 本地 DB: SQLite, documents≈1146, chunks≈48810, chunk_embeddings≈71139, image_chunks=15628。
 - Stage 30: 91.52 / A / pass（必须保持不退化）。
-- 全量测试: 996 passed。
-- Alembic head: `20260620_0004_chunk_page_number`。
+- 全量测试: Phase 2 baseline `1002 passed`。
+- Alembic head: `20260621_0005_phase47_shared_schema`。
 
 ## 协作模式：主 agent + 四 subagent 并行
 
@@ -77,11 +77,18 @@ Phase 7     主 agent：全量回归验证 + 文档 + Obsidian 收尾
   - `USER_IMAGE_MAX_SIZE_MB: float = 10.0`
 - [x] 在 `app/services/agent/react_actions.py` 预留 `search_tables` 和 `analyze_user_image` action type
 - [x] 运行全量 pytest 确认不退化
-- [ ] 提交共享基础设施到 phase-47 分支，作为四个 subagent 的公共基线（等待用户确认 commit 边界）
+- [x] 提交共享基础设施到 phase-47 分支，作为四个 subagent 的公共基线（local commit `25674308`，未 push/tag/PR）
 
 ### Phase 3：四 subagent 并行开发
 
 四个 subagent 从 Phase 2 完成后的公共基线分别创建 worktree，并行开发。每个 subagent 只改自己的新文件和指定的工具函数（在 tools.py 中追加函数），不修改共享文件。
+
+当前调度状态：
+
+- [x] Track A 分支 `codex/phase-47-track-a-table-extraction`，worktree `C:\Users\admin\.codex\worktrees\2ff9\rfc-rag-agent`，worker Zeno。
+- [x] Track B 分支 `codex/phase-47-track-b-user-image-upload`，worktree `C:\Users\admin\.codex\worktrees\5e65\rfc-rag-agent`，worker Hume。
+- [x] Track C 分支 `codex/phase-47-track-c-citation-location`，worktree `C:\Users\admin\.codex\worktrees\cafa\rfc-rag-agent`，worker Singer。
+- [x] Track D 分支 `codex/phase-47-track-d-feedback-loop`，worktree `C:\Users\admin\.codex\worktrees\faf2\rfc-rag-agent`，worker Poincare。
 
 #### Subagent A：PDF 表格结构化提取与检索
 
