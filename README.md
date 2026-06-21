@@ -1,5 +1,36 @@
 # RFC-RAG-Agent
 
+## Phase 49 Local PostgreSQL And Cloud Sync Update
+
+Current branch: `codex/phase-49-local-postgresql-cloud-sync`.
+
+Phase 49 starts from the merged Phase 48 baseline: `main / origin/main -> 4fefaafc Merge pull request #13 from CxcTHU/codex/phase-48-multimodal-evaluation`. The annotated `phase-48-complete` tag points to the same commit and was not moved. User approval for Phase 49 commit, tag, push, and GitHub merge was granted on 2026-06-21.
+
+Main changes: added `docker-compose.dev.yml` for one-command local PostgreSQL 16 development on host port `5433`; added `.env.dev.example`; extended Alembic with `20260621_0006` so `chunks.heading_path` is `Text` on PostgreSQL; extended `scripts/migrate_sqlite_to_postgres.py` to migrate documents, sources, chunks, embeddings, QA logs, users, conversations, messages, and feedback idempotently; rebuilt FAISS from local PostgreSQL; completed cloud PostgreSQL dump/restore, image asset sync, cloud FAISS rebuild, and production health/asset smoke; documented the cloud procedure in `docs/phase49_cloud_sync_runbook.md`.
+
+Verified local PostgreSQL state after migration:
+
+```text
+documents=1146
+sources=1073
+chunks=50250
+chunk_embeddings=72579
+qa_logs=227
+users=3
+conversations=7
+messages=117
+qa_feedback=0
+chunk_type: text=33182, image_description=15628, table=1440
+GLM embeddings: paratera / GLM-Embedding-3 / 2048 = 40563
+FAISS rebuild from PostgreSQL: vectors=40563
+Stage 30: overall=91.52 grade=A release_decision=pass
+Full pytest: 1037 passed
+```
+
+Local browser smoke was run with deterministic chat, vision, and embedding providers so real APIs remain outside CI/full-test requirements. The authenticated frontend loaded, a smoke user registered, Agent/table-style query returned a cited answer, an existing image was uploaded, and deterministic vision returned the expected test-mode refusal. The temporary smoke user/messages were removed from local PostgreSQL afterward.
+
+Cloud result: cloud PostgreSQL now matches local PostgreSQL for core table counts and fingerprints, `data/images/` contains 16978 files, cloud FAISS was rebuilt from PostgreSQL with `vectors=40563`, `/health` returns 200, and `/assets/images/1059/page10_img1.png` returns 200. No database password, JWT secret, SSH password, API key, bearer token, provider raw response, or restricted full text is written to Git/docs/tests/Obsidian.
+
 ## Phase 48 Multimodal Real Evaluation And Quality Loop Update
 
 Current branch: `codex/phase-48-multimodal-evaluation`.

@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-本指南对应阶段 39 的生产部署与端到端体验收尾。当前服务入口是 FastAPI：
+本指南最初对应阶段 39 的生产部署与端到端体验收尾；阶段 49 后，本地开发推荐使用 `docker-compose.dev.yml` 启动 PostgreSQL 16，生产部署推荐使用 `docker-compose.prod.yml`。旧 `docker-compose.yml` 仍保留为 SQLite fallback/历史单容器路径。
 
 ```text
 uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -17,7 +17,53 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - 本地 `.env` 保存真实 provider 配置；`.env` 不得提交。
 - `./data` 作为运行时数据卷挂载到容器内 `/app/data`。
 
-## 快速启动
+## 本地 PostgreSQL 开发启动（推荐）
+
+复制本地 PostgreSQL 示例配置中的 `DATABASE_URL` 到 `.env`，或直接按需手动设置：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+本地 PostgreSQL 示例连接串：
+
+```text
+DATABASE_URL=postgresql+psycopg2://rfc_user:dev_password@localhost:5433/rfc_rag_dev
+```
+
+启动本地 PostgreSQL 16：
+
+```powershell
+docker compose -f docker-compose.dev.yml up -d db
+```
+
+建表并迁移本地 SQLite 数据：
+
+```powershell
+$env:DATABASE_URL="postgresql+psycopg2://rfc_user:dev_password@localhost:5433/rfc_rag_dev"
+python -m alembic upgrade head
+python scripts/migrate_sqlite_to_postgres.py --source-sqlite-url sqlite:///./data/app.sqlite --target-database-url $env:DATABASE_URL
+```
+
+从 PostgreSQL 重建 FAISS：
+
+```powershell
+python scripts/build_faiss_index.py --provider paratera --model-name GLM-Embedding-3 --dimension 2048 --database-url $env:DATABASE_URL
+```
+
+启动 FastAPI：
+
+```powershell
+python -m uvicorn app.main:app --reload
+```
+
+访问：
+
+```text
+http://127.0.0.1:8000
+```
+
+## SQLite fallback 快速启动（历史路径）
 
 复制环境变量模板：
 
@@ -61,7 +107,15 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 
 ## 环境变量
 
-基础配置：
+推荐本地开发基础配置：
+
+```text
+APP_ENV=development
+DATABASE_URL=postgresql+psycopg2://rfc_user:dev_password@localhost:5433/rfc_rag_dev
+RAW_DATA_DIR=data/raw
+```
+
+SQLite fallback 配置：
 
 ```text
 APP_ENV=production
@@ -124,7 +178,13 @@ RERANKING_RECALL_K=25
 ./data:/app/data
 ```
 
-SQLite 数据库默认位于：
+PostgreSQL 开发数据默认位于 Docker volume：
+
+```text
+pgdata_dev
+```
+
+SQLite fallback 数据库默认位于：
 
 ```text
 /app/data/app.sqlite

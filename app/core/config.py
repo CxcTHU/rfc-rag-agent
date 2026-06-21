@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     app_name: str = "RFC-RAG-Agent"
     app_version: str = "0.1.0"
     app_env: str = "development"
+    # SQLite remains the safe fallback; Phase 49 local development should set
+    # DATABASE_URL to the PostgreSQL dev container for dev/prod parity.
     database_url: str = "sqlite:///./data/app.sqlite"
     raw_data_dir: str = "data/raw"
     auth_enabled: bool = False

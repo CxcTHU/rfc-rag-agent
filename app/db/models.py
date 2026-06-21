@@ -104,7 +104,7 @@ class Chunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     char_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    heading_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    heading_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     start_char: Mapped[int | None] = mapped_column(Integer, nullable=True)
     end_char: Mapped[int | None] = mapped_column(Integer, nullable=True)
     chunk_type: Mapped[str] = mapped_column(String(30), nullable=False, default="text", index=True)

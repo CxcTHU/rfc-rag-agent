@@ -1,5 +1,64 @@
 # 项目进度
 
+## Latest Status: 2026-06-21 Phase 49 Local PostgreSQL Migration And Cloud Sync Approved For Submission
+
+Current branch: `codex/phase-49-local-postgresql-cloud-sync`.
+
+Phase 49 starts from the correct Phase 48 merged baseline: `main / origin/main -> 4fefaafc Merge pull request #13 from CxcTHU/codex/phase-48-multimodal-evaluation`. The annotated `phase-48-complete` tag points to that Phase 48 final merge commit and was not moved. User approval for Phase 49 `git add`, commit, tag, push, PR, and GitHub merge was granted on 2026-06-21.
+
+Completed local work:
+
+```text
+docker-compose.dev.yml -> PostgreSQL 16 dev container on host port 5433
+.env.dev.example -> safe local PostgreSQL example
+alembic 20260621_0006 -> chunks.heading_path changed to Text for PostgreSQL parity
+migrate_sqlite_to_postgres.py -> documents/sources/chunks/embeddings/qa_logs/users/conversations/messages/qa_feedback
+local PostgreSQL migration -> idempotent second run inserted 0 duplicate rows
+FAISS rebuild from PostgreSQL -> vectors=40563
+SQLite boundary audit -> check_same_thread remains SQLite-only; PostgreSQL uses pool_pre_ping
+docs/phase49_cloud_sync_runbook.md -> cloud DB/assets/FAISS/deploy/smoke checklist
+Obsidian drafts -> Phase 49 index and Phase 0-9 reports
+```
+
+Verified local database state:
+
+```text
+documents=1146
+sources=1073
+chunks=50250
+chunk_embeddings=72579
+qa_logs=227
+users=3
+conversations=7
+messages=117
+qa_feedback=0
+text chunks=33182
+image_description chunks=15628
+table chunks=1440
+GLM embeddings=40563
+```
+
+Verification:
+
+```text
+docker compose -f docker-compose.dev.yml config -> passed
+PostgreSQL healthcheck -> healthy
+python -m alembic upgrade head -> 20260621_0006
+python scripts/build_faiss_index.py --provider paratera --model-name GLM-Embedding-3 --dimension 2048 --database-url postgresql+psycopg2://... -> vectors=40563
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m pytest -q -> 1037 passed
+local authenticated browser smoke with deterministic providers -> passed for frontend/auth/Agent/table-style query/image upload/test-mode vision refusal
+cloud PostgreSQL -> restored from local PostgreSQL dump; row counts, fingerprints, and sequences match local
+cloud data/images -> 16978 files; public image asset returns 200
+cloud FAISS -> rebuilt from cloud PostgreSQL with vectors=40563
+cloud public health -> 200
+```
+
+Submission boundary:
+
+- Real provider cloud Agent smoke remains outside CI/full-test requirements and should be treated as an operational/manual check.
+- User has authorized submission, so the next closeout action is commit, `phase-49-complete` tag, push, PR, and GitHub merge.
+
 ## Latest Status: 2026-06-20 Phase 48 Multimodal Real Evaluation And Quality Loop Complete Before Human Verification
 
 Current branch: `codex/phase-48-multimodal-evaluation`.
