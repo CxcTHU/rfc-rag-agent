@@ -46,10 +46,11 @@ class AgentQueryRequest(BaseModel):
             "agentic",
             "react_agent",
             "tool_calling_agent",
+            "langgraph_agent",
         }:
             raise ValueError(
                 "mode must be 'default', 'agentic', 'react_agent', or "
-                "'tool_calling_agent'"
+                "'tool_calling_agent', or 'langgraph_agent'"
             )
         return normalized
 

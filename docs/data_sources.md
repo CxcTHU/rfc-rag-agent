@@ -1,5 +1,42 @@
 # 数据来源登记
 
+## Phase 50 Planner Fast Model Data Note
+
+Phase 16-17 adds no external data source, crawler, PDF download, corpus row, embedding rebuild, or provider raw-response artifact. It only adds an optional runtime planner model for LangGraph route selection.
+
+Planner prompts contain action descriptions, the current user question, and short observation summaries. Tests use fake providers only. Docs, tests, CSVs, and Obsidian do not store API keys, bearer tokens, raw provider responses, `raw_response`, `reasoning_content`, hidden thoughts, or restricted full text.
+
+## Phase 50 LangGraph Redis Data Note
+
+Phase 50 adds no crawler, no external literature source, no new PDF download, and no new production corpus category. It adds runtime cache/checkpoint storage and deterministic evaluation artifacts only.
+
+Runtime data introduced:
+
+```text
+Redis key emb:{provider}:{model}:{dimension}:{sha256(normalized_query)}
+-> cached query embedding JSON
+-> TTL controlled by existing query embedding cache settings
+-> fallback to in-memory QueryEmbeddingCache when Redis is unavailable
+```
+
+```text
+LangGraph checkpoint
+-> RedisSaver when RedisJSON / RediSearch are available
+-> MemorySaver fallback otherwise
+-> keyed by configurable thread_id
+```
+
+New deterministic evaluation artifacts:
+
+```text
+scripts/evaluate_phase50_langgraph_vs_react.py
+data/evaluation/phase50_langgraph_vs_react_results.csv
+data/evaluation/phase50_langgraph_vs_react_summary.csv
+tests/test_phase50_langgraph_eval.py
+```
+
+The evaluation script uses an in-memory SQLite fixture and deterministic providers by default. CSV rows contain mode, status, refusal summary, tool/iteration counts, safe latency metrics, citation/source counts, top source id, cache/checkpointer backend, and short safe error summaries. They must not contain API keys, bearer tokens, Authorization headers, provider raw responses, `raw_response`, `reasoning_content`, hidden reasoning, full restricted text, or user-uploaded sensitive bytes.
+
 ## Phase 49 Local PostgreSQL And Cloud Sync Data Note
 
 Phase 49 adds no crawler, no external literature source, no new PDF download, no new provider topology, and no new production corpus category. It moves existing local project data from SQLite into local PostgreSQL, then synchronizes that PostgreSQL state plus image assets to the cloud deployment.
@@ -1696,3 +1733,31 @@ User-uploaded image analysis first creates a vision description, applies a domai
 Data safety boundary: no API key, Bearer token, Authorization header, vendor raw response, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, raw uploaded image bytes, or full feedback-sensitive material is written to Git, docs, tests, public CSVs, or Obsidian. Automated tests use deterministic/local providers only; real vision/model APIs are not a test prerequisite.
 
 The orientation repair does not add a new source corpus. It rewrites derived local files under gitignored `data/images/` from the existing local PDFs and records local audit artifacts under ignored Phase 47 orientation directories.
+## Phase 50 Phase 10-14 Redis Runtime Data Note
+
+Phase 50 Phase 10-14 adds no external data source, crawler, PDF download, or production corpus category. It adds Redis runtime data only:
+
+```text
+semcache:{sha256(normalized_query)}
+-> Redis Hash with query, mode, created_at, FLOAT32 embedding, payload JSON
+-> payload contains answer, sources, citations, mode
+-> no API keys, bearer tokens, provider raw responses, hidden reasoning, or restricted full text
+```
+
+```text
+ratelimit:{client_ip}:{endpoint}
+-> Redis ZSET of request timestamps
+-> applies only to /agent/query and /agent/query/stream when enabled
+-> Redis unavailable means fail-open; no request body is stored
+```
+
+Redis Stack indexes (`idx:semcache`, LangGraph checkpoint indexes) are derived runtime structures and are not committed. Phase 50 evaluation artifacts remain deterministic and safe for Git.
+## Phase 50 pgvector Data Boundary Update
+
+pgvector does not add any external data source. It stores a second database representation of embeddings already present in `chunk_embeddings.embedding_json`.
+
+- Source of truth for corpus text/image/table chunks remains the existing PostgreSQL/SQLite tables.
+- `embedding_vector Vector(2048)` is derived from GLM-Embedding-3 vectors and can be rebuilt from `embedding_json`.
+- HNSW indexes are database indexes, not new content.
+- Existing FAISS files under `data/faiss/` remain gitignored, rebuildable runtime artifacts and are kept as fallback.
+- No API key, Bearer token, provider raw response, or restricted full text is written to docs, tests, CSV, Git, or Obsidian.

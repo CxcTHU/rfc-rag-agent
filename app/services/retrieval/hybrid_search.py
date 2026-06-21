@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
 
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
@@ -59,6 +60,7 @@ class HybridSearchService:
         reranking_provider: ReRankingProvider | None = None,
         reranking_enabled: bool | None = None,
         reranking_recall_k: int | None = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> None:
         self.db = db
         self.embedding_provider = embedding_provider
@@ -70,6 +72,7 @@ class HybridSearchService:
         self.reranking_enabled = settings.reranking_enabled if reranking_enabled is None else reranking_enabled
         self.reranking_recall_k = reranking_recall_k or settings.reranking_recall_k
         self.reranking_provider = reranking_provider
+        self.progress_callback = progress_callback
         if self.reranking_enabled and self.reranking_provider is None:
             self.reranking_provider = create_reranking_provider(
                 provider_name=settings.reranking_provider,
@@ -90,10 +93,13 @@ class HybridSearchService:
         if self.reranking_enabled and self.reranking_provider is not None:
             fetch_k = max(fetch_k, top_k * 5, self.reranking_recall_k)
         if self.parallel:
+            self._progress("正在并行检索关键词和向量候选证据")
             keyword_results, vector_results = self._search_parallel(normalized_query, fetch_k)
         else:
+            self._progress("正在检索关键词和向量候选证据")
             keyword_results, vector_results = self._search_serial(normalized_query, fetch_k)
 
+        self._progress("已获得候选证据，正在合并排序")
         candidates: dict[int, _HybridCandidate] = {}
         add_results(candidates, keyword_results, "keyword", max_result_score(keyword_results))
         add_results(candidates, vector_results, "vector", max_result_score(vector_results))
@@ -116,7 +122,7 @@ class HybridSearchService:
         fetch_k: int,
     ) -> tuple[list[KeywordSearchResult], list[VectorSearchResult]]:
         keyword_results = KeywordSearchService(self.db).search(query, top_k=fetch_k)
-        vector_results = VectorSearchService(self.db, self.embedding_provider).search(
+        vector_results = self._vector_search_service(self.db).search(
             query,
             top_k=fetch_k,
         )
@@ -140,7 +146,7 @@ class HybridSearchService:
             token = set_current_latency_trace(trace)
             with ThreadSessionLocal() as db:
                 try:
-                    return VectorSearchService(db, self.embedding_provider).search(
+                    return self._vector_search_service(db).search(
                         query,
                         top_k=fetch_k,
                     )
@@ -162,6 +168,7 @@ class HybridSearchService:
         if not self.reranking_enabled or self.reranking_provider is None or not results:
             return results[:top_k]
         try:
+            self._progress("正在重排候选证据")
             with latency_timer("rerank_latency_ms"):
                 reranked = self.reranking_provider.rerank(
                     query=query,
@@ -174,6 +181,20 @@ class HybridSearchService:
             # order instead of failing the whole query.
             return results[:top_k]
         return [results[item.index] for item in reranked]
+
+    def _progress(self, summary: str) -> None:
+        if self.progress_callback is not None:
+            self.progress_callback(summary)
+
+    def _vector_search_service(self, db: Session) -> VectorSearchService:
+        try:
+            return VectorSearchService(
+                db,
+                self.embedding_provider,
+                progress_callback=self.progress_callback,
+            )
+        except TypeError:
+            return VectorSearchService(db, self.embedding_provider)
 
 
 def add_results(

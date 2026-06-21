@@ -1,5 +1,67 @@
 # 架构说明
 
+## Phase 50 Planner Fast Model Addendum
+
+LangGraph Agent now supports an optional two-tier model pattern:
+
+```text
+/agent/query mode="langgraph_agent"
+-> LangGraphAgentService
+-> ContextVar planner_chat_provider
+-> route_query_node
+   -> deterministic image/table rules
+   -> optional planner fast model JSON action
+   -> DeterministicReActPlanner fallback
+-> AgentToolbox nodes
+-> answer_with_citations using main chat_model_provider
+```
+
+The planner model only chooses the next `ReActAction`; it does not embed, retrieve, inspect raw documents, or generate the final cited answer. Runtime provider objects are injected through ContextVar and are not stored in checkpoint state, so RedisSaver still sees JSON-native state only.
+
+`latency_trace.planner_model` records either `deterministic` or `provider/model`, and `planner_latency_ms` records the planner LLM call duration. When `PLANNER_CHAT_MODEL_PROVIDER` is blank, behavior is unchanged and no planner API call is made.
+
+## Phase 50 Architecture Delta: LangGraph Agent And Redis Cache Layer
+
+Phase 50 adds a new explicit `mode="langgraph_agent"` execution path. It does not replace the current default `tool_calling_agent`, does not delete `react_agent`, and does not add external data sources.
+
+Core control flow:
+
+```text
+/agent/query mode="langgraph_agent"
+-> LangGraphAgentService
+-> LangGraphAgentState
+-> StateGraph route node
+-> AgentToolbox-backed nodes
+   search_knowledge / search_figures / search_tables / analyze_user_image
+   rewrite_query / answer_with_citations / refuse / final_answer
+-> AgentQueryResult
+-> AgentQueryResponse / SSE metadata
+```
+
+The graph layer is orchestration only. Retrieval, figure search, table search, uploaded-image analysis, and cited answer generation still live behind `AgentToolbox`; LangGraph nodes call those existing methods instead of reimplementing retrieval or generation.
+
+Redis now has two roles:
+
+```text
+query text
+-> QueryEmbeddingCache facade
+-> RedisQueryEmbeddingCache when REDIS_URL is healthy
+-> fallback in-memory QueryEmbeddingCache
+-> EmbeddingProvider only on miss
+```
+
+```text
+LangGraph StateGraph
+-> RedisSaver when langgraph-checkpoint-redis and Redis modules are available
+-> MemorySaver fallback when Redis is absent, unreachable, or lacks RedisJSON / RediSearch
+```
+
+Runtime-only objects such as `AgentToolbox` and SSE `event_sink` are injected into LangGraph nodes through `ContextVar`, not stored in checkpoint state. This keeps checkpoints serializable and prevents database sessions or callbacks from leaking into persisted state.
+
+SSE compatibility is preserved. LangGraph emits the same public runtime event names already used by ReAct/tool-calling paths: `agent_step`, `tool_call_start`, and `tool_call_result`. Final answer streaming still uses the existing `token`, `metadata`, and `done` event contract, so the frontend does not need a new renderer for `langgraph_agent`.
+
+Deployment boundary: `docker-compose.dev.yml` and `docker-compose.prod.yml` include Redis 7 for caching. Ordinary `redis:7-alpine` is enough for query embedding cache, while Redis-backed LangGraph checkpoint persistence needs RedisJSON / RediSearch support; otherwise the service falls back to `MemorySaver`.
+
 ## Phase 49 Architecture Delta: Local PostgreSQL Migration And Cloud Sync
 
 Phase 49 changes the development and release substrate from "SQLite as the only practical local runtime" to "SQLite as golden backup plus local PostgreSQL as the active development database". It does not change retrieval strategy, prompt strategy, Stage 30 scoring rules, provider topology, ReAct/tool-calling behavior, or the external data-source boundary.
@@ -4279,3 +4341,36 @@ The new schema surface is:
 Table extraction uses PyMuPDF `page.find_tables()` and stores extracted Markdown as `chunk_type="table"`. User uploads are validated with Pillow and saved under `data/user_uploads/`; the ReAct path calls the configured vision provider through the existing provider abstraction, records `vision_provider` / `vision_model` in `image_analysis`, and refuses deterministic test vision as non-real image understanding. Citation location is best-effort: exact bbox, partial bbox, page-only, or none. Feedback export is local and sanitized before writing `data/evaluation/phase47_user_feedback_eval.csv`.
 
 The frontend remains a static FastAPI-served HTML/CSS/JS app. It does not introduce a Node build chain. New controls are thin API clients for upload, feedback, and evidence rendering.
+## Phase 50 Phase 10-14 Architecture Delta: Redis Stack, Semantic Cache, Rate Limiting
+
+Redis now has four explicit roles:
+
+```text
+1. Query embedding cache -> exact query embedding reuse, fallback to memory
+2. LangGraph checkpointer -> RedisSaver on Redis Stack, fallback to MemorySaver
+3. Semantic Cache -> RediSearch vector KNN answer cache, default disabled
+4. Rate Limiting -> Redis ZSET sliding window for Agent endpoints, default disabled
+```
+
+`docker-compose.dev.yml` and `docker-compose.prod.yml` use `redis/redis-stack-server:latest` so RedisJSON and RediSearch are available. LangGraph state stored in checkpoints is JSON-native dict/list data; runtime objects such as `AgentToolbox`, DB sessions, and SSE callbacks are not persisted.
+
+Semantic Cache is answer-level caching. `/agent/query` checks it before running the Agent only when the request has no conversation history, no uploaded image, and no `source_id` filter. A hit returns the cached answer/sources/citations/mode with `latency_trace.semantic_cache_hit=true`; a miss or Redis error falls through to normal Agent execution.
+
+Rate Limiting is request-level protection. `RateLimitMiddleware` applies only to `/agent/query` and `/agent/query/stream`, stores timestamps in Redis ZSETs, returns `429` with `X-RateLimit-*` headers when enabled and exceeded, and fail-opens when Redis is unavailable.
+## Phase 50 pgvector HNSW Architecture Addendum
+
+The retrieval architecture now has an optional database-native vector backend:
+
+```text
+query
+-> query embedding cache / provider
+-> VectorSearchService
+   -> pgvector HNSW search when enabled and PostgreSQL dim=2048 is available
+   -> FAISS file index fallback
+   -> numpy fallback when FAISS is unavailable
+-> rerank / AgentToolbox / answer
+```
+
+`chunk_embeddings.embedding_json` remains the canonical serialized embedding history. `chunk_embeddings.embedding_vector Vector(2048)` is the PostgreSQL search column for GLM-Embedding-3. The HNSW index uses a `halfvec(2048)` expression with `halfvec_cosine_ops`, because pgvector HNSW indexes on `vector` columns are limited to 2000 dimensions. Runtime search uses `<=>` cosine distance and records `latency_trace.vector_search_backend`.
+
+Default vector retrieval is HNSW-first because `pgvector_search_enabled=True`. PostgreSQL + pgvector + 2048-dimensional embeddings use `pgvector_hnsw`; SQLite tests, low-dimensional deterministic embeddings, and environments without pgvector continue to use FAISS/numpy fallback.

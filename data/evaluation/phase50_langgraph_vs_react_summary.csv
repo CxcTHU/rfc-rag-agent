@@ -1,0 +1,3 @@
+mode,total,errors,refused,avg_tool_call_count,avg_iteration_count,avg_time_to_final_ms,avg_citation_count,avg_source_count,same_refusal_as_react,same_top_source_as_react,same_citation_count_as_react,decision
+langgraph_agent,6,0,1,2.000,2.000,455.196,0.833,4.167,6/6,5/6,6/6,parallel_candidate
+react_agent,6,0,1,2.000,2.000,478.373,0.833,4.500,6/6,6/6,6/6,parallel_candidate

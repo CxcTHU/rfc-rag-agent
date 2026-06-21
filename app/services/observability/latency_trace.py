@@ -31,6 +31,11 @@ class LatencyTrace:
         self.values.setdefault("time_to_final_ms", 0.0)
         self.values.setdefault("iteration_count", 0)
         self.values.setdefault("tool_call_count", 0)
+        self.values.setdefault("query_embedding_cache_hits", 0)
+        self.values.setdefault("query_embedding_cache_misses", 0)
+        self.values.setdefault("query_embedding_cache_backend", "memory")
+        self.values.setdefault("vector_search_backend", "not_run")
+        self.values.setdefault("planner_model", "deterministic")
 
     def add_duration(self, field_name: str, duration_ms: float) -> None:
         current = self.values.get(field_name, 0.0)

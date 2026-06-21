@@ -17,6 +17,21 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - 本地 `.env` 保存真实 provider 配置；`.env` 不得提交。
 - `./data` 作为运行时数据卷挂载到容器内 `/app/data`。
 
+## 可选 Planner 快模型配置
+
+`react_agent` 与 `langgraph_agent` 支持可选 `PLANNER_CHAT_MODEL_*` 配置，用低延迟模型做 action 路由，主 `CHAT_MODEL_*` 仍用于最终引用式回答生成。留空时自动使用确定性 planner，不调用 planner API。
+
+```text
+PLANNER_CHAT_MODEL_PROVIDER=openai-compatible
+PLANNER_CHAT_MODEL_NAME=deepseek-v4-flash
+PLANNER_CHAT_MODEL_API_KEY=<local-only>
+PLANNER_CHAT_MODEL_BASE_URL=<provider-base-url>
+PLANNER_CHAT_MODEL_TEMPERATURE=0
+PLANNER_CHAT_MODEL_TIMEOUT_SECONDS=10
+```
+
+部署时不要把真实 planner API key 写入 Git、镜像、文档或 Obsidian；只放在服务器本地 `.env.prod` 或等价 secret 管理中。
+
 ## 本地 PostgreSQL 开发启动（推荐）
 
 复制本地 PostgreSQL 示例配置中的 `DATABASE_URL` 到 `.env`，或直接按需手动设置：
@@ -156,6 +171,19 @@ EMBEDDING_DIMENSION=0
 EMBEDDING_TIMEOUT_SECONDS=30
 ```
 
+Redis / LangGraph（Phase 50）：
+
+```text
+REDIS_URL=redis://redis:6379/0
+REDIS_SOCKET_TIMEOUT_SECONDS=1.0
+LANGGRAPH_CHECKPOINT_TTL_MINUTES=60
+LANGGRAPH_CHECKPOINT_REFRESH_ON_READ=true
+```
+
+`docker-compose.dev.yml` 和 `docker-compose.prod.yml` 都提供 Redis 7 容器。当前 Redis 主要用于 query embedding 缓存；命中后会跳过 embedding provider 调用。Redis 不可用、未配置或连接超时时，服务会 graceful fallback 到进程内 `QueryEmbeddingCache`。
+
+`mode="langgraph_agent"` 会尝试使用 `langgraph-checkpoint-redis` 的 Redis checkpointer。该适配器需要 RedisJSON / RediSearch 模块；普通 `redis:7-alpine` 不一定具备这些模块，因此生产若只使用普通 Redis 7，Agent 会自动 fallback 到 `MemorySaver`，不影响回答链路。若需要真正跨进程持久化 LangGraph checkpoint，请在生产环境改用带 RedisJSON / RediSearch 的 Redis Stack 或 Redis 8 模块化镜像，并保留相同 `REDIS_URL`。
+
 Reranking provider：
 
 ```text
@@ -271,3 +299,45 @@ python scripts/score_stage30_quality.py
 ```text
 overall=91.52 grade=A release_decision=pass
 ```
+## Phase 50 Redis Stack, Semantic Cache, And Rate Limiting
+
+Phase 50 now expects Redis Stack for full Redis-backed behavior:
+
+```text
+docker-compose.dev.yml  -> redis/redis-stack-server:latest
+docker-compose.prod.yml -> redis/redis-stack-server:latest
+```
+
+Required and optional runtime settings:
+
+```text
+REDIS_URL=redis://redis:6379/0
+LANGGRAPH_CHECKPOINT_TTL_MINUTES=60
+LANGGRAPH_CHECKPOINT_REFRESH_ON_READ=true
+SEMANTIC_CACHE_ENABLED=false
+SEMANTIC_CACHE_SIMILARITY_THRESHOLD=0.92
+SEMANTIC_CACHE_TTL_SECONDS=3600
+RATE_LIMIT_ENABLED=false
+RATE_LIMIT_REQUESTS_PER_MINUTE=30
+RATE_LIMIT_WINDOW_SECONDS=60
+```
+
+Redis failure behavior is intentionally graceful: embedding cache falls back to memory, LangGraph checkpoint falls back to `MemorySaver`, Semantic Cache skips, and Rate Limiting fail-opens. Keep Semantic Cache and Rate Limiting disabled until Redis Stack health and production traffic expectations are verified.
+## Phase 50 pgvector HNSW Deployment Note
+
+Phase 50 dev/prod Compose files now use `pgvector/pgvector:pg16` for PostgreSQL. Run Alembic after pulling the image so PostgreSQL can create the `vector` extension, `chunk_embeddings.embedding_vector Vector(2048)`, and the HNSW cosine index.
+
+```powershell
+docker compose -f docker-compose.dev.yml up -d db redis
+$env:DATABASE_URL="postgresql+psycopg2://rfc_user:dev_password@localhost:5433/rfc_rag_dev"
+python -m alembic upgrade head
+```
+
+Enable pgvector search only after the migration succeeds:
+
+```text
+PGVECTOR_SEARCH_ENABLED=true
+HNSW_EF_SEARCH=100
+```
+
+If pgvector is disabled or unavailable, the app continues to use the existing FAISS/numpy fallback. Keep `data/faiss/` as a rebuildable runtime artifact; do not commit FAISS files or secrets.

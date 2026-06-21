@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import time
+import hashlib
 from collections.abc import Iterator, Sequence
 from queue import Queue
 from threading import Thread
@@ -34,6 +35,7 @@ from app.services.agent import intent_router
 from app.services.agent.refusal_explainer import build_refusal_explanation
 from app.services.agent.service import AgentQueryResult, AgentService
 from app.services.agent.tools import image_url_from_source_image_path, page_number_from_source_image_path
+from app.services.agent.graph_builder import LangGraphAgentService
 from app.services.agent.react_service import ReActAgentService
 from app.services.agent.tool_calling_service import ToolCallingAgentService
 from app.services.agent.routing import classify_query_complexity
@@ -53,6 +55,10 @@ from app.services.generation.chat_model import (
     split_streaming_text,
 )
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
+from app.services.cache.semantic_cache import (
+    get_configured_semantic_cache,
+    semantic_cache_request_is_eligible,
+)
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -198,6 +204,32 @@ def query_agent(
     if effective_mode is None:
         effective_mode = "tool_calling_agent"
     log_agent_query_received(request, effective_mode=effective_mode)
+    semantic_cache = get_configured_semantic_cache()
+    semantic_cache_context_value = semantic_cache_context(db)
+    semantic_cache_eligible = semantic_cache_request_is_eligible(
+        conversation_id=request.conversation_id,
+        history=conversation_history or request.history,
+        source_id=request.source_id,
+        image_path=request.image_path,
+        query=request.question,
+        conversation_messages=conversation_messages,
+    )
+    if semantic_cache is not None and semantic_cache_eligible:
+        semantic_lookup = semantic_cache.lookup(
+            query=request.question,
+            mode=effective_mode,
+            embedding_provider=embedding_provider,
+            cache_context=semantic_cache_context_value,
+        )
+        if semantic_lookup.response is not None:
+            persist_agent_conversation_messages(
+                repository=conversation_repository,
+                conversation_id=request.conversation_id,
+                question=request.question,
+                response=semantic_lookup.response,
+                chat_model_provider=chat_model_provider,
+            )
+            return semantic_lookup.response
 
     response: AgentQueryResponse
     if effective_mode == "agentic":
@@ -224,6 +256,15 @@ def query_agent(
             question=request.question,
             response=agent_response_from_agentic_result(agentic_result),
             effective_mode=effective_mode,
+        )
+        maybe_store_semantic_cache_response(
+            semantic_cache=semantic_cache,
+            eligible=semantic_cache_eligible,
+            query=request.question,
+            mode=effective_mode,
+            embedding_provider=embedding_provider,
+            response=response,
+            cache_context=semantic_cache_context_value,
         )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
@@ -265,6 +306,70 @@ def query_agent(
             response=agent_response_from_result(result),
             effective_mode=effective_mode,
         )
+        maybe_store_semantic_cache_response(
+            semantic_cache=semantic_cache,
+            eligible=semantic_cache_eligible,
+            query=request.question,
+            mode=effective_mode,
+            embedding_provider=embedding_provider,
+            response=response,
+            cache_context=semantic_cache_context_value,
+        )
+        log_agent_response_event(response)
+        persist_agent_conversation_messages(
+            repository=conversation_repository,
+            conversation_id=request.conversation_id,
+            question=request.question,
+            response=response,
+            chat_model_provider=chat_model_provider,
+        )
+        return response
+
+    if effective_mode == "langgraph_agent":
+        try:
+            result = LangGraphAgentService(
+                db=db,
+                chat_model_provider=chat_model_provider,
+                embedding_provider=embedding_provider,
+                planner_chat_provider=planner_chat_provider,
+            ).query(
+                question=request.question,
+                top_k=request.top_k,
+                max_tool_calls=request.max_tool_calls,
+                source_id=request.source_id,
+                history=conversation_history or request.history,
+                image_path=request.image_path,
+                thread_id=(
+                    f"conversation:{request.conversation_id}"
+                    if request.conversation_id is not None
+                    else None
+                ),
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="chat model provider is unavailable or timed out",
+            ) from exc
+        response = maybe_enrich_agent_response_with_figure_evidence(
+            db=db,
+            question=request.question,
+            response=agent_response_from_result(result),
+            effective_mode=effective_mode,
+        )
+        maybe_store_semantic_cache_response(
+            semantic_cache=semantic_cache,
+            eligible=semantic_cache_eligible,
+            query=request.question,
+            mode=effective_mode,
+            embedding_provider=embedding_provider,
+            response=response,
+            cache_context=semantic_cache_context_value,
+        )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
             repository=conversation_repository,
@@ -302,6 +407,15 @@ def query_agent(
             question=request.question,
             response=agent_response_from_result(result),
             effective_mode=effective_mode,
+        )
+        maybe_store_semantic_cache_response(
+            semantic_cache=semantic_cache,
+            eligible=semantic_cache_eligible,
+            query=request.question,
+            mode=effective_mode,
+            embedding_provider=embedding_provider,
+            response=response,
+            cache_context=semantic_cache_context_value,
         )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
@@ -341,6 +455,15 @@ def query_agent(
         question=request.question,
         response=agent_response_from_result(result),
         effective_mode=effective_mode,
+    )
+    maybe_store_semantic_cache_response(
+        semantic_cache=semantic_cache,
+        eligible=semantic_cache_eligible,
+        query=request.question,
+        mode=effective_mode,
+        embedding_provider=embedding_provider,
+        response=response,
+        cache_context=semantic_cache_context_value,
     )
     log_agent_response_event(response)
     persist_agent_conversation_messages(
@@ -450,15 +573,47 @@ def stream_agent_query_events(
                     response = agent_response_from_chitchat(request.question, chitchat)
                     summarize = False
                 else:
-                    response, streamed_token_count = yield from stream_non_chitchat_agent_response(
-                        request=request,
-                        db=db,
-                        conversation_history=conversation_history,
-                        chat_model_provider=chat_model_provider,
-                        embedding_provider=embedding_provider,
-                        planner_chat_provider=planner_chat_provider,
+                    effective_mode = request.mode or "tool_calling_agent"
+                    semantic_cache = get_configured_semantic_cache()
+                    semantic_cache_context_value = semantic_cache_context(db)
+                    semantic_cache_eligible = semantic_cache_request_is_eligible(
+                        conversation_id=request.conversation_id,
+                        history=conversation_history or request.history,
+                        source_id=request.source_id,
+                        image_path=request.image_path,
+                        query=request.question,
+                        conversation_messages=conversation_messages or [],
                     )
-                    if streamed_token_count == 0:
+                    semantic_cache_hit = False
+                    if semantic_cache is not None and semantic_cache_eligible:
+                        semantic_lookup = semantic_cache.lookup(
+                            query=request.question,
+                            mode=effective_mode,
+                            embedding_provider=embedding_provider,
+                            cache_context=semantic_cache_context_value,
+                        )
+                        if semantic_lookup.response is not None:
+                            response = semantic_lookup.response
+                            semantic_cache_hit = True
+                    if not semantic_cache_hit:
+                        response, streamed_token_count = yield from stream_non_chitchat_agent_response(
+                            request=request,
+                            db=db,
+                            conversation_history=conversation_history,
+                            chat_model_provider=chat_model_provider,
+                            embedding_provider=embedding_provider,
+                            planner_chat_provider=planner_chat_provider,
+                        )
+                        maybe_store_semantic_cache_response(
+                            semantic_cache=semantic_cache,
+                            eligible=semantic_cache_eligible,
+                            query=request.question,
+                            mode=effective_mode,
+                            embedding_provider=embedding_provider,
+                            response=response,
+                            cache_context=semantic_cache_context_value,
+                        )
+                    if semantic_cache_hit or streamed_token_count == 0:
                         for token in split_streaming_text(response.answer):
                             mark_response_first_token(response, stream_started)
                             yield sse_event("token", {"text": token})
@@ -525,6 +680,7 @@ def stream_non_chitchat_agent_response(
                 event_sink=lambda event: queue.put(("agent_event", event)),
             )
         except Exception as exc:  # noqa: BLE001 - forwarded to SSE error mapping.
+            agent_logger.exception("stream_response_failed")
             queue.put(("error", exc))
             return
         queue.put(("response", response))
@@ -551,6 +707,38 @@ def stream_non_chitchat_agent_response(
 
         producer.join()
         raise RuntimeError("unknown stream event")
+
+
+def maybe_store_semantic_cache_response(
+    *,
+    semantic_cache: Any | None,
+    eligible: bool,
+    query: str,
+    mode: str,
+    embedding_provider: EmbeddingProvider,
+    response: AgentQueryResponse,
+    cache_context: str = "default",
+) -> None:
+    if semantic_cache is None or not eligible:
+        return
+    response.latency_trace.setdefault("semantic_cache_hit", False)
+    response.latency_trace.setdefault("semantic_cache_similarity", None)
+    semantic_cache.store(
+        query=query,
+        mode=mode,
+        embedding_provider=embedding_provider,
+        response=response,
+        cache_context=cache_context,
+    )
+
+
+def semantic_cache_context(db: Session) -> str:
+    try:
+        safe_url = db.get_bind().url.render_as_string(hide_password=True)
+    except Exception:
+        safe_url = "unknown"
+    digest = hashlib.sha256(safe_url.encode("utf-8")).hexdigest()
+    return f"db:{digest}"
 
 
 FOLLOWUP_TRANSFORM_TRIGGERS = (
@@ -1023,10 +1211,18 @@ def enrich_agent_response_with_figure_evidence(
 
     if not added_sources:
         return response
+    figure_workflow_step = AgentWorkflowStepItem(
+        name="search_figures",
+        input_summary=f"question={safe_text_summary(question, limit=120)}",
+        output_summary=f"auto-enriched {len(added_sources)} figure evidence items from cited documents",
+        succeeded=True,
+        error=None,
+    )
     return response.model_copy(
         update={
             "sources": [*response.sources, *added_sources],
             "search_results": [*response.search_results, *added_results],
+            "workflow_steps": [*response.workflow_steps, figure_workflow_step],
         },
     )
 
@@ -1085,6 +1281,35 @@ def build_agent_query_response(
             max_tool_calls=request.max_tool_calls,
             history=conversation_history or request.history,
             image_path=request.image_path,
+            event_sink=event_sink,
+        )
+        response = maybe_enrich_agent_response_with_figure_evidence(
+            db=db,
+            question=request.question,
+            response=agent_response_from_result(result),
+            effective_mode=effective_mode,
+        )
+        log_agent_response_event(response)
+        return response
+
+    if effective_mode == "langgraph_agent":
+        result = LangGraphAgentService(
+            db=db,
+            chat_model_provider=chat_model_provider,
+            embedding_provider=embedding_provider,
+            planner_chat_provider=planner_chat_provider,
+        ).query(
+            question=request.question,
+            top_k=request.top_k,
+            max_tool_calls=request.max_tool_calls,
+            source_id=request.source_id,
+            history=conversation_history or request.history,
+            image_path=request.image_path,
+            thread_id=(
+                f"conversation:{request.conversation_id}"
+                if request.conversation_id is not None
+                else None
+            ),
             event_sink=event_sink,
         )
         response = maybe_enrich_agent_response_with_figure_evidence(
@@ -1157,7 +1382,7 @@ def log_agent_query_received(
 
 def log_agent_response_event(response: AgentQueryResponse) -> None:
     event = "refusal_triggered" if response.refused else "answer_generated"
-    latency_ms = response.latency_trace.get("total_latency_ms")
+    latency_ms = response.latency_trace.get("time_to_final_ms")
     log_event(
         agent_logger,
         event,

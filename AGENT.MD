@@ -1,3 +1,58 @@
+# 阶段 50 Phase 16-17 最新交班状态（2026-06-21）
+
+当前分支：`codex/phase-50-langgraph-redis`。
+
+阶段 50 在 Phase 0-15 的 LangGraph、Redis Stack、Semantic Cache、Rate Limiting 与 pgvector HNSW 基础上，追加完成 LangGraph planner 快模型路由与全栈收尾。尚未 `git add`、commit、tag、push 或创建 PR，等待用户人工核验。
+
+关键新增：
+
+- `app/services/agent/graph_nodes.py` 新增 `_CURRENT_PLANNER_PROVIDER` ContextVar；`route_query_node` 在非图片/非表格硬规则分支可调用 planner 快模型输出 JSON action。
+- `LangGraphAgentService` 新增 `planner_chat_provider` 参数，并在 `query()` 生命周期中 set/reset ContextVar；planner provider 不进入 LangGraph checkpoint state。
+- `/agent/query` 与 `/agent/query/stream` 的 `mode="langgraph_agent"` 路径传入已有 Depends 注入的 `planner_chat_provider`。
+- `latency_trace.planner_model` 记录 `deterministic` 或 `provider/model`；`planner_latency_ms` 继续记录 planner LLM 耗时。
+- planner 未配置、返回非法 JSON 或调用异常时 fallback 到 `DeterministicReActPlanner`；最终 `answer_with_citations` 仍使用主 `chat_model_provider`，不改变 Pro 生成链路。
+- 环境模板补充 `PLANNER_CHAT_MODEL_*` 示例；该配置默认留空，不让真实 API 成为 CI 或本地全量测试前提。
+
+验证结果：
+
+```text
+Phase 16 focused regression -> 69 passed
+python -m pytest -q -> 1106 passed, 1 skipped
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+docker compose -f docker-compose.dev.yml config --quiet -> passed
+docker compose -f docker-compose.prod.yml config --quiet -> passed with temporary local placeholders
+```
+
+当前必须停在用户人工核验前：**不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR，不要创建或移动 `phase-50-complete` tag**。不得把 `.env`、`.env.prod`、数据库密码、JWT secret、API key、Bearer token、供应商原始响应、`raw_response`、`reasoning_content`、hidden thought 或受限全文写入 Git/CSV/文档/测试/Obsidian。
+
+# 阶段 50 最新交班状态（2026-06-21）
+
+当前分支：`codex/phase-50-langgraph-redis`。
+
+阶段 50 已从阶段 49 合并后的 `main / origin/main -> 0671a31b Merge pull request #14 from CxcTHU/codex/phase-49-local-postgresql-cloud-sync` 出发。`phase-49-complete` 已核对为 annotated tag，指向 `a044ce0c Complete phase 49 local PostgreSQL cloud sync`，并且没有移动任何已有阶段 tag。
+
+阶段 50 已完成 LangGraph Agent 编排与 Redis 缓存层开发：
+
+- `docker-compose.dev.yml` 和 `docker-compose.prod.yml` 均新增 Redis 7 服务；`REDIS_URL` 为空或 Redis 不可用时必须 graceful fallback。
+- `app/services/cache/embedding_cache.py` 新增 Redis query embedding 缓存，命中时跳过 embedding provider 调用；`query_embedding_cache.py` 保留内存缓存作为 fallback。
+- `app/services/agent/graph_state.py`、`graph_nodes.py`、`graph_builder.py` 新增 `mode="langgraph_agent"` 的 `StateGraph` 编排。节点只封装并复用 `AgentToolbox`，不重写检索、表格/图片搜索或生成逻辑。
+- `app/services/agent/graph_checkpointer.py` 集成 `langgraph-checkpoint-redis`，RedisSaver 不可用时 fallback 到全局 `MemorySaver`。普通 `redis:7-alpine` 可用于 embedding cache；若要真实 Redis checkpoint 持久化，生产需要 RedisJSON / RediSearch 能力。
+- `/agent/query` 与 `/agent/query/stream` 支持显式 `mode="langgraph_agent"`，返回现有 `AgentQueryResponse` 结构，SSE 事件保持 `agent_step`、`tool_call_start`、`tool_call_result`、`token`、`metadata`、`done`。
+- 新增 `scripts/evaluate_phase50_langgraph_vs_react.py` 对比 ReAct 与 LangGraph deterministic 结果，输出脱敏 CSV。
+- 文档、部署说明和 Obsidian 草稿已同步到阶段 50。
+
+阶段 50 验证结果：
+
+```text
+python -m pytest -q -> 1082 passed
+python scripts\score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts\evaluate_phase50_langgraph_vs_react.py -> langgraph_agent errors=0, same_refusal=6/6, same_top_source=5/6, decision=parallel_candidate
+docker compose -f docker-compose.prod.yml config --quiet -> passed with temporary placeholder .env.prod
+browser smoke -> title=RFC-RAG-Agent, console errors=0
+```
+
+阶段 50 当前必须停在用户人工核验前：**不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR，不要创建或移动 `phase-50-complete` tag**。只有用户人工核验并明确授权后，才允许进入提交、tag 和 GitHub 推送流程。
+
 # 阶段 49 最新交班状态（2026-06-21）
 
 当前分支：`codex/phase-49-local-postgresql-cloud-sync`。
@@ -2271,3 +2326,45 @@ Final verification: `python -m pytest -q` -> `694 passed`; `/quality-report` has
 阶段 49 云端远程操作尚未由 Codex 执行：云端 PostgreSQL 导入、`data/images/` 同步、云端 FAISS 重建、生产 compose 重启和完整云端 smoke 需要用户在有 SSH/凭据的环境中按 `docs/phase49_cloud_sync_runbook.md` 手动执行或另行授权。公开检查显示 `http://36.103.199.132:8044/health` 可达，但 `/assets/images/1059/page10_img1.png` 仍为 404，说明云端图片资产尚未同步。
 
 阶段 49 当前必须停在人工核验前状态：不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR，不要创建或移动 `phase-49-complete` tag。只有用户人工核验并明确确认后，才允许进入提交、tag 和 GitHub 推送流程。
+## Phase 50 Phase 10-14 最新交班状态（2026-06-21）
+
+当前分支：`codex/phase-50-langgraph-redis`。
+
+Phase 50 Phase 10-14 已完成 Redis 全栈缓存补齐：`redis/redis-stack-server:latest` 替代 `redis:7-alpine`，RedisSaver 在真实 Redis Stack 下写入 checkpoint；新增 Semantic Cache（默认关闭）和 Rate Limiting（默认关闭）。`mode="langgraph_agent"` 仍为显式新增模式，不替换默认 `tool_calling_agent`，`react_agent` 不受影响。
+
+关键新增：
+- `app/services/cache/semantic_cache.py`：RediSearch KNN answer-level semantic cache，缓存 query/answer/sources/citations/mode，Redis 不可用时 skip。
+- `app/middleware/rate_limit.py`：Redis ZSET sliding window，限制 `/agent/query` 与 `/agent/query/stream`，超限返回 429 + `X-RateLimit-*`，Redis 不可用时 fail-open。
+- `app/services/agent/graph_nodes.py` / `graph_builder.py`：LangGraph checkpoint state 改为 JSON 原生 dict，服务返回前还原为既有 `AgentQueryResult` 契约。
+- `docker-compose.dev.yml` / `docker-compose.prod.yml`：Redis Stack server，用于 RedisJSON / RediSearch / vector index / checkpoint。
+
+验证结果：
+```text
+python -m pytest -q -> 1093 passed, 1 skipped
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/evaluate_phase50_langgraph_vs_react.py -> langgraph_agent errors=0, same_refusal=6/6, same_top_source=5/6, decision=parallel_candidate
+Redis focused tests -> 19 passed
+docker compose dev/prod config -> passed with temporary local placeholders
+```
+
+当前必须停在用户人工核验前：不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR，不要创建或移动 `phase-50-complete` tag。不得把 `.env`、`.env.prod`、数据库密码、JWT secret、API key、Bearer token、供应商原始响应或受限全文写入 Git/CSV/文档/测试/Obsidian。
+## Phase 50 Phase 14-15 最新交班状态（2026-06-21）
+
+阶段 50 已在 LangGraph Agent 编排与 Redis 全栈缓存基础上继续完成 pgvector HNSW 向量检索迁移和收尾验证。当前分支仍为 `codex/phase-50-langgraph-redis`，尚未 `git add`、commit、tag、push 或创建 PR，等待用户人工核验。
+
+关键结果：
+
+- `docker-compose.dev.yml` / `docker-compose.prod.yml` 的 PostgreSQL 镜像改为 `pgvector/pgvector:pg16`，Redis 仍为 `redis/redis-stack-server:latest`。
+- Alembic 新增 `20260621_0007_pgvector_hnsw.py`：创建 `vector` 扩展、`chunk_embeddings.embedding_vector Vector(2048)`、历史 2048 维 JSON 向量回填、HNSW cosine 索引。
+- `app/services/retrieval/pgvector_search.py` 使用 pgvector `<=>` cosine distance 检索；`VectorSearchService` 在 `pgvector_search_enabled=True` 且 PostgreSQL/2048 维可用时优先 `pgvector_hnsw`，否则 fallback 到原 FAISS/numpy。
+- `PGVECTOR_SEARCH_ENABLED` 默认开启，`HNSW_EF_SEARCH` 默认 100；可用 PostgreSQL/2048 维/pgvector 时优先 HNSW，不可用时自动 fallback 到 FAISS/numpy；不改变现有默认 Agent 模式、不删除 `data/faiss/`。
+- `latency_trace.vector_search_backend` 记录 `pgvector_hnsw` 或 `faiss`，用于人工核验实际检索后端。
+
+验证结果：
+
+```text
+python -m pytest -q -> 1100 passed, 1 skipped
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+docker compose -f docker-compose.dev.yml config -> passed
+docker compose -f docker-compose.prod.yml config -> passed with temporary local placeholders
+```

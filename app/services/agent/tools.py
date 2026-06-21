@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 import re
@@ -289,10 +289,19 @@ class AgentToolbox:
             refusal_reason=None if search_results else "No keyword results were found.",
         )
 
-    def hybrid_search_knowledge(self, query: str, top_k: int = 5) -> AgentToolResult:
+    def hybrid_search_knowledge(
+        self,
+        query: str,
+        top_k: int = 5,
+        progress_callback: Callable[[str], None] | None = None,
+    ) -> AgentToolResult:
         tool_name = "hybrid_search_knowledge"
         try:
-            results = HybridSearchService(self.db, self.embedding_provider).search(
+            results = HybridSearchService(
+                self.db,
+                self.embedding_provider,
+                progress_callback=progress_callback,
+            ).search(
                 query=query,
                 top_k=top_k,
             )

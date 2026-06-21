@@ -240,9 +240,11 @@ class ChunkEmbeddingRepository:
             model_name=embedding_data.model_name,
         )
         embedding_json = serialize_embedding(embedding_data.embedding)
+        embedding_vector = list(embedding_data.embedding) if embedding_data.dimension == 2048 else None
         if existing_embedding is not None:
             existing_embedding.dimension = embedding_data.dimension
             existing_embedding.embedding_json = embedding_json
+            existing_embedding.embedding_vector = embedding_vector
             existing_embedding.content_hash = embedding_data.content_hash
             if commit:
                 self.db.commit()
@@ -255,6 +257,7 @@ class ChunkEmbeddingRepository:
             model_name=embedding_data.model_name,
             dimension=embedding_data.dimension,
             embedding_json=embedding_json,
+            embedding_vector=embedding_vector,
             content_hash=embedding_data.content_hash,
         )
         self.db.add(chunk_embedding)

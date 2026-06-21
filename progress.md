@@ -1,332 +1,255 @@
-# 阶段 49 Session Progress
+# 阶段 50 Session Progress
 
 ## 阶段信息
 
-- 阶段: 49 — 本地 PostgreSQL 迁移与云端数据同步
-- 目标分支: `codex/phase-49-local-postgresql-cloud-sync`
-- 基线: 阶段 48 合并后的 `main`
-- 状态: 尚未创建开发分支，等待 Codex 启动
-- Git 边界: 未经用户人工核验，不 git add/commit/tag/push/建 PR
+- 阶段: 50 — LangGraph Agent 编排与 Redis 全栈缓存层
+- 分支: `codex/phase-50-langgraph-redis`
+- 基线: `main` / `origin/main` = `0671a31b Merge pull request #14`
+- 基线 tag: `phase-49-complete` -> `a044ce0c`
+- 基线 pytest: 1037 passed
+- 基线 Stage 30: 91.52 / A / pass
 
-## 启动校准
+## Phase 0-9（Codex 完成，Claude 已验收 PASS）
 
-- [x] 阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md
-- [x] 阅读 docs/phase_reviews/phase-48.md、docs/phase48_evaluation_report.md
-- [x] 阅读根目录 task_plan.md、findings.md、progress.md
-- [x] 运行 `git status -sb` 与 `git log --oneline -5`
-- [x] 确认阶段 48 已合并到 `main`，`phase-48-complete` tag 存在且未移动
-- [x] 从 `main` 创建 `codex/phase-49-local-postgresql-cloud-sync`
-- [x] 校准基线
+- Phase 0-9 完成 LangGraph Agent 编排 + 基础 Redis embedding 缓存 + Checkpointer 代码框架
+- pytest: 1082 passed（+45）
+- Stage 30: 91.52 / A / pass
+- 已知问题：Checkpointer 因 redis:7-alpine 缺少 RedisJSON/RediSearch，实际 fallback 到 MemorySaver
+- 已知问题：无 Semantic Cache、无 Rate Limiting
 
-## 执行进展
+## Phase 10-14（待开发：补齐 Redis 全栈能力）
 
-- [x] Phase 0: 启动校准
-- [x] Phase 1: 本地 PostgreSQL 容器搭建
-- [x] Phase 2: 本地数据库切换与数据迁移
-- [x] Phase 3: 本地 FAISS 重建与回归验证
-- [x] Phase 4: SQLite 双引擎边界清理
-- [x] Phase 5: 云端 PostgreSQL 数据同步（Codex 可准备部分完成；真实远程写入待用户手动执行/授权）
-- [x] Phase 6: 云端图片资产同步（Codex 可准备部分完成；真实远程文件同步待用户手动执行/授权）
-- [x] Phase 7: 云端 FAISS 重建与应用部署（命令与验证点完成；真实远程执行待用户手动执行/授权）
-- [x] Phase 8: 云端功能 smoke 验证（公开 health/home 检查完成；完整云端 smoke 待用户手动执行/授权）
-- [ ] Phase 9: 文档 + Obsidian 收尾
-
-## 当前状态
-
-Codex 已启动阶段 49，当前分支为 `codex/phase-49-local-postgresql-cloud-sync`。
-
-## Phase 0 日志：启动校准
-
-时间：2026-06-20
-
-- 已按入口规则阅读 `AGENT.MD`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、`docs/phase_reviews/phase-48.md`、`docs/phase48_evaluation_report.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- `git status -sb`：`## main...origin/main`，启动前工作树干净。
-- `git log --oneline -5 --decorate`：`main` / `origin/main` / `origin/HEAD` 位于 `4fefaafc Merge pull request #13 from CxcTHU/codex/phase-48-multimodal-evaluation`。
-- `phase-48-complete` 是 annotated tag，tag 对象指向 `4fefaafc`；未移动任何已有阶段 tag。
-- `phase-48-complete` 已确认是 `main` 的祖先；`main` 没有停在阶段 47 合并点，因此可以从 Phase 48 合并后的正确基线继续。
-- 已创建并切换到 `codex/phase-49-local-postgresql-cloud-sync`。
-- 已盘点 `app/db/session.py`：SQLite 分支使用 `check_same_thread=False`，PostgreSQL 分支使用 `pool_pre_ping=True`。
-- 已盘点 `scripts/migrate_sqlite_to_postgres.py`：现有幂等迁移覆盖 documents/sources/chunks/chunk_embeddings/qa_logs，但缺少 Phase 46-48 的 `caption`、`page_number`、`content_bbox_json` 字段以及 `users`、`conversations`、`messages`、`qa_feedback` 表。
-- 已盘点 `docker-compose.prod.yml`：生产 PostgreSQL 16、`postgres_data`、healthcheck 与 `alembic upgrade head` 启动链路可复用。
-
-测试结果：Phase 0 为校准阶段，尚未运行代码测试。
-
-遗留风险：本地 Docker/PostgreSQL 可用性尚未验证；迁移脚本需要在 Phase 2 修复覆盖范围后再做真实导入。
-
-提交状态：尚未 `git add`，尚未 commit/tag/push/PR，等待阶段开发完成后由用户人工核验。
-
-## Phase 1 日志：本地 PostgreSQL 容器搭建
-
-时间：2026-06-20
-
-- 新增 `docker-compose.dev.yml`，提供本地 PostgreSQL 16 容器，宿主端口 `5433`，数据卷 `pgdata_dev`，healthcheck 使用 `pg_isready`。
-- 新增 `.env.dev.example`，给出本地开发 PostgreSQL `DATABASE_URL` 示例。
-- 更新 `.env.example` 与 `app/core/config.py` 注释：SQLite 保留为 fallback/测试路径，阶段 49 推荐本地 PostgreSQL 开发以贴近生产。
-- 新增 `tests/test_phase49_local_postgres_dev.py`，锁定 dev compose、示例连接串和“不出现 token/API secret”边界。
-
-验证结果：
-
-```text
-docker compose -f docker-compose.dev.yml config -> passed
-docker version --format '{{.Server.Version}}' -> 29.5.3
-python -m pytest tests\test_phase49_local_postgres_dev.py tests\test_stage44_db_session.py -q -> 7 passed
-docker compose -f docker-compose.dev.yml up -d db -> container started
-docker inspect rfc-rag-postgres-dev health -> healthy
-docker exec rfc-rag-postgres-dev pg_isready -U rfc_user -d rfc_rag_dev -> accepting connections
-```
-
-说明：启动时 Docker Compose 提示存在历史 orphan container `rfc-rag-agent-rfc-rag-agent-1`，未执行清理，避免影响用户已有运行状态。
-
-遗留风险：本地 PostgreSQL 当前为空库，Phase 2 需要运行 Alembic 并修复迁移脚本后导入完整 SQLite 数据。
+### Phase 10：Redis Stack 升级与 Checkpointer 修复 — 完成
+### Phase 11：Semantic Cache（语义缓存） — 完成
+### Phase 12：Rate Limiting（API 限流中间件） — 完成
+### Phase 13：全栈回归验证 — 完成
+### Phase 14：pgvector HNSW 向量索引迁移 — 完成
+### Phase 15：全栈回归验证与文档收尾 — 完成
+### Phase 16：LangGraph Planner 接入快模型（Flash 路由 + Pro 生成） — 完成
+### Phase 17：全栈回归验证与文档收尾 — 完成
 
 提交状态：尚未 `git add`，尚未 commit/tag/push/PR。
 
-## Phase 5-8 日志：云端同步、资产、部署与 smoke 准备
+## Phase 16 启动日志：LangGraph Planner 接入快模型（2026-06-21）
 
-时间：2026-06-20
+- 已确认继续沿用 `codex/phase-50-langgraph-redis`，未新建分支。
+- 已阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、task_plan.md、findings.md、progress.md。
+- `git status -sb` 显示 Phase 50 既有大量未提交/未跟踪改动；本轮只在其上增量修改，不重置、不清理。
+- 已确认 Phase 0-15 完成状态：全量 pytest `1100 passed, 1 skipped`，Stage 30 `91.52/A/pass`，LangGraph Agent、Redis 四项能力和 pgvector HNSW 可用。
+- 本 Phase 目标：让 `route_query_node` 在配置 planner provider 时使用快模型做 action 选择；未配置时保持确定性规则路由零变化。
+- 提交状态：尚未 `git add`，尚未 commit/tag/push/PR。
 
-- 公开检查 `http://36.103.199.132:8044/health`：返回 `{"status":"ok","service":"RFC-RAG-Agent","environment":"production"}`。
-- 公开检查 `http://36.103.199.132:8044/`：HTTP 200。
-- 公开检查 `http://36.103.199.132:8044/assets/images/1059/page10_img1.png`：404，说明云端图片资产尚未完成同步。
-- 本地资产盘点：`data/images` 文件数 16978，目录数 854；PostgreSQL image chunks with paths=15628。
-- 新增 `docs/phase49_cloud_sync_runbook.md`，记录云端 PostgreSQL 数据同步、图片资产同步、云端 FAISS 重建、生产 compose 部署、认证与多模态 smoke 验证命令。
-- 补充 runbook 安全测试，禁止真实 token/secret 形态进入文档。
-- 清理本地 browser smoke 产生的测试用户和消息，使本地 PostgreSQL 回到 `users=3`、`messages=117`。
+## Phase 16 完成日志：LangGraph Planner 接入快模型（2026-06-21）
 
-验证结果：
+- 新增 `_CURRENT_PLANNER_PROVIDER` ContextVar 与 set/reset helper；`LangGraphAgentService` 支持 `planner_chat_provider` 注入。
+- `route_query_node` 在确定性图片/表格规则之后调用 planner LLM；planner 返回合法 JSON 时转换为 `ReActAction`，解析失败或 provider 异常时 fallback 到 `DeterministicReActPlanner`。
+- `/agent/query` 与 `/agent/query/stream` 的 `langgraph_agent` 调用点已传入 `planner_chat_provider`；`react_agent`、`tool_calling_agent`、`default` 行为未改。
+- `latency_trace` 增加 `planner_model` 默认值，保留已有 `planner_latency_ms`。
+- 补充 `tests/test_phase50_langgraph_planner.py`，覆盖合法 JSON、非法 JSON fallback、provider None、ContextVar 注入/reset。
+- 修复 `refuse_node` workflow step 序列化，避免 RedisSaver 拒答路径 dataclass 序列化风险。
+- 验证：`python -m pytest tests/test_phase50_langgraph_planner.py tests/test_phase50_langgraph_nodes.py tests/test_phase50_langgraph_builder.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_phase50_semantic_cache.py -q` -> `69 passed`。
+- 提交状态：尚未 `git add`，尚未 commit/tag/push/PR。
 
-```text
-public cloud /health -> 200 production
-public cloud / -> 200
-public cloud /assets/images/1059/page10_img1.png -> 404
-local data/images files -> 16978
-local PostgreSQL image chunks with source_image_path -> 15628
-python -m pytest tests\test_phase49_local_postgres_dev.py -q -> 4 passed
-```
+## Phase 17 启动日志：全栈回归验证与文档收尾（2026-06-21）
 
-远程执行状态：
+- 本 Phase 解决 Phase 16 变更后的整体不退化验证、部署配置校验、普通文档更新和 Obsidian 草稿补齐。
+- 在 RAG 链路中的位置：不新增 runtime 能力，负责把 planner 快模型路由的验证结果、配置示例和架构说明同步到项目文档。
+- 计划验证：全量 pytest、Stage 30、dev/prod Docker Compose config。
+- 提交状态：尚未 `git add`，尚未 commit/tag/push/PR。
 
-```text
-Codex cannot execute SSH/cloud DB/file sync without credentials in this thread.
-Manual runbook is ready at docs/phase49_cloud_sync_runbook.md.
-Cloud PostgreSQL row sync, data/images sync, cloud FAISS rebuild, docker compose deploy, and authenticated multimodal smoke remain manual/authorized remote steps.
-```
+## Phase 17 完成日志：全栈回归验证与文档收尾（2026-06-21）
 
-提交状态：尚未 `git add`，尚未 commit/tag/push/PR。
+- 全量测试：`python -m pytest -q` -> `1106 passed, 1 skipped`。
+- Stage 30：`python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`。
+- Compose：`docker compose -f docker-compose.dev.yml config --quiet` 通过；`docker compose -f docker-compose.prod.yml config --quiet` 使用临时占位 `.env.prod` 与进程级占位变量通过，临时文件已删除。
+- 普通文档：README、AGENT.MD、docs/progress、docs/architecture、docs/data_sources、docs/deployment_guide、docs/phase_reviews/phase-50、环境模板已更新。
+- Obsidian：Phase 16-17 小汇报与阶段索引已补齐。
+- 最终状态：Phase 50 Phase 16-17 已完成并停在人工核验前；尚未 `git add`、未 commit、未 tag、未 push、未 PR。
 
-## Phase 4 日志：SQLite 双引擎边界清理
+---
 
-时间：2026-06-20
+## Phase 0-9 详细日志（保留供参考）
 
-- 使用 `rg` 审计 `check_same_thread`、`:memory:`、`sqlite3.connect`、`sqlite://`、`connect_args`、`batch_alter_table`、`json_extract` 等 SQLite/双引擎关键词。
-- 确认运行时引擎入口集中在 `app/db/session.py`：SQLite 和 PostgreSQL 分支清晰。
-- 确认 Alembic 迁移无 `batch_alter_table`；新增 `20260621_0006` 已在 PostgreSQL 执行。
-- 保留测试和历史数据修复脚本中的 SQLite 临时库/本地库用法，不作为生产死代码删除。
-- 更新 `docs/deployment_guide.md`：阶段 49 后推荐本地 PostgreSQL dev，旧 SQLite compose 标为 fallback/历史路径。
-- 扩展 `tests/test_phase49_local_postgres_dev.py` 覆盖部署指南。
-
-验证结果：
-
-```text
-python -m pytest tests\test_phase49_local_postgres_dev.py tests\test_stage44_db_session.py tests\test_stage45_migration.py tests\test_stage39_deployment_docs.py tests\test_stage44_deployment.py -q -> 18 passed
-```
-
-遗留风险：
-
-- 仍存在大量 Phase 45/46 `sqlite3.connect()` 本地修复脚本，它们是历史 SQLite 黄金库维护能力；云端和本地 PostgreSQL 主路径不应依赖这些脚本。
-- 旧 `docker-compose.yml` 仍是 SQLite fallback，后续文档需持续引导用户优先使用 `docker-compose.dev.yml` 或 `docker-compose.prod.yml`。
-
-提交状态：尚未 `git add`，尚未 commit/tag/push/PR。
-
-## Phase 3 日志：本地 FAISS 重建与回归验证
-
-时间：2026-06-20
-
-- 使用 PostgreSQL `DATABASE_URL` 重建 `paratera / GLM-Embedding-3 / dim2048` FAISS。
-- 运行 Stage 30 评分。
-- 运行 Agent/table/FAISS 聚焦测试和全量 pytest。
-- 启动本地 8050 服务做浏览器 smoke；为避免真实 API 成为本地 smoke 前提，显式使用 deterministic chat/embedding/vision 环境。
-- 通过 Playwright CLI 验证登录/注册、工作台渲染、历史图片 evidence card、Agent 表格问题、图片上传入口和 deterministic vision 安全拒答。
-- 结束 8050 服务并关闭 Playwright 浏览器。
-
-验证结果：
-
-```text
-python scripts\build_faiss_index.py --provider paratera --model-name GLM-Embedding-3 --dimension 2048 --database-url postgresql+psycopg2://... -> vectors=40563
-python scripts\score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
-python -m pytest tests\test_faiss_index.py tests\test_vector_cache_faiss.py tests\test_agent_tools.py tests\test_phase47_tables.py -q -> 27 passed
-python -m pytest -q -> 1035 passed
-browser smoke -> registered local smoke user, workspace rendered, existing figure evidence cards visible, Agent deterministic answer returned citation, image chooser/upload state visible, deterministic vision refusal rendered
-```
-
-错误与解决：
-
-```text
-initial /agent/query API smoke used wrong field name task -> 422; corrected schema is question
-real-provider Agent smoke timed out / was too slow for automated local smoke -> restarted server with deterministic chat/embedding/vision for repeatable UI smoke
-first browser register used invalid .example.test email -> frontend/API returned 422; changed to phase49smoke@example.com and registration succeeded
-```
-
-遗留风险：
-
-- Phase 3 的 browser smoke 没有把真实 GLM image/table query embedding 作为必跑前提；真实 provider 路径已在 Phase 48 gate 中验证，阶段 49 后续云端 smoke可在人工授权环境下再跑。
-- 本地 smoke 创建了 `phase49smoke` 测试用户和少量本地会话/上传运行态数据，位于本地 PostgreSQL 和 gitignored runtime 目录，不进入 Git。
-
-提交状态：尚未 `git add`，尚未 commit/tag/push/PR。
-
-## Phase 2 日志：本地数据库切换与数据迁移
-
-时间：2026-06-20
-
-- 扩展 `scripts/migrate_sqlite_to_postgres.py`：
-  - `chunks` 迁移补齐 `caption`、`page_number`、`content_bbox_json`。
-  - 新增 `users`、`conversations`、`messages`、`qa_feedback` 迁移。
-  - 通过 source -> target id map 重建 user/conversation/message/feedback 关系。
-- 扩展 `tests/test_stage45_migration.py`，覆盖 Phase 46-48 metadata、用户、会话、消息和反馈的迁移与幂等。
-- 运行本地 PostgreSQL Alembic：先升级到 `20260621_0005`，迁移时发现 `chunks.heading_path` 超出 PostgreSQL `varchar(500)`。
-- 新增 `alembic/versions/20260621_0006_chunk_heading_path_text.py`，并把 `app/db/models.py::Chunk.heading_path` 改为 `Text`。
-- 重新执行 Alembic 到 `20260621_0006 (head)`。
-- 执行 SQLite -> PostgreSQL 全量迁移，并二次执行验证幂等。
-- 定向更新本地 `.env` 的 `DATABASE_URL` 为本地 PostgreSQL dev 连接串，未读取或输出其他 `.env` 内容。
-
-验证结果：
-
-```text
-python -m pytest tests\test_stage45_migration.py tests\test_phase49_local_postgres_dev.py -q -> 4 passed
-python -m alembic upgrade head (PostgreSQL) -> 20260621_0006
-first migration -> documents=1146, sources=1073, chunks=50250, chunk_embeddings=72579, users=3, conversations=7, messages=117
-second migration -> inserted=0 for existing migrated tables
-PostgreSQL chunk_type counts -> text=33182, image_description=15628, table=1440
-PostgreSQL GLM embeddings -> 40563
-python -m pytest tests\test_stage45_migration.py tests\test_phase49_local_postgres_dev.py tests\test_stage44_db_session.py -q -> 9 passed
-app SessionLocal query through .env PostgreSQL -> backend=postgresql, documents=1146
-```
-
-错误与解决：
-
-```text
-error: psycopg2.errors.StringDataRightTruncation on chunks.heading_path varchar(500)
-root cause: SQLite did not enforce String(500), PostgreSQL does
-resolution: widen chunks.heading_path to Text via Alembic 20260621_0006 and ORM model update
-```
-
-遗留风险：
-
-- 直接用 Python `sqlite3.connect('data/app.sqlite')` 做源库 count 曾超时；迁移脚本已完整读源并成功导入，目标库计数与迁移输出一致。后续如需源库只读审计，应拆成专用脚本或使用迁移结果作为对账依据。
-- `qa_feedback` 当前源库为 0，因此迁移代码有测试覆盖但本地真实数据没有反馈行可验证。
-
-提交状态：尚未 `git add`，尚未 commit/tag/push/PR。
-## Phase 9 日志：文档 + Obsidian 收尾
-
-时间：2026-06-20
-
-- 更新 README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、AGENT.MD，记录 Phase 49 基线、本地 PostgreSQL 迁移、FAISS 40563、pytest 1035、Stage 30 91.52/A/pass、云端图片 404 缺口和未提交边界。
-- 新增 `docs/phase_reviews/phase-49.md`。
-- 新增 Obsidian 阶段页 `obsidian-vault/阶段/阶段 49 - 本地 PostgreSQL 迁移与云端数据同步.md`。
-- 新增 Obsidian 阶段汇报目录 `obsidian-vault/阶段汇报/阶段 49 - 本地 PostgreSQL 迁移与云端数据同步/`，包含 Phase 0-9 小汇报和 `阶段 49 Phase 汇报索引.md`。
-- 更新 `obsidian-vault/阶段汇报索引.md` 和 `obsidian-vault/阶段索引.md`。
-- 校准 `task_plan.md`、`findings.md`、`progress.md` 的阶段 49 收尾状态。
-
-验证状态：
-```text
-Phase 3 full pytest -> 1035 passed
-Phase 3 Stage30 -> 91.52 / A / pass
-Phase 9 docs/tests final focused rerun -> pending in current closeout
-```
-
-遗留风险：
-- 云端 PostgreSQL 数据同步、`data/images/` 同步、云端 FAISS 重建、生产 compose 和完整云端 smoke 仍需用户按 `docs/phase49_cloud_sync_runbook.md` 手动执行或另行授权。
-- 当前未 `git add`、未 commit、未 tag、未 push、未 PR，等待用户人工核验。
-## Phase 9 最终验证补记
-
-时间：2026-06-20
-
-```text
-python -m pytest tests\test_phase49_local_postgres_dev.py tests\test_stage45_migration.py tests\test_stage44_db_session.py -q -> 11 passed
-python -m pytest -q -> 1037 passed
-python scripts\score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
-```
-
-当前仍未 `git add`、未 commit、未 tag、未 push、未 PR；等待用户人工核验。
-## Cloud PostgreSQL 全量迁移完成补记
-
-时间：2026-06-20
-
-用户确认后，阶段 49 云端数据库迁移方案从 SQLite -> Cloud PostgreSQL 切换为 Local PostgreSQL -> Cloud PostgreSQL，以保证后续开发和部署基线一致。
-
-执行结果：
-```text
-SSH -> ubuntu@36.103.199.132 connected with local key C:\Users\admin\.ssh\rfc_rag_phase49
-cloud deploy dir -> /home/ubuntu/rfc-rag-agent-stage44-smoke
-cloud pre-restore backup -> /home/ubuntu/phase49_pre_restore_20260620_214251.dump
-local pg_dump custom format -> /tmp/phase49_local_pg.dump in rfc-rag-postgres-dev, copied to C:\Users\admin\AppData\Local\Temp\phase49_local_pg.dump
-uploaded dump -> /home/ubuntu/phase49_local_pg.dump
-cloud PostgreSQL -> dropped/recreated target database, restored local PostgreSQL dump
-cloud app -> rebuilt from uploaded Phase 49 code and restarted
-cloud health -> {"status":"ok","service":"RFC-RAG-Agent","environment":"production"}
-```
-
-Local PostgreSQL and cloud PostgreSQL now match on the checked release-baseline invariants:
-```text
-documents=1146
-sources=1073
-chunks=50250
-chunk_embeddings=72579
-qa_logs=227
-users=3
-conversations=7
-messages=117
-qa_feedback=0
-chunk_type: image_description=15628, table=1440, text=33182
-embeddings: paratera/GLM-Embedding-3/2048=40563, deterministic/hash-token-v1/64=19300, jina/jina-embeddings-v3/1024=12716
-alembic_version=20260621_0006
-documents_fp=204ed79b5065798774d2f202546aad0f
-chunks_fp=65c5aa1705958abdae7f02b1b180c72e
-sequence values match for documents/chunks/chunk_embeddings/users/conversations/messages/qa_logs/sources/qa_feedback
-```
-
-说明：
-- 本次目标只完成数据库全量迁移与校验；`data/images/` 资产同步和云端 FAISS 重建仍属于后续云端多模态运行完整化步骤。
-- 当前本地 Git 仍未 `git add`、未 commit、未 tag、未 push、未 PR。
-## Cloud Image Asset Sync 完成补记
-
+### Phase 0 日志：启动校准
 时间：2026-06-21
+- 已确认阶段 49 合并到 main，phase-49-complete tag 存在且未移动
+- 从 main 创建 codex/phase-50-langgraph-redis
 
-用户指出云端 `data/images/` 仍为 0 文件且图片 URL 404。已补充执行图片资产同步：
-
-```text
-local data/images -> files=16978, size≈3.01GB
-local tar -> C:\Users\admin\AppData\Local\Temp\phase49_data_images.tar, size≈3.03GB
-uploaded cloud tar -> /home/ubuntu/phase49_data_images.tar
-extract target -> /home/ubuntu/rfc-rag-agent-stage44-smoke/data/images
-cloud data/images -> files=16978, size≈2.9G
-cloud app health -> healthy
-```
-
-验证结果：
-
-```text
-http://127.0.0.1:8044/assets/images/1059/page10_img1.png -> 200 OK, content-type=image/png, content-length=452728
-http://36.103.199.132:8044/assets/images/1059/page10_img1.png -> 200 OK, content-type=image/png, content-length=452728
-```
-
-## Cloud FAISS 与提交授权补记
-
+### Phase 1 日志：Redis 容器与连接基础
 时间：2026-06-21
+- docker-compose.dev.yml 新增 Redis 7 容器
+- 新增 RedisClientFactory，Redis 不可用时返回 None
+- 验证：8 passed
 
-```text
-cloud FAISS rebuild -> provider=paratera model=GLM-Embedding-3 dimension=2048 vectors=40563
-cloud app restart -> completed
-cloud health -> {"status":"ok","service":"RFC-RAG-Agent","environment":"production"}
-cloud public image asset -> http://36.103.199.132:8044/assets/images/1059/page10_img1.png returned 200 OK
-user submission approval -> commit, phase-49-complete tag, push, PR, and GitHub merge authorized
-```
+### Phase 2 日志：Redis Query Embedding 缓存
+时间：2026-06-21
+- 新增 RedisQueryEmbeddingCache，key=emb:{provider}:{model}:{dim}:{sha256}
+- Redis 不可用时 fallback 内存缓存
+- 验证：19 passed
 
-遗留风险：
-- 真实 provider 的云端 Agent smoke 受外部 API 可用性影响，不作为 CI 或本地全量测试前提。
-- 提交前继续检查 staged files，确保 `.env`、数据库 dump、图片 tar、FAISS 文件和敏感凭据不进入 Git。
+### Phase 3 日志：LangGraph 依赖引入与状态定义
+时间：2026-06-21
+- 新增 graph_state.py + graph_nodes.py，10 个 node 复用 AgentToolbox
+- 验证：16 passed
 
-说明：
-- 本次同步只补齐图片资产，不修改数据库。
-- 云端图片 URL 已不再 404。
-- 当前本地 Git 仍未 `git add`、未 commit、未 tag、未 push、未 PR。
+### Phase 4 日志：LangGraph 图构建与条件路由
+时间：2026-06-21
+- 新增 graph_builder.py + LangGraphAgentService
+- StateGraph 条件路由覆盖全部 8 种 action
+- 验证：13 passed
+
+### Phase 5 日志：Redis Checkpointer 集成
+时间：2026-06-21
+- 新增 graph_checkpointer.py，RedisSaver → MemorySaver fallback
+- 发现 redis:7-alpine 不支持 RedisSaver（缺 RedisJSON/RediSearch）
+- 验证：12 passed
+
+### Phase 6 日志：API 集成与模式切换
+时间：2026-06-21
+- mode="langgraph_agent" 接入 /agent/query + /agent/query/stream
+- SSE 事件格式保持兼容
+- 验证：43 passed
+
+### Phase 7 日志：回归验证与性能对比
+时间：2026-06-21
+- 全量 pytest 1082 passed，Stage 30 91.52/A/pass
+- LangGraph vs ReAct 对比：errors=0, same_refusal=6/6, same_top_source=5/6
+
+### Phase 8 日志：云端部署准备
+时间：2026-06-21
+- docker-compose.prod.yml 新增 Redis，部署文档更新
+
+### Phase 9 日志：文档 + Obsidian 收尾
+时间：2026-06-21
+- 文档、Obsidian 同步完成
+- 最终验证：1082 passed，91.52/A/pass
+## Phase 14 日志：文档更新与 Obsidian 收尾
+时间：2026-06-21
+- 更新 README、AGENT.MD、docs/progress.md、docs/architecture.md、docs/data_sources.md、docs/deployment_guide.md、docs/phase_reviews/phase-50.md。
+- 更新 `.env.example` 与 `.env.dev.example`，补充 Semantic Cache 与 Rate Limiting 默认关闭配置。
+- 新增 Obsidian Phase 10-14 小汇报，更新阶段 50 汇报索引、阶段页和阶段汇报索引。
+- 文档/配置聚焦测试：29 passed。
+- 最终全量 pytest：1093 passed, 1 skipped。
+- 最终状态：尚未 `git add`，尚未 commit/tag/push/PR，等待用户人工核验。
+
+## Phase 13 日志：全栈回归验证
+时间：2026-06-21
+- 全量 pytest：1093 passed, 1 skipped。
+- Stage 30：overall=91.52 grade=A release_decision=pass。
+- Phase 50 LangGraph vs ReAct：langgraph_agent errors=0, same_refusal=6/6, same_top_source=5/6, decision=parallel_candidate。
+- Docker Compose：dev config 通过；prod config 用临时 `.env.prod` 与进程级占位 secret 验证通过，临时文件已删除。
+- Redis 能力聚焦验证：embedding cache、RedisSaver checkpointer、Semantic Cache、Rate Limiting 共 19 passed。
+- 备注：一次手写 one-off Semantic Cache smoke 使用 Python Redis client 超时，但同一轮 pytest RedisSaver 真实集成与 Redis CLI 均正常；未将该 one-off 脚本作为门禁。
+- 提交状态：尚未 `git add`，尚未 commit/tag/push/PR，等待用户人工核验。
+
+## Phase 12 日志：Rate Limiting（API 限流中间件）
+时间：2026-06-21
+- 新增 `RedisSlidingWindowRateLimiter` 与 `RateLimitMiddleware`。
+- `Settings` 新增 rate limit 开关、每分钟请求数、窗口秒数；默认关闭。
+- 仅 `/agent/query` 与 `/agent/query/stream` 受限；超限返回 429 与 `X-RateLimit-*` 响应头。
+- Redis 未配置/不可用/执行异常时 fail-open 放行，避免 Redis 故障阻断 Agent 服务。
+- 聚焦测试：5 passed。
+- 提交状态：尚未 `git add`，尚未 commit/tag/push/PR，等待用户人工核验。
+
+## Phase 11 日志：Semantic Cache（语义缓存）
+时间：2026-06-21
+- 新增 `RedisSemanticCache`，使用 Redis Hash + RediSearch KNN 向量索引缓存完整 Agent 回答。
+- `Settings` 新增 semantic cache 开关、相似度阈值、TTL；默认关闭，不影响现有测试和本地运行。
+- `/agent/query` 接入 Agent 前查缓存；命中直接返回，未命中正常执行 Agent 并在 eligible 时写入缓存。
+- `latency_trace` 增加 `semantic_cache_hit` 与 `semantic_cache_similarity`。
+- Redis/RediSearch 不可用时 graceful skip；streaming SSE 路径保持原格式不变。
+- 聚焦测试：15 passed。
+- 提交状态：尚未 `git add`，尚未 commit/tag/push/PR，等待用户人工核验。
+
+## Phase 10 日志：Redis Stack 升级与 Checkpointer 修复
+时间：2026-06-21
+- 已确认继续沿用 `codex/phase-50-langgraph-redis`，未新建分支。
+- 已阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、task_plan.md、findings.md、progress.md。
+- `planning-with-files` catchup 脚本因 PowerShell `&` 表达式解析失败未执行成功；已手动读取并校准规划文件。
+- `docker-compose.dev.yml`、`docker-compose.prod.yml` Redis 镜像升级为 `redis/redis-stack-server:latest`。
+- 本机 Redis Stack 容器健康，包含 RediSearch `search` 与 RedisJSON `ReJSON` 模块。
+- 修复 LangGraph checkpoint state 的 Redis 序列化边界：state 内部使用 JSON 原生 dict，API 输出仍保持 `AgentQueryResult` 契约。
+- 真实 Redis Stack 集成测试确认 RedisSaver backend=`redis`，checkpoint 可写入 Redis；Redis 未配置/不可用时保留 MemorySaver fallback。
+- 聚焦测试：35 passed。
+- 提交状态：尚未 `git add`，尚未 commit/tag/push/PR，等待阶段完成后用户人工核验。
+## Phase 14 启动日志：pgvector HNSW 向量索引迁移
+时间：2026-06-21
+- 线程标题已追加：pgvector HNSW迁移。
+- 已确认继续沿用 `codex/phase-50-langgraph-redis`，未新建分支。
+- 已阅读 AGENT.MD、README.md、docs/progress.md、docs/architecture.md、docs/data_sources.md、task_plan.md、findings.md、progress.md。
+- 已确认 Phase 0-13 完成状态：全量 pytest 1093 passed / 1 skipped，Stage 30 91.52/A/pass，LangGraph Agent 可用，Redis embedding cache / RedisSaver Checkpointer / Semantic Cache / Rate Limiting 四项能力可用。
+- 本 Phase 目标：把向量检索主路径从文件系统 FAISS IndexFlatIP 扩展为 PostgreSQL pgvector HNSW，可用时优先数据库检索，不可用时 fallback 到现有 FAISS。
+- 提交状态：尚未 `git add`，尚未 commit/tag/push/PR。
+## Semantic Cache Stream 修正日志（2026-06-21）
+
+- 问题：UI 重复相同问题仍重新思考并生成不同答案；日志显示请求走 `/agent/query/stream`，Semantic Cache 未命中且 Agent tool calls 被重新执行。
+- 原因：本地 `.env` 未启用 `SEMANTIC_CACHE_ENABLED=true`；同时初版 Semantic Cache 只接同步 `/agent/query`，未覆盖前端默认 stream 路径；会话内请求也因 `conversation_id/history` 被判定为不 eligible。
+- 修正：`/agent/query/stream` 已接入 Semantic Cache lookup/store；同一会话内最后一条 user message 与当前问题完全相同才允许缓存命中；本地 `.env` 已设置 `REDIS_URL=redis://localhost:6379/0`、`SEMANTIC_CACHE_ENABLED=true`。
+- 验证：`python -m pytest tests/test_phase50_semantic_cache.py tests/test_agent_stream_api.py tests/test_agent_api.py::test_agent_api_explicit_langgraph_agent_mode_uses_graph_service -q` -> `18 passed`。
+- 服务：8000 已重启，`/health` 返回 ok，Redis Stack `search` / `ReJSON` 模块可用。
+
+## Phase 15 完成日志：全栈回归验证与文档收尾（2026-06-21）
+
+- 全量测试：`python -m pytest -q` -> `1100 passed, 1 skipped`。
+- Stage 30：`python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`。
+- Compose：`docker compose -f docker-compose.dev.yml config` 通过；`docker compose -f docker-compose.prod.yml config` 使用临时占位 `.env.prod` 通过，临时文件已删除。
+- 文档：README、AGENT.MD、docs/progress、docs/architecture、docs/data_sources、docs/deployment_guide、docs/phase_reviews/phase-50、环境模板已更新。
+- Obsidian：Phase 14-15 小汇报与阶段索引已补齐。
+- 最终状态：Phase 50 Phase 14-15 已完成并停在人工核验前；尚未 `git add`、未 commit、未 tag、未 push、未 PR。
+
+## Phase 14 完成日志：pgvector HNSW 向量索引迁移（2026-06-21）
+
+- 分支：继续沿用 `codex/phase-50-langgraph-redis`，未新建分支。
+- 完成内容：PostgreSQL 容器升级为 `pgvector/pgvector:pg16`；新增 pgvector Alembic 迁移、`embedding_vector Vector(2048)` 模型列、HNSW 索引、pgvector 检索服务、配置开关与 latency backend 字段。
+- 检索路径：`pgvector_search_enabled=True` 且 PostgreSQL/2048 维可用时优先 `pgvector_hnsw`；否则自动 fallback 到原 FAISS/numpy 路径。
+- 本地实测修正：pgvector `vector` HNSW 索引不能超过 2000 维，已将 HNSW 索引改为 `halfvec(2048)` 表达式索引，保留 `embedding_vector Vector(2048)` 数据列。
+- 验证：`python -m pytest tests/test_phase50_pgvector_hnsw.py tests/test_vector_search.py tests/test_vector_cache.py tests/test_phase49_local_postgres_dev.py tests/test_stage44_deployment.py -q`，结果 `25 passed`。
+- 状态：Phase 14 代码与 focused tests 完成；尚未 `git add`、未 commit、未 tag、未 push、未 PR。下一步进入 Phase 15 全栈回归验证与文档/Obsidian 收尾。
+## Semantic Cache Stream 与隔离最终修正日志（2026-06-21）
+
+- 问题：UI 默认走 `/agent/query/stream`，初版 Semantic Cache 只覆盖同步 `/agent/query`，并且缺少数据库上下文隔离。
+- 修正：stream 路径已支持 Semantic Cache 命中和写入；会话内完全相同的重复问题可以命中；缓存 key/payload 绑定 database context、mode、embedding provider、model、dimension。
+- 本地测试配置：`.env` 已设置 `REDIS_URL=redis://localhost:6379/0`、`SEMANTIC_CACHE_ENABLED=true`；Redis Stack `search` / `ReJSON` 模块可用。
+- 清理：已删除旧格式 `semcache:*` 和 `idx:semcache`，避免旧缓存影响新格式筛选。
+- 验证：`python -m pytest tests/test_phase50_semantic_cache.py tests/test_agent_stream_api.py tests/test_agent_api.py -q` -> `51 passed`。
+- 服务：8000 已重启，PID `12868`，`/health` 返回 ok。
+## Semantic Cache standalone query eligibility fix (2026-06-21)
+- Issue observed in UI: semantically close standalone questions such as `堆石混凝土的性能` and `堆石混凝土的性能有哪些？` did not reach semantic cache lookup inside an existing conversation, because eligibility previously required an exact last-user-message match.
+- Fix: `semantic_cache_request_is_eligible()` now still blocks source-filtered/image requests, but allows standalone RFC/domain questions inside a conversation to enter Redis KNN lookup; contextual follow-ups such as `它有哪些？` remain ineligible to avoid reusing an answer under the wrong context.
+- Verification: `python -m pytest tests\test_phase50_semantic_cache.py::test_semantic_cache_config_and_request_eligibility -q` -> `1 passed`; `python -m pytest tests\test_phase50_semantic_cache.py -q` -> `8 passed`.
+- Submission state remains unchanged: no `git add`, commit, tag, push, or PR.
+## LangGraph safe answer-progress streaming update (2026-06-21)
+- Added safe `agent_step` progress events before LangGraph `answer_with_citations` waits on final answer generation: evidence organization, related source count, citation-number check, and final Chinese answer generation.
+- Frontend live thinking status now prefers SSE `step_summary`, so users see public progress such as `正在基于 5 条证据组织回答` instead of raw model CoT or provider `reasoning_content`.
+- Verification: `node --check app\frontend\static\app.js` passed; `python -m pytest tests\test_phase50_langgraph_nodes.py::test_generate_answer_node_uses_answer_with_citations_contract tests\test_phase50_langgraph_nodes.py::test_generate_answer_node_emits_safe_answer_progress -q` -> `2 passed`; `python -m pytest tests\test_agent_stream_api.py -q` -> `10 passed`; `python -m pytest tests\test_frontend_app.py -q` -> `10 passed`.
+- Submission state remains unchanged: no `git add`, commit, tag, push, or PR.
+## LangGraph search-progress streaming update (2026-06-21)
+- Issue observed in UI: the live thinking panel stayed on `检索知识库` for a long time. Backend logs confirmed this step includes query embedding, vector/keyword candidate retrieval, candidate fusion, and remote rerank.
+- Fix: `search_knowledge_node` now emits safe `search_progress` SSE events through the existing event sink. These are public engineering-status messages, not model CoT, raw provider output, or hidden reasoning.
+- `HybridSearchService` and `VectorSearchService` now accept an optional `progress_callback` and report: generating/reading query vector, vector similarity search, parallel keyword/vector retrieval, candidate merge/sort, and reranking.
+- Frontend `app.js` localizes `search_progress` and continues to prefer `step_summary` for live status text.
+- Logging fix: `log_agent_response_event` now reads `time_to_final_ms` instead of the non-existent `total_latency_ms`, so `answer_generated.latency_ms` is populated.
+- Verification: `node --check app\frontend\static\app.js` passed; `python -m pytest tests\test_phase50_langgraph_nodes.py::test_search_knowledge_node_reuses_agent_toolbox_and_records_observation tests\test_phase50_langgraph_nodes.py::test_search_knowledge_node_emits_safe_search_progress tests\test_phase50_langgraph_nodes.py::test_generate_answer_node_emits_safe_answer_progress -q` -> `3 passed`; `python -m pytest tests\test_agent_stream_api.py -q` -> `10 passed`.
+- Submission state remains unchanged: no `git add`, commit, tag, push, or PR.
+## Frontend search-progress visibility update (2026-06-21)
+- Issue: `search_progress` SSE events were emitted by the backend, but the frontend live-step container stayed hidden and final `metadata` rendering removed the live-step DOM before preserving it in the thought panel.
+- Fix: `appendAgentLiveStep()` now unhides the live-step container when events arrive; final streaming render converts `_agentThoughtEvents` into `_live_thought_steps`, so search substeps remain visible under `查看思考过程` after the answer completes.
+- Thought-step rendering now shows safe summaries from `step_summary` / `observation_summary` / `output_summary` / `input_summary`, allowing entries like query-vector generation, vector similarity search, candidate merge, and rerank to be readable.
+- Verification: `node --check app\frontend\static\app.js` passed; `python -m pytest tests\test_frontend_app.py -q` -> `10 passed`; `python -m pytest tests\test_agent_stream_api.py tests\test_phase50_langgraph_nodes.py::test_search_knowledge_node_emits_safe_search_progress -q` -> `11 passed`.
+- Submission state remains unchanged: no `git add`, commit, tag, push, or PR.
+## LangGraph vector-search progress and local pgvector enablement (2026-06-21)
+- User observed the UI staying on `正在并行检索关键词和向量候选证据` for a long time. Logs showed FAISS loading, meaning local runtime was falling back to FAISS instead of using Phase 14 pgvector HNSW.
+- Root cause: `.env` did not set `PGVECTOR_SEARCH_ENABLED=true`, so the default disabled pgvector path and used FAISS fallback. Also, vector-search progress events emitted inside `ThreadPoolExecutor` did not inherit the LangGraph `ContextVar` event sink, so substeps from the vector worker were not visible in the frontend.
+- Fix: `.env` now includes non-sensitive `PGVECTOR_SEARCH_ENABLED=true` and `HNSW_EF_SEARCH=100`; code captures the current event sink before entering hybrid search and passes it through the progress callback so worker-thread vector progress reaches SSE.
+- Verification: `python -m pytest tests/test_phase50_langgraph_nodes.py::test_search_knowledge_node_emits_safe_search_progress tests/test_agent_stream_api.py -q` -> `11 passed`; `node --check app/frontend/static/app.js` passed.
+- Service restarted on port 8000 for manual verification. Submission state remains unchanged: no `git add`, commit, tag, push, or PR.
+## pgvector HNSW default correction (2026-06-21)
+- User confirmed the intended default retrieval path should be HNSW-first. Root cause: Phase 14 kept `pgvector_search_enabled=False` and `PGVECTOR_SEARCH_ENABLED=false` in templates for conservative SQLite/CI compatibility, so local runtime could silently use FAISS fallback unless `.env` explicitly enabled pgvector.
+- Correction: `app/core/config.py`, `.env.example`, and `.env.dev.example` now default pgvector search to enabled. Runtime remains graceful: PostgreSQL + pgvector + 2048-dimensional embeddings use `pgvector_hnsw`; SQLite, unavailable pgvector, non-PostgreSQL, or wrong dimension still fallback to FAISS/numpy.
+- Docs updated: README, AGENT.MD, docs/architecture.md, docs/progress.md, and docs/phase_reviews/phase-50.md now describe HNSW-first defaults instead of conservative-off defaults.
+- Verification: `python -m pytest tests/test_phase50_pgvector_hnsw.py tests/test_vector_search.py tests/test_vector_cache.py -q` -> `16 passed`; `python -m pytest tests/test_agent_stream_api.py tests/test_phase50_langgraph_nodes.py::test_search_knowledge_node_emits_safe_search_progress -q` -> `11 passed`; `node --check app/frontend/static/app.js` passed.
+- Submission state remains unchanged: no `git add`, commit, tag, push, or PR.
+## Phase 50 final submission validation (2026-06-21)
+- User manually accepted Phase 50 and authorized commit, tag, push, and GitHub merge.
+- Final validation before submission: `python -m pytest -q` -> `1110 passed, 1 skipped`; `python scripts/score_stage30_quality.py` -> `overall=91.52 grade=A release_decision=pass`; `docker compose -f docker-compose.dev.yml config --quiet` -> passed; `docker compose -f docker-compose.prod.yml config --quiet` -> passed with temporary placeholder `.env.prod` and process-level placeholder variables, then the temporary file was removed.
+- Submission safety check: `.env`, `.env.prod`, and `obsidian-vault/` are not tracked by Git; no API keys, bearer tokens, provider raw responses, `raw_response`, `reasoning_content`, hidden thoughts, or restricted full text are intentionally staged.

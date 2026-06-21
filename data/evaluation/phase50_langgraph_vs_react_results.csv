@@ -1,0 +1,13 @@
+run_type,query_id,category,mode,status,refused,refusal_reason_summary,tool_call_count,iteration_count,time_to_final_ms,citation_count,source_count,top_source_id,same_refusal_as_react,same_top_source_as_react,same_citation_count_as_react,query_embedding_cache_backend,langgraph_checkpointer_backend,error_summary,decision_candidate
+deterministic,phase50_filling_capacity,knowledge_search,react_agent,ok,false,,2,2,766.799,1,6,chunk:1,true,true,true,memory,,,baseline
+deterministic,phase50_filling_capacity,knowledge_search,langgraph_agent,ok,false,,2,2,416.699,1,6,chunk:1,true,true,true,memory,memory,,parallel_candidate
+deterministic,phase50_thermal_control,comparison,react_agent,ok,false,,2,2,402.896,1,6,chunk:1,true,true,true,memory,,,baseline
+deterministic,phase50_thermal_control,comparison,langgraph_agent,ok,false,,2,2,450.162,1,6,chunk:1,true,true,true,memory,memory,,parallel_candidate
+deterministic,phase50_table_evidence,table_search,react_agent,ok,false,,2,2,412.809,1,6,chunk:3,true,true,true,memory,,,baseline
+deterministic,phase50_table_evidence,table_search,langgraph_agent,ok,false,,2,2,419.344,1,4,chunk:2,true,false,true,memory,memory,,review_mismatch
+deterministic,phase50_figure_evidence,figure_search,react_agent,ok,false,,2,2,412.532,1,3,1,true,true,true,memory,,,baseline
+deterministic,phase50_figure_evidence,figure_search,langgraph_agent,ok,false,,2,2,417.974,1,3,1,true,true,true,memory,memory,,parallel_candidate
+deterministic,phase50_followup_history,followup,react_agent,ok,false,,2,2,432.086,1,3,chunk:4,true,true,true,memory,,,baseline
+deterministic,phase50_followup_history,followup,langgraph_agent,ok,false,,2,2,607.640,1,3,chunk:4,true,true,true,memory,memory,,parallel_candidate
+deterministic,phase50_off_topic,off_topic_refusal,react_agent,ok,true,off_topic,2,2,443.118,0,3,chunk:3,true,true,true,memory,,,baseline
+deterministic,phase50_off_topic,off_topic_refusal,langgraph_agent,ok,true,off_topic,2,2,419.356,0,3,chunk:3,true,true,true,memory,memory,,parallel_candidate

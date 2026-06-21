@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from threading import RLock
 
+from app.services.observability.latency_trace import get_current_latency_trace
 from app.services.retrieval.embedding import EmbeddingProvider
 
 
@@ -60,6 +61,7 @@ class QueryEmbeddingCache:
             if entry is not None and entry.expires_at > now:
                 self._hits += 1
                 self._entries.move_to_end(key)
+                record_query_embedding_cache_event(hit=True, backend="memory")
                 return list(entry.embedding)
             if entry is not None:
                 self._entries.pop(key, None)
@@ -70,6 +72,7 @@ class QueryEmbeddingCache:
 
         with self._lock:
             self._misses += 1
+            record_query_embedding_cache_event(hit=False, backend="memory")
             self._entries[key] = _CacheEntry(
                 embedding=tuple(float(value) for value in embedding),
                 expires_at=now + self.ttl_seconds,
@@ -104,12 +107,29 @@ def normalize_query_text(query: str) -> str:
     return " ".join((query or "").strip().split())
 
 
+def record_query_embedding_cache_event(*, hit: bool, backend: str) -> None:
+    trace = get_current_latency_trace()
+    if trace is None:
+        return
+    field_name = "query_embedding_cache_hits" if hit else "query_embedding_cache_misses"
+    current = trace.values.get(field_name, 0)
+    if not isinstance(current, int):
+        current = 0
+    trace.set_value(field_name, current + 1)
+    trace.set_value("query_embedding_cache_backend", backend)
+
+
 _GLOBAL_QUERY_EMBEDDING_CACHE = QueryEmbeddingCache()
 
 
 def get_query_embedding_cache() -> QueryEmbeddingCache:
-    return _GLOBAL_QUERY_EMBEDDING_CACHE
+    from app.services.cache.embedding_cache import get_configured_query_embedding_cache
+
+    return get_configured_query_embedding_cache(_GLOBAL_QUERY_EMBEDDING_CACHE)
 
 
 def clear_query_embedding_cache() -> None:
+    from app.services.cache.embedding_cache import reset_configured_query_embedding_cache
+
+    reset_configured_query_embedding_cache()
     _GLOBAL_QUERY_EMBEDDING_CACHE.clear()

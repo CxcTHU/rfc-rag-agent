@@ -1,5 +1,39 @@
 # RFC-RAG-Agent
 
+## Phase 50 Planner Fast Model Closeout Update
+
+Current branch: `codex/phase-50-langgraph-redis`.
+
+Phase 50 now adds an optional fast planner model for `mode="langgraph_agent"` on top of the completed LangGraph, Redis Stack, Semantic Cache, Rate Limiting, and pgvector HNSW work. `route_query_node` can call a configured `PLANNER_CHAT_MODEL_*` provider to choose the next ReAct action as JSON, while final cited answer generation still uses the main `CHAT_MODEL_*` provider.
+
+The default remains conservative: planner config is blank, so LangGraph uses `DeterministicReActPlanner` with zero provider calls. Invalid planner JSON or provider errors also fall back to deterministic routing. Existing `tool_calling_agent`, `react_agent`, and `default` modes are unchanged.
+
+Verification: focused Phase 16 regression -> `69 passed`; full `python -m pytest -q -> 1106 passed, 1 skipped`; `python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`; dev/prod Docker Compose config passed with temporary local placeholders. No `git add`, commit, tag, push, or PR has been performed.
+
+## Phase 50 Full Redis Stack Closeout Update
+
+Current branch: `codex/phase-50-langgraph-redis`.
+
+Phase 50 Phase 10-14 extends the earlier LangGraph Agent work with Redis Stack, answer-level Semantic Cache, and Redis-backed API rate limiting. The phase still keeps `tool_calling_agent` as the default mode; `langgraph_agent` remains an explicit opt-in mode, and `react_agent` remains available as the rollback/comparison path.
+
+Main additions after Phase 0-9: `docker-compose.dev.yml` and `docker-compose.prod.yml` now use `redis/redis-stack-server:latest`; LangGraph checkpoint state is JSON-serializable and RedisSaver writes to real Redis Stack; `app/services/cache/semantic_cache.py` adds optional RediSearch KNN answer caching; `app/middleware/rate_limit.py` adds optional Redis ZSET sliding-window limiting for `/agent/query` and `/agent/query/stream`.
+
+Verification: `python -m pytest -q -> 1093 passed, 1 skipped`; `python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`; `python scripts/evaluate_phase50_langgraph_vs_react.py -> langgraph_agent errors=0, same_refusal=6/6, same_top_source=5/6, decision=parallel_candidate`; Redis capability focused tests -> `19 passed`; dev/prod compose config passed with temporary local placeholders.
+
+Boundary: Semantic Cache and Rate Limiting default to disabled. Redis remains optional: embedding cache falls back to memory, checkpointer falls back to `MemorySaver`, Semantic Cache skips, and Rate Limiting fail-opens when Redis is unavailable. No `git add`, commit, tag, push, or PR has been performed; this branch is waiting for user human verification.
+
+## Phase 50 LangGraph Agent And Redis Cache Layer Update
+
+Current branch: `codex/phase-50-langgraph-redis`.
+
+Phase 50 starts from the merged Phase 49 baseline `main / origin/main -> 0671a31b Merge pull request #14 from CxcTHU/codex/phase-49-local-postgresql-cloud-sync`; `phase-49-complete` still points to `a044ce0c Complete phase 49 local PostgreSQL cloud sync` and was not moved. This phase adds an explicit `mode="langgraph_agent"` without replacing the existing default `tool_calling_agent` or the rollback `react_agent` path.
+
+Main changes: added Redis 7 to local and production compose files; added optional Redis-backed query embedding cache with memory fallback; added `LangGraphAgentState`, LangGraph node wrappers that reuse `AgentToolbox`, conditional `StateGraph` routing, optional Redis checkpointer with `MemorySaver` fallback, API/SSE integration for `mode="langgraph_agent"`, and deterministic ReAct-vs-LangGraph comparison outputs.
+
+Verification: `python -m pytest -q -> 1082 passed`; `python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`; `python scripts/evaluate_phase50_langgraph_vs_react.py -> langgraph_agent errors=0, same_refusal=6/6, same_top_source=5/6, decision=parallel_candidate`; production compose config passed with temporary placeholder `.env.prod`; browser smoke loaded the app with console errors=0.
+
+Boundary: Redis remains optional. If Redis is unavailable, query embedding falls back to in-memory cache and LangGraph checkpointing falls back to `MemorySaver`. No external data source was added, and no API key, bearer token, provider raw response, or restricted full text is written to Git/docs/tests/Obsidian. Phase 50 is stopped before `git add`, commit, tag, push, or PR until user human verification.
+
 ## Phase 49 Local PostgreSQL And Cloud Sync Update
 
 Current branch: `codex/phase-49-local-postgresql-cloud-sync`.
@@ -1842,3 +1876,10 @@ Phase 47 adds four user-facing multimodal interaction paths on top of the Phase 
 - Positive/negative answer feedback is stored in `qa_feedback` and can be exported into a sanitized evaluation CSV.
 
 The native frontend now renders uploaded-image analysis cards, table evidence cards, citation location links, and feedback buttons. Refused image-analysis responses do not render normal evidence cards or feedback buttons, and deterministic vision output is labeled as test-mode behavior rather than real image understanding. Verification on the local baseline: `1029 passed`, Stage 30 remains `91.52 / A / pass`, and Alembic head is `20260621_0005`.
+## Phase 50 pgvector HNSW Closeout Update
+
+Phase 50 now includes Phase 14-15 pgvector HNSW migration on top of the LangGraph + Redis Stack work. PostgreSQL dev/prod containers use `pgvector/pgvector:pg16`; `chunk_embeddings` gains `embedding_vector Vector(2048)` plus an HNSW cosine index; `VectorSearchService` prefers PostgreSQL pgvector search when `PGVECTOR_SEARCH_ENABLED=true`.
+
+The default retrieval backend is now HNSW-first: `pgvector_search_enabled=True` by default, so PostgreSQL + pgvector + 2048-dimensional embeddings use `pgvector_hnsw`. If pgvector is disabled, unavailable, non-PostgreSQL, or non-2048-dimensional, retrieval falls back to the existing FAISS/numpy path and keeps `data/faiss/` as a rebuildable runtime artifact.
+
+Verification: `python -m pytest -q -> 1100 passed, 1 skipped`; `python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`; dev/prod Docker Compose config passed with temporary local placeholders. No `git add`, commit, tag, push, or PR has been performed; this branch remains stopped before user human verification.
