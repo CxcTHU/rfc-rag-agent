@@ -1,3 +1,23 @@
+# 阶段 49 最新交班状态（2026-06-21）
+
+当前分支：`codex/phase-49-local-postgresql-cloud-sync`。
+
+阶段 49 已从 Phase 48 合并基线 `main / origin/main -> 4fefaafc` 出发完成本地 PostgreSQL 迁移、云端 PostgreSQL 全量同步、云端图片资产同步、云端 FAISS 重建和文档收尾。`phase-48-complete` 未移动。用户已明确授权提交、创建 `phase-49-complete` tag、推送、创建 PR 并合并到 GitHub。
+
+关键结果：
+
+```text
+local/cloud PostgreSQL counts and fingerprints -> matched
+data/images on cloud -> 16978 files
+cloud FAISS rebuild -> provider=paratera model=GLM-Embedding-3 dimension=2048 vectors=40563
+cloud health -> production 200
+public image asset -> /assets/images/1059/page10_img1.png 200
+local full pytest -> 1037 passed
+Stage 30 -> 91.52 / A / pass
+```
+
+提交前安全边界：不得把 `.env`、`.env.prod`、数据库 dump、图片 tar、`data/images/`、`data/faiss/`、数据库密码、JWT secret、SSH 密码、API key、Bearer token、供应商原始响应、受限全文写入 Git、CSV、文档、测试或 Obsidian。
+
 # 堆石混凝土问答 Agent 项目指南
 
 ## 每个新线程必须先读
@@ -2240,3 +2260,14 @@ final conclusion: Judge gate FAIL; validator decoupled from production Brain pat
 ```
 
 Final verification: `python -m pytest -q` -> `694 passed`; `/quality-report` has been rebuilt to `91.52 / A / pass`, and `/agent/query mode=react_agent` returns a non-refused cited answer without validator markers. User has explicitly approved commit, push, and GitHub merge for Phase 35; do not create or move phase tags unless separately requested.
+## 最新交接状态：阶段 49 本地 PostgreSQL 迁移与云端数据同步，等待用户人工核验
+
+当前分支：`codex/phase-49-local-postgresql-cloud-sync`。
+
+阶段 49 从阶段 48 已合并后的 `main / origin/main -> 4fefaafc Merge pull request #13 from CxcTHU/codex/phase-48-multimodal-evaluation` 出发；`phase-48-complete` 是指向同一提交的 annotated tag，未移动任何已有阶段 tag。
+
+本阶段已完成本地 PostgreSQL 开发底座、SQLite 到 PostgreSQL 的幂等迁移、PostgreSQL 来源的 FAISS 重建、SQLite/PostgreSQL 双引擎边界审计、云端同步 runbook、普通文档和 Obsidian 草稿。关键本地结果：PostgreSQL `documents=1146`、`chunks=50250`、`image_description=15628`、`table=1440`、GLM embedding `40563`，FAISS rebuild `vectors=40563`，Stage 30 `91.52 / A / pass`，全量 `pytest -> 1035 passed`。
+
+阶段 49 云端远程操作尚未由 Codex 执行：云端 PostgreSQL 导入、`data/images/` 同步、云端 FAISS 重建、生产 compose 重启和完整云端 smoke 需要用户在有 SSH/凭据的环境中按 `docs/phase49_cloud_sync_runbook.md` 手动执行或另行授权。公开检查显示 `http://36.103.199.132:8044/health` 可达，但 `/assets/images/1059/page10_img1.png` 仍为 404，说明云端图片资产尚未同步。
+
+阶段 49 当前必须停在人工核验前状态：不要执行 `git add`、`git commit`、`git tag`、`git push`，不要创建 PR，不要创建或移动 `phase-49-complete` tag。只有用户人工核验并明确确认后，才允许进入提交、tag 和 GitHub 推送流程。

@@ -1,5 +1,60 @@
 # 架构说明
 
+## Phase 49 Architecture Delta: Local PostgreSQL Migration And Cloud Sync
+
+Phase 49 changes the development and release substrate from "SQLite as the only practical local runtime" to "SQLite as golden backup plus local PostgreSQL as the active development database". It does not change retrieval strategy, prompt strategy, Stage 30 scoring rules, provider topology, ReAct/tool-calling behavior, or the external data-source boundary.
+
+Local database lane:
+
+```text
+data/app.sqlite
+-> docker-compose.dev.yml PostgreSQL 16 on localhost:5433
+-> python -m alembic upgrade head
+-> scripts/migrate_sqlite_to_postgres.py
+-> app/db/session.py reads DATABASE_URL
+-> local app/runtime uses PostgreSQL
+```
+
+`app/db/session.py::create_database_engine()` remains the engine boundary. SQLite keeps `connect_args={"check_same_thread": False}` for local file and `:memory:` tests. PostgreSQL uses `pool_pre_ping=True`. No dual-write path was added; the project migrates data from SQLite into PostgreSQL and then runs against the configured `DATABASE_URL`.
+
+Migration lane:
+
+```text
+SQLite documents/sources/chunks/chunk_embeddings/qa_logs/users/conversations/messages/qa_feedback
+-> id maps and natural-key dedupe
+-> PostgreSQL rows
+-> second run inserts 0 duplicates
+```
+
+The Phase 49 migration extends the Phase 45 script to cover authenticated runtime tables as well as multimodal chunk metadata: `caption`, `page_number`, `content_bbox_json`, `chunk_type`, and `source_image_path`. PostgreSQL exposed one SQLite parity issue: `chunks.heading_path` could exceed `String(500)` because SQLite did not enforce the length. Alembic `20260621_0006` changes that column to `Text`.
+
+FAISS lane:
+
+```text
+PostgreSQL chunk_embeddings
+-> scripts/build_faiss_index.py --database-url
+-> data/faiss/paratera_GLM-Embedding-3_dim2048.index
+-> VectorIndexCache
+-> search_knowledge / search_figures / search_tables
+```
+
+FAISS remains a derived runtime artifact and is not committed. The acceptance baseline is the Phase 48 GLM vector set: `paratera / GLM-Embedding-3 / 2048 = 40563` vectors. Local Phase 49 rebuild from PostgreSQL produced `vectors=40563`, so the PostgreSQL migration preserves the Phase 48 retrieval substrate.
+
+Cloud sync lane:
+
+```text
+local SQLite/PostgreSQL data
+-> manual cloud PostgreSQL import or SQL dump/restore
+-> manual data/images/ sync
+-> cloud FAISS rebuild from cloud PostgreSQL
+-> docker-compose.prod.yml up --build
+-> health/auth/Agent/search_tables/assets/frontend smoke
+```
+
+Cloud synchronization is intentionally operational, not automatic CI behavior. In the Phase 49 closeout, the cloud PostgreSQL database was restored from the local PostgreSQL dump, `data/images/` was synchronized to 16978 files, cloud FAISS was rebuilt from cloud PostgreSQL with `vectors=40563`, and `/health` plus a public `/assets/images/...` URL returned 200. Cloud PostgreSQL stores structured rows and image paths; `data/images/` must remain synchronized separately so `/assets/images/...` can serve extracted figures. Cloud FAISS should be rebuilt from cloud PostgreSQL embeddings instead of copying local indexes.
+
+Security boundary: `.env`, `.env.prod`, database passwords, JWT secrets, SSH passwords, bearer tokens, API keys, provider raw responses, `raw_response`, `reasoning_content`, hidden reasoning, full chunks, restricted full text, and raw sensitive user content must not enter Git, CSV, docs, tests, or Obsidian.
+
 ## Phase 48 Architecture Delta: Real Multimodal Evaluation And Table Hybrid Retrieval
 
 Phase 48 keeps the Phase 47 interaction surface but adds real-model quality gates and tightens three multimodal runtime paths.

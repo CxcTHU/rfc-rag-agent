@@ -4,7 +4,18 @@ import sys
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
-from app.db.models import Base, Chunk, ChunkEmbedding, Document, QuestionAnswerLog, Source
+from app.db.models import (
+    Base,
+    Chunk,
+    ChunkEmbedding,
+    Conversation,
+    Document,
+    Message,
+    QAFeedback,
+    QuestionAnswerLog,
+    Source,
+    User,
+)
 from app.db.session import create_sqlite_engine
 from app.services.retrieval.vector_index import calculate_text_hash
 from scripts.migrate_sqlite_to_postgres import migrate_sqlite_to_target
@@ -45,6 +56,11 @@ def seed_source_database(database_url: str) -> None:
             heading_path="parent",
             start_char=0,
             end_char=23,
+            chunk_type="image_description",
+            source_image_path="data/images/1/page2_img1.png",
+            caption="图2 堆石混凝土试件",
+            page_number=2,
+            content_bbox_json='{"page": 2, "bbox": [1, 2, 3, 4]}',
             parent_chunk=parent,
         )
         db.add(document)
@@ -72,16 +88,42 @@ def seed_source_database(database_url: str) -> None:
                 content_hash=calculate_text_hash(child.content),
             )
         )
+        qa_log = QuestionAnswerLog(
+            question="阶段45迁移是否可重复？",
+            answer="可以。",
+            retrieved_chunk_ids=f"[{child.id}]",
+            citations="[1]",
+            model_provider="deterministic",
+            model_name="test-chat",
+            retrieval_mode="hybrid",
+            refused=False,
+        )
+        user = User(
+            username="stage45-user",
+            email="stage45@example.test",
+            password_hash="hashed-password",
+        )
+        conversation = Conversation(user=user, title="迁移测试对话")
+        message = Message(
+            conversation=conversation,
+            role="assistant",
+            content="可以。",
+            mode="react_agent",
+            metadata_json='{"safe": true}',
+        )
+        db.add(qa_log)
+        db.add(user)
+        db.flush()
         db.add(
-            QuestionAnswerLog(
-                question="阶段45迁移是否可重复？",
-                answer="可以。",
-                retrieved_chunk_ids=f"[{child.id}]",
-                citations="[1]",
-                model_provider="deterministic",
-                model_name="test-chat",
-                retrieval_mode="hybrid",
-                refused=False,
+            QAFeedback(
+                question_answer_log_id=qa_log.id,
+                conversation_id=conversation.id,
+                message_id=message.id,
+                question=qa_log.question,
+                answer=qa_log.answer,
+                rating="up",
+                reason="helpful",
+                comment="sanitized comment",
             )
         )
         db.commit()
@@ -100,11 +142,19 @@ def test_migrate_sqlite_to_target_is_incremental_and_maps_references(tmp_path) -
     assert first.chunks.inserted == 2
     assert first.chunk_embeddings.inserted == 1
     assert first.qa_logs.inserted == 1
+    assert first.users.inserted == 1
+    assert first.conversations.inserted == 1
+    assert first.messages.inserted == 1
+    assert first.qa_feedback.inserted == 1
     assert second.documents.skipped == 1
     assert second.sources.skipped == 1
     assert second.chunks.skipped == 2
     assert second.chunk_embeddings.skipped == 1
     assert second.qa_logs.skipped == 1
+    assert second.users.skipped == 1
+    assert second.conversations.skipped == 1
+    assert second.messages.skipped == 1
+    assert second.qa_feedback.skipped == 1
 
     TargetSession = create_temp_session(target_url)
     with TargetSession() as db:
@@ -113,15 +163,33 @@ def test_migrate_sqlite_to_target_is_incremental_and_maps_references(tmp_path) -
         target_source = db.scalar(select(Source).where(Source.source_id == "stage45-source"))
         target_embedding = db.scalar(select(ChunkEmbedding))
         qa_logs = list(db.scalars(select(QuestionAnswerLog)).all())
+        users = list(db.scalars(select(User)).all())
+        conversations = list(db.scalars(select(Conversation)).all())
+        messages = list(db.scalars(select(Message)).all())
+        feedback_rows = list(db.scalars(select(QAFeedback)).all())
 
     assert target_document is not None
     assert len(target_chunks) == 2
     assert target_chunks[1].parent_chunk_id == target_chunks[0].id
+    assert target_chunks[1].chunk_type == "image_description"
+    assert target_chunks[1].source_image_path == "data/images/1/page2_img1.png"
+    assert target_chunks[1].caption == "图2 堆石混凝土试件"
+    assert target_chunks[1].page_number == 2
+    assert target_chunks[1].content_bbox_json == '{"page": 2, "bbox": [1, 2, 3, 4]}'
     assert target_source is not None
     assert target_source.document_id == target_document.id
     assert target_embedding is not None
     assert target_embedding.chunk_id == target_chunks[1].id
     assert len(qa_logs) == 1
+    assert len(users) == 1
+    assert len(conversations) == 1
+    assert conversations[0].user_id == users[0].id
+    assert len(messages) == 1
+    assert messages[0].conversation_id == conversations[0].id
+    assert len(feedback_rows) == 1
+    assert feedback_rows[0].question_answer_log_id == qa_logs[0].id
+    assert feedback_rows[0].conversation_id == conversations[0].id
+    assert feedback_rows[0].message_id == messages[0].id
 
 
 def test_build_faiss_index_accepts_explicit_database_url(tmp_path) -> None:

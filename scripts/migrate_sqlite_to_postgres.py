@@ -16,9 +16,13 @@ from app.db.models import (  # noqa: E402
     Base,
     Chunk,
     ChunkEmbedding,
+    Conversation,
     Document,
+    Message,
+    QAFeedback,
     QuestionAnswerLog,
     Source,
+    User,
 )
 from app.db.session import create_database_engine  # noqa: E402
 
@@ -37,6 +41,10 @@ class MigrationResult:
     chunks: TableMigrationStats = field(default_factory=TableMigrationStats)
     chunk_embeddings: TableMigrationStats = field(default_factory=TableMigrationStats)
     qa_logs: TableMigrationStats = field(default_factory=TableMigrationStats)
+    users: TableMigrationStats = field(default_factory=TableMigrationStats)
+    conversations: TableMigrationStats = field(default_factory=TableMigrationStats)
+    messages: TableMigrationStats = field(default_factory=TableMigrationStats)
+    qa_feedback: TableMigrationStats = field(default_factory=TableMigrationStats)
 
 
 def create_source_engine(sqlite_url: str) -> Engine:
@@ -70,7 +78,18 @@ def migrate_sqlite_to_target(
         chunk_id_map = migrate_chunks(source_db, target_db, document_id_map, result)
         migrate_sources(source_db, target_db, document_id_map, result)
         migrate_chunk_embeddings(source_db, target_db, chunk_id_map, result)
-        migrate_qa_logs(source_db, target_db, result)
+        qa_log_id_map = migrate_qa_logs(source_db, target_db, result)
+        user_id_map = migrate_users(source_db, target_db, result)
+        conversation_id_map = migrate_conversations(source_db, target_db, user_id_map, result)
+        message_id_map = migrate_messages(source_db, target_db, conversation_id_map, result)
+        migrate_qa_feedback(
+            source_db,
+            target_db,
+            qa_log_id_map,
+            conversation_id_map,
+            message_id_map,
+            result,
+        )
         target_db.commit()
         return result
 
@@ -150,6 +169,12 @@ def migrate_chunks(
             values["chunk_type"] = getattr(source_chunk, "chunk_type", "text")
         if hasattr(Chunk, "source_image_path"):
             values["source_image_path"] = getattr(source_chunk, "source_image_path", None)
+        if hasattr(Chunk, "caption"):
+            values["caption"] = getattr(source_chunk, "caption", None)
+        if hasattr(Chunk, "page_number"):
+            values["page_number"] = getattr(source_chunk, "page_number", None)
+        if hasattr(Chunk, "content_bbox_json"):
+            values["content_bbox_json"] = getattr(source_chunk, "content_bbox_json", None)
         target_chunk = Chunk(**values)
         target_db.add(target_chunk)
         target_db.flush()
@@ -261,7 +286,8 @@ def migrate_qa_logs(
     source_db: Session,
     target_db: Session,
     result: MigrationResult,
-) -> None:
+) -> dict[int, int]:
+    qa_log_id_map: dict[int, int] = {}
     logs = list(source_db.scalars(select(QuestionAnswerLog).order_by(QuestionAnswerLog.id)).all())
     for log in logs:
         existing = target_db.scalar(
@@ -277,6 +303,7 @@ def migrate_qa_logs(
             )
         )
         if existing is not None:
+            qa_log_id_map[log.id] = existing.id
             result.qa_logs.skipped += 1
             continue
         target_log = QuestionAnswerLog(
@@ -292,12 +319,210 @@ def migrate_qa_logs(
             created_at=log.created_at,
         )
         target_db.add(target_log)
+        target_db.flush()
+        qa_log_id_map[log.id] = target_log.id
         result.qa_logs.inserted += 1
+    return qa_log_id_map
+
+
+def migrate_users(
+    source_db: Session,
+    target_db: Session,
+    result: MigrationResult,
+) -> dict[int, int]:
+    user_id_map: dict[int, int] = {}
+    users = list(source_db.scalars(select(User).order_by(User.id)).all())
+    existing_by_username = {
+        user.username: user
+        for user in target_db.scalars(select(User).order_by(User.id)).all()
+    }
+    existing_by_email = {
+        user.email: user
+        for user in target_db.scalars(select(User).order_by(User.id)).all()
+    }
+    for user in users:
+        existing = existing_by_username.get(user.username) or existing_by_email.get(user.email)
+        if existing is not None:
+            user_id_map[user.id] = existing.id
+            result.users.skipped += 1
+            continue
+        target_user = User(
+            username=user.username,
+            email=user.email,
+            password_hash=user.password_hash,
+            is_active=user.is_active,
+            created_at=user.created_at,
+        )
+        target_db.add(target_user)
+        target_db.flush()
+        existing_by_username[target_user.username] = target_user
+        existing_by_email[target_user.email] = target_user
+        user_id_map[user.id] = target_user.id
+        result.users.inserted += 1
+    return user_id_map
+
+
+def migrate_conversations(
+    source_db: Session,
+    target_db: Session,
+    user_id_map: dict[int, int],
+    result: MigrationResult,
+) -> dict[int, int]:
+    conversation_id_map: dict[int, int] = {}
+    conversations = list(source_db.scalars(select(Conversation).order_by(Conversation.id)).all())
+    for conversation in conversations:
+        mapped_user_id = (
+            user_id_map[conversation.user_id]
+            if conversation.user_id is not None and conversation.user_id in user_id_map
+            else None
+        )
+        existing = target_db.scalar(
+            select(Conversation).where(
+                and_(
+                    Conversation.user_id.is_(None)
+                    if mapped_user_id is None
+                    else Conversation.user_id == mapped_user_id,
+                    Conversation.title == conversation.title,
+                    Conversation.created_at == conversation.created_at,
+                )
+            )
+        )
+        if existing is not None:
+            conversation_id_map[conversation.id] = existing.id
+            result.conversations.skipped += 1
+            continue
+        target_conversation = Conversation(
+            user_id=mapped_user_id,
+            title=conversation.title,
+            created_at=conversation.created_at,
+            updated_at=conversation.updated_at,
+        )
+        target_db.add(target_conversation)
+        target_db.flush()
+        conversation_id_map[conversation.id] = target_conversation.id
+        result.conversations.inserted += 1
+    return conversation_id_map
+
+
+def migrate_messages(
+    source_db: Session,
+    target_db: Session,
+    conversation_id_map: dict[int, int],
+    result: MigrationResult,
+) -> dict[int, int]:
+    message_id_map: dict[int, int] = {}
+    messages = list(source_db.scalars(select(Message).order_by(Message.id)).all())
+    for message in messages:
+        target_conversation_id = conversation_id_map.get(message.conversation_id)
+        if target_conversation_id is None:
+            result.messages.skipped += 1
+            continue
+        existing = target_db.scalar(
+            select(Message).where(
+                and_(
+                    Message.conversation_id == target_conversation_id,
+                    Message.role == message.role,
+                    Message.content == message.content,
+                    Message.mode == message.mode,
+                    Message.created_at == message.created_at,
+                )
+            )
+        )
+        if existing is not None:
+            message_id_map[message.id] = existing.id
+            result.messages.skipped += 1
+            continue
+        target_message = Message(
+            conversation_id=target_conversation_id,
+            role=message.role,
+            content=message.content,
+            mode=message.mode,
+            metadata_json=message.metadata_json,
+            created_at=message.created_at,
+        )
+        target_db.add(target_message)
+        target_db.flush()
+        message_id_map[message.id] = target_message.id
+        result.messages.inserted += 1
+    return message_id_map
+
+
+def migrate_qa_feedback(
+    source_db: Session,
+    target_db: Session,
+    qa_log_id_map: dict[int, int],
+    conversation_id_map: dict[int, int],
+    message_id_map: dict[int, int],
+    result: MigrationResult,
+) -> None:
+    feedback_rows = list(source_db.scalars(select(QAFeedback).order_by(QAFeedback.id)).all())
+    for feedback in feedback_rows:
+        mapped_qa_log_id = (
+            qa_log_id_map[feedback.question_answer_log_id]
+            if feedback.question_answer_log_id is not None
+            and feedback.question_answer_log_id in qa_log_id_map
+            else None
+        )
+        mapped_conversation_id = (
+            conversation_id_map[feedback.conversation_id]
+            if feedback.conversation_id is not None and feedback.conversation_id in conversation_id_map
+            else None
+        )
+        mapped_message_id = (
+            message_id_map[feedback.message_id]
+            if feedback.message_id is not None and feedback.message_id in message_id_map
+            else None
+        )
+        existing = target_db.scalar(
+            select(QAFeedback).where(
+                and_(
+                    QAFeedback.question_answer_log_id.is_(None)
+                    if mapped_qa_log_id is None
+                    else QAFeedback.question_answer_log_id == mapped_qa_log_id,
+                    QAFeedback.conversation_id.is_(None)
+                    if mapped_conversation_id is None
+                    else QAFeedback.conversation_id == mapped_conversation_id,
+                    QAFeedback.message_id.is_(None)
+                    if mapped_message_id is None
+                    else QAFeedback.message_id == mapped_message_id,
+                    QAFeedback.question == feedback.question,
+                    QAFeedback.answer == feedback.answer,
+                    QAFeedback.rating == feedback.rating,
+                    QAFeedback.created_at == feedback.created_at,
+                )
+            )
+        )
+        if existing is not None:
+            result.qa_feedback.skipped += 1
+            continue
+        target_feedback = QAFeedback(
+            question_answer_log_id=mapped_qa_log_id,
+            conversation_id=mapped_conversation_id,
+            message_id=mapped_message_id,
+            question=feedback.question,
+            answer=feedback.answer,
+            rating=feedback.rating,
+            reason=feedback.reason,
+            comment=feedback.comment,
+            created_at=feedback.created_at,
+        )
+        target_db.add(target_feedback)
+        result.qa_feedback.inserted += 1
 
 
 def format_result(result: MigrationResult) -> str:
     rows = []
-    for name in ["documents", "sources", "chunks", "chunk_embeddings", "qa_logs"]:
+    for name in [
+        "documents",
+        "sources",
+        "chunks",
+        "chunk_embeddings",
+        "qa_logs",
+        "users",
+        "conversations",
+        "messages",
+        "qa_feedback",
+    ]:
         stats = getattr(result, name)
         rows.append(
             f"{name}: inserted={stats.inserted} skipped={stats.skipped} updated={stats.updated}"

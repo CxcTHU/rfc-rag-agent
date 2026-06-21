@@ -1,5 +1,48 @@
 # 数据来源登记
 
+## Phase 49 Local PostgreSQL And Cloud Sync Data Note
+
+Phase 49 adds no crawler, no external literature source, no new PDF download, no new provider topology, and no new production corpus category. It moves existing local project data from SQLite into local PostgreSQL, then synchronizes that PostgreSQL state plus image assets to the cloud deployment.
+
+Data movement:
+
+```text
+data/app.sqlite
+-> local PostgreSQL 16 dev database on localhost:5433
+-> documents / sources / chunks / chunk_embeddings / qa_logs
+-> users / conversations / messages / qa_feedback
+-> FAISS rebuilt from PostgreSQL embeddings
+```
+
+The SQLite database remains a local backup/golden source and is not deleted. PostgreSQL is the active local runtime database after `.env` points `DATABASE_URL` to PostgreSQL. The migration is idempotent: a second run inserts no duplicate rows.
+
+Local migrated counts:
+
+```text
+documents=1146
+sources=1073
+chunks=50250
+chunk_embeddings=72579
+users=3
+conversations=7
+messages=117
+image_description chunks=15628
+table chunks=1440
+GLM vectors for FAISS=40563
+```
+
+Image assets:
+
+```text
+data/images/ files=16978
+data/images/ directories=854
+PostgreSQL image chunks with paths=15628
+```
+
+`data/images/` is still a gitignored runtime asset directory. It must be synchronized to the cloud separately from PostgreSQL rows so `/assets/images/...` can serve figure evidence. Phase 49 synchronized 16978 image files to the cloud server; a public check against `http://36.103.199.132:8044/assets/images/1059/page10_img1.png` returned 200 after sync.
+
+Safety boundary: Phase 49 docs and tests store only counts, local paths, command templates, and placeholder variables. They must not store database passwords, JWT secrets, SSH passwords, API keys, bearer tokens, Authorization headers, provider raw responses, `raw_response`, `reasoning_content`, hidden reasoning, full restricted text, or sensitive uploaded-image bytes.
+
 ## Phase 48 Real Multimodal Evaluation Data Note
 
 Phase 48 adds no new literature corpus, crawler, restricted full text, or production source registry. It operates on the existing local corpus plus a local-only public-image evaluation set for uploaded-image analysis.
