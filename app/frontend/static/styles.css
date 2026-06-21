@@ -1188,12 +1188,12 @@ td {
 }
 
 .answer-text {
-  white-space: pre-wrap;
   line-height: 1.7;
 }
 
 .answer-text p {
   margin: 0;
+  white-space: pre-wrap;
 }
 
 .answer-text p + p,
@@ -1222,6 +1222,62 @@ td {
 
 .answer-segment + .answer-segment {
   margin-top: 10px;
+}
+
+.markdown-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;
+  margin: 10px 0 12px;
+  border: 1px solid rgba(141, 202, 230, 0.22);
+  border-radius: 8px;
+  background: rgba(5, 12, 22, 0.55);
+}
+
+.markdown-table {
+  min-width: max(100%, 680px);
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.markdown-table th,
+.markdown-table td {
+  min-width: 96px;
+  padding: 9px 11px;
+  border-right: 1px solid rgba(141, 202, 230, 0.14);
+  border-bottom: 1px solid rgba(141, 202, 230, 0.14);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-table th:last-child,
+.markdown-table td:last-child {
+  border-right: 0;
+}
+
+.markdown-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(18, 36, 56, 0.98);
+  color: #e7f7ff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.markdown-table td {
+  color: #dcecf7;
+}
+
+.markdown-table tbody tr:nth-child(even) td {
+  background: rgba(141, 202, 230, 0.045);
 }
 
 .thinking-text {
@@ -1455,6 +1511,14 @@ td {
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+.table-evidence-content {
+  margin-top: 10px;
+}
+
+.table-evidence-content .markdown-table-wrap {
+  margin-bottom: 0;
 }
 
 .location-link {

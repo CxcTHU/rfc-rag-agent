@@ -25,6 +25,7 @@ from app.db.repositories import (
 )
 from app.db.session import create_sqlite_engine, get_db
 from app.main import app
+from app.schemas.agent import AgentQueryRequest
 from app.services.generation.chat_model import (
     ChatMessage,
     ChatModelResult,
@@ -268,6 +269,15 @@ def test_agent_api_defaults_to_tool_calling_with_citations(tmp_path) -> None:
     assert payload["invalid_citations"] == []
     assert payload["refusal_category"] is None
     assert "tool_calling_agent" in payload["reasoning_summary"]
+
+
+def test_agent_query_request_accepts_langgraph_agent_mode() -> None:
+    request = AgentQueryRequest(
+        question="What affects filling capacity?",
+        mode="LANGGRAPH_AGENT",
+    )
+
+    assert request.mode == "langgraph_agent"
 
 
 def test_agent_api_answers_model_meta_without_retrieval(tmp_path) -> None:
@@ -703,6 +713,41 @@ def test_agent_api_explicit_tool_calling_agent_mode_uses_tool_loop(tmp_path) -> 
     assert "reasoning_content" not in serialized
 
 
+def test_agent_api_explicit_langgraph_agent_mode_uses_graph_service(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 2,
+                "max_tool_calls": 3,
+                "mode": "langgraph_agent",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "langgraph_agent"
+    assert payload["refused"] is False
+    assert payload["citations"] == [1]
+    assert [call["tool_name"] for call in payload["tool_calls"]] == [
+        "hybrid_search_knowledge",
+        "answer_with_citations",
+    ]
+    assert [step["name"] for step in payload["workflow_steps"]] == [
+        "llm_with_tools",
+        "search_knowledge",
+        "llm_with_tools",
+        "answer_with_citations",
+    ]
+    assert payload["iteration_count"] == 4
+    assert payload["latency_trace"]["langgraph_checkpointer_backend"] in {
+        "memory",
+        "redis",
+    }
+    assert "langgraph_agent" in payload["reasoning_summary"]
+
+
 def test_agent_api_agentic_refusal_category_marks_responsibility_gate(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
@@ -830,6 +875,87 @@ def test_react_agent_never_uses_auto_figure_enrichment(monkeypatch) -> None:
         )
         is response
     )
+
+
+def test_auto_figure_enrichment_records_workflow_step() -> None:
+    class FakeQuery:
+        def join(self, *args, **kwargs):
+            return self
+
+        def filter(self, *args, **kwargs):
+            return self
+
+        def order_by(self, *args, **kwargs):
+            return self
+
+        def all(self):
+            chunk = SimpleNamespace(
+                id=2,
+                document_id=1,
+                chunk_index=1,
+                chunk_type="image_description",
+                content="Figure evidence showing interface microstructure.",
+                heading_path="Figure",
+                source_image_path="data/images/1/page2_img3.png",
+                caption="Fig. 1 Interface microstructure",
+            )
+            document = SimpleNamespace(
+                id=1,
+                title="Agent API filling source",
+                file_name="agent-filling.md",
+                source_type="local_file",
+                source_path="agent-filling.md",
+            )
+            return [(chunk, document)]
+
+    class FakeSession:
+        def query(self, *args, **kwargs):
+            return FakeQuery()
+
+    response = agent_api_module.AgentQueryResponse(
+        question="What affects filling capacity?",
+        answer="Answer [1].",
+        tool_calls=[],
+        search_results=[],
+        sources=[
+            agent_api_module.AgentSourceItem(
+                source_id="chunk:1",
+                title="Agent API filling source",
+                source_type="local_file",
+                status=None,
+                trust_level=None,
+                fulltext_permission=None,
+                document_id=1,
+                chunk_id=1,
+                chunk_index=0,
+                url=None,
+                doi=None,
+                content="Filling capacity text.",
+                score=1.0,
+                chunk_type="text",
+            )
+        ],
+        citations=[1],
+        refused=False,
+        refusal_reason=None,
+        reasoning_summary="test",
+        mode="langgraph_agent",
+        workflow_steps=[],
+        iteration_count=0,
+        invalid_citations=[],
+        refusal_category=None,
+        latency_trace={},
+    )
+
+    enriched = agent_api_module.enrich_agent_response_with_figure_evidence(
+        db=FakeSession(),
+        question=response.question,
+        response=response,
+    )
+
+    assert any(source.chunk_type == "image_description" for source in enriched.sources)
+    assert enriched.workflow_steps[-1].name == "search_figures"
+    assert enriched.workflow_steps[-1].output_summary.startswith("auto-enriched 1")
 
 
 def test_agent_api_off_topic_refusal_includes_safe_rewrite_suggestion(tmp_path) -> None:

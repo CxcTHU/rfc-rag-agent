@@ -31,8 +31,8 @@ def test_frontend_index_is_served() -> None:
     assert "data-auth-logout" in response.text
     assert "data-auth-status" in response.text
     assert "data-auth-username" in response.text
-    assert "/static/app.js?v=phase48-figure-card-block-fix1" in response.text
-    assert "/static/styles.css?v=phase48-figure-card-block-fix1" in response.text
+    assert "/static/app.js?v=phase50-langgraph-default-zh6" in response.text
+    assert "/static/styles.css?v=phase50-langgraph-default-zh6" in response.text
     assert 'class="hero-layout"' in response.text
     assert "hero-kicker" not in response.text
     assert 'class="demo-panel agent-workspace-panel"' in response.text
@@ -135,15 +135,16 @@ def test_frontend_static_assets_are_served() -> None:
     assert "agent_step" in response.text
     assert "tool_call_start" in response.text
     assert "tool_call_result" in response.text
-    assert "skipped duplicate tool call" in response.text
-    assert "Analyze question and choose retrieval tools" in response.text
+    assert "跳过重复工具调用" in response.text
+    assert "分析问题并选择检索工具" in response.text
+    assert "step.name || step.tool_name || step.action" in response.text
     assert "userFacingAgentSummary" in response.text
     assert "isSkippedAgentStep" in response.text
     assert "onAgentStep" in response.text
     assert "onToolCallStart" in response.text
     assert "onToolCallResult" in response.text
     assert "appendAgentErrorMessage" in response.text
-    assert "Thinking..." in response.text
+    assert "正在思考..." in response.text
     assert "pendingThinkingMessage?.remove()" in response.text
     assert "Agent failed" in response.text
     assert "setConversationListPlaceholder" in response.text
@@ -223,7 +224,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "[data-agent-mode-status]" not in response.text
     assert "[data-agent-mode]" not in response.text
     assert 'body.mode = "agentic"' not in response.text
-    assert 'mode: "tool_calling_agent"' in response.text
+    assert 'mode: "langgraph_agent"' in response.text
     assert 'updateAgentModeStatus("auto")' not in response.text
     assert "reindexSource" in response.text
     assert "bindEnterToSubmit" in response.text
@@ -260,15 +261,21 @@ def test_frontend_static_assets_are_served() -> None:
     assert "citationNumbersInAnswer" in response.text
     assert "renderAnswerWithCitationLinks" in response.text
     assert "renderMarkdownBlocks" in response.text
+    assert "markdownTableHtml" in response.text
+    assert "table-evidence-content" in response.text
     assert "messageElement._streamedAnswerText" in response.text
     assert "answerText.innerHTML = renderMarkdownBlocks" in response.text
-    assert "blocks.push(`<ol>" in response.text
+    assert 'start="${listStart}"' in response.text
+    assert '"start"' in response.text
     assert "renderInlineMarkdown" in response.text
     assert "sanitizeRenderedHtml" in response.text
     assert "SAFE_RENDERED_TAGS" in response.text
     assert "DANGEROUS_RENDERED_TAGS" in response.text
     assert "javascript:" in response.text
     assert 'name.startsWith("on")' in response.text
+    assert '"TABLE"' in response.text
+    assert '"THEAD"' in response.text
+    assert '"TD"' in response.text
     assert "<strong>" in response.text
     assert "data-citation-ref" in response.text
     assert "citation-popover" in response.text
@@ -318,6 +325,8 @@ def test_frontend_static_assets_are_served() -> None:
     assert "answer-segment + .answer-segment" in styles.text
     assert ".answer-text ol" in styles.text
     assert ".answer-text li + li" in styles.text
+    assert ".markdown-table-wrap" in styles.text
+    assert ".markdown-table th" in styles.text
     assert "agent-chat-layout" in styles.text
     assert "conversation-sidebar" in styles.text
     assert "conversation-list-item" in styles.text

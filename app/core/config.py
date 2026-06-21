@@ -10,6 +10,20 @@ class Settings(BaseSettings):
     # SQLite remains the safe fallback; Phase 49 local development should set
     # DATABASE_URL to the PostgreSQL dev container for dev/prod parity.
     database_url: str = "sqlite:///./data/app.sqlite"
+    # Redis is optional. When unset or unreachable, embedding cache and
+    # LangGraph checkpoints must fall back to in-process memory.
+    redis_url: str = ""
+    redis_socket_timeout_seconds: float = 1.0
+    langgraph_checkpoint_ttl_minutes: int = 60
+    langgraph_checkpoint_refresh_on_read: bool = True
+    semantic_cache_enabled: bool = False
+    semantic_cache_similarity_threshold: float = 0.92
+    semantic_cache_ttl_seconds: int = 3600
+    rate_limit_enabled: bool = False
+    rate_limit_requests_per_minute: int = 30
+    rate_limit_window_seconds: int = 60
+    pgvector_search_enabled: bool = True
+    hnsw_ef_search: int = 100
     raw_data_dir: str = "data/raw"
     auth_enabled: bool = False
     jwt_secret_key: str = ""

@@ -4,7 +4,7 @@ from pathlib import Path
 def test_phase49_dev_compose_runs_postgres_on_5433() -> None:
     compose = Path("docker-compose.dev.yml").read_text(encoding="utf-8")
 
-    assert "postgres:16-alpine" in compose
+    assert "pgvector/pgvector:pg16" in compose
     assert "pgdata_dev:/var/lib/postgresql/data" in compose
     assert "${POSTGRES_DEV_PORT:-5433}:5432" in compose
     assert "pg_isready" in compose

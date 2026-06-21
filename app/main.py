@@ -34,6 +34,7 @@ from app.core.structured_logging import (
     set_request_id,
 )
 from app.db.session import init_db
+from app.middleware.rate_limit import RateLimitMiddleware
 
 
 request_logger = logging.getLogger("rfc_rag_agent.request")
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
         description="Citation-first RAG agent for rock-filled concrete knowledge retrieval.",
         lifespan=lifespan,
     )
+    app.add_middleware(RateLimitMiddleware)
 
     @app.middleware("http")
     async def structured_request_logging(request: Request, call_next):

@@ -1,5 +1,70 @@
 # 项目进度
 
+## Latest Status: 2026-06-21 Phase 50 Phase 16-17 Planner Fast Model Complete Before Human Verification
+
+Current branch: `codex/phase-50-langgraph-redis`.
+
+Phase 50 Phase 16-17 is complete before user human verification. It adds an optional planner fast-model lane for `mode="langgraph_agent"` without changing the default `tool_calling_agent`, explicit `react_agent`, or legacy `default` modes.
+
+Implementation summary:
+
+```text
+app/services/agent/graph_nodes.py -> _CURRENT_PLANNER_PROVIDER ContextVar, planner JSON prompt/parse/fallback
+app/services/agent/graph_builder.py -> LangGraphAgentService(planner_chat_provider=...)
+app/api/agent.py -> langgraph_agent sync + SSE paths pass planner_chat_provider
+app/services/observability/latency_trace.py -> planner_model default field
+tests/test_phase50_langgraph_planner.py -> planner valid/invalid/None/reset coverage
+.env.example + .env.dev.example -> PLANNER_CHAT_MODEL_* examples
+```
+
+Validation:
+
+```text
+focused Phase 16 regression -> 69 passed
+python -m pytest -q -> 1106 passed, 1 skipped
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+docker compose -f docker-compose.dev.yml config --quiet -> passed
+docker compose -f docker-compose.prod.yml config --quiet -> passed with temporary local placeholders
+```
+
+Boundary: planner config remains optional and blank by default. Final answers still use the main chat model provider. No real API is required for CI or full local tests. The branch remains stopped before `git add`, commit, tag, push, or PR.
+
+## Latest Status: 2026-06-21 Phase 50 LangGraph Agent Orchestration And Redis Cache Layer Awaiting Human Verification
+
+Current branch: `codex/phase-50-langgraph-redis`.
+
+Phase 50 starts from `main / origin/main -> 0671a31b Merge pull request #14 from CxcTHU/codex/phase-49-local-postgresql-cloud-sync`. The `phase-49-complete` annotated tag still points to `a044ce0c Complete phase 49 local PostgreSQL cloud sync` and was not moved.
+
+The phase adds explicit `mode="langgraph_agent"` while preserving the existing default `tool_calling_agent`, explicit `react_agent`, and legacy `default` modes. Redis 7 is added to local and production compose files. Redis query embedding cache falls back to the existing in-memory cache when unavailable. LangGraph checkpointing tries RedisSaver and falls back to `MemorySaver` when Redis is not configured, unreachable, or missing RedisJSON / RediSearch support.
+
+Main implementation:
+
+```text
+app/services/cache/redis_client.py -> optional Redis connection factory
+app/services/cache/embedding_cache.py -> Redis query embedding cache with memory fallback
+app/services/agent/graph_state.py -> LangGraphAgentState / route literals
+app/services/agent/graph_nodes.py -> node wrappers reusing AgentToolbox
+app/services/agent/graph_builder.py -> StateGraph and LangGraphAgentService
+app/services/agent/graph_checkpointer.py -> RedisSaver / MemorySaver selection
+app/api/agent.py + app/schemas/agent.py -> mode="langgraph_agent" normal and SSE routes
+scripts/evaluate_phase50_langgraph_vs_react.py -> deterministic ReAct vs LangGraph comparison
+docker-compose.dev.yml + docker-compose.prod.yml -> Redis 7 services
+docs/deployment_guide.md -> Redis/LangGraph deployment and fallback notes
+```
+
+Verification:
+
+```text
+python -m pytest -q -> 1082 passed
+python scripts\score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts\evaluate_phase50_langgraph_vs_react.py -> langgraph_agent errors=0, same_refusal=6/6, same_top_source=5/6, decision=parallel_candidate
+docker compose -f docker-compose.dev.yml config -> passed
+docker compose -f docker-compose.prod.yml config --quiet -> passed with temporary placeholder .env.prod
+browser smoke -> title=RFC-RAG-Agent, console errors=0
+```
+
+Boundary: Phase 50 development, tests, normal docs, and local Obsidian drafts are complete and intentionally stopped before user human verification. No `git add`, commit, tag, push, or PR has been performed.
+
 ## Latest Status: 2026-06-21 Phase 49 Local PostgreSQL Migration And Cloud Sync Approved For Submission
 
 Current branch: `codex/phase-49-local-postgresql-cloud-sync`.
@@ -3684,3 +3749,28 @@ node --check app/frontend/static/app.js -> passed
 ```
 
 Boundary: user uploads stay under `data/user_uploads/` and are gitignored. Phase 47 orientation repair reports/backups under `data/evaluation/phase47_*orientation*` are local runtime artifacts and are not committed. Real API calls are not required for tests. API keys, bearer tokens, raw provider responses, and raw feedback-sensitive material are not committed.
+## Latest Status: 2026-06-21 Phase 50 Phase 10-14 Full Redis Stack Awaiting Human Verification
+
+Current branch: `codex/phase-50-langgraph-redis`.
+
+Phase 50 Phase 10-14 is complete before user human verification. The update upgrades Redis to `redis/redis-stack-server:latest`, verifies real RedisSaver checkpoint persistence, adds optional Semantic Cache, adds optional Redis ZSET Rate Limiting, and preserves existing `tool_calling_agent`, `react_agent`, and `default` behavior.
+
+Verification:
+
+```text
+python -m pytest -q -> 1093 passed, 1 skipped
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts/evaluate_phase50_langgraph_vs_react.py -> langgraph_agent errors=0, same_refusal=6/6, same_top_source=5/6, decision=parallel_candidate
+Redis focused tests -> 19 passed
+docker compose -f docker-compose.dev.yml config --quiet -> passed
+docker compose -f docker-compose.prod.yml config --quiet -> passed with temporary local placeholders
+```
+
+Boundary: Semantic Cache and Rate Limiting are disabled by default. Redis failure paths remain graceful: memory embedding cache, `MemorySaver`, Semantic Cache skip, and Rate Limiting fail-open. No `git add`, commit, tag, push, or PR has been performed.
+## Phase 50 Phase 14-15 Update: pgvector HNSW Migration
+
+Status: complete before user human verification. No `git add`, commit, tag, push, or PR has been performed.
+
+Phase 14 migrated the vector retrieval substrate from FAISS-only runtime files toward PostgreSQL-native pgvector HNSW search. Dev/prod PostgreSQL images now use `pgvector/pgvector:pg16`; Alembic adds `chunk_embeddings.embedding_vector Vector(2048)` and an HNSW cosine index; `VectorSearchService` defaults to HNSW-first retrieval when PostgreSQL is active and the embedding dimension is 2048. Otherwise it falls back to the existing FAISS/numpy path.
+
+Phase 15 validation passed: `python -m pytest -q -> 1100 passed, 1 skipped`; Stage 30 remains `overall=91.52 grade=A release_decision=pass`; Docker Compose dev/prod config passed with temporary local placeholders.

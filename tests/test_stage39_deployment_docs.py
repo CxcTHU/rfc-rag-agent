@@ -21,6 +21,20 @@ def test_stage39_deployment_guide_documents_fastapi_docker_flow() -> None:
     assert "不是 Docker 默认启动入口" in guide
 
 
+def test_phase50_deployment_guide_documents_redis_langgraph_fallback() -> None:
+    guide = (ROOT / "docs" / "deployment_guide.md").read_text(encoding="utf-8")
+
+    for phrase in [
+        "Redis / LangGraph（Phase 50）",
+        "REDIS_URL=redis://redis:6379/0",
+        "LANGGRAPH_CHECKPOINT_TTL_MINUTES=60",
+        "query embedding 缓存",
+        "fallback 到 `MemorySaver`",
+        "RedisJSON / RediSearch",
+    ]:
+        assert phrase in guide
+
+
 def test_stage39_deployment_guide_documents_security_boundaries() -> None:
     guide = (ROOT / "docs" / "deployment_guide.md").read_text(encoding="utf-8")
 

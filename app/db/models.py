@@ -1,7 +1,38 @@
+import json
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+try:
+    from pgvector.sqlalchemy import Vector as PgVector
+except ImportError:  # pragma: no cover - dependency is declared for runtime images.
+    PgVector = None
+
+
+class JsonTextVector(TypeDecorator):
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return json.dumps([float(item) for item in value], ensure_ascii=False)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        loaded = json.loads(value)
+        if not isinstance(loaded, list):
+            return None
+        return [float(item) for item in loaded]
+
+
+def pgvector_column_type(dimension: int):
+    if PgVector is None:
+        return JsonTextVector()
+    return PgVector(dimension)
 
 
 def utc_now() -> datetime:
@@ -156,6 +187,7 @@ class ChunkEmbedding(Base):
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     dimension: Mapped[int] = mapped_column(Integer, nullable=False)
     embedding_json: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding_vector: Mapped[list[float] | None] = mapped_column(pgvector_column_type(2048), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(

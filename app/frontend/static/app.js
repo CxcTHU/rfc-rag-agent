@@ -378,6 +378,12 @@ const SAFE_RENDERED_TAGS = new Set([
   "SPAN",
   "STRONG",
   "SUMMARY",
+  "TABLE",
+  "TBODY",
+  "TD",
+  "TH",
+  "THEAD",
+  "TR",
 ]);
 
 const SAFE_RENDERED_ATTRS = new Set([
@@ -400,6 +406,7 @@ const SAFE_RENDERED_ATTRS = new Set([
   "rel",
   "role",
   "src",
+  "start",
   "target",
   "type",
 ]);
@@ -608,11 +615,59 @@ function renderAnswerWithCitationLinks(answer, sources = [], invalidCitations = 
   return sanitizeRenderedHtml(rendered);
 }
 
+function isMarkdownTableRow(line) {
+  const trimmed = String(line || "").trim();
+  return trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.slice(1, -1).includes("|");
+}
+
+function splitMarkdownTableRow(line) {
+  return String(line || "")
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function isMarkdownTableSeparator(line) {
+  if (!isMarkdownTableRow(line)) {
+    return false;
+  }
+  return splitMarkdownTableRow(line).every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+function markdownTableHtml(tableLines, inline) {
+  const rows = tableLines
+    .filter((line) => !isMarkdownTableSeparator(line))
+    .map(splitMarkdownTableRow)
+    .filter((cells) => cells.length > 1);
+  if (!rows.length) {
+    return "";
+  }
+  const columnCount = Math.max(...rows.map((row) => row.length));
+  const normalizedRows = rows.map((row) => {
+    const cells = [...row];
+    while (cells.length < columnCount) {
+      cells.push("");
+    }
+    return cells;
+  });
+  const [header, ...bodyRows] = normalizedRows;
+  const headerHtml = `<thead><tr>${header.map((cell) => `<th>${inline(cell)}</th>`).join("")}</tr></thead>`;
+  const bodyHtml = bodyRows.length
+    ? `<tbody>${bodyRows.map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`).join("")}</tbody>`
+    : "";
+  return `<div class="markdown-table-wrap"><table class="markdown-table">${headerHtml}${bodyHtml}</table></div>`;
+}
+
 function renderMarkdownBlocks(answer, sources = [], invalidCitations = [], citationSourceMap = {}, citationSetId = "") {
   const lines = String(answer || "").replace(/\r\n/g, "\n").split("\n");
   const blocks = [];
   let paragraphLines = [];
   let listItems = [];
+  let listStart = 1;
+  let nextListStart = 1;
+  let tableLines = [];
 
   const inline = (text) =>
     renderAnswerWithCitationLinks(text, sources, invalidCitations, citationSourceMap, citationSetId);
@@ -630,8 +685,24 @@ function renderMarkdownBlocks(answer, sources = [], invalidCitations = [], citat
     if (!listItems.length) {
       return;
     }
-    blocks.push(`<ol>${listItems.map((item) => `<li>${inline(item)}</li>`).join("")}</ol>`);
+    const startAttr = listStart > 1 ? ` start="${listStart}"` : "";
+    blocks.push(`<ol${startAttr}>${listItems.map((item) => `<li>${inline(item)}</li>`).join("")}</ol>`);
+    nextListStart = listStart + listItems.length;
     listItems = [];
+    listStart = nextListStart;
+  };
+
+  const flushTable = () => {
+    if (!tableLines.length) {
+      return;
+    }
+    const table = markdownTableHtml(tableLines, inline);
+    if (table) {
+      blocks.push(table);
+    } else {
+      paragraphLines.push(...tableLines.map((line) => line.trim()));
+    }
+    tableLines = [];
   };
 
   for (const line of lines) {
@@ -639,21 +710,34 @@ function renderMarkdownBlocks(answer, sources = [], invalidCitations = [], citat
     if (!trimmed) {
       flushParagraph();
       flushList();
+      flushTable();
+      continue;
+    }
+    if (isMarkdownTableRow(trimmed)) {
+      flushParagraph();
+      flushList();
+      tableLines.push(trimmed);
       continue;
     }
     const bullet = trimmed.match(/^[-*]\s+(.+)$/);
-    const numbered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+    const numbered = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
     if (bullet || numbered) {
       flushParagraph();
-      listItems.push((bullet || numbered)[1]);
+      flushTable();
+      if (!listItems.length) {
+        listStart = numbered ? Number(numbered[1]) || nextListStart : nextListStart;
+      }
+      listItems.push(bullet ? bullet[1] : numbered[2]);
       continue;
     }
     flushList();
+    flushTable();
     paragraphLines.push(trimmed);
   }
 
   flushParagraph();
   flushList();
+  flushTable();
   return sanitizeRenderedHtml(blocks.join(""));
 }
 
@@ -864,6 +948,7 @@ function tableEvidenceHtml(result = {}) {
   const cards = tables
     .map((source, index) => {
       const tableText = source.table_content || source.content || "";
+      const tableHtml = renderMarkdownBlocks(tableText);
       return `
         <article class="table-evidence-card">
           <div class="evidence-card-head">
@@ -871,7 +956,7 @@ function tableEvidenceHtml(result = {}) {
             ${citationLocationButtonHtml(source)}
           </div>
           <strong>${escapeHtml(sourceTitle(source))}</strong>
-          <pre>${escapeHtml(tableText)}</pre>
+          <div class="table-evidence-content">${tableHtml || `<pre>${escapeHtml(tableText)}</pre>`}</div>
         </article>
       `;
     })
@@ -1452,7 +1537,7 @@ function renderAgentWorkflowSteps(steps) {
     .map((step, index) => {
       const skipped = isSkippedAgentStep(step);
       const succeeded = step.succeeded !== false || skipped;
-      const action = localizeAgentAction(step.action || step.name || step.tool_name || `Step ${index + 1}`);
+      const action = localizeAgentAction(step.name || step.tool_name || step.action || `Step ${index + 1}`);
       const status = skipped ? "Skipped" : succeeded ? "Done" : "Handled";
       return `
         <article class="tool-call-item">
@@ -1543,8 +1628,8 @@ function appendAgentThinkingMessage() {
       <article class="chat-message chat-message--assistant chat-message--thinking" aria-live="polite">
         <div class="chat-message-bubble">
           <div class="chat-message-role">Agent</div>
-          <div class="agent-thinking-status" data-agent-thinking-status><span class="loading-spinner" aria-hidden="true"></span>Thinking...</div>
-          <div class="agent-live-steps" data-agent-live-steps hidden aria-label="Agent live steps"></div>
+          <div class="agent-thinking-status" data-agent-thinking-status><span class="loading-spinner" aria-hidden="true"></span>正在思考...</div>
+          <div class="agent-live-steps" data-agent-live-steps hidden aria-label="Agent 实时步骤"></div>
           <div class="answer-text thinking-text"></div>
         </div>
       </article>
@@ -1555,11 +1640,12 @@ function appendAgentThinkingMessage() {
 }
 
 function liveAgentEventView(eventName, payload = {}) {
+  const summary = userFacingAgentSummary(payload.step_summary || payload.observation_summary || payload.output_summary || "");
   if (eventName === "tool_call_start") {
     return {
       kind: "tool-call-start",
-      title: "Preparing tool",
-      summary: "",
+      title: "准备工具",
+      summary: summary,
       meta: payload.tool_name || payload.action || "",
     };
   }
@@ -1570,41 +1656,53 @@ function liveAgentEventView(eventName, payload = {}) {
         : payload.succeeded === false
           ? "tool-call-result failed"
           : "tool-call-result",
-      title: "Tool result",
-      summary: "",
+      title: "工具结果",
+      summary: summary,
       meta: payload.tool_name || payload.action || "",
     };
   }
   return {
     kind: "agent-step",
-    title: "Agent step",
-    summary: "",
+    title: "Agent 步骤",
+    summary: summary,
     meta: payload.action || payload.phase || "",
   };
 }
 
 function localizeAgentAction(action) {
+  if (action === "search_progress") {
+    return "检索进度";
+  }
+  if (action === "answer_progress") {
+    return "回答进度";
+  }
   const labels = {
-    llm_with_tools: "Analyze question and choose retrieval tools",
-    search_knowledge: "Search knowledge",
-    rewrite_query: "Rewrite query",
-    answer_with_citations: "Generate cited answer",
-    refuse: "Refuse",
-    final_answer: "Final answer",
+    llm_with_tools: "分析问题并选择检索工具",
+    search_knowledge: "检索知识库",
+    search_figures: "检索示例图片",
+    search_tables: "检索表格证据",
+    analyze_user_image: "分析上传图片",
+    rewrite_query: "改写查询",
+    answer_with_citations: "生成带引用回答",
+    refuse: "安全拒答",
+    final_answer: "最终回答",
   };
-  return labels[action] || action || "Unknown action";
+  return labels[action] || action || "未知动作";
 }
 
 function localizeAgentTool(toolName) {
   const labels = {
-    search_knowledge: "Search knowledge",
-    hybrid_search_knowledge: "Hybrid search",
-    answer_with_citations: "Cited answer",
-    rewrite_query: "Rewrite query",
-    refuse: "Refuse",
-    final_answer: "Final answer",
+    search_knowledge: "检索知识库",
+    hybrid_search_knowledge: "混合检索",
+    search_figures: "检索示例图片",
+    search_tables: "检索表格证据",
+    analyze_user_image: "分析上传图片",
+    answer_with_citations: "引用式回答",
+    rewrite_query: "改写查询",
+    refuse: "安全拒答",
+    final_answer: "最终回答",
   };
-  return labels[toolName] || toolName || "Unknown tool";
+  return labels[toolName] || toolName || "未知工具";
 }
 
 function isSkippedAgentStep(step = {}) {
@@ -1619,30 +1717,34 @@ function userFacingAgentSummary(summary) {
     return "";
   }
   if (normalized.includes("calling model with tool definitions") || normalized.includes("llm_with_tools")) {
-    return "Analyzing the question and choosing retrieval tools";
+    return "正在分析问题并选择检索工具";
   }
   if (normalized.includes("near-duplicate") || normalized.includes("existing evidence available")) {
-    return "Existing evidence is available; skipped duplicate tool call";
+    return "已有可用证据，已跳过重复工具调用";
   }
   if (normalized.includes("model request failed") || normalized.includes("llm") || normalized.includes("provider")) {
-    return "Model service is temporarily unavailable; switched to error handling";
+    return "模型服务暂时不可用，已切换到错误处理";
   }
   return text;
 }
 
 function agentLiveStatusText(eventName, payload = {}) {
+  const summary = userFacingAgentSummary(payload.step_summary || payload.observation_summary || payload.output_summary || "");
+  if (summary) {
+    return summary;
+  }
   if (eventName === "tool_call_start") {
-    return `Calling ${localizeAgentTool(payload.tool_name || payload.action)}`;
+    return `正在调用：${localizeAgentTool(payload.tool_name || payload.action)}`;
   }
   if (eventName === "tool_call_result") {
     if (payload.skipped) {
-      return `${localizeAgentTool(payload.tool_name || payload.action)} skipped`;
+      return `${localizeAgentTool(payload.tool_name || payload.action)}已跳过`;
     }
     return payload.succeeded === false
-      ? `${localizeAgentTool(payload.tool_name || payload.action)} failed`
-      : `${localizeAgentTool(payload.tool_name || payload.action)} completed`;
+      ? `${localizeAgentTool(payload.tool_name || payload.action)}失败`
+      : `${localizeAgentTool(payload.tool_name || payload.action)}完成`;
   }
-  return `Running ${localizeAgentAction(payload.action)}`;
+  return `正在执行：${localizeAgentAction(payload.action)}`;
 }
 
 function appendAgentLiveStep(messageElement, eventName, payload = {}) {
@@ -1659,6 +1761,7 @@ function appendAgentLiveStep(messageElement, eventName, payload = {}) {
   if (!list) {
     return;
   }
+  list.hidden = false;
   const view = liveAgentEventView(eventName, payload);
   list.insertAdjacentHTML(
     "beforeend",
@@ -1676,12 +1779,16 @@ function appendAgentLiveStep(messageElement, eventName, payload = {}) {
 }
 
 function agentThoughtStepHtml(step, index) {
-  const action = localizeAgentAction(step.action || step.name || step.tool_name);
+  const action = localizeAgentAction(step.name || step.tool_name || step.action);
   const skipped = isSkippedAgentStep(step);
   const succeeded = step.succeeded !== false || skipped;
-  const statusText = skipped ? "Skipped" : succeeded ? "Done" : "Handled";
+  const statusText = skipped ? "已跳过" : succeeded ? "已完成" : "已处理";
+  const summary = userFacingAgentSummary(step.step_summary || step.observation_summary || step.output_summary || step.input_summary || "");
+  const summaryHtml = summary
+    ? `<div class="agent-thought-line">${escapeHtml(summary)}</div>`
+    : "";
   const error = step.error && !skipped
-    ? `<div class="agent-thought-line agent-thought-line--error">Note: ${escapeHtml(userFacingAgentSummary(step.error))}</div>`
+    ? `<div class="agent-thought-line agent-thought-line--error">提示：${escapeHtml(userFacingAgentSummary(step.error))}</div>`
     : "";
   return `
     <li class="agent-thought-step">
@@ -1689,15 +1796,17 @@ function agentThoughtStepHtml(step, index) {
         <span>${index + 1}. ${escapeHtml(action)}</span>
         <span class="pill ${succeeded ? "neutral" : "warning"}">${escapeHtml(statusText)}</span>
       </div>
+      ${summaryHtml}
       ${error}
     </li>
   `;
 }
 
 function agentThoughtHtml(result = {}) {
+  const liveThoughtSteps = result._live_thought_steps || [];
   const workflowSteps = result.workflow_steps || [];
   const toolCalls = result.tool_calls || [];
-  const steps = workflowSteps.length
+  const baseSteps = workflowSteps.length
     ? workflowSteps
     : toolCalls.map((call) => ({
         action: call.tool_name,
@@ -1707,17 +1816,36 @@ function agentThoughtHtml(result = {}) {
         succeeded: call.succeeded,
         error: call.error,
       }));
+  const steps = liveThoughtSteps.length ? liveThoughtSteps : baseSteps;
   if (!steps.length) {
     return "";
   }
   return `
     <details class="agent-thought-panel">
-      <summary>View reasoning process</summary>
+      <summary>查看思考过程</summary>
       <ol class="agent-thought-list">
         ${steps.map((step, index) => agentThoughtStepHtml(step, index)).join("")}
       </ol>
     </details>
   `;
+}
+
+function liveThoughtStepsFromEvents(events = []) {
+  return events.map(({ eventName, payload }, index) => {
+    const action = payload.action || payload.tool_name || `live_step_${index + 1}`;
+    return {
+      action,
+      name: action,
+      tool_name: payload.tool_name || "",
+      step_summary: payload.step_summary || payload.observation_summary || payload.output_summary || "",
+      input_summary: payload.input_summary || "",
+      output_summary: payload.output_summary || "",
+      observation_summary: payload.observation_summary || "",
+      succeeded: eventName === "tool_call_result" ? payload.succeeded !== false : true,
+      skipped: payload.skipped === true,
+      error: payload.error || "",
+    };
+  });
 }
 
 function appendTokenToAgentMessage(messageElement, token) {
@@ -1734,7 +1862,7 @@ function appendTokenToAgentMessage(messageElement, token) {
     answerText.textContent = "";
     const status = messageElement.querySelector("[data-agent-thinking-status]");
     if (status) {
-      status.textContent = "Receiving answer...";
+      status.textContent = "正在接收回答...";
     }
   }
   messageElement._streamedAnswerText = `${messageElement._streamedAnswerText || ""}${token}`;
@@ -1826,6 +1954,10 @@ function markAgentStreamingAborted(messageElement) {
 
 function finalizeAgentStreamingMessage(messageElement, result) {
   result = normalizeCitationDisplay(result);
+  const liveThoughtSteps = liveThoughtStepsFromEvents(messageElement?._agentThoughtEvents || []);
+  if (liveThoughtSteps.length) {
+    result = { ...result, _live_thought_steps: liveThoughtSteps };
+  }
   if (!messageElement) {
     appendAgentAssistantMessage(result);
     return;
@@ -2275,7 +2407,7 @@ async function submitAgent() {
       question,
       top_k: 5,
       max_tool_calls: 2,
-      mode: "tool_calling_agent",
+      mode: "langgraph_agent",
     };
     const uploadedImage = await uploadSelectedAgentImage();
     if (uploadedImage?.path) {

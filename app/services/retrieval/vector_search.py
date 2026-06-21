@@ -1,14 +1,16 @@
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings, get_settings
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.keyword_search import SearchTerm, capped_count, expand_query_terms, normalize_text
-from app.services.observability.latency_trace import latency_timer
+from app.services.observability.latency_trace import get_current_latency_trace, latency_timer
+from app.services.retrieval.pgvector_search import PgVectorSearchService
 from app.services.retrieval.query_embedding_cache import QueryEmbeddingCache, get_query_embedding_cache
-from app.services.retrieval.vector_cache import VectorIndexCache, get_vector_index_cache
+from app.services.retrieval.vector_cache import VectorIndexCache, VectorIndexMatch, get_vector_index_cache
 
 
 TOPIC_ANCHOR_BOOST = 0.2
@@ -39,11 +41,17 @@ class VectorSearchService:
         embedding_provider: EmbeddingProvider,
         index_cache: VectorIndexCache | None = None,
         query_embedding_cache: QueryEmbeddingCache | None = None,
+        pgvector_search: PgVectorSearchService | None = None,
+        settings: Settings | None = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> None:
         self.db = db
         self.embedding_provider = embedding_provider
+        self.settings = settings or get_settings()
         self.index_cache = index_cache or get_vector_index_cache(db, embedding_provider)
         self.query_embedding_cache = query_embedding_cache or get_query_embedding_cache()
+        self.pgvector_search = pgvector_search or PgVectorSearchService(db, embedding_provider, self.settings)
+        self.progress_callback = progress_callback
 
     def search(self, query: str, top_k: int = 5) -> list[VectorSearchResult]:
         normalized_query = query.strip()
@@ -52,6 +60,7 @@ class VectorSearchService:
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0")
 
+        self._progress("正在生成或读取问题向量")
         with latency_timer("query_embedding_latency_ms"):
             query_embedding = self.query_embedding_cache.get_or_embed(
                 self.embedding_provider,
@@ -62,8 +71,9 @@ class VectorSearchService:
         if is_zero_vector(query_embedding):
             return []
 
+        self._progress("正在执行向量相似度检索")
         with latency_timer("vector_search_latency_ms"):
-            matches = self.index_cache.search(query_embedding, top_k=max(top_k * 4, top_k))
+            matches = self._search_with_preferred_backend(query_embedding, top_k=max(top_k * 4, top_k))
         results: list[VectorSearchResult] = []
         for match in matches:
             entry = match.entry
@@ -87,6 +97,24 @@ class VectorSearchService:
             )
 
         return rank_vector_results(normalized_query, results)[:top_k]
+
+    def _progress(self, summary: str) -> None:
+        if self.progress_callback is not None:
+            self.progress_callback(summary)
+
+    def _search_with_preferred_backend(
+        self,
+        query_embedding: Sequence[float],
+        top_k: int,
+    ) -> list[VectorIndexMatch]:
+        pgvector_matches = self.pgvector_search.search(query_embedding, top_k=top_k)
+        if pgvector_matches is not None:
+            set_vector_search_backend("pgvector_hnsw")
+            return pgvector_matches
+
+        matches = self.index_cache.search(query_embedding, top_k=top_k)
+        set_vector_search_backend("faiss")
+        return matches
 
 
 def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
@@ -172,3 +200,9 @@ def normalized_anchor_score(anchor_score: float, max_anchor_score: float) -> flo
     if anchor_score <= 0 or max_anchor_score <= 0:
         return 0.0
     return min(1.0, anchor_score / max_anchor_score)
+
+
+def set_vector_search_backend(backend: str) -> None:
+    trace = get_current_latency_trace()
+    if trace is not None:
+        trace.set_value("vector_search_backend", backend)
