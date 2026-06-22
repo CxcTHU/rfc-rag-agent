@@ -5,6 +5,7 @@ import time
 from sqlalchemy.orm import sessionmaker
 
 from app.api.agent import stream_agent_query_events
+from app.core.config import get_settings
 from app.db.models import Base
 from app.db.repositories import ConversationRepository
 from app.db.session import create_sqlite_engine
@@ -17,6 +18,7 @@ from app.services.generation.chat_model import (
     ToolCallingChatModelResult,
 )
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
+from app.services.retrieval.query_embedding_cache import clear_query_embedding_cache
 from tests.test_agent_api import make_test_client, seed_agent_api_document, source_record
 from app.db.repositories import SourceRepository
 
@@ -34,6 +36,13 @@ def parse_sse_events(body: str) -> list[tuple[str, dict]]:
         if event_name:
             events.append((event_name, json.loads(data)))
     return events
+
+
+def disable_external_stream_caches(monkeypatch) -> None:
+    monkeypatch.setenv("REDIS_URL", "")
+    monkeypatch.setenv("SEMANTIC_CACHE_ENABLED", "false")
+    get_settings.cache_clear()
+    clear_query_embedding_cache()
 
 
 def test_agent_stream_api_defaults_to_tool_calling_metadata_done(tmp_path) -> None:
@@ -281,6 +290,7 @@ class SlowToolCallingStreamingChatModelProvider:
 
 
 def test_agent_stream_yields_first_token_before_model_finishes(tmp_path, monkeypatch) -> None:
+    disable_external_stream_caches(monkeypatch)
     monkeypatch.setattr(
         "app.services.retrieval.hybrid_search.create_reranking_provider",
         lambda **_kwargs: None,
@@ -324,6 +334,7 @@ def test_tool_calling_agent_streams_final_answer_before_model_finishes(
     tmp_path,
     monkeypatch,
 ) -> None:
+    disable_external_stream_caches(monkeypatch)
     monkeypatch.setattr(
         "app.services.retrieval.hybrid_search.create_reranking_provider",
         lambda **_kwargs: None,

@@ -1,5 +1,19 @@
 # 数据来源登记
 
+## Phase 51 Performance Evaluation Data Note
+
+Phase 51 adds no external data source, crawler, PDF download, corpus row, embedding rebuild, or provider raw-response artifact. It adds derived evaluation artifacts only:
+
+```text
+scripts/evaluate_phase51_performance.py
+tests/test_phase51_performance_eval.py
+data/evaluation/phase51_performance_results.csv
+data/evaluation/phase51_performance_summary.csv
+docs/phase_reviews/phase-51.md
+```
+
+The real-provider evaluation reads the existing local database and provider configuration only when `--execute` is explicitly used. CSV outputs store configuration ids, latency metrics, backend labels, cache-hit flags, citation/source counts, and sanitized error summaries. They do not store API keys, Bearer tokens, Authorization headers, provider raw responses, `raw_response`, `reasoning_content`, hidden thoughts, restricted full text, or raw sensitive content.
+
 ## Phase 50 Planner Fast Model Data Note
 
 Phase 16-17 adds no external data source, crawler, PDF download, corpus row, embedding rebuild, or provider raw-response artifact. It only adds an optional runtime planner model for LangGraph route selection.

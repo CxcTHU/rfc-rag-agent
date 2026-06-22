@@ -1,0 +1,8 @@
+run_type,config_id,total,ok,skipped,errors,refused,avg_time_to_first_token_ms,avg_time_to_final_ms,avg_planner_latency_ms,avg_search_latency_ms,semantic_cache_hits,same_refusal_as_react,same_top_source_as_react,primary_vector_backend,decision
+dry_run,brain_baseline,8,8,0,0,1,0.000,392.125,0.000,0.000,0,8/8,0/8,,complete
+dry_run,react_agent,8,8,0,0,1,0.000,365.470,0.026,0.017,0,8/8,8/8,faiss,complete
+dry_run,tool_calling_agent,8,8,0,0,1,0.000,2.175,0.020,0.005,0,8/8,6/8,faiss,complete
+dry_run,langgraph_deterministic,8,8,0,0,1,0.000,15.520,0.000,0.006,0,8/8,7/8,faiss,complete
+dry_run,langgraph_flash_planner,8,8,0,0,1,0.000,13.430,0.014,0.001,0,8/8,1/8,not_run,complete
+dry_run,langgraph_faiss_fallback,8,8,0,0,1,0.000,19.264,0.000,0.006,0,8/8,7/8,faiss,complete
+dry_run,semantic_cache_hit,8,8,0,0,1,0.000,1.000,0.014,0.001,8,8/8,1/8,not_run,complete

@@ -293,10 +293,49 @@ def test_agent_api_answers_model_meta_without_retrieval(tmp_path) -> None:
     assert "当前运行模型配置" in payload["answer"]
     assert "对话模型" in payload["answer"]
     assert "向量模型" in payload["answer"]
+    assert "tool_calling_agent" in payload["answer"]
+    assert "\u89c4\u5212\u6a21\u578b" not in payload["answer"]
     assert "deterministic / rule-based-chat-v1" in payload["answer"]
     assert "deterministic / hash-token-v1" in payload["answer"]
     assert "Runtime model configuration" not in payload["answer"]
     assert "agent_meta" in payload["reasoning_summary"]
+
+
+def test_agent_api_default_model_meta_hides_configured_planner(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        app.dependency_overrides[get_agent_planner_chat_model_provider] = lambda: DeterministicChatModelProvider(
+            model_name="deepseek-v4-flash",
+            provider_name="openai-compatible",
+        )
+
+        response = client.post("/agent/query", json={"question": "你生成用的什么模型？"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "meta"
+    assert "tool_calling_agent" in payload["answer"]
+    assert "deepseek-v4-flash" not in payload["answer"]
+    assert "\u89c4\u5212\u6a21\u578b" not in payload["answer"]
+
+
+def test_agent_api_langgraph_model_meta_shows_configured_planner(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        app.dependency_overrides[get_agent_planner_chat_model_provider] = lambda: DeterministicChatModelProvider(
+            model_name="deepseek-v4-flash",
+            provider_name="openai-compatible",
+        )
+
+        response = client.post(
+            "/agent/query",
+            json={"question": "你生成用的什么模型？", "mode": "langgraph_agent"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "meta"
+    assert "langgraph_agent" in payload["answer"]
+    assert "deepseek-v4-flash" in payload["answer"]
+    assert "\u89c4\u5212\u6a21\u578b" in payload["answer"]
 
 
 def test_agent_api_answers_capability_help_in_chinese_by_default(tmp_path) -> None:
@@ -365,6 +404,38 @@ def test_agent_api_transforms_previous_answer_without_retrieval(tmp_path) -> Non
     assert payload["sources"]
     assert payload["tool_calls"][0]["tool_name"] == "answer_with_citations"
     assert "followup_transform" in payload["reasoning_summary"]
+
+
+def test_agent_api_detail_followup_uses_agent_tool_decision(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        conversation = client.post("/conversations", json={"title": "detail-followup"}).json()
+        first = client.post(
+            "/agent/query",
+            json={
+                "question": "What affects filling capacity?",
+                "top_k": 2,
+                "conversation_id": conversation["id"],
+                "mode": "tool_calling_agent",
+            },
+        )
+        app.dependency_overrides[get_agent_chat_model_provider] = (
+            lambda: FollowupTransformProvider()
+        )
+        second = client.post(
+            "/agent/query",
+            json={"question": "请详细回答", "conversation_id": conversation["id"]},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    payload = second.json()
+    assert payload["refused"] is False
+    assert payload["citations"] == [1]
+    assert payload["sources"]
+    assert payload["tool_calls"]
+    assert payload["mode"] == "tool_calling_agent"
+    assert "tool_calling_agent" in payload["reasoning_summary"]
+    assert "followup_transform" not in payload["reasoning_summary"]
 
 
 def test_agent_api_followup_respects_requested_point_count(tmp_path) -> None:

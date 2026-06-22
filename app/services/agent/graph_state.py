@@ -40,6 +40,9 @@ class LangGraphAgentState(TypedDict, total=False):
     search_results: list[dict[str, Any]]
     sources: list[dict[str, Any]]
     citations: list[int]
+    prior_sources: list[dict[str, Any]]
+    prior_citations: list[int]
+    prior_answer_summary: str
     image_analysis: dict[str, object] | None
     answer: str
     refused: bool

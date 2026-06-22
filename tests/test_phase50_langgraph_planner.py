@@ -6,7 +6,7 @@ from app.services.agent.graph_builder import LangGraphAgentService
 from app.services.agent.graph_nodes import (
     initialize_state,
     reset_current_planner_provider,
-    route_query_node,
+    planner_node,
     set_current_planner_provider,
 )
 from app.services.generation.chat_model import (
@@ -21,6 +21,7 @@ from app.services.observability.latency_trace import (
 )
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from tests.test_phase50_langgraph_nodes import FakeToolbox
+from tests.test_phase50_langgraph_nodes import source_reference
 
 
 class FakePlannerProvider:
@@ -44,7 +45,7 @@ class FakePlannerProvider:
         )
 
 
-def test_route_query_node_uses_planner_llm_json_action() -> None:
+def test_planner_node_uses_planner_llm_json_action() -> None:
     planner = FakePlannerProvider(
         [
             '{"action":"search_figures","query":"crack examples","reasoning_summary":"visual request"}',
@@ -55,7 +56,7 @@ def test_route_query_node_uses_planner_llm_json_action() -> None:
     latency_token = set_current_latency_trace(trace)
     planner_token = set_current_planner_provider(planner)
     try:
-        updates = route_query_node(initialize_state(question="Show crack examples"))
+        updates = planner_node(initialize_state(question="Show crack examples"))
     finally:
         reset_current_planner_provider(planner_token)
         reset_current_latency_trace(latency_token)
@@ -69,13 +70,36 @@ def test_route_query_node_uses_planner_llm_json_action() -> None:
     assert "Allowed actions" in planner.messages[1].content
 
 
-def test_route_query_node_falls_back_to_deterministic_on_invalid_planner_json() -> None:
+def test_planner_node_llm_prompt_includes_prior_evidence() -> None:
+    planner = FakePlannerProvider(
+        '{"action":"answer_with_citations","reasoning_summary":"prior evidence is enough"}'
+    )
+    state = initialize_state(question="请详细回答")
+    state["prior_sources"] = [
+        source_reference(chunk_id=1).__dict__,
+        source_reference(chunk_id=2).__dict__,
+        source_reference(chunk_id=3).__dict__,
+    ]
+    state["prior_answer_summary"] = "上一轮回答说明填充性能受颗粒和流体阻塞影响。"
+    planner_token = set_current_planner_provider(planner)
+    try:
+        updates = planner_node(state)
+    finally:
+        reset_current_planner_provider(planner_token)
+
+    assert updates["next_action"] == "answer_with_citations"
+    assert "Prior evidence from the same conversation" in planner.messages[1].content
+    assert "fixture source evidence" in planner.messages[1].content
+    assert "上一轮回答说明" in planner.messages[1].content
+
+
+def test_planner_node_falls_back_to_deterministic_on_invalid_planner_json() -> None:
     planner = FakePlannerProvider("not json")
     trace = LatencyTrace()
     latency_token = set_current_latency_trace(trace)
     planner_token = set_current_planner_provider(planner)
     try:
-        updates = route_query_node(initialize_state(question="What affects filling capacity?"))
+        updates = planner_node(initialize_state(question="What affects filling capacity?"))
     finally:
         reset_current_planner_provider(planner_token)
         reset_current_latency_trace(latency_token)
@@ -86,11 +110,11 @@ def test_route_query_node_falls_back_to_deterministic_on_invalid_planner_json() 
     assert trace.values["planner_model"] == "deterministic"
 
 
-def test_route_query_node_without_planner_preserves_deterministic_behavior() -> None:
+def test_planner_node_without_planner_preserves_deterministic_behavior() -> None:
     trace = LatencyTrace()
     latency_token = set_current_latency_trace(trace)
     try:
-        updates = route_query_node(initialize_state(question="What affects filling capacity?"))
+        updates = planner_node(initialize_state(question="What affects filling capacity?"))
     finally:
         reset_current_latency_trace(latency_token)
 
@@ -125,5 +149,5 @@ def test_langgraph_agent_service_injects_and_resets_planner_provider() -> None:
     assert result.workflow_steps[1].tool_name == "search_figures"
     assert result.latency_trace["planner_model"] == "fast/mock-planner"
 
-    updates = route_query_node(initialize_state(question="What affects filling capacity?"))
+    updates = planner_node(initialize_state(question="What affects filling capacity?"))
     assert updates["next_action"] == "search_knowledge"

@@ -36,7 +36,7 @@ class CountingEmbeddingProvider:
 
 class FakeRedis:
     def __init__(self) -> None:
-        self.index_created = False
+        self.indexes_created: set[str] = set()
         self.hashes: dict[str, dict[str, object]] = {}
         self.ttl: dict[str, int] = {}
         self.search_distance = 0.03
@@ -45,11 +45,11 @@ class FakeRedis:
     def execute_command(self, *args):
         command = args[0]
         if command == "FT.INFO":
-            if not self.index_created:
+            if args[1] not in self.indexes_created:
                 raise RuntimeError("missing index")
             return []
         if command == "FT.CREATE":
-            self.index_created = True
+            self.indexes_created.add(args[1])
             return b"OK"
         if command == "FT.SEARCH":
             if self.fail_search:
@@ -180,6 +180,30 @@ def test_semantic_cache_miss_when_embedding_identity_differs() -> None:
     assert lookup.hit is False
     assert lookup.response is None
     assert lookup.reason == "embedding_identity_mismatch"
+
+
+def test_semantic_cache_uses_dimension_specific_indexes_and_keys() -> None:
+    clear_query_embedding_cache()
+    redis_client = FakeRedis()
+    cache = RedisSemanticCache(redis_client, similarity_threshold=0.92, ttl_seconds=60)
+
+    assert cache.store(
+        query="What affects filling capacity?",
+        mode="tool_calling_agent",
+        embedding_provider=CountingEmbeddingProvider(dimension=8),
+        response=response_fixture(),
+    )
+    assert cache.store(
+        query="What affects filling capacity?",
+        mode="tool_calling_agent",
+        embedding_provider=CountingEmbeddingProvider(dimension=16),
+        response=response_fixture(),
+    )
+
+    assert "idx:semcache:d8" in redis_client.indexes_created
+    assert "idx:semcache:d16" in redis_client.indexes_created
+    assert any(key.startswith("semcache:d8:") for key in redis_client.hashes)
+    assert any(key.startswith("semcache:d16:") for key in redis_client.hashes)
 
 
 def test_semantic_cache_miss_when_similarity_is_below_threshold() -> None:

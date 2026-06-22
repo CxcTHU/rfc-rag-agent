@@ -174,7 +174,8 @@ EMBEDDING_TIMEOUT_SECONDS=30
 Redis / LangGraph（Phase 50）：
 
 ```text
-REDIS_URL=redis://redis:6379/0
+REDIS_PASSWORD=<strong redis password>
+REDIS_URL=redis://:<url-encoded redis password>@redis:6379/0
 REDIS_SOCKET_TIMEOUT_SECONDS=1.0
 LANGGRAPH_CHECKPOINT_TTL_MINUTES=60
 LANGGRAPH_CHECKPOINT_REFRESH_ON_READ=true
@@ -311,7 +312,8 @@ docker-compose.prod.yml -> redis/redis-stack-server:latest
 Required and optional runtime settings:
 
 ```text
-REDIS_URL=redis://redis:6379/0
+REDIS_PASSWORD=<strong redis password>
+REDIS_URL=redis://:<url-encoded redis password>@redis:6379/0
 LANGGRAPH_CHECKPOINT_TTL_MINUTES=60
 LANGGRAPH_CHECKPOINT_REFRESH_ON_READ=true
 SEMANTIC_CACHE_ENABLED=false

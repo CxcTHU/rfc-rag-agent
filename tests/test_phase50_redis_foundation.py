@@ -11,8 +11,11 @@ def test_phase50_dev_compose_adds_optional_redis_service() -> None:
 
     assert "redis/redis-stack-server:latest" in compose
     assert "container_name: rfc-rag-redis-dev" in compose
-    assert "${REDIS_DEV_PORT:-6379}:6379" in compose
+    assert "127.0.0.1:${REDIS_DEV_PORT:-6379}:6379" in compose
+    assert "--requirepass ${REDIS_PASSWORD:-dev_redis_password}" in compose
+    assert "--protected-mode yes" in compose
     assert "redis-cli" in compose
+    assert 'redis-cli -a \\"$${REDIS_PASSWORD}\\" ping' in compose
     assert "redisdata_dev:/data" in compose
     assert "JWT_SECRET_KEY" not in compose
 
@@ -20,14 +23,15 @@ def test_phase50_dev_compose_adds_optional_redis_service() -> None:
 def test_phase50_env_dev_example_uses_safe_redis_url() -> None:
     env_example = Path(".env.dev.example").read_text(encoding="utf-8")
 
-    assert "REDIS_URL=redis://localhost:6379/0" in env_example
+    assert "REDIS_URL=redis://:dev_redis_password@localhost:6379/0" in env_example
+    assert "REDIS_PASSWORD=dev_redis_password" in env_example
     assert "REDIS_DEV_PORT=6379" in env_example
     assert "API_KEY" not in env_example
     assert "Bearer " not in env_example
 
 
 def test_phase50_settings_make_redis_optional() -> None:
-    default_settings = Settings()
+    default_settings = Settings(_env_file=None)
     redis_settings = Settings(redis_url="redis://localhost:6379/0")
 
     assert default_settings.redis_url == ""

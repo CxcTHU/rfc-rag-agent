@@ -226,12 +226,21 @@ class DeterministicReActPlanner:
         question: str,
         observations: list[ReActObservation],
         previous_queries: set[str] | None = None,
+        prior_source_count: int = 0,
+        expand_followup: bool = False,
     ) -> ReActAction:
         normalized_question = question.strip()
         if not normalized_question:
             raise ValueError("question must not be empty")
 
         previous_queries = previous_queries or set()
+        if not observations and prior_source_count >= 3 and expand_followup:
+            return ReActAction(
+                action="answer_with_citations",
+                question=normalized_question,
+                reasoning_summary="Prior evidence from the conversation is sufficient for an expanded answer.",
+            )
+
         if not observations and should_search_figures(question):
             return ReActAction(
                 action="search_figures",

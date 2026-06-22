@@ -4,7 +4,7 @@ import re
 import time
 import hashlib
 from collections.abc import Iterator, Sequence
-from queue import Queue
+from queue import Empty, Queue
 from threading import Thread
 from typing import Any
 
@@ -56,6 +56,7 @@ from app.services.generation.chat_model import (
 )
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
 from app.services.cache.semantic_cache import (
+    SemanticCacheLookup,
     get_configured_semantic_cache,
     semantic_cache_request_is_eligible,
 )
@@ -152,6 +153,7 @@ def query_agent(
         chat_model_provider=chat_model_provider,
         embedding_provider=embedding_provider,
         planner_chat_provider=planner_chat_provider,
+        effective_mode=request.mode or "tool_calling_agent",
         conversation_messages=conversation_messages,
     )
     if meta_response is not None:
@@ -553,6 +555,7 @@ def stream_agent_query_events(
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
             planner_chat_provider=planner_chat_provider,
+            effective_mode=request.mode or "tool_calling_agent",
             conversation_messages=conversation_messages or [],
         )
         if meta_response is not None:
@@ -586,7 +589,8 @@ def stream_agent_query_events(
                     )
                     semantic_cache_hit = False
                     if semantic_cache is not None and semantic_cache_eligible:
-                        semantic_lookup = semantic_cache.lookup(
+                        semantic_lookup = stream_semantic_cache_lookup(
+                            semantic_cache=semantic_cache,
                             query=request.question,
                             mode=effective_mode,
                             embedding_provider=embedding_provider,
@@ -709,6 +713,34 @@ def stream_non_chitchat_agent_response(
         raise RuntimeError("unknown stream event")
 
 
+def stream_semantic_cache_lookup(
+    *,
+    semantic_cache: Any,
+    query: str,
+    mode: str,
+    embedding_provider: EmbeddingProvider,
+    cache_context: str,
+    timeout_seconds: float = 0.05,
+) -> SemanticCacheLookup:
+    result_queue: Queue[SemanticCacheLookup] = Queue(maxsize=1)
+
+    def lookup() -> None:
+        result_queue.put(
+            semantic_cache.lookup(
+                query=query,
+                mode=mode,
+                embedding_provider=embedding_provider,
+                cache_context=cache_context,
+            )
+        )
+
+    Thread(target=lookup, daemon=True).start()
+    try:
+        return result_queue.get(timeout=timeout_seconds)
+    except Empty:
+        return SemanticCacheLookup(None, False, reason="stream_lookup_timeout")
+
+
 def maybe_store_semantic_cache_response(
     *,
     semantic_cache: Any | None,
@@ -752,6 +784,10 @@ FOLLOWUP_TRANSFORM_TRIGGERS = (
     "\u91cd\u65b0\u7528\u4e2d\u6587",
     "\u7b80\u77ed\u70b9",
     "\u603b\u7ed3\u4e00\u4e0b",
+    "\u8be6\u7ec6\u56de\u7b54",
+    "\u8be6\u7ec6\u8bf4",
+    "\u5c55\u5f00\u8bf4",
+    "\u5c55\u5f00\u56de\u7b54",
     "\u6574\u7406\u6210\u8868\u683c",
     "\u6539\u6210\u8981\u70b9",
     "translate that",
@@ -761,6 +797,9 @@ FOLLOWUP_TRANSFORM_TRIGGERS = (
     "say that in chinese",
     "say it in chinese",
     "summarize that",
+    "answer in detail",
+    "expand on that",
+    "explain in detail",
     "make it shorter",
     "turn that into bullets",
 )
@@ -812,6 +851,7 @@ def build_agent_meta_response(
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
     planner_chat_provider: ChatModelProvider | None,
+    effective_mode: str,
     conversation_messages: Sequence[Message],
 ) -> AgentQueryResponse | None:
     intent = intent_router.classify_meta_intent(question)
@@ -820,15 +860,19 @@ def build_agent_meta_response(
 
     normalized_question = question.strip()
     if intent == "agent_meta":
-        planner_text = (
-            f"{planner_chat_provider.provider_name} / {planner_chat_provider.model_name}"
-            if planner_chat_provider is not None
-            else "未单独配置；ReAct planner 使用确定性兜底逻辑"
-        )
+        planner_line = ""
+        if effective_mode != "tool_calling_agent":
+            planner_text = (
+                f"{planner_chat_provider.provider_name} / {planner_chat_provider.model_name}"
+                if planner_chat_provider is not None
+                else "未单独配置；planner 使用确定性兜底逻辑"
+            )
+            planner_line = f"- 规划模型：{planner_text}\n"
         answer = (
             "当前运行模型配置：\n"
+            f"- 默认链路：{effective_mode}\n"
             f"- 对话模型：{chat_model_provider.provider_name} / {chat_model_provider.model_name}\n"
-            f"- 规划模型：{planner_text}\n"
+            f"{planner_line}"
             f"- 向量模型：{embedding_provider.provider_name} / {embedding_provider.model_name}\n"
             "我不会在聊天回答中暴露 API key、授权令牌、供应商原始响应、隐藏推理或受限全文。"
         )
@@ -1435,7 +1479,9 @@ class QueueStreamingChatModelProvider:
         )
 
     def stream_generate(self, messages: Sequence[ChatMessage]) -> Iterator[str]:
-        yield from self.base_provider.stream_generate(messages)
+        for token in self.base_provider.stream_generate(messages):
+            self.queue.put(("token", token))
+            yield token
 
     def generate_with_tools(
         self,

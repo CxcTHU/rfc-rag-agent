@@ -1,0 +1,57 @@
+run_type,query_id,category,config_id,path,status,refused,refusal_reason_summary,time_to_first_token_ms,time_to_final_ms,planner_latency_ms,search_latency_ms,vector_search_backend,planner_model,tool_call_count,iteration_count,citation_count,source_count,top_source_id,same_refusal_as_react,same_top_source_as_react,semantic_cache_hit,semantic_cache_similarity,error_summary
+real_provider,stage37_single_hop_definition,single_hop_definition,brain_baseline,/chat,ok,false,,,59091.077,,,,none,0,0,3,4,1,true,false,false,,
+real_provider,stage37_single_hop_definition,single_hop_definition,react_agent,/agent/query,ok,false,,,49684.469,2837.013,1081.061,pgvector_hnsw,deterministic,2,2,3,9,chunk:12176,true,false,false,,
+real_provider,stage37_single_hop_definition,single_hop_definition,tool_calling_agent,/agent/query,ok,false,,,40081.551,4022.272,562.656,pgvector_hnsw,native_tool_calls,2,3,3,8,chunk:11471,true,false,false,,
+real_provider,stage37_single_hop_definition,single_hop_definition,langgraph_deterministic,/agent/query,ok,false,,,47432.940,0.000,981.347,pgvector_hnsw,deterministic,2,4,3,9,chunk:12176,true,true,false,,
+real_provider,stage37_single_hop_definition,single_hop_definition,langgraph_flash_planner,/agent/query,error,,,,30314.979,,,,flash_planner,0,0,0,0,,false,false,false,,Chat model request timed out
+real_provider,stage37_single_hop_definition,single_hop_definition,langgraph_faiss_fallback,/agent/query,error,,,,165177.922,,,,deterministic,0,0,0,0,,false,false,false,,Chat model request timed out
+real_provider,stage37_single_hop_definition,single_hop_definition,semantic_cache_hit,/agent/query,skipped,,,,0.000,,,,flash_planner,0,0,0,0,,false,false,false,,cache_seed_response_missing
+real_provider,stage37_comparison,comparison,brain_baseline,/chat,ok,true,refused,,5232.376,,,,none,0,0,0,0,,false,true,false,,
+real_provider,stage37_comparison,comparison,react_agent,/agent/query,error,,,,1793.091,,,,deterministic,0,0,0,0,,true,true,false,,Chat model request timed out
+real_provider,stage37_comparison,comparison,tool_calling_agent,/agent/query,error,,,,1599.569,,,,native_tool_calls,0,0,0,0,,true,true,false,,Chat model request timed out
+real_provider,stage37_comparison,comparison,langgraph_deterministic,/agent/query,ok,true,refused,,5456.711,0.000,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_comparison,comparison,langgraph_flash_planner,/agent/query,ok,true,refused,,7772.241,3314.671,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_comparison,comparison,langgraph_faiss_fallback,/agent/query,ok,true,refused,,4376.898,0.000,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_comparison,comparison,semantic_cache_hit,/agent/query,ok,true,refused,,1.000,3314.671,0.000,not_run,deterministic,1,4,0,0,,false,true,true,1.000,
+real_provider,stage37_multi_dimensional,multi_dimensional,brain_baseline,/chat,ok,true,refused,,8857.424,,,,none,0,0,0,0,,false,true,false,,
+real_provider,stage37_multi_dimensional,multi_dimensional,react_agent,/agent/query,error,,,,1816.065,,,,deterministic,0,0,0,0,,true,true,false,,Chat model request timed out
+real_provider,stage37_multi_dimensional,multi_dimensional,tool_calling_agent,/agent/query,error,,,,1621.008,,,,native_tool_calls,0,0,0,0,,true,true,false,,Chat model request timed out
+real_provider,stage37_multi_dimensional,multi_dimensional,langgraph_deterministic,/agent/query,ok,true,refused,,5956.662,0.000,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_multi_dimensional,multi_dimensional,langgraph_flash_planner,/agent/query,ok,true,refused,,7612.031,3435.226,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_multi_dimensional,multi_dimensional,langgraph_faiss_fallback,/agent/query,ok,true,refused,,4183.922,0.000,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_multi_dimensional,multi_dimensional,semantic_cache_hit,/agent/query,ok,true,refused,,1.000,3435.226,0.000,not_run,deterministic,1,4,0,0,,false,true,true,1.000,
+real_provider,stage37_bilingual_terms,bilingual_terminology,brain_baseline,/chat,ok,true,refused,,4920.457,,,,none,0,0,0,0,,false,true,false,,
+real_provider,stage37_bilingual_terms,bilingual_terminology,react_agent,/agent/query,error,,,,1807.584,,,,deterministic,0,0,0,0,,true,true,false,,Chat model request timed out
+real_provider,stage37_bilingual_terms,bilingual_terminology,tool_calling_agent,/agent/query,error,,,,2619.627,,,,native_tool_calls,0,0,0,0,,true,true,false,,Chat model request timed out
+real_provider,stage37_bilingual_terms,bilingual_terminology,langgraph_deterministic,/agent/query,ok,true,refused,,4938.097,0.000,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_bilingual_terms,bilingual_terminology,langgraph_flash_planner,/agent/query,ok,true,refused,,9332.796,4433.821,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_bilingual_terms,bilingual_terminology,langgraph_faiss_fallback,/agent/query,ok,true,refused,,5031.576,0.000,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_bilingual_terms,bilingual_terminology,semantic_cache_hit,/agent/query,ok,true,refused,,1.000,4433.821,0.000,not_run,deterministic,1,4,0,0,,false,true,true,1.000,
+real_provider,stage37_followup,followup,brain_baseline,/chat,ok,true,refused,,3953.019,,,,none,0,0,0,0,,false,true,false,,
+real_provider,stage37_followup,followup,react_agent,/agent/query,error,,,,1635.506,,,,deterministic,0,0,0,0,,true,true,false,,Chat model request timed out
+real_provider,stage37_followup,followup,tool_calling_agent,/agent/query,error,,,,1810.968,,,,native_tool_calls,0,0,0,0,,true,true,false,,Chat model request timed out
+real_provider,stage37_followup,followup,langgraph_deterministic,/agent/query,ok,true,refused,,22775.652,0.000,0.000,not_run,deterministic,1,4,0,0,,false,true,false,,
+real_provider,stage37_followup,followup,langgraph_flash_planner,/agent/query,ok,false,,,138586.495,37313.674,14654.421,pgvector_hnsw,openai-compatible/deepseek-v4-flash,3,7,2,9,chunk:9265,false,false,false,,
+real_provider,stage37_followup,followup,langgraph_faiss_fallback,/agent/query,ok,false,,,37768.593,0.000,131.855,faiss,deterministic,2,4,2,9,chunk:9265,false,false,false,,
+real_provider,stage37_followup,followup,semantic_cache_hit,/agent/query,ok,false,,,1.000,37313.674,14654.421,pgvector_hnsw,openai-compatible/deepseek-v4-flash,3,7,2,9,chunk:9265,false,false,true,1.000,
+real_provider,stage37_evidence_insufficient,evidence_insufficient,brain_baseline,/chat,ok,false,,,37560.174,,,,none,0,0,3,3,1,true,false,false,,
+real_provider,stage37_evidence_insufficient,evidence_insufficient,react_agent,/agent/query,ok,false,,,32627.848,3017.644,1135.937,pgvector_hnsw,deterministic,2,2,1,8,chunk:9099,true,false,false,,
+real_provider,stage37_evidence_insufficient,evidence_insufficient,tool_calling_agent,/agent/query,ok,false,,,15591.690,5189.849,465.203,pgvector_hnsw,native_tool_calls,2,3,5,8,chunk:39127,true,false,false,,
+real_provider,stage37_evidence_insufficient,evidence_insufficient,langgraph_deterministic,/agent/query,ok,false,,,25498.572,0.000,680.965,pgvector_hnsw,deterministic,2,4,1,8,chunk:58888,true,false,false,,
+real_provider,stage37_evidence_insufficient,evidence_insufficient,langgraph_flash_planner,/agent/query,ok,false,,,29506.605,0.000,754.091,pgvector_hnsw,deterministic,2,4,1,8,chunk:58888,true,false,false,,
+real_provider,stage37_evidence_insufficient,evidence_insufficient,langgraph_faiss_fallback,/agent/query,ok,false,,,35881.016,0.000,88.182,faiss,deterministic,2,4,3,8,chunk:58888,true,false,false,,
+real_provider,stage37_evidence_insufficient,evidence_insufficient,semantic_cache_hit,/agent/query,ok,false,,,1.000,0.000,754.091,pgvector_hnsw,deterministic,2,4,1,8,chunk:58888,true,false,true,1.000,
+real_provider,stage37_off_topic_refusal,off_topic_refusal,brain_baseline,/chat,ok,true,off_topic,,14627.648,,,,none,0,0,0,0,,false,true,false,,
+real_provider,stage37_off_topic_refusal,off_topic_refusal,react_agent,/agent/query,ok,true,refused,,3029.827,3029.802,0.000,not_run,deterministic,0,1,0,0,,false,true,false,,
+real_provider,stage37_off_topic_refusal,off_topic_refusal,tool_calling_agent,/agent/query,ok,true,off_topic,,0.112,,,,native_tool_calls,0,1,0,0,,true,true,false,,
+real_provider,stage37_off_topic_refusal,off_topic_refusal,langgraph_deterministic,/agent/query,ok,true,off_topic,,23071.928,0.000,1498.900,pgvector_hnsw,deterministic,2,4,0,5,chunk:11513,true,false,false,,
+real_provider,stage37_off_topic_refusal,off_topic_refusal,langgraph_flash_planner,/agent/query,ok,true,off_topic,,24371.246,2223.212,1566.991,pgvector_hnsw,openai-compatible/deepseek-v4-flash,2,4,0,8,chunk:38071,true,false,false,,
+real_provider,stage37_off_topic_refusal,off_topic_refusal,langgraph_faiss_fallback,/agent/query,ok,true,off_topic,,22413.238,0.000,96.639,faiss,deterministic,2,4,0,5,chunk:11513,true,false,false,,
+real_provider,stage37_off_topic_refusal,off_topic_refusal,semantic_cache_hit,/agent/query,ok,true,off_topic,,1.000,2223.212,1566.991,pgvector_hnsw,openai-compatible/deepseek-v4-flash,2,4,0,8,chunk:38071,true,false,true,1.000,
+real_provider,stage37_multi_hop_retrieval,multi_hop_retrieval,brain_baseline,/chat,ok,false,,,28420.270,,,,none,0,0,3,4,1,true,false,false,,
+real_provider,stage37_multi_hop_retrieval,multi_hop_retrieval,react_agent,/agent/query,ok,false,,,41833.269,4926.857,1287.718,pgvector_hnsw,deterministic,2,2,3,9,chunk:18590,true,false,false,,
+real_provider,stage37_multi_hop_retrieval,multi_hop_retrieval,tool_calling_agent,/agent/query,ok,false,,,20722.045,3848.725,439.556,pgvector_hnsw,native_tool_calls,2,3,4,8,chunk:18609,true,false,false,,
+real_provider,stage37_multi_hop_retrieval,multi_hop_retrieval,langgraph_deterministic,/agent/query,ok,false,,,30164.951,0.000,1334.085,pgvector_hnsw,deterministic,2,4,3,9,chunk:9192,true,false,false,,
+real_provider,stage37_multi_hop_retrieval,multi_hop_retrieval,langgraph_flash_planner,/agent/query,ok,false,,,48726.557,5406.307,1190.508,pgvector_hnsw,openai-compatible/deepseek-v4-flash,2,4,1,9,chunk:34566,true,false,false,,
+real_provider,stage37_multi_hop_retrieval,multi_hop_retrieval,langgraph_faiss_fallback,/agent/query,ok,false,,,42532.413,0.000,82.098,faiss,deterministic,2,4,3,9,chunk:9192,true,false,false,,
+real_provider,stage37_multi_hop_retrieval,multi_hop_retrieval,semantic_cache_hit,/agent/query,ok,false,,,1.000,5406.307,1190.508,pgvector_hnsw,openai-compatible/deepseek-v4-flash,2,4,1,9,chunk:34566,true,false,true,1.000,
