@@ -32,6 +32,16 @@ from app.services.agent.tools import (
     AgentSourceReference,
     AgentToolCallRecord,
 )
+from app.services.agent.tool_calling_service import (
+    citation_repair_messages,
+    evidence_answer_messages,
+)
+from app.services.brain.workflow import (
+    RESPONSIBILITY_REFUSAL_ANSWER,
+    evaluate_responsibility_gate,
+    extract_citations,
+    has_topic_anchor,
+)
 from app.services.generation.chat_model import ChatMessage, ChatModelProvider
 from app.services.observability.latency_trace import (
     get_current_latency_trace,
@@ -87,6 +97,9 @@ def initialize_state(
         "search_results": [],
         "sources": [],
         "citations": [],
+        "prior_sources": [],
+        "prior_citations": [],
+        "prior_answer_summary": "",
         "image_path": image_path,
         "image_analysis": None,
         "answer": "",
@@ -98,9 +111,10 @@ def initialize_state(
     return state
 
 
-def route_query_node(state: LangGraphAgentState) -> dict[str, Any]:
+def planner_node(state: LangGraphAgentState) -> dict[str, Any]:
     question = _question(state)
     observations = deserialize_observations(state.get("observations", []))
+    prior_sources = deserialize_prior_source_references(state.get("prior_sources", []))
     iteration = int(state.get("iteration_count", 0)) + 1
     max_iterations = int(state.get("max_iterations", 3))
     last_observation = observations[-1] if observations else None
@@ -160,6 +174,8 @@ def route_query_node(state: LangGraphAgentState) -> dict[str, Any]:
             question=question,
             observations=observations,
             previous_queries=set(state.get("previous_queries", [])),
+            prior_sources=prior_sources,
+            prior_answer_summary=state.get("prior_answer_summary", ""),
         )
 
     _emit(
@@ -191,6 +207,8 @@ def _plan_route_action(
     question: str,
     observations: list[ReActObservation],
     previous_queries: set[str],
+    prior_sources: list[AgentSourceReference] | None = None,
+    prior_answer_summary: str = "",
 ) -> ReActAction:
     planner_provider = _CURRENT_PLANNER_PROVIDER.get()
     if planner_provider is not None:
@@ -200,6 +218,8 @@ def _plan_route_action(
                     build_planner_messages(
                         question=question,
                         observations=observations,
+                        prior_sources=prior_sources or [],
+                        prior_answer_summary=prior_answer_summary,
                     )
                 )
             _record_planner_model(f"{result.provider}/{result.model_name}")
@@ -214,12 +234,16 @@ def _plan_route_action(
                 question=question,
                 observations=observations,
                 previous_queries=previous_queries,
+                prior_source_count=len(prior_sources or []),
+                expand_followup=is_expand_followup_question(question),
             )
     _record_planner_model("deterministic")
     return DeterministicReActPlanner().plan(
         question=question,
         observations=observations,
         previous_queries=previous_queries,
+        prior_source_count=len(prior_sources or []),
+        expand_followup=is_expand_followup_question(question),
     )
 
 
@@ -227,6 +251,8 @@ def build_planner_messages(
     *,
     question: str,
     observations: list[ReActObservation],
+    prior_sources: list[AgentSourceReference] | None = None,
+    prior_answer_summary: str = "",
 ) -> list[ChatMessage]:
     tool_lines = "\n".join(
         f"- {name}: {description}"
@@ -234,6 +260,8 @@ def build_planner_messages(
         if name in READ_ONLY_REACT_ACTIONS
     )
     observation_summary = summarize_observations_for_planner(observations)
+    prior_evidence_summary = summarize_prior_sources_for_planner(prior_sources or [])
+    prior_answer_summary = truncate_text(prior_answer_summary, 200) if prior_answer_summary else "(none)"
     system_prompt = (
         "You route one RAG agent step. Choose exactly one allowed action. "
         "Return only compact JSON with keys action, query, and reasoning_summary. "
@@ -242,6 +270,8 @@ def build_planner_messages(
     user_prompt = (
         f"Allowed actions:\n{tool_lines}\n\n"
         f"Current question:\n{question}\n\n"
+        f"Prior answer summary:\n{prior_answer_summary}\n\n"
+        f"Prior evidence from the same conversation:\n{prior_evidence_summary}\n\n"
         f"Recent observations:\n{observation_summary}\n\n"
         'Return JSON like {"action":"search_knowledge","query":"...","reasoning_summary":"..."}'
     )
@@ -263,6 +293,20 @@ def summarize_observations_for_planner(observations: list[ReActObservation]) -> 
                 f"results={observation.search_result_count}; "
                 f"summary={truncate_text(observation.observation_summary, limit=160)}"
             )
+        )
+    return "\n".join(lines)
+
+
+def summarize_prior_sources_for_planner(sources: list[AgentSourceReference]) -> str:
+    if not sources:
+        return "(none)"
+    lines: list[str] = []
+    for index, source in enumerate(sources[:5], start=1):
+        title = source.title or source.source_id
+        snippet = truncate_text(source.content or source.table_content or "", limit=160)
+        lines.append(
+            f"[{index}] title={truncate_text(title, 80)}; "
+            f"source_id={source.source_id}; snippet={snippet}"
         )
     return "\n".join(lines)
 
@@ -444,10 +488,13 @@ def generate_answer_node(state: LangGraphAgentState) -> dict[str, Any]:
     action = ReActAction(
         action="answer_with_citations",
         question=question,
-        reasoning_summary="Generate a cited answer through AgentToolbox.",
+        reasoning_summary="Generate a cited answer from existing LangGraph evidence.",
     )
-    evidence_count = len(state.get("search_results", [])) or len(state.get("sources", []))
-    source_count = len(state.get("sources", []))
+    sources = deserialize_source_references(state.get("sources", []))
+    prior_sources = deserialize_prior_source_references(state.get("prior_sources", []))
+    answer_sources = sources or prior_sources
+    evidence_count = len(state.get("search_results", [])) or len(sources) or len(prior_sources)
+    source_count = len(answer_sources)
     citation_count = len(state.get("citations", []))
     _emit_answer_progress(
         iteration=int(state.get("iteration_count", 1)),
@@ -470,12 +517,96 @@ def generate_answer_node(state: LangGraphAgentState) -> dict[str, Any]:
         summary="正在生成最终中文回答",
     )
     _emit_tool_start(action, int(state.get("iteration_count", 1)))
-    tool_result = _toolbox(state).answer_with_citations(
-        question,
-        top_k=int(state.get("top_k", 5)),
-        retrieval_mode="hybrid",
-        history=state.get("history", []),
-    )
+    toolbox = _toolbox(state)
+    responsibility_gate = evaluate_responsibility_gate(question)
+    topic_gate_query = " ".join([question, *state.get("history", [])])
+    if responsibility_gate.triggered:
+        tool_result = AgentToolResult(
+            tool_name="answer_with_citations",
+            call=AgentToolCallRecord(
+                tool_name="responsibility_gate",
+                input_summary=truncate_text(question),
+                output_summary="refused=True responsibility_gate",
+                succeeded=True,
+            ),
+            answer=RESPONSIBILITY_REFUSAL_ANSWER,
+            refused=True,
+            refusal_reason=responsibility_gate.refusal_reason,
+        )
+    elif not has_topic_anchor(topic_gate_query):
+        refusal_reason = "Question appears off-topic: no domain anchor was found."
+        tool_result = AgentToolResult(
+            tool_name="answer_with_citations",
+            call=AgentToolCallRecord(
+                tool_name="off_topic_gate",
+                input_summary=truncate_text(question),
+                output_summary="refused=True off_topic",
+                succeeded=True,
+            ),
+            answer="当前问题缺少项目资料库的领域锚点，无法基于堆石混凝土资料可靠回答。",
+            refused=True,
+            refusal_reason=refusal_reason,
+        )
+    elif not answer_sources:
+        tool_result = toolbox.answer_with_citations(
+            question,
+            top_k=int(state.get("top_k", 5)),
+            retrieval_mode="hybrid",
+            history=state.get("history", []),
+        )
+    else:
+        with latency_timer("answer_latency_ms"):
+            model_result = toolbox.chat_model_provider.generate(
+                evidence_answer_messages(
+                    question,
+                    sources=answer_sources,
+                    history=state.get("history", []),
+                )
+            )
+        allowed_source_ids = list(range(1, len(answer_sources) + 1))
+        citations = extract_citations(model_result.answer, allowed_source_ids)
+        answer = model_result.answer
+        if not citations:
+            with latency_timer("answer_latency_ms"):
+                repair_result = toolbox.chat_model_provider.generate(
+                    citation_repair_messages(
+                        question,
+                        draft_answer=model_result.answer,
+                        sources=answer_sources,
+                        history=state.get("history", []),
+                    )
+                )
+            repair_citations = extract_citations(repair_result.answer, allowed_source_ids)
+            if repair_citations:
+                answer = repair_result.answer
+                citations = repair_citations
+        refused = not citations
+        refusal_reason = (
+            "已有证据未能支撑带有效引用编号的回答。"
+            if refused
+            else None
+        )
+        tool_result = AgentToolResult(
+            tool_name="answer_with_citations",
+            call=AgentToolCallRecord(
+                tool_name="answer_with_citations",
+                input_summary=(
+                    f"question={truncate_text(question)}; "
+                    f"existing_sources={len(answer_sources)}"
+                ),
+                output_summary=(
+                    f"refused={refused}; sources={len(answer_sources)}; "
+                    f"citations={len(citations)}"
+                ),
+                succeeded=not refused,
+                error=refusal_reason,
+            ),
+            answer=answer if not refused else refusal_answer(refusal_reason),
+            sources=answer_sources,
+            citations=citations,
+            refused=refused,
+            refusal_reason=refusal_reason,
+        )
     updates = _append_tool_result(state, action, tool_result)
     updates["answer"] = tool_result.answer or ""
     updates["refused"] = tool_result.refused
@@ -657,6 +788,47 @@ def deserialize_source_references(
     ]
 
 
+def deserialize_prior_source_references(
+    values: list[AgentSourceReference | dict[str, Any]],
+) -> list[AgentSourceReference]:
+    sources: list[AgentSourceReference] = []
+    for index, value in enumerate(values, start=1):
+        if isinstance(value, AgentSourceReference):
+            sources.append(value)
+            continue
+        title = str(
+            value.get("title")
+            or value.get("document_title")
+            or value.get("source_id")
+            or f"Prior source {index}"
+        )
+        sources.append(
+            AgentSourceReference(
+                source_id=str(value.get("source_id") or f"prior:{index}"),
+                title=title,
+                source_type=str(value.get("source_type") or "prior_conversation"),
+                document_id=_optional_int(value.get("document_id")),
+                chunk_id=_optional_int(value.get("chunk_id")),
+                chunk_index=_optional_int(value.get("chunk_index")),
+                content=value.get("content"),
+                chunk_type=str(value.get("chunk_type") or "text"),
+                caption=value.get("caption"),
+                page_number=_optional_int(value.get("page_number")),
+                table_content=value.get("table_content"),
+            )
+        )
+    return sources
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _to_plain_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return dict(value)
@@ -683,6 +855,25 @@ TABLE_QUERY_TERMS = (
 def query_requests_table(question: str) -> bool:
     normalized = question.casefold()
     return any(term in normalized for term in TABLE_QUERY_TERMS)
+
+
+EXPAND_FOLLOWUP_TERMS = (
+    "\u8be6\u7ec6",
+    "\u5c55\u5f00",
+    "\u8865\u5145",
+    "\u7ee7\u7eed",
+    "detail",
+    "expand",
+    "continue",
+    "elaborate",
+)
+
+
+def is_expand_followup_question(question: str) -> bool:
+    normalized = question.casefold().strip()
+    return bool(normalized) and len(normalized) <= 80 and any(
+        term in normalized for term in EXPAND_FOLLOWUP_TERMS
+    )
 
 
 def set_current_toolbox(toolbox: AgentToolbox) -> Token[AgentToolbox | None]:

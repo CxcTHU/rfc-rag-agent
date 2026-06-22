@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Sequence
+from typing import Any
 
 from langgraph.graph import END, StateGraph
 from sqlalchemy.orm import Session
@@ -17,7 +18,7 @@ from app.services.agent.graph_nodes import (
     refuse_node,
     reset_current_toolbox,
     rewrite_query_node,
-    route_query_node,
+    planner_node,
     search_figures_node,
     search_knowledge_node,
     search_tables_node,
@@ -50,7 +51,7 @@ from app.services.retrieval.embedding import EmbeddingProvider
 def build_langgraph_agent_graph() -> StateGraph:
     graph = StateGraph(LangGraphAgentState)
 
-    graph.add_node("route", route_query_node)
+    graph.add_node("planner", planner_node)
     graph.add_node("search_knowledge", search_knowledge_node)
     graph.add_node("search_figures", search_figures_node)
     graph.add_node("search_tables", search_tables_node)
@@ -60,9 +61,9 @@ def build_langgraph_agent_graph() -> StateGraph:
     graph.add_node("refuse", refuse_node)
     graph.add_node("final_answer", final_answer_node)
 
-    graph.set_entry_point("route")
+    graph.set_entry_point("planner")
     graph.add_conditional_edges(
-        "route",
+        "planner",
         route_after_planner,
         {
             "search_knowledge": "search_knowledge",
@@ -75,9 +76,9 @@ def build_langgraph_agent_graph() -> StateGraph:
             "final_answer": "final_answer",
         },
     )
-    graph.add_edge("search_knowledge", "route")
-    graph.add_edge("search_figures", "route")
-    graph.add_edge("search_tables", "route")
+    graph.add_edge("search_knowledge", "planner")
+    graph.add_edge("search_figures", "planner")
+    graph.add_edge("search_tables", "planner")
     graph.add_edge("rewrite_query", "search_knowledge")
     graph.add_edge("answer_with_citations", END)
     graph.add_edge("analyze_user_image", END)
@@ -155,14 +156,21 @@ class LangGraphAgentService:
             compiled_graph = build_langgraph_agent_graph().compile(
                 checkpointer=checkpointer_selection.checkpointer,
             )
+            graph_config = {
+                "recursion_limit": 15,
+                "configurable": {
+                    "thread_id": thread_id or default_thread_id(normalized_question),
+                },
+            }
+            initial_state.update(
+                load_prior_evidence_from_checkpoint(
+                    compiled_graph=compiled_graph,
+                    config=graph_config,
+                )
+            )
             final_state = compiled_graph.invoke(
                 initial_state,
-                config={
-                    "recursion_limit": 15,
-                    "configurable": {
-                        "thread_id": thread_id or default_thread_id(normalized_question),
-                    },
-                },
+                config=graph_config,
             )
             workflow_steps = deserialize_steps(final_state.get("workflow_steps", []))
             tool_calls = deserialize_tool_calls(final_state.get("tool_calls", []))
@@ -212,3 +220,72 @@ class LangGraphAgentService:
 def default_thread_id(question: str) -> str:
     digest = hashlib.sha256(question.encode("utf-8")).hexdigest()[:16]
     return f"langgraph-agent:{digest}"
+
+
+def load_prior_evidence_from_checkpoint(
+    *,
+    compiled_graph: Any,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        snapshot = compiled_graph.get_state(config)
+        values = getattr(snapshot, "values", None)
+        if not isinstance(values, dict):
+            return {}
+        return compact_prior_evidence(values)
+    except Exception:
+        return {}
+
+
+def compact_prior_evidence(state: dict[str, Any]) -> dict[str, Any]:
+    sources = state.get("sources") or []
+    if not isinstance(sources, list) or not sources:
+        return {}
+    prior_sources = compact_prior_sources(sources)
+    if not prior_sources:
+        return {}
+    prior: dict[str, Any] = {"prior_sources": prior_sources}
+    citations = state.get("citations") or []
+    if isinstance(citations, list):
+        prior["prior_citations"] = [
+            int(value)
+            for value in citations
+            if isinstance(value, int) or (isinstance(value, str) and value.isdigit())
+        ][:10]
+    answer = str(state.get("answer") or "").strip()
+    if answer:
+        prior["prior_answer_summary"] = truncate_prior_answer(answer)
+    return prior
+
+
+def compact_prior_sources(sources: list[Any], *, limit: int = 5) -> list[dict[str, Any]]:
+    compacted: list[dict[str, Any]] = []
+    for index, source in enumerate(sources[:limit], start=1):
+        if not isinstance(source, dict):
+            continue
+        content = str(source.get("content") or source.get("table_content") or "")[:300]
+        source_id = str(source.get("source_id") or f"prior:{index}")
+        compacted.append(
+            {
+                "source_id": source_id,
+                "document_title": str(source.get("title") or source.get("document_title") or source_id),
+                "heading_path": source.get("heading_path"),
+                "content": content,
+                "source_type": source.get("source_type") or "prior_conversation",
+                "document_id": source.get("document_id"),
+                "chunk_id": source.get("chunk_id"),
+                "chunk_index": source.get("chunk_index"),
+                "chunk_type": source.get("chunk_type") or "text",
+                "caption": source.get("caption"),
+                "page_number": source.get("page_number"),
+                "table_content": str(source.get("table_content") or "")[:300] or None,
+            }
+        )
+    return compacted
+
+
+def truncate_prior_answer(answer: str, *, limit: int = 200) -> str:
+    normalized = " ".join(answer.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[:limit].rstrip()

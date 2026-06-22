@@ -70,10 +70,11 @@ class RedisSemanticCache:
                 embedding_provider,
                 normalized_query,
             )
-            self._ensure_index(len(embedding))
+            dimension = len(embedding)
+            self._ensure_index(dimension)
             raw_result = self.redis_client.execute_command(
                 "FT.SEARCH",
-                self.index_name,
+                self._index_name_for_dimension(dimension),
                 "*=>[KNN 5 @embedding $vector AS distance]",
                 "PARAMS",
                 "2",
@@ -182,7 +183,8 @@ class RedisSemanticCache:
                 embedding_provider,
                 normalized_query,
             )
-            self._ensure_index(len(embedding))
+            dimension = len(embedding)
+            self._ensure_index(dimension)
             redis_key = semantic_cache_key(
                 semantic_cache_identity(
                     query=normalized_query,
@@ -190,7 +192,7 @@ class RedisSemanticCache:
                     embedding_provider=embedding_provider,
                     cache_context=cache_context,
                 ),
-                prefix=self.key_prefix,
+                prefix=self._key_prefix_for_dimension(dimension),
             )
             self.redis_client.hset(
                 redis_key,
@@ -210,17 +212,19 @@ class RedisSemanticCache:
     def _ensure_index(self, dimension: int) -> None:
         if dimension in self._index_dimensions:
             return
+        index_name = self._index_name_for_dimension(dimension)
+        key_prefix = self._key_prefix_for_dimension(dimension)
         try:
-            self.redis_client.execute_command("FT.INFO", self.index_name)
+            self.redis_client.execute_command("FT.INFO", index_name)
         except Exception:
             self.redis_client.execute_command(
                 "FT.CREATE",
-                self.index_name,
+                index_name,
                 "ON",
                 "HASH",
                 "PREFIX",
                 "1",
-                f"{self.key_prefix}:",
+                f"{key_prefix}:",
                 "SCHEMA",
                 "query",
                 "TEXT",
@@ -240,6 +244,12 @@ class RedisSemanticCache:
                 "COSINE",
             )
         self._index_dimensions.add(dimension)
+
+    def _index_name_for_dimension(self, dimension: int) -> str:
+        return f"{self.index_name}:d{dimension}"
+
+    def _key_prefix_for_dimension(self, dimension: int) -> str:
+        return f"{self.key_prefix}:d{dimension}"
 
 
 def semantic_cache_key(query: str, *, prefix: str = SEMANTIC_CACHE_PREFIX) -> str:

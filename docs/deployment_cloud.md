@@ -26,6 +26,8 @@ This document records the deployment path for the Phase 44 production shape. It 
 
 ```text
 POSTGRES_PASSWORD=<strong database password>
+REDIS_PASSWORD=<strong redis password>
+REDIS_URL=redis://:<url-encoded redis password>@redis:6379/0
 JWT_SECRET_KEY=<long random jwt secret>
 APP_PORT=8000
 ```

@@ -31,6 +31,8 @@ def test_intent_router_meta_intents_are_stable() -> None:
 
 def test_intent_router_followup_transform_is_short_or_pronoun_bound() -> None:
     assert is_followup_transform_request("Translate that into Chinese.")
+    assert not is_followup_transform_request("\u8bf7\u8be6\u7ec6\u56de\u7b54")
+    assert not is_followup_transform_request("\u5c55\u5f00\u8bf4")
     assert is_followup_transform_request("把刚才答案整理成表格")
     assert not is_followup_transform_request(
         "answer in Chinese and also search a new long technical question "

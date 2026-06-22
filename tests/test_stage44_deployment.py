@@ -19,8 +19,11 @@ def test_phase50_production_compose_includes_optional_redis() -> None:
 
     assert "redis/redis-stack-server:latest" in compose
     assert "redis_data:/data" in compose
-    assert "REDIS_URL: redis://redis:6379/0" in compose
+    assert "REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD" in compose
+    assert "--requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD" in compose
+    assert "REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env.prod}@redis:6379/0}" in compose
     assert "redis-cli" in compose
+    assert 'redis-cli -a \\"$${REDIS_PASSWORD}\\" ping' in compose
 
 
 def test_stage44_cloud_deployment_doc_keeps_remote_server_as_smoke_target() -> None:
@@ -31,6 +34,8 @@ def test_stage44_cloud_deployment_doc_keeps_remote_server_as_smoke_target() -> N
     assert "docker compose -f docker-compose.prod.yml" in document
     assert "postgres_data" in document
     assert "<strong database password>" in document
+    assert "<strong redis password>" in document
+    assert "REDIS_URL=redis://:<url-encoded redis password>@redis:6379/0" in document
 
 
 def test_stage44_secret_templates_do_not_contain_real_values() -> None:

@@ -31,8 +31,8 @@ def test_frontend_index_is_served() -> None:
     assert "data-auth-logout" in response.text
     assert "data-auth-status" in response.text
     assert "data-auth-username" in response.text
-    assert "/static/app.js?v=phase50-langgraph-default-zh6" in response.text
-    assert "/static/styles.css?v=phase50-langgraph-default-zh6" in response.text
+    assert "/static/app.js?v=phase51-followup-toolcalling-fix1" in response.text
+    assert "/static/styles.css?v=phase51-followup-toolcalling-fix1" in response.text
     assert 'class="hero-layout"' in response.text
     assert "hero-kicker" not in response.text
     assert 'class="demo-panel agent-workspace-panel"' in response.text
@@ -130,6 +130,10 @@ def test_frontend_static_assets_are_served() -> None:
     assert "liveAgentEventView" in response.text
     assert "agentThoughtHtml" in response.text
     assert "agent-thinking-status" in response.text
+    assert "agent-thinking-timer" in response.text
+    assert "startAgentThinkingTimer" in response.text
+    assert "stopAgentThinkingTimer" in response.text
+    assert "已处理" in response.text
     assert "agent-thought-panel" in response.text
     assert "data-agent-live-steps" in response.text
     assert "agent_step" in response.text
@@ -224,7 +228,8 @@ def test_frontend_static_assets_are_served() -> None:
     assert "[data-agent-mode-status]" not in response.text
     assert "[data-agent-mode]" not in response.text
     assert 'body.mode = "agentic"' not in response.text
-    assert 'mode: "langgraph_agent"' in response.text
+    assert 'mode: "tool_calling_agent"' in response.text
+    assert 'mode: "langgraph_agent"' not in response.text
     assert 'updateAgentModeStatus("auto")' not in response.text
     assert "reindexSource" in response.text
     assert "bindEnterToSubmit" in response.text
@@ -300,6 +305,8 @@ def test_frontend_static_assets_are_served() -> None:
     assert "agent-live-steps" in styles.text
     assert "agent-live-step" in styles.text
     assert "agent-thinking-status" in styles.text
+    assert "agent-thinking-timer" in styles.text
+    assert "agent-thinking-label" in styles.text
     assert "agent-thought-panel" in styles.text
     assert "overflow-wrap: anywhere" in styles.text
     assert "@keyframes loading-spin" in styles.text

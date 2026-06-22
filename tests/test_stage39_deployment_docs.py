@@ -26,7 +26,8 @@ def test_phase50_deployment_guide_documents_redis_langgraph_fallback() -> None:
 
     for phrase in [
         "Redis / LangGraph（Phase 50）",
-        "REDIS_URL=redis://redis:6379/0",
+        "REDIS_PASSWORD=<strong redis password>",
+        "REDIS_URL=redis://:<url-encoded redis password>@redis:6379/0",
         "LANGGRAPH_CHECKPOINT_TTL_MINUTES=60",
         "query embedding 缓存",
         "fallback 到 `MemorySaver`",

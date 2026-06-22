@@ -3,10 +3,10 @@ from __future__ import annotations
 from app.services.agent.graph_nodes import (
     generate_answer_node,
     initialize_state,
+    planner_node,
     refuse_node,
     reset_current_event_sink,
     rewrite_query_node,
-    route_query_node,
     search_figures_node,
     search_knowledge_node,
     search_tables_node,
@@ -18,11 +18,31 @@ from app.services.agent.tools import (
     AgentToolCallRecord,
     AgentToolResult,
 )
+from app.services.generation.chat_model import ChatMessage, ChatModelResult
+
+
+class RecordingChatProvider:
+    provider_name = "test"
+    model_name = "recording-chat"
+
+    def __init__(self, answers: list[str] | None = None) -> None:
+        self.answers = answers or ["cited answer from existing evidence [1]"]
+        self.messages: list[list[ChatMessage]] = []
+
+    def generate(self, messages) -> ChatModelResult:
+        self.messages.append(list(messages))
+        answer = self.answers[min(len(self.messages) - 1, len(self.answers) - 1)]
+        return ChatModelResult(
+            answer=answer,
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
 
 
 class FakeToolbox:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, int]] = []
+        self.chat_model_provider = RecordingChatProvider()
 
     def hybrid_search_knowledge(self, query: str, top_k: int = 5, progress_callback=None) -> AgentToolResult:
         self.calls.append(("hybrid_search_knowledge", query, top_k))
@@ -136,6 +156,7 @@ def source_reference(*, chunk_id: int, chunk_type: str = "text") -> AgentSourceR
         chunk_id=chunk_id,
         chunk_index=0,
         chunk_type=chunk_type,
+        content="fixture source evidence",
     )
 
 
@@ -149,10 +170,10 @@ def test_initialize_state_sets_safe_defaults() -> None:
     assert state["previous_queries"] == []
 
 
-def test_route_query_node_selects_search_before_answering() -> None:
+def test_planner_node_selects_search_before_answering() -> None:
     state = initialize_state(question="What affects filling capacity?")
 
-    updates = route_query_node(state)
+    updates = planner_node(state)
 
     assert updates["next_action"] == "search_knowledge"
     assert updates["current_query"] == "What affects filling capacity?"
@@ -160,26 +181,68 @@ def test_route_query_node_selects_search_before_answering() -> None:
     assert updates["workflow_steps"][0]["name"] == "llm_with_tools"
 
 
-def test_route_query_node_selects_image_analysis_when_image_is_attached() -> None:
+def test_planner_node_answers_expand_followup_from_prior_sources() -> None:
+    state = initialize_state(
+        question="请详细回答",
+        history=["用户：堆石混凝土填充性能受到哪些方面的影响？"],
+    )
+    state["prior_sources"] = [
+        source_reference(chunk_id=1).__dict__,
+        source_reference(chunk_id=2).__dict__,
+        source_reference(chunk_id=3).__dict__,
+    ]
+    state["prior_citations"] = [1, 2, 3]
+    state["prior_answer_summary"] = "上一轮回答说明填充性能受颗粒阻塞、流体阻塞和施工参数影响。"
+
+    updates = planner_node(state)
+
+    assert updates["next_action"] == "answer_with_citations"
+    assert updates["current_query"] == "请详细回答"
+    assert updates["workflow_steps"][0]["output_summary"] == "selected action=answer_with_citations"
+
+
+def test_planner_node_searches_new_direction_despite_prior_sources() -> None:
+    state = initialize_state(question="堆石混凝土温控措施有哪些？")
+    state["prior_sources"] = [
+        source_reference(chunk_id=1).__dict__,
+        source_reference(chunk_id=2).__dict__,
+        source_reference(chunk_id=3).__dict__,
+    ]
+
+    updates = planner_node(state)
+
+    assert updates["next_action"] == "search_knowledge"
+    assert updates["current_query"] == "堆石混凝土温控措施有哪些？"
+
+
+def test_planner_node_keeps_original_behavior_without_prior_sources() -> None:
+    state = initialize_state(question="请详细回答")
+
+    updates = planner_node(state)
+
+    assert updates["next_action"] == "search_knowledge"
+
+
+def test_planner_node_selects_image_analysis_when_image_is_attached() -> None:
     state = initialize_state(question="analyze this", image_path="data/user_uploads/a.png")
 
-    updates = route_query_node(state)
+    updates = planner_node(state)
 
     assert updates["next_action"] == "analyze_user_image"
     assert updates["iteration_count"] == 1
     assert updates["workflow_steps"][0]["name"] == "llm_with_tools"
 
 
-def test_route_query_node_selects_table_search_for_table_questions() -> None:
+def test_planner_node_selects_table_search_for_table_questions() -> None:
     state = initialize_state(question="请返回配合比表中的参数")
 
-    updates = route_query_node(state)
+    updates = planner_node(state)
 
     assert updates["next_action"] == "search_tables"
     assert updates["workflow_steps"][0]["name"] == "llm_with_tools"
 
 
-def test_route_query_node_answers_after_table_evidence() -> None:
+def test_planner_node_answers_after_table_evidence() -> None:
     state = initialize_state(question="请返回配合比表中的参数")
     state["observations"] = [
         search_tables_node(
@@ -192,13 +255,13 @@ def test_route_query_node_answers_after_table_evidence() -> None:
         )["observations"][0]
     ]
 
-    updates = route_query_node(state)
+    updates = planner_node(state)
 
     assert updates["next_action"] == "answer_with_citations"
     assert updates["workflow_steps"][0]["name"] == "llm_with_tools"
 
 
-def test_route_query_node_answers_with_retrieved_evidence_at_iteration_limit() -> None:
+def test_planner_node_answers_with_retrieved_evidence_at_iteration_limit() -> None:
     state = initialize_state(question="堆石混凝土的性能", max_iterations=1)
     state["iteration_count"] = 1
     state["observations"] = [
@@ -211,7 +274,7 @@ def test_route_query_node_answers_with_retrieved_evidence_at_iteration_limit() -
         )["observations"][0]
     ]
 
-    updates = route_query_node(state)
+    updates = planner_node(state)
 
     assert updates["next_action"] == "answer_with_citations"
     assert "refusal_reason" not in updates
@@ -221,7 +284,7 @@ def test_route_query_node_answers_with_retrieved_evidence_at_iteration_limit() -
 def test_search_knowledge_node_reuses_agent_toolbox_and_records_observation() -> None:
     toolbox = FakeToolbox()
     state = initialize_state(question="filling capacity", top_k=2, toolbox=toolbox)
-    state.update(route_query_node(state))
+    state.update(planner_node(state))
 
     updates = search_knowledge_node(state)
 
@@ -237,7 +300,7 @@ def test_search_knowledge_node_reuses_agent_toolbox_and_records_observation() ->
 def test_search_knowledge_node_emits_safe_search_progress() -> None:
     toolbox = FakeToolbox()
     state = initialize_state(question="filling capacity", top_k=2, toolbox=toolbox)
-    state.update(route_query_node(state))
+    state.update(planner_node(state))
     events = []
     token = set_current_event_sink(events.append)
     try:
@@ -269,16 +332,70 @@ def test_visual_and_table_nodes_reuse_agent_toolbox() -> None:
     assert table_updates["search_results"][0]["chunk_type"] == "table"
 
 
-def test_generate_answer_node_uses_answer_with_citations_contract() -> None:
+def test_generate_answer_node_uses_existing_sources_without_retrieval() -> None:
     toolbox = FakeToolbox()
-    state = initialize_state(question="answer me", top_k=3, toolbox=toolbox)
+    state = initialize_state(question="What affects RFC filling capacity?", top_k=3, toolbox=toolbox)
+    state["search_results"] = [search_item(chunk_id=1)]
+    state["sources"] = [source_reference(chunk_id=1)]
 
     updates = generate_answer_node(state)
 
-    assert toolbox.calls == [("answer_with_citations", "answer me", 3)]
+    assert toolbox.calls == []
+    assert len(toolbox.chat_model_provider.messages) == 1
+    assert updates["answer"] == "cited answer from existing evidence [1]"
+    assert updates["citations"] == [1]
+    assert updates["refused"] is False
+
+
+def test_generate_answer_node_falls_back_when_sources_are_missing() -> None:
+    toolbox = FakeToolbox()
+    state = initialize_state(question="What affects RFC filling capacity?", top_k=3, toolbox=toolbox)
+
+    updates = generate_answer_node(state)
+
+    assert toolbox.calls == [("answer_with_citations", "What affects RFC filling capacity?", 3)]
     assert updates["answer"] == "cited answer [1]"
     assert updates["citations"] == [1]
     assert updates["refused"] is False
+
+
+def test_generate_answer_node_uses_prior_sources_when_current_sources_are_missing() -> None:
+    toolbox = FakeToolbox()
+    state = initialize_state(
+        question="请详细回答",
+        top_k=3,
+        toolbox=toolbox,
+        history=["堆石混凝土填充性能受到哪些方面的影响？"],
+    )
+    state["prior_sources"] = [
+        source_reference(chunk_id=1).__dict__,
+        source_reference(chunk_id=2).__dict__,
+        source_reference(chunk_id=3).__dict__,
+    ]
+    state["prior_citations"] = [1, 2, 3]
+
+    updates = generate_answer_node(state)
+
+    assert toolbox.calls == []
+    assert len(toolbox.chat_model_provider.messages) == 1
+    assert updates["answer"] == "cited answer from existing evidence [1]"
+    assert updates["citations"] == [1]
+    assert len(updates["sources"]) == 3
+    assert updates["refused"] is False
+
+
+def test_generate_answer_node_refuses_off_topic_before_llm_generation() -> None:
+    toolbox = FakeToolbox()
+    state = initialize_state(question="How do I cook pasta?", top_k=3, toolbox=toolbox)
+    state["search_results"] = [search_item(chunk_id=1)]
+    state["sources"] = [source_reference(chunk_id=1)]
+
+    updates = generate_answer_node(state)
+
+    assert toolbox.calls == []
+    assert toolbox.chat_model_provider.messages == []
+    assert updates["refused"] is True
+    assert updates["refusal_reason"] == "Question appears off-topic: no domain anchor was found."
 
 
 def test_generate_answer_node_emits_safe_answer_progress() -> None:

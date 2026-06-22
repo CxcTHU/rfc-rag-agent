@@ -1,10 +1,18 @@
 # RFC-RAG-Agent
 
+## Phase 51 Performance Evaluation Update
+
+Current branch: `codex/phase-51-performance-evaluation`.
+
+Phase 51 completed the LangGraph planning-node rename (`planner_node`), added the Phase 51 performance evaluation script, ran dry-run and real-provider comparisons across Brain baseline, ReAct, Tool Calling, LangGraph deterministic, LangGraph + planner, FAISS fallback, and Semantic Cache hit scenarios, expanded the external architecture evolution comparison table, and closed two LangGraph follow-ups: avoiding redundant retrieval in `generate_answer_node` and restoring cross-turn prior evidence for planner decisions.
+
+Validation: focused Phase 0 regression `21 passed`; final full `python -m pytest -q -> 1128 passed, 1 skipped`; Phase 51 dry-run `rows=56 summary=7`; real-provider evaluation `rows=56 summary=7`; Semantic Cache hit scenario `8/8`, avg `1.000ms`; Stage 30 remains `91.52 / A / pass`. User authorized submission, `phase-51-complete` tagging, GitHub push, PR creation, and merge on 2026-06-22.
+
 ## Phase 50 Planner Fast Model Closeout Update
 
 Current branch: `codex/phase-50-langgraph-redis`.
 
-Phase 50 now adds an optional fast planner model for `mode="langgraph_agent"` on top of the completed LangGraph, Redis Stack, Semantic Cache, Rate Limiting, and pgvector HNSW work. `route_query_node` can call a configured `PLANNER_CHAT_MODEL_*` provider to choose the next ReAct action as JSON, while final cited answer generation still uses the main `CHAT_MODEL_*` provider.
+Phase 51 has started from the merged Phase 50 baseline. The LangGraph planning node has been renamed from the old `route_query_node` implementation to `planner_node`, matching its actual responsibility: choose the next ReAct action through deterministic rules or the optional `PLANNER_CHAT_MODEL_*` fast planner. Final cited answer generation still uses the main `CHAT_MODEL_*` provider.
 
 The default remains conservative: planner config is blank, so LangGraph uses `DeterministicReActPlanner` with zero provider calls. Invalid planner JSON or provider errors also fall back to deterministic routing. Existing `tool_calling_agent`, `react_agent`, and `default` modes are unchanged.
 

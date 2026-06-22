@@ -1,3 +1,25 @@
+# 阶段 51 最新交班状态（2026-06-22）
+
+当前分支：`codex/phase-51-performance-evaluation`。
+
+阶段 51 已从阶段 50 合并后的 `main -> a32fd804 Merge phase 50 LangGraph Redis and pgvector` 出发；`phase-50-complete -> b1dc0ff7` 已确认存在且是 `main` 祖先，未移动任何已有阶段 tag。
+
+已完成：`route_query_node` 重命名为 `planner_node`；新增 `scripts/evaluate_phase51_performance.py` 和 `tests/test_phase51_performance_eval.py`；完成 dry-run 与真实 provider 评测，输出 `data/evaluation/phase51_performance_results.csv` / `phase51_performance_summary.csv`；更新 `G:\Codex\program\关键提升\agent_evolution_comparison.md` 为全周期架构演进对照表；完成 LangGraph 回答节点去冗余检索与跨轮 prior evidence 记忆 follow-up。
+
+验证结果：
+
+```text
+Phase 0 focused regression -> 21 passed
+python -m pytest -q -> 1128 passed, 1 skipped
+Phase 1 dry-run -> rows=56 summary=7
+Phase 2 real-provider --execute --resume -> rows=56 summary=7
+Semantic Cache hit -> 8/8, avg=1.000ms
+Stage 30 -> 91.52 / A / pass
+CSV sensitive scan -> no api key / bearer / authorization / raw_response / reasoning_content matches
+```
+
+用户已在 2026-06-22 明确授权提交阶段 51 整体开发工作、创建 `phase-51-complete` tag、推送 GitHub 并合并 PR。仍不得把 `.env`、`.env.prod`、数据库密码、JWT secret、API key、Bearer token、供应商原始响应、`raw_response`、`reasoning_content`、hidden thought 或受限全文写入 Git/CSV/文档/测试/Obsidian。
+
 # 阶段 50 Phase 16-17 最新交班状态（2026-06-21）
 
 当前分支：`codex/phase-50-langgraph-redis`。
@@ -6,7 +28,7 @@
 
 关键新增：
 
-- `app/services/agent/graph_nodes.py` 新增 `_CURRENT_PLANNER_PROVIDER` ContextVar；`route_query_node` 在非图片/非表格硬规则分支可调用 planner 快模型输出 JSON action。
+- `app/services/agent/graph_nodes.py` 新增 `_CURRENT_PLANNER_PROVIDER` ContextVar；阶段 51 已将旧 `route_query_node` 命名对齐为 `planner_node`，在非图片/非表格硬规则分支可调用 planner 快模型输出 JSON action。
 - `LangGraphAgentService` 新增 `planner_chat_provider` 参数，并在 `query()` 生命周期中 set/reset ContextVar；planner provider 不进入 LangGraph checkpoint state。
 - `/agent/query` 与 `/agent/query/stream` 的 `mode="langgraph_agent"` 路径传入已有 Depends 注入的 `planner_chat_provider`。
 - `latency_trace.planner_model` 记录 `deterministic` 或 `provider/model`；`planner_latency_ms` 继续记录 planner LLM 耗时。

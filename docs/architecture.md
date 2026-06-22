@@ -1,5 +1,21 @@
 # 架构说明
 
+## Phase 51 Architecture Delta: Performance Evaluation And Planner Naming
+
+Phase 51 does not change the default runtime chain. It aligns LangGraph naming and adds an evaluation layer:
+
+```text
+/agent/query mode="langgraph_agent"
+-> LangGraphAgentService
+-> planner_node
+-> AgentToolbox nodes
+-> answer_with_citations
+```
+
+`planner_node` is the renamed Phase 50 planning node. It keeps the same deterministic image/table rules, optional fast planner provider, and deterministic fallback behavior. The StateGraph node name is now `"planner"`.
+
+The new evaluation layer is `scripts/evaluate_phase51_performance.py`. It compares `/chat` Brain baseline, explicit Agent modes, pgvector HNSW vs FAISS fallback, and Semantic Cache hit behavior through script-local switches. It does not alter `app/core/config.py` defaults.
+
 ## Phase 50 Planner Fast Model Addendum
 
 LangGraph Agent now supports an optional two-tier model pattern:
@@ -8,7 +24,7 @@ LangGraph Agent now supports an optional two-tier model pattern:
 /agent/query mode="langgraph_agent"
 -> LangGraphAgentService
 -> ContextVar planner_chat_provider
--> route_query_node
+-> planner_node
    -> deterministic image/table rules
    -> optional planner fast model JSON action
    -> DeterministicReActPlanner fallback
@@ -30,7 +46,7 @@ Core control flow:
 /agent/query mode="langgraph_agent"
 -> LangGraphAgentService
 -> LangGraphAgentState
--> StateGraph route node
+-> StateGraph planner node
 -> AgentToolbox-backed nodes
    search_knowledge / search_figures / search_tables / analyze_user_image
    rewrite_query / answer_with_citations / refuse / final_answer

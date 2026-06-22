@@ -4,7 +4,7 @@ Status: complete before user human verification. No `git add`, commit, tag, push
 
 ## Phase 16-17 Planner Fast Model Closeout Addendum
 
-Phase 16-17 adds an optional fast planner model for the LangGraph route node. `route_query_node` preserves deterministic image/table rules, then uses a configured planner provider to return compact JSON such as `{"action":"search_knowledge","query":"...","reasoning_summary":"..."}`. Invalid JSON or provider failure falls back to `DeterministicReActPlanner`.
+Phase 16-17 adds an optional fast planner model for the LangGraph planning node. In Phase 51 this node is named `planner_node`; it preserves deterministic image/table rules, then uses a configured planner provider to return compact JSON such as `{"action":"search_knowledge","query":"...","reasoning_summary":"..."}`. Invalid JSON or provider failure falls back to `DeterministicReActPlanner`.
 
 The planner is injected through ContextVar and is not stored in LangGraph checkpoint state. `generate_answer_node` is unchanged: final cited answers still use the main chat model provider. `latency_trace` now includes `planner_model` in addition to `planner_latency_ms`.
 

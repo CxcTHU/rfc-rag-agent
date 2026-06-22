@@ -1306,10 +1306,31 @@ td {
 .agent-thinking-status {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 10px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
+}
+
+.agent-thinking-label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+.agent-thinking-timer {
+  flex: 0 0 auto;
+  color: #9ed8ec;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.agent-thinking-timer--done {
+  color: #bfe8d5;
 }
 
 .agent-thought-panel {
@@ -1323,6 +1344,8 @@ td {
   min-height: 36px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   cursor: pointer;
   padding: 8px 10px;
   color: #cde7f5;

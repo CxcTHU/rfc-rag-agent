@@ -1,5 +1,23 @@
 # 项目进度
 
+## Latest Status: 2026-06-22 Phase 51 Performance Evaluation Approved For Submission
+
+Current branch: `codex/phase-51-performance-evaluation`.
+
+Phase 51 starts from `main -> a32fd804 Merge phase 50 LangGraph Redis and pgvector`; `phase-50-complete -> b1dc0ff7` exists and remains unmoved. The phase renamed the LangGraph planning node to `planner_node`, added `scripts/evaluate_phase51_performance.py`, ran dry-run and real-provider performance comparisons, expanded `G:\Codex\program\关键提升\agent_evolution_comparison.md` into a full-cycle architecture table, removed redundant LangGraph answer-node retrieval, and added cross-turn prior evidence memory for LangGraph planner decisions.
+
+Validation:
+
+```text
+python -m pytest -q -> 1128 passed, 1 skipped
+Phase 51 dry-run -> rows=56 summary=7
+Phase 51 real-provider evaluation -> rows=56 summary=7
+Semantic Cache hit -> 8/8, avg=1.000ms
+Stage 30 -> 91.52 / A / pass
+```
+
+Submission: user authorized commit, `phase-51-complete` tag, GitHub push, PR creation, and merge on 2026-06-22.
+
 ## Latest Status: 2026-06-21 Phase 50 Phase 16-17 Planner Fast Model Complete Before Human Verification
 
 Current branch: `codex/phase-50-langgraph-redis`.

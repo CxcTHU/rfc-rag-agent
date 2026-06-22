@@ -55,6 +55,7 @@ const state = {
 };
 
 const ANSWER_SEGMENT_MAX_CHARS = 1200;
+const AGENT_THINKING_TIMER_INTERVAL_MS = 500;
 
 function authHeaders() {
   return state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {};
@@ -1628,7 +1629,10 @@ function appendAgentThinkingMessage() {
       <article class="chat-message chat-message--assistant chat-message--thinking" aria-live="polite">
         <div class="chat-message-bubble">
           <div class="chat-message-role">Agent</div>
-          <div class="agent-thinking-status" data-agent-thinking-status><span class="loading-spinner" aria-hidden="true"></span>正在思考...</div>
+          <div class="agent-thinking-status" data-agent-thinking-status>
+            <span class="agent-thinking-label" data-agent-thinking-label><span class="loading-spinner" aria-hidden="true"></span>正在思考...</span>
+            <span class="agent-thinking-timer" data-agent-thinking-timer>思考0秒</span>
+          </div>
           <div class="agent-live-steps" data-agent-live-steps hidden aria-label="Agent 实时步骤"></div>
           <div class="answer-text thinking-text"></div>
         </div>
@@ -1636,7 +1640,73 @@ function appendAgentThinkingMessage() {
     `,
   );
   scrollAgentChatToBottom();
-  return answerBox.lastElementChild;
+  const messageElement = answerBox.lastElementChild;
+  startAgentThinkingTimer(messageElement);
+  return messageElement;
+}
+
+function agentThinkingElapsedMs(messageElement) {
+  const startedAt = Number(messageElement?.dataset.agentThinkingStartedAt || 0);
+  if (!startedAt) {
+    return 0;
+  }
+  return Math.max(0, Date.now() - startedAt);
+}
+
+function formatAgentThinkingDuration(ms) {
+  return `${Math.max(0, Math.ceil(Number(ms || 0) / 1000))}秒`;
+}
+
+function setAgentThinkingStatusLabel(messageElement, label, { showSpinner = false } = {}) {
+  const status = messageElement?.querySelector("[data-agent-thinking-status]");
+  if (!status) {
+    return;
+  }
+  const labelElement = status.querySelector("[data-agent-thinking-label]");
+  if (!labelElement) {
+    status.textContent = label;
+    return;
+  }
+  labelElement.textContent = label;
+  if (showSpinner) {
+    labelElement.insertAdjacentHTML("afterbegin", '<span class="loading-spinner" aria-hidden="true"></span>');
+  }
+}
+
+function updateAgentThinkingTimer(messageElement, { completed = false, elapsedMs = null } = {}) {
+  const timer = messageElement?.querySelector("[data-agent-thinking-timer]");
+  if (!timer) {
+    return 0;
+  }
+  const durationMs = elapsedMs ?? agentThinkingElapsedMs(messageElement);
+  timer.textContent = completed
+    ? `已处理${formatAgentThinkingDuration(durationMs)}`
+    : `思考${formatAgentThinkingDuration(durationMs)}`;
+  timer.classList.toggle("agent-thinking-timer--done", completed);
+  return durationMs;
+}
+
+function startAgentThinkingTimer(messageElement) {
+  if (!messageElement) {
+    return;
+  }
+  messageElement.dataset.agentThinkingStartedAt = String(Date.now());
+  updateAgentThinkingTimer(messageElement);
+  messageElement._agentThinkingTimerId = window.setInterval(
+    () => updateAgentThinkingTimer(messageElement),
+    AGENT_THINKING_TIMER_INTERVAL_MS,
+  );
+}
+
+function stopAgentThinkingTimer(messageElement) {
+  if (!messageElement) {
+    return 0;
+  }
+  if (messageElement._agentThinkingTimerId) {
+    window.clearInterval(messageElement._agentThinkingTimerId);
+    messageElement._agentThinkingTimerId = null;
+  }
+  return updateAgentThinkingTimer(messageElement, { completed: true });
 }
 
 function liveAgentEventView(eventName, payload = {}) {
@@ -1753,10 +1823,7 @@ function appendAgentLiveStep(messageElement, eventName, payload = {}) {
   }
   messageElement._agentThoughtEvents = messageElement._agentThoughtEvents || [];
   messageElement._agentThoughtEvents.push({ eventName, payload });
-  const status = messageElement.querySelector("[data-agent-thinking-status]");
-  if (status) {
-    status.textContent = agentLiveStatusText(eventName, payload);
-  }
+  setAgentThinkingStatusLabel(messageElement, agentLiveStatusText(eventName, payload));
   const list = messageElement.querySelector("[data-agent-live-steps]");
   if (!list) {
     return;
@@ -1820,9 +1887,17 @@ function agentThoughtHtml(result = {}) {
   if (!steps.length) {
     return "";
   }
+  const durationMs = Number(
+    result._client_elapsed_ms
+      ?? result.latency_trace?.time_to_final_ms
+      ?? result.latency_trace?.total_latency_ms
+      ?? result.latency_trace?.answer_latency_ms
+      ?? 0,
+  );
+  const durationLabel = durationMs > 0 ? `已处理${formatAgentThinkingDuration(durationMs)}` : "";
   return `
     <details class="agent-thought-panel">
-      <summary>查看思考过程</summary>
+      <summary><span>查看思考过程</span>${durationLabel ? `<span class="agent-thinking-timer agent-thinking-timer--done">${escapeHtml(durationLabel)}</span>` : ""}</summary>
       <ol class="agent-thought-list">
         ${steps.map((step, index) => agentThoughtStepHtml(step, index)).join("")}
       </ol>
@@ -1860,10 +1935,7 @@ function appendTokenToAgentMessage(messageElement, token) {
     messageElement.classList.remove("chat-message--thinking");
     answerText.classList.remove("thinking-text");
     answerText.textContent = "";
-    const status = messageElement.querySelector("[data-agent-thinking-status]");
-    if (status) {
-      status.textContent = "正在接收回答...";
-    }
+    setAgentThinkingStatusLabel(messageElement, "正在接收回答...", { showSpinner: true });
   }
   messageElement._streamedAnswerText = `${messageElement._streamedAnswerText || ""}${token}`;
   answerText.innerHTML = renderMarkdownBlocks(messageElement._streamedAnswerText);
@@ -1926,6 +1998,7 @@ function markAgentStreamingAborted(messageElement) {
   }
   messageElement.classList.remove("chat-message--thinking");
   messageElement.classList.add("chat-message--aborted");
+  stopAgentThinkingTimer(messageElement);
   const answerText = messageElement.querySelector(".answer-text");
   if (answerText) {
     const wasThinkingText = answerText.classList.contains("thinking-text");
@@ -1934,10 +2007,7 @@ function markAgentStreamingAborted(messageElement) {
       answerText.textContent = "";
     }
   }
-  const status = messageElement.querySelector("[data-agent-thinking-status]");
-  if (status) {
-    status.textContent = "Generation stopped";
-  }
+  setAgentThinkingStatusLabel(messageElement, "Generation stopped");
   const liveSteps = messageElement.querySelector("[data-agent-live-steps]");
   if (liveSteps && !liveSteps.children.length) {
     liveSteps.remove();
@@ -1953,7 +2023,11 @@ function markAgentStreamingAborted(messageElement) {
 }
 
 function finalizeAgentStreamingMessage(messageElement, result) {
+  const clientElapsedMs = stopAgentThinkingTimer(messageElement);
   result = normalizeCitationDisplay(result);
+  if (clientElapsedMs > 0) {
+    result = { ...result, _client_elapsed_ms: clientElapsedMs };
+  }
   const liveThoughtSteps = liveThoughtStepsFromEvents(messageElement?._agentThoughtEvents || []);
   if (liveThoughtSteps.length) {
     result = { ...result, _live_thought_steps: liveThoughtSteps };
@@ -2407,7 +2481,7 @@ async function submitAgent() {
       question,
       top_k: 5,
       max_tool_calls: 2,
-      mode: "langgraph_agent",
+      mode: "tool_calling_agent",
     };
     const uploadedImage = await uploadSelectedAgentImage();
     if (uploadedImage?.path) {

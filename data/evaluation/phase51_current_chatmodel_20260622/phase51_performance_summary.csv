@@ -1,0 +1,8 @@
+run_type,config_id,total,ok,skipped,errors,refused,avg_time_to_first_token_ms,avg_time_to_final_ms,avg_planner_latency_ms,avg_search_latency_ms,semantic_cache_hits,same_refusal_as_react,same_top_source_as_react,primary_vector_backend,decision
+real_provider,brain_baseline,8,8,0,0,5,0.000,20332.806,0.000,0.000,0,3/8,5/8,,review
+real_provider,react_agent,8,4,0,4,1,0.000,16778.457,3452.829,876.179,0,7/8,5/8,pgvector_hnsw,review_errors
+real_provider,tool_calling_agent,8,4,0,4,1,0.000,10505.821,4353.615,489.138,0,8/8,5/8,pgvector_hnsw,review_errors
+real_provider,langgraph_deterministic,8,8,0,0,5,0.000,20661.939,0.000,561.912,0,4/8,5/8,not_run,review
+real_provider,langgraph_flash_planner,8,7,0,1,4,0.000,37027.869,8018.130,2595.144,0,3/8,3/8,pgvector_hnsw,review_errors
+real_provider,langgraph_faiss_fallback,8,7,0,1,4,0.000,39670.697,0.000,56.968,0,3/8,3/8,faiss,review_errors
+real_provider,semantic_cache_hit,8,7,1,0,4,0.000,0.875,8018.130,2595.144,7,3/8,3/8,pgvector_hnsw,partial_skipped
