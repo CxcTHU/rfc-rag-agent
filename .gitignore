@@ -27,6 +27,8 @@ data/fulltext/
 data/logs/
 data/incoming/
 data/user_uploads/
+data/reranker_training/
+models/bge-reranker-base-rfc-lora/
 *.sqlite
 *.db
 data/app.sqlite*.backup*
