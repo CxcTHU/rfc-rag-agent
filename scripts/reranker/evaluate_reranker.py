@@ -17,7 +17,7 @@ import random
 import sys
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -103,12 +103,13 @@ class LocalLoraReranker:
     model_path: Path
     max_length: int
     name: str = "local-lora"
+    _tokenizer: Any = field(init=False, repr=False)
+    _model: Any = field(init=False, repr=False)
+    _device: Any = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.model_path.exists():
             raise FileNotFoundError(f"local LoRA model path not found: {self.model_path}")
-
-    def rerank(self, query: str, candidates: list[Candidate]) -> list[RankedCandidate]:
         try:
             import torch
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -117,8 +118,17 @@ class LocalLoraReranker:
 
         tokenizer = AutoTokenizer.from_pretrained(self.model_path)
         model = AutoModelForSequenceClassification.from_pretrained(self.model_path)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model.to(device)
         model.eval()
-        encoded = tokenizer(
+        object.__setattr__(self, "_tokenizer", tokenizer)
+        object.__setattr__(self, "_model", model)
+        object.__setattr__(self, "_device", device)
+
+    def rerank(self, query: str, candidates: list[Candidate]) -> list[RankedCandidate]:
+        import torch
+
+        encoded = self._tokenizer(
             [query] * len(candidates),
             [candidate.passage for candidate in candidates],
             truncation=True,
@@ -126,8 +136,15 @@ class LocalLoraReranker:
             padding=True,
             return_tensors="pt",
         )
+        if hasattr(encoded, "to"):
+            encoded = encoded.to(self._device)
+        else:
+            encoded = {
+                key: value.to(self._device) if hasattr(value, "to") else value
+                for key, value in encoded.items()
+            }
         with torch.no_grad():
-            logits = model(**encoded).logits.reshape(-1).tolist()
+            logits = self._model(**encoded).logits.reshape(-1).tolist()
         ranked = [
             RankedCandidate(original_index=candidate.index, score=float(score), label=candidate.label)
             for candidate, score in zip(candidates, logits, strict=True)

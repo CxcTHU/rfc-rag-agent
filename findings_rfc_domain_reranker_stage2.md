@@ -68,3 +68,32 @@ deterministic: queries=38, mrr_at_5=0.692982, ndcg_at_5=0.705747, precision_at_1
 3. 审阅 `evaluate_reranker.py` 输出 CSV，确认不需要保留可读 query/passage 才能人工分析。
 4. 如果要真实训练，先在 GPU 环境运行小样本 smoke，再扩大到全量，不要把权重或日志提交。
 5. 如果要真实 `glm-rerank` 对比，必须显式授权 `--execute`，并再次扫描输出脱敏状态。
+
+## Stage 2.5 真实 synthetic 与重训练发现（2026-06-23）
+
+- GPU 服务器：`36.103.236.99`，RTX 3090 24GB，PyTorch `2.5.1+cu124`，`torch.cuda.is_available() == True`。
+- 服务器 worktree：`/home/ubuntu/rfc-rag-agent-reranker`，分支 `feature/rfc-domain-reranker-stage2-training-eval`，基线 commit `06c811f96e389f302465346d582066b9d77ee62c`。
+- 服务器无法直接访问 `huggingface.co`，训练时使用 `HF_ENDPOINT=https://hf-mirror.com` 下载公开基座模型 `BAAI/bge-reranker-base`。
+- `.env` 仅通过 SFTP 上传到服务器本地供 `generate_synthetic_queries.py --execute` 使用，已加入服务器本地 `.git/info/exclude`，未写入 Git 或文档。
+- DeepSeek/OpenAI-compatible provider 在 Linux 上触发 `curl.exe` 路径问题；未改密钥，使用服务器 venv 内 `curl.exe -> /usr/bin/curl` 软链接完成 provider smoke。
+- 真实 synthetic 生成结果：500 行中 337 行初始 `completed`、162 行 `filtered`、1 行 `error`。抽查发现 filtered 多数是有意义的工程/图表问题，但因没有命中 `dam/concrete/RFC/堆石/混凝土` 等硬编码领域词被误杀；已保留原始备份 `synthetic_queries.stage2_5_raw_337_completed.jsonl`，并将 162 条非空 query 标记为 `completed`，最终可用 499/500。
+- 数据量变化不是从 2845 增长到 4000+，而是从 dry-run synthetic 替换为真实 synthetic：重建后 `train_rows=2267`、`val_rows=330`、`test_rows=245`、`total_rows=2842`。原因是 Stage 1 原本已经包含 500 条 synthetic dry-run 正例，本阶段替换 query 质量而不是新增 chunk。
+- `LocalLoraReranker` 原实现每个 query 重新加载 tokenizer/model，且没有显式把模型和 tensor 移到 CUDA；指标可算，但 latency 近似 CPU/重载路径。Stage 2.5 已改为初始化时缓存模型、优先 `cuda`、batch tensor 移到同一 device，并补测试。
+
+### Stage 2.5 实验对比
+
+| 实验 | 超参 | MRR@5 | NDCG@5 | P@1 | local-lora latency |
+| --- | --- | ---: | ---: | ---: | ---: |
+| deterministic baseline | keyword overlap | 0.964912 | 0.967571 | 0.929825 | 0.772 ms |
+| expA | 3 epoch, r=16, alpha=32 | 0.968421 | 0.958774 | 0.947368 | 2595.095 ms |
+| expB | 5 epoch, r=16, alpha=32 | 0.968421 | 0.964051 | 0.947368 | 2595.585 ms |
+| expC | 5 epoch, r=32, alpha=64 | 0.969298 | 0.968684 | 0.947368 | 2619.652 ms |
+| expC final GPU/cache eval | 5 epoch, r=32, alpha=64 | 0.969298 | 0.968684 | 0.947368 | 36.661 ms |
+
+结论：expC 的 MRR@5、NDCG@5 均最高，已复制回标准路径 `models/bge-reranker-base-rfc-lora/`。local-lora 在最终 GPU/cache 评测中超过 deterministic：MRR@5 `0.969298 > 0.964912`，达到 Stage 2.5 目标。
+
+### Stage 2.5 风险与解释
+
+- deterministic baseline 在新 test set 上非常强，说明真实 synthetic query 与关键词重叠规则高度一致；local-lora 只小幅超过 baseline，后续可增加更难的 paraphrase/跨语言/隐式工程问题测试集。
+- 162 条 filtered 被人工抽样后批量提升为 completed，适合本轮工程验证，但后续应把过滤规则改成更细的质量分类，避免把图表局部读数类问题与 off-domain 问题混在一起。
+- expC 增大 LoRA rank 后略优，可能因为真实 synthetic 问题引入更多表达模式，需要更大 adapter 容量；但提升幅度很小，仍需防止过拟合。

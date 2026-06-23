@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -100,6 +102,95 @@ def test_evaluate_reranker_local_lora_requires_model_path(tmp_path) -> None:
             max_length=128,
             execute=False,
         )
+
+
+def test_local_lora_loads_once_and_moves_batches_to_cuda(tmp_path, monkeypatch) -> None:
+    model_path = tmp_path / "model"
+    model_path.mkdir()
+    calls = {"tokenizer_loads": 0, "model_loads": 0, "model_to": [], "batch_to": []}
+
+    class FakeNoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, traceback):  # noqa: ANN001
+            return False
+
+    class FakeCuda:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+    class FakeTorch(types.SimpleNamespace):
+        def __init__(self) -> None:
+            super().__init__(cuda=FakeCuda(), no_grad=lambda: FakeNoGrad(), device=lambda value: value)
+
+    class FakeEncoded(dict):
+        def to(self, device: str) -> "FakeEncoded":
+            calls["batch_to"].append(device)
+            return self
+
+    class FakeTokenizer:
+        def __call__(self, *args, **kwargs) -> FakeEncoded:  # noqa: ANN002, ANN003
+            return FakeEncoded(input_ids=[1])
+
+    class FakeTokenizerFactory:
+        @staticmethod
+        def from_pretrained(path: Path) -> FakeTokenizer:
+            calls["tokenizer_loads"] += 1
+            assert path == model_path
+            return FakeTokenizer()
+
+    class FakeLogits:
+        def reshape(self, _value: int) -> "FakeLogits":
+            return self
+
+        def tolist(self) -> list[float]:
+            return [0.1, 0.9]
+
+    class FakeModel:
+        def to(self, device: str) -> "FakeModel":
+            calls["model_to"].append(device)
+            return self
+
+        def eval(self) -> None:
+            return None
+
+        def __call__(self, **kwargs):  # noqa: ANN003
+            return types.SimpleNamespace(logits=FakeLogits())
+
+    class FakeModelFactory:
+        @staticmethod
+        def from_pretrained(path: Path) -> FakeModel:
+            calls["model_loads"] += 1
+            assert path == model_path
+            return FakeModel()
+
+    monkeypatch.setitem(sys.modules, "torch", FakeTorch())
+    monkeypatch.setitem(
+        sys.modules,
+        "transformers",
+        types.SimpleNamespace(
+            AutoTokenizer=FakeTokenizerFactory,
+            AutoModelForSequenceClassification=FakeModelFactory,
+        ),
+    )
+
+    reranker = evaluate_reranker.LocalLoraReranker(model_path=model_path, max_length=128)
+    candidates = [
+        evaluate_reranker.Candidate(index=0, passage="low", label=0),
+        evaluate_reranker.Candidate(index=1, passage="high", label=1),
+    ]
+
+    first = reranker.rerank("query", candidates)
+    second = reranker.rerank("query", candidates)
+
+    assert calls["tokenizer_loads"] == 1
+    assert calls["model_loads"] == 1
+    assert calls["model_to"] == ["cuda"]
+    assert calls["batch_to"] == ["cuda", "cuda"]
+    assert first[0].label == 1
+    assert second[0].label == 1
 
 
 def test_evaluate_reranker_rejects_group_without_positive(tmp_path) -> None:

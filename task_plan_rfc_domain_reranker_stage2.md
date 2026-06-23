@@ -108,6 +108,51 @@ git check-ignore -v data/reranker_training/ data/reranker_training/reranker_eval
 - [x] Stage 2 三件套更新到最新状态。
 - [x] 最终停在用户人工核验前。
 
+## Stage 2.5 附加计划：数据增强与重训练
+
+目标：在 GPU 服务器 `36.103.236.99` 上用真实 synthetic query 替换 dry-run 模板 query，并通过多组 LoRA 超参实验让 `local-lora` 的 MRR@5 超过 deterministic baseline。
+
+### Stage 2.5 Phase 0：启动核验
+
+- [x] 确认服务器目录为 `/home/ubuntu/rfc-rag-agent-reranker`。
+- [x] 确认 RTX 3090、CUDA、PyTorch CUDA 可用。
+- [x] 确认分支 `feature/rfc-domain-reranker-stage2-training-eval` 与 commit `06c811f96e389f302465346d582066b9d77ee62c`。
+- [x] 读取 `AGENT.MD`、Stage 2 findings/progress。
+- [x] 上传服务器本地 `.env` 并保持 exclude，不写入 Git。
+
+### Stage 2.5 Phase 1：真实 synthetic query 生成
+
+- [x] 运行 `generate_synthetic_queries.py --execute --limit 500`。
+- [x] 完成 provider smoke；Linux 上通过 venv 本地 `curl.exe -> /usr/bin/curl` 兼容 DeepSeek curl fallback。
+- [x] 生成 500 条真实 synthetic query，最终可用 499 条。
+- [x] 保留 raw 状态备份，记录 filtered 误杀与人工抽样判断。
+
+### Stage 2.5 Phase 2：重建数据集
+
+- [x] 运行 `build_dataset.py`。
+- [x] 新数据：`train_rows=2267`、`val_rows=330`、`test_rows=245`、`total_rows=2842`。
+- [x] 运行 `train_lora.py --dry-run`，schema、label、长度统计通过。
+
+### Stage 2.5 Phase 3：三组 GPU 训练
+
+- [x] 备份首次训练模型为 `models/bge-reranker-base-rfc-lora-run1-baseline`。
+- [x] 实验 A：3 epoch，LoRA r=16/alpha=32。
+- [x] 实验 B：5 epoch，LoRA r=16/alpha=32。
+- [x] 实验 C：5 epoch，LoRA r=32/alpha=64。
+- [x] 每组训练后立即评测并保存独立 summary/results。
+
+### Stage 2.5 Phase 4：最优模型与最终评测
+
+- [x] 选择 expC，复制回标准路径 `models/bge-reranker-base-rfc-lora/`。
+- [x] 修复 `local-lora` 评测：初始化缓存模型、优先 CUDA、batch tensor 移动到同一 device。
+- [x] 最终 GPU/cache 评测：local-lora MRR@5 `0.969298`，deterministic MRR@5 `0.964912`。
+
+### Stage 2.5 Phase 5：收尾
+
+- [x] 更新 Stage 2 三件套。
+- [x] 运行聚焦测试：`23 passed`。
+- [x] 停在人工核验前：不 `git add`、不 commit、不 tag、不 push、不 PR。
+
 ## 安全边界
 
 - 不提交 `.env`、`.env.prod`、数据库文件、API key、Bearer token、供应商原始响应、`raw_response`、`reasoning_content`、hidden thought、受限全文、完整 chunk 或模型权重。
