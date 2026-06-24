@@ -11,6 +11,7 @@ from app.services.agent.tools import AgentToolResult, truncate_text
 
 ReActActionType = Literal[
     "search_knowledge",
+    "search_graph_knowledge",
     "search_figures",
     "search_tables",
     "analyze_user_image",
@@ -22,6 +23,7 @@ ReActActionType = Literal[
 
 READ_ONLY_REACT_ACTIONS: tuple[ReActActionType, ...] = (
     "search_knowledge",
+    "search_graph_knowledge",
     "search_figures",
     "search_tables",
     "analyze_user_image",
@@ -33,6 +35,7 @@ READ_ONLY_REACT_ACTIONS: tuple[ReActActionType, ...] = (
 
 REACT_TOOL_TO_AGENT_TOOL: dict[ReActActionType, str | None] = {
     "search_knowledge": "hybrid_search_knowledge",
+    "search_graph_knowledge": "search_graph_knowledge",
     "search_figures": "search_figures",
     "search_tables": "search_tables",
     "analyze_user_image": "analyze_user_image",
@@ -73,6 +76,7 @@ class ReActAction(BaseModel):
     def validate_action_payload(self) -> ReActAction:
         if self.action in {
             "search_knowledge",
+            "search_graph_knowledge",
             "search_figures",
             "search_tables",
             "rewrite_query",
@@ -164,7 +168,13 @@ def parse_react_action_json(
     if decoded.get("action") == "refuse" and not decoded.get("refusal_reason"):
         decoded["refusal_reason"] = "The agent could not produce a reliable answer from the available evidence."
     if (
-        decoded.get("action") in {"search_knowledge", "search_figures", "rewrite_query"}
+        decoded.get("action")
+        in {
+            "search_knowledge",
+            "search_graph_knowledge",
+            "search_figures",
+            "rewrite_query",
+        }
         and not decoded.get("query")
         and default_query
     ):
@@ -249,6 +259,13 @@ class DeterministicReActPlanner:
                 reasoning_summary="The question asks for visual evidence; search figure evidence first.",
             )
 
+        if not observations and should_search_graph(question):
+            return ReActAction(
+                action="search_graph_knowledge",
+                query=normalized_question,
+                reasoning_summary="The question asks for cross-document or standard-reference graph evidence.",
+            )
+
         if not observations:
             return ReActAction(
                 action="search_knowledge",
@@ -264,7 +281,7 @@ class DeterministicReActPlanner:
                 reasoning_summary="Tool error requires safe refusal.",
             )
 
-        if last.action == "search_knowledge" and last.search_result_count > 0:
+        if last.action in {"search_knowledge", "search_graph_knowledge"} and last.search_result_count > 0:
             return ReActAction(
                 action="answer_with_citations",
                 question=normalized_question,
@@ -278,7 +295,7 @@ class DeterministicReActPlanner:
                 reasoning_summary="Figure evidence search is complete; answer with cited text evidence and available figures.",
             )
 
-        if last.action == "search_knowledge" and last.search_result_count == 0:
+        if last.action in {"search_knowledge", "search_graph_knowledge"} and last.search_result_count == 0:
             rewritten_query = f"{normalized_question} rock-filled concrete"
             if is_repeated_query(rewritten_query, previous_queries):
                 return ReActAction(
@@ -345,3 +362,28 @@ FIGURE_QUERY_TERMS = (
 def should_search_figures(question: str) -> bool:
     normalized = question.casefold()
     return any(term in normalized for term in FIGURE_QUERY_TERMS)
+
+
+GRAPH_QUERY_TERMS = (
+    "graph",
+    "knowledge graph",
+    "relationship",
+    "relationships",
+    "reference chain",
+    "standard reference",
+    "cross document",
+    "cross-document",
+    "linked",
+    "connection",
+    "关联",
+    "关系",
+    "引用链",
+    "标准引用",
+    "跨文档",
+    "知识图谱",
+)
+
+
+def should_search_graph(question: str) -> bool:
+    normalized = question.casefold()
+    return any(term in normalized for term in GRAPH_QUERY_TERMS)

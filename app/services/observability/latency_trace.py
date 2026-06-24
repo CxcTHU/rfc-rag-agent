@@ -16,6 +16,7 @@ LATENCY_FIELDS = (
     "planner_latency_ms",
     "answer_latency_ms",
     "tool_latency_ms",
+    "graph_search_latency_ms",
 )
 
 
@@ -36,6 +37,13 @@ class LatencyTrace:
         self.values.setdefault("query_embedding_cache_backend", "memory")
         self.values.setdefault("vector_search_backend", "not_run")
         self.values.setdefault("planner_model", "deterministic")
+        self.values.setdefault("retrieval_strategy", "none")
+        self.values.setdefault("graph_search_available", False)
+        self.values.setdefault("graph_search_fallback", False)
+        self.values.setdefault("graph_search_error", "")
+        self.values.setdefault("graph_entity_count", 0)
+        self.values.setdefault("graph_candidate_chunk_count", 0)
+        self.values.setdefault("graph_hop_count", 0)
 
     def add_duration(self, field_name: str, duration_ms: float) -> None:
         current = self.values.get(field_name, 0.0)

@@ -125,6 +125,21 @@ def test_planner_node_without_planner_preserves_deterministic_behavior() -> None
     assert trace.values["planner_latency_ms"] == 0.0
 
 
+def test_planner_node_routes_graph_relationship_questions_to_graph_search() -> None:
+    trace = LatencyTrace()
+    latency_token = set_current_latency_trace(trace)
+    try:
+        updates = planner_node(
+            initialize_state(question="How are RFC standard reference chains related?")
+        )
+    finally:
+        reset_current_latency_trace(latency_token)
+
+    assert updates["next_action"] == "search_graph_knowledge"
+    assert updates["retrieval_strategy"] == "graph_enhanced_search"
+    assert trace.values["retrieval_strategy"] == "graph_enhanced_search"
+
+
 def test_langgraph_agent_service_injects_and_resets_planner_provider() -> None:
     planner = FakePlannerProvider(
         [

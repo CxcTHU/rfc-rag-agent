@@ -58,7 +58,8 @@ def test_env_example_lists_runtime_provider_and_reranking_settings() -> None:
         "APP_ENV=development",
         "DATABASE_URL=sqlite:///./data/app.sqlite",
         "CHAT_MODEL_PROVIDER=",
-        "PLANNER_CHAT_MODEL_PROVIDER=",
+        "PLANNER_CHAT_MODEL_PROVIDER=openai-compatible",
+        "PLANNER_CHAT_MODEL_NAME=deepseek-v4-flash",
         "EMBEDDING_PROVIDER=",
         "RERANKING_ENABLED=true",
         "RERANKING_PROVIDER=remote-bge-lora",
@@ -70,6 +71,20 @@ def test_env_example_lists_runtime_provider_and_reranking_settings() -> None:
 
     assert "sk-" not in env_example.casefold()
     assert "bearer " not in env_example.casefold()
+
+
+def test_phase53_tests_clear_planner_provider_for_deterministic_ci() -> None:
+    conftest = (ROOT / "tests" / "conftest.py").read_text(encoding="utf-8")
+
+    for phrase in [
+        'os.environ["PLANNER_CHAT_MODEL_PROVIDER"] = ""',
+        'os.environ["PLANNER_CHAT_MODEL_NAME"] = ""',
+        'os.environ["PLANNER_CHAT_MODEL_API_KEY"] = ""',
+        'os.environ["PLANNER_CHAT_MODEL_BASE_URL"] = ""',
+        'os.environ["VISION_MODEL_PROVIDER"] = ""',
+        'os.environ["VISION_MODEL_API_KEY"] = ""',
+    ]:
+        assert phrase in conftest
 
 
 def test_readme_quick_start_points_to_phase39_fastapi_container() -> None:

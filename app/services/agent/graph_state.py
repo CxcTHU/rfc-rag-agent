@@ -12,6 +12,7 @@ from app.services.agent.tools import (
 
 LangGraphAgentRoute = Literal[
     "search_knowledge",
+    "search_graph_knowledge",
     "search_figures",
     "search_tables",
     "analyze_user_image",
@@ -32,6 +33,7 @@ class LangGraphAgentState(TypedDict, total=False):
     iteration_count: int
     next_action: LangGraphAgentRoute
     current_query: str
+    retrieval_strategy: str
     image_path: str | None
     previous_queries: list[str]
     observations: list[dict[str, Any]]

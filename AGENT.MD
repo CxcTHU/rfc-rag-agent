@@ -1,3 +1,28 @@
+# 阶段 53 GraphRAG 最新交班状态（2026-06-24）
+
+当前分支：`codex/phase-53-graphrag`。
+
+阶段 53 从 Phase 52 已合并后的 `main / origin/main -> 29229270 Merge pull request #20 from CxcTHU/codex/phase-52-default-reranker-chain` 出发，已完成生产/测试 planner 配置收口、Adaptive RAG 策略标签、GraphRAG 实体关系抽取、NetworkX 图存储、图增强检索、LangGraph `search_graph_knowledge` 集成和 30 条 GraphRAG dry-run ablation 评测资产。
+
+关键产物：
+
+```text
+app/services/graphrag/
+scripts/extract_phase53_graphrag_triples.py
+scripts/build_phase53_graphrag_graph.py
+scripts/evaluate_phase53_graphrag_ablation.py
+data/evaluation/phase53_graphrag_queries.csv
+data/evaluation/phase53_graphrag_ablation_results.csv
+data/evaluation/phase53_graphrag_ablation_summary.csv
+data/evaluation/phase53_graphrag_ablation.csv
+docs/stage53_adaptive_rag_graphrag.md
+docs/phase_reviews/phase-53.md
+```
+
+当前验证：Phase 53 API/SSE/LangGraph focused regression `99 passed`；GraphRAG ablation dry-run `cases=30`；最终全量 pytest、Stage 30 和 `git diff --check` 正在 Phase 53G 收口。当前仍未 `git add`、commit、tag、push 或创建 PR，等待用户人工核验。
+
+不得把 `.env`、`.env.prod`、credentials、供应商原始响应、provider payload、hidden thought、完整 chunk、受限全文或长期用户画像写入 Git/CSV/文档/测试/Obsidian。真实模型运行必须显式 `--execute`，默认 deterministic/dry-run。
+
 # 阶段 52 真实 API 记忆测评最新交班状态（2026-06-23）
 
 当前分支：`codex/phase-52-agent-memory-context`。

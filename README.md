@@ -1,5 +1,15 @@
 # RFC-RAG-Agent
 
+## Phase 53 GraphRAG Knowledge Graph Retrieval
+
+Current branch: `codex/phase-53-graphrag`.
+
+Phase 53 adds a GraphRAG lane without changing the default citation contract. Production planner config is explicit, tests clear planner/vision provider env vars, planner actions now expose safe Adaptive RAG strategy labels, and GraphRAG extraction/storage/retrieval is implemented behind read-only agent tools. The new graph path uses deterministic extraction by default, NetworkX `MultiDiGraph` JSON persistence, graph-enhanced retrieval with fail-open hybrid fallback, and a LangGraph `search_graph_knowledge` node for cross-document relationship and standard-reference-chain questions.
+
+New artifacts include `app/services/graphrag/`, `scripts/extract_phase53_graphrag_triples.py`, `scripts/build_phase53_graphrag_graph.py`, `scripts/evaluate_phase53_graphrag_ablation.py`, `data/evaluation/phase53_graphrag_queries.csv`, generated Phase 53 ablation CSVs, and `docs/stage53_adaptive_rag_graphrag.md`. Graph/evaluation outputs store derived ids, labels, counts, titles, entities, and relations only; they do not store full chunk bodies, provider payloads, hidden reasoning, credentials, or restricted full text.
+
+Current validation before user human verification: Phase 53 focused/API/SSE tests passed through `99 passed`; Phase 53 dry-run ablation generated 30 rows. Final full pytest, Stage 30, and whitespace gates are run in Phase 53G closeout.
+
 ## Phase 52 Real API Memory Evaluation
 
 Current branch: `codex/phase-52-agent-memory-context`.

@@ -1,5 +1,31 @@
 # 数据来源登记
 
+## Phase 53 GraphRAG Data Note
+
+Phase 53 adds no external corpus, crawler, PDF download, source registry entry, model weight, or embedding rebuild. It adds derived GraphRAG artifacts from existing local chunks and manually authored evaluation questions:
+
+```text
+scripts/extract_phase53_graphrag_triples.py
+scripts/build_phase53_graphrag_graph.py
+scripts/evaluate_phase53_graphrag_ablation.py
+data/evaluation/phase53_graphrag_queries.csv
+data/evaluation/phase53_graphrag_ablation_results.csv
+data/evaluation/phase53_graphrag_ablation_summary.csv
+data/evaluation/phase53_graphrag_ablation.csv
+```
+
+Expected optional derived graph artifacts, generated only when local extraction/build scripts are run:
+
+```text
+data/evaluation/phase53_graphrag_triples_sample.json
+data/evaluation/phase53_graphrag_graph.json
+data/evaluation/phase53_graphrag_graph_stats.json
+```
+
+The extraction and graph JSON files store chunk ids, document ids, short titles, entity labels, relation labels, graph node/edge metadata, counts, and sanitized status only. They must not store full chunk bodies, restricted full text, provider payloads, hidden reasoning, credentials, or service logs.
+
+LLM extraction is disabled by default and requires explicit `execute_llm=True` or script `--execute`. The Phase 53 ablation runner is dry-run by default and writes strategy/count labels only.
+
 ## RFC-DomainReranker Stage 3 Data Note
 
 Stage 3 adds no new corpus source, crawler, PDF download, training dataset, model weight, embedding rebuild, or provider raw-response artifact. It adds code and derived evaluation outputs for comparing rerankers on existing RAG evaluation queries.
