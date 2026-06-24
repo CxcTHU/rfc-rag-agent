@@ -189,11 +189,27 @@ Reranking provider：
 
 ```text
 RERANKING_ENABLED=true
+RERANKING_PROVIDER=remote-bge-lora
+RERANKING_MODEL_NAME=rfc-domain-bge-lora
+RERANKING_API_KEY=
+RERANKING_BASE_URL=http://127.0.0.1:8091
+RERANKING_TIMEOUT_SECONDS=30
+RERANKING_RECALL_K=75
+```
+
+The default RAG/Agent retrieval chain uses the Stage 3 quality-first setting:
+`remote-bge-lora`, `candidate_pool_size=75`, and final evidence `top_k=8`.
+The remote BGE LoRA service must be reached through a private path such as an
+SSH tunnel to `127.0.0.1:8091`; do not expose the reranker port publicly. If
+the remote reranker is unavailable, `HybridSearchService` fails open and
+returns the original hybrid/RRF order instead of failing the request.
+
+Offline rollback configuration:
+
+```text
 RERANKING_PROVIDER=deterministic
 RERANKING_MODEL_NAME=keyword-overlap-reranker-v1
-RERANKING_API_KEY=
 RERANKING_BASE_URL=
-RERANKING_TIMEOUT_SECONDS=30
 RERANKING_RECALL_K=25
 ```
 

@@ -461,7 +461,7 @@ real provider API smoke: GET /health, GET /quality-report, POST /search, /search
 - **缓存失效**：`VectorIndexService.build_index()` 新增或更新 embedding 后自动 invalidate cache，下次查询重新加载。
 - **hybrid 并行召回**：`HybridSearchService` 默认用 `ThreadPoolExecutor` 并行执行 keyword/BM25 与 vector search；每个 worker 使用独立 SQLAlchemy Session，不跨线程共享请求 Session。
 - **Cross-Encoder 重排序边界**：新增 `app/services/retrieval/reranking.py`，提供 `ReRankingProvider` Protocol、`DeterministicReRankingProvider`、`OpenAICompatibleReRankingProvider` 和工厂函数；hybrid 默认召回 top-20~30 后 rerank top-5。
-- **配置项**：新增 `reranking_enabled`、`reranking_provider`、`reranking_model_name`、`reranking_api_key`、`reranking_base_url`、`reranking_timeout_seconds`、`reranking_recall_k`；默认 deterministic rerank，可配置关闭或切换真实兼容 API。
+- **配置项**：新增 `reranking_enabled`、`reranking_provider`、`reranking_model_name`、`reranking_api_key`、`reranking_base_url`、`reranking_timeout_seconds`、`reranking_recall_k`；Stage 3 人工核验后默认链路为 `remote-bge-lora`、`candidate_pool_size=75`、最终 `top_k=8`，可关闭或回退 deterministic rerank。
 - **基准结果**：英文 query 上 deterministic `vector_search` 从约 1456.82ms 降至 349.45ms，`hybrid_search` 从约 2199.56ms 降至 720.30ms，`agent_query` 从约 2174.16ms 降至 735.48ms；`rerank_only` 约 1.53ms。
 - **验证结果**：聚焦回归 **82 passed**；全量测试 **511 passed**；提交前验收复跑阶段 26/SSE 聚焦回归 **40 passed**；当前代码服务 8000 验证 `/agent/query/stream` 首个 `token` 可提前到达，`/health` 正常。
 - **边界**：不做登录系统、不做部署优化、不引入 `torch` / `sentence-transformers`、不引入前端框架或 Node 构建链、不让真实 API 成为 CI 或本地全量测试前提，不写入 API key、Bearer token、供应商原始敏感响应或受限全文。

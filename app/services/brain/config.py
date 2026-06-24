@@ -75,7 +75,7 @@ class RetrievalConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     retrieval_mode: RetrievalMode = "auto"
-    top_k: int = Field(default=5, ge=1, le=50)
+    top_k: int = Field(default=8, ge=1, le=50)
     min_score: float = Field(default=0.0, ge=0)
     max_history: int = Field(default=0, ge=0, le=50)
     rerank_top_n: int = Field(default=0, ge=0, le=50)
@@ -101,7 +101,7 @@ class RetrievalConfig(BaseModel):
     def from_chat_request(
         cls,
         *,
-        top_k: int = 5,
+        top_k: int = 8,
         retrieval_mode: RetrievalMode = "auto",
         min_score: float = 0.0,
         model_provider: str = "deterministic",

@@ -54,7 +54,7 @@ class CitationAnswerService:
     def answer(
         self,
         question: str,
-        top_k: int = 5,
+        top_k: int = 8,
         retrieval_mode: RetrievalMode = "auto",
         min_score: float = 0.0,
         history: Sequence[str] | None = None,

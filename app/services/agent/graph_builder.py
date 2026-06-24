@@ -128,7 +128,7 @@ class LangGraphAgentService:
     def query(
         self,
         question: str,
-        top_k: int = 5,
+        top_k: int = 8,
         max_tool_calls: int = REACT_DEFAULT_MAX_ITERATIONS,
         source_id: str | None = None,
         history: Sequence[str] | None = None,

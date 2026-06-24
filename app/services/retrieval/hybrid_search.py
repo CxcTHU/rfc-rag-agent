@@ -74,13 +74,16 @@ class HybridSearchService:
         self.reranking_provider = reranking_provider
         self.progress_callback = progress_callback
         if self.reranking_enabled and self.reranking_provider is None:
-            self.reranking_provider = create_reranking_provider(
-                provider_name=settings.reranking_provider,
-                model_name=settings.reranking_model_name,
-                api_key=settings.reranking_api_key,
-                base_url=settings.reranking_base_url,
-                timeout_seconds=settings.reranking_timeout_seconds,
-            )
+            try:
+                self.reranking_provider = create_reranking_provider(
+                    provider_name=settings.reranking_provider,
+                    model_name=settings.reranking_model_name,
+                    api_key=settings.reranking_api_key,
+                    base_url=settings.reranking_base_url,
+                    timeout_seconds=settings.reranking_timeout_seconds,
+                )
+            except Exception:
+                self.reranking_provider = None
 
     def search(self, query: str, top_k: int = 5) -> list[HybridSearchResult]:
         normalized_query = query.strip()
@@ -181,7 +184,7 @@ class HybridSearchService:
                     candidates=[result.content for result in results],
                     top_k=top_k,
                 )
-        except RuntimeError:
+        except Exception:
             # Reranking is a quality enhancement, not a hard requirement. If the
             # rerank service has a transient failure, fall back to the fusion
             # order instead of failing the whole query.

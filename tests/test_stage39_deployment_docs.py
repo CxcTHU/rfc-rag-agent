@@ -61,8 +61,10 @@ def test_env_example_lists_runtime_provider_and_reranking_settings() -> None:
         "PLANNER_CHAT_MODEL_PROVIDER=",
         "EMBEDDING_PROVIDER=",
         "RERANKING_ENABLED=true",
-        "RERANKING_PROVIDER=deterministic",
-        "RERANKING_RECALL_K=25",
+        "RERANKING_PROVIDER=remote-bge-lora",
+        "RERANKING_MODEL_NAME=rfc-domain-bge-lora",
+        "RERANKING_BASE_URL=http://127.0.0.1:8091",
+        "RERANKING_RECALL_K=75",
     ]:
         assert key in env_example
 

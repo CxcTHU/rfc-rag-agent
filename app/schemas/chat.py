@@ -9,7 +9,7 @@ UsedRetrievalMode = Literal["vector", "keyword", "hybrid", "none"]
 
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1)
-    top_k: int = Field(default=5, ge=1, le=50)
+    top_k: int = Field(default=8, ge=1, le=50)
     retrieval_mode: RetrievalMode = "auto"
     min_score: float = Field(default=0.0, ge=0)
     history: list[str] = Field(default_factory=list, max_length=50)

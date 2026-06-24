@@ -216,11 +216,24 @@ def create_reranking_provider(
         "remote-bge-lora",
         "bge-lora",
         "rfc-bge-lora",
+        "rfc-domain-bge-lora",
     }:
+        default_model = "rfc-domain-bge-lora" if provider in {
+            "remote-bge-lora",
+            "bge-lora",
+            "rfc-bge-lora",
+            "rfc-domain-bge-lora",
+        } else ""
+        default_base_url = "http://127.0.0.1:8091" if provider in {
+            "remote-bge-lora",
+            "bge-lora",
+            "rfc-bge-lora",
+            "rfc-domain-bge-lora",
+        } else ""
         return OpenAICompatibleReRankingProvider(
-            model_name=(model_name or "").strip(),
+            model_name=(model_name or default_model).strip(),
             api_key=(api_key or "").strip(),
-            base_url=(base_url or "").strip(),
+            base_url=(base_url or default_base_url).strip(),
             timeout_seconds=timeout_seconds,
         )
     raise ValueError(f"Unsupported reranking provider: {provider_name}")
@@ -259,6 +272,11 @@ def parse_openai_compatible_rerank_response(
     top_k: int,
 ) -> list[ReRankResult]:
     raw_results = response_data.get("results")
+    if raw_results is None and isinstance(response_data.get("scores"), list):
+        raw_results = [
+            {"index": index, "score": score}
+            for index, score in enumerate(response_data["scores"])
+        ]
     if not isinstance(raw_results, list):
         raise RuntimeError("Reranking model response did not include results")
 

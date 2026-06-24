@@ -75,7 +75,7 @@ logger = logging.getLogger(__name__)
 def initialize_state(
     *,
     question: str,
-    top_k: int = 5,
+    top_k: int = 8,
     max_iterations: int = 3,
     source_id: str | None = None,
     history: list[str] | None = None,

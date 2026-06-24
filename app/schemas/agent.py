@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class AgentQueryRequest(BaseModel):
     question: str = Field(min_length=1)
-    top_k: int = Field(default=5, ge=1, le=50)
+    top_k: int = Field(default=8, ge=1, le=50)
     max_tool_calls: int = Field(default=2, ge=1, le=5)
     source_id: str | None = None
     history: list[str] = Field(default_factory=list, max_length=50)

@@ -1,5 +1,31 @@
 # 项目进度
 
+## Latest Status: 2026-06-24 Phase 52 Default Reranker Chain Follow-up
+
+Current branch: `codex/phase-52-default-reranker-chain`.
+
+After Phase 52 human verification, the default RAG/Agent retrieval chain was
+updated to keep the Stage 3 quality-first reranker configuration as the runtime
+default:
+
+```text
+reranker=remote-bge-lora
+reranking_model_name=rfc-domain-bge-lora
+reranking_base_url=http://127.0.0.1:8091
+candidate_pool_size=75
+final_top_k=8
+```
+
+The remote BGE LoRA reranker remains a private service reached through an SSH
+tunnel or equivalent localhost binding; the reranker port must not be exposed
+publicly. Tests use mocks/deterministic providers only and do not call the GPU
+server. Hybrid retrieval fails open to the original hybrid/RRF order if provider
+creation or a remote rerank request fails.
+
+Security boundary: no server passwords, API keys, bearer tokens, raw provider
+responses, complete chunks, BGE logits, service logs, or model weights were
+added to Git, tests, CSV, or docs.
+
 ## Latest Status: 2026-06-23 RFC-DomainReranker Stage 3 Complete Before Human Verification
 
 Current branch: `feature/rfc-domain-reranker-stage3-rag-integration-eval`.
