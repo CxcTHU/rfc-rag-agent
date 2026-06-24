@@ -1,5 +1,33 @@
 # 架构说明
 
+## Phase 53 Architecture Delta: GraphRAG Knowledge Graph Retrieval
+
+Phase 53 adds a graph retrieval lane while keeping the existing citation-first answer contract and hybrid retrieval fallback.
+
+```text
+chunks
+-> GraphRAGTripleExtractor
+-> GraphExtractionResult entities/relations
+-> NetworkX MultiDiGraph JSON
+-> GraphEnhancedSearchService
+   -> query entity match
+   -> 1-2 hop traversal
+   -> graph chunk ids
+   -> existing HybridSearchService
+   -> chunk-id dedupe/fusion
+-> AgentToolbox.search_graph_knowledge
+-> LangGraph search_graph_knowledge node
+-> answer_with_citations
+```
+
+The entity schema is limited to `Standard`, `Material`, `Parameter`, `Value`, `Organization`, and `Method`. Relation predicates are limited to `standard_defines`, `standard_references`, `material_has_property`, `parameter_range`, and `applies_to`.
+
+Graph persistence uses deterministic JSON, not pickle. Nodes store `type`, `name`, `normalized_name`, `mentions`, and `chunk_ids`. Edges store `type`, `source_chunk_id`, and optional short evidence. Graph-enhanced retrieval is fail-open: missing or malformed graph files return ordinary hybrid retrieval results and set graph fallback fields in `LatencyTrace`.
+
+LangGraph/ReAct now expose the read-only action `search_graph_knowledge`; deterministic planning routes only obvious graph-shaped questions such as standard reference chains and cross-document relationships to it. Ordinary concept questions continue to use `search_knowledge`.
+
+Observability adds safe labels and counts only: `retrieval_strategy=graph_enhanced_search`, `graph_search_available`, `graph_search_fallback`, `graph_search_error`, `graph_entity_count`, `graph_candidate_chunk_count`, `graph_hop_count`, and `graph_search_latency_ms`. These fields must not include query text, chunk bodies, provider payloads, hidden reasoning, or credentials.
+
 ## RFC-DomainReranker Stage 3 Architecture Delta
 
 Stage 3 keeps the `ReRankingProvider` boundary intact and connects the RFC-domain BGE LoRA model through HTTP rather than local model loading:

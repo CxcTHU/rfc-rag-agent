@@ -1,0 +1,6 @@
+metric,value
+total_cases,30
+graph_intent_cases,21
+baseline_intent_cases,9
+dry_run_rows,30
+safety_boundary,derived_counts_and_labels_only_no_chunk_bodies_no_provider_payloads

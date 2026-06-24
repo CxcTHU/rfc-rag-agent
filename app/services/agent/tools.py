@@ -15,6 +15,7 @@ from app.services.generation.answer_service import CitationAnswerService
 from app.services.generation.chat_model import ChatModelProvider
 from app.services.generation.prompt_builder import ContextSource
 from app.services.generation.vision_model import create_vision_model_provider
+from app.services.graphrag.graph_search import GraphEnhancedSearchService
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.citation_locator import CitationLocator
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
@@ -328,6 +329,48 @@ class AgentToolbox:
             sources=sources,
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No hybrid results were found.",
+        )
+
+    def search_graph_knowledge(self, query: str, top_k: int = 5) -> AgentToolResult:
+        tool_name = "search_graph_knowledge"
+        settings = get_settings()
+        try:
+            outcome = GraphEnhancedSearchService(
+                self.db,
+                self.embedding_provider,
+                graph_path=Path(settings.graphrag_graph_path),
+            ).search(
+                query=query,
+                top_k=top_k,
+            )
+        except (RuntimeError, ValueError) as exc:
+            return failed_tool_result(tool_name, query, exc)
+
+        search_results = _enrich_results_with_citation_location(
+            [search_item_from_result(result) for result in outcome.results],
+            self.db,
+        )
+        sources = _enrich_sources_with_citation_location(
+            sources_from_search_results(search_results),
+            self.db,
+        )
+        return AgentToolResult(
+            tool_name=tool_name,
+            call=AgentToolCallRecord(
+                tool_name=tool_name,
+                input_summary=summarize_input(query, top_k),
+                output_summary=(
+                    f"returned {len(search_results)} graph-enhanced results; "
+                    f"graph_available={outcome.summary.available}; "
+                    f"graph_fallback={outcome.summary.fallback}; "
+                    f"graph_candidates={outcome.summary.candidate_chunk_count}"
+                ),
+                succeeded=True,
+            ),
+            search_results=search_results,
+            sources=sources,
+            refused=not bool(search_results),
+            refusal_reason=None if search_results else "No graph-enhanced results were found.",
         )
 
     def search_tables(self, query: str, top_k: int = 5) -> AgentToolResult:

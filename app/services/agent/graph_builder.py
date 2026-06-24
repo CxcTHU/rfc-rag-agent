@@ -19,6 +19,7 @@ from app.services.agent.graph_nodes import (
     reset_current_toolbox,
     rewrite_query_node,
     planner_node,
+    search_graph_knowledge_node,
     search_figures_node,
     search_knowledge_node,
     search_tables_node,
@@ -58,6 +59,7 @@ def build_langgraph_agent_graph() -> StateGraph:
 
     graph.add_node("planner", planner_node)
     graph.add_node("search_knowledge", search_knowledge_node)
+    graph.add_node("search_graph_knowledge", search_graph_knowledge_node)
     graph.add_node("search_figures", search_figures_node)
     graph.add_node("search_tables", search_tables_node)
     graph.add_node("analyze_user_image", analyze_image_node)
@@ -72,6 +74,7 @@ def build_langgraph_agent_graph() -> StateGraph:
         route_after_planner,
         {
             "search_knowledge": "search_knowledge",
+            "search_graph_knowledge": "search_graph_knowledge",
             "search_figures": "search_figures",
             "search_tables": "search_tables",
             "analyze_user_image": "analyze_user_image",
@@ -82,6 +85,7 @@ def build_langgraph_agent_graph() -> StateGraph:
         },
     )
     graph.add_edge("search_knowledge", "planner")
+    graph.add_edge("search_graph_knowledge", "planner")
     graph.add_edge("search_figures", "planner")
     graph.add_edge("search_tables", "planner")
     graph.add_edge("rewrite_query", "search_knowledge")

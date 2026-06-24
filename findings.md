@@ -1,92 +1,76 @@
-# 阶段 52L-52P Findings：真实 API 记忆测评
+# 阶段 53 Findings：GraphRAG 知识图谱增强检索
 
 ## 已确认事实
 
-- Phase 52 记忆系统语义升级已经完成主要开发：`AgentMemoryContext`、prior relevance gate、intent classifier、planner memory metadata、长期记忆禁用态、deterministic regression 等均已落地。
-- 用户明确要求：所有正式测评集都必须使用真实 API 测试。
-- 因此，本阶段正式质量结论只使用真实 API 结果；deterministic 测试只作为代码回归护栏。
-- 当前工作区已有 Phase 52 未提交改动，后续提交仍需用户人工核验和明确授权。
+- 当前 `main / origin/main` 已包含 Phase 52 默认 reranker 链路合并：`29229270 Merge pull request #20 from CxcTHU/codex/phase-52-default-reranker-chain`。
+- 阶段 53 目标分支已创建：`codex/phase-53-graphrag`。
+- 用户指定的 `docs/stage53_graphrag_prompt.md` 不在当前 HEAD，但作为 Git blob 存在：`557f438744e2d1b0f4c842d8ba5b6ca9c849d704`。
+- 阶段 53 要求严格按 53A 到 53G 顺序推进，且每个小 Phase 完成后更新 `task_plan.md`、`findings.md`、`progress.md`。
 
-## 真实 API 测评结论
+## Phase 53A 研究笔记
 
-最终正式结果：
+- 53A 的核心不是改测试行为，而是把生产 planner 配置和测试 deterministic 路径隔离清楚。
+- 不能把真实 API key 写入 `.env.prod`、模板、测试或文档。若 `.env.prod` 是本地秘密文件，只能检查/调整非敏感配置；可提交文件应使用 `.env.prod.example` 或文档说明。
+- 需要检查 `conftest.py` 中是否已有环境变量隔离 fixture，以及 `/agent/query mode="langgraph_agent"` 是否通过 `planner_chat_provider` 注入。
+- 生产 `.env.prod` 不存在且 `.env.*` 被 gitignore；阶段 53A 采用“可提交模板 + compose 必填变量”方式收口，不创建或打印真实 `.env.prod`。
+- `docker-compose.prod.yml` 已通过 placeholder 环境变量验证配置有效。
+- `tests/conftest.py` 原本只清空 reranker 环境；阶段 53A 已补齐 planner 与 vision provider 清空，避免本地真实配置污染测试。
 
-```text
-current:
-  rows=100 completed=100 gate=pass
-  intent_accuracy=0.9200
-  correction_recall=1.0000
-  prior_reuse_precision=1.0000
-  planner_action_accuracy=0.9700
-  low_relevance_false_reuse_count=0
-  stale_anchor_prior_reuse_count=0
-  memory_citation_source_true_count=0
-  long_term_enabled_count=0
+## 待确认/观察
 
-legacy:
-  rows=100 completed=100 gate=blocked
-  prior_reuse_precision=0.7317
-  planner_action_accuracy=0.8800
-  low_relevance_false_reuse_count=11
-```
+- `.env.prod` 是否存在且是否被 gitignore；如果包含真实密钥，只做最小非输出检查，不打印内容。
+- `PLANNER_CHAT_MODEL_*` 的生产实际 provider 应优先沿用现有 `CHAT_MODEL_*`/规划模型配置模式，不能凭空写入密钥。
+- 当前全量测试规模较大，应先跑 Phase 53A focused tests，再跑全量 pytest。
+- 全量 pytest 补齐 Pillow 后暴露本地 `VISION_MODEL_*` 环境污染风险：图片分析测试期望 deterministic vision，但真实/本地视觉配置会让路径非拒答。测试入口应同时清空 vision provider 变量，保持 CI/local regression 不触发真实视觉 API。
 
-current 相对 legacy 的核心进步：
+## Phase 53B 研究笔记
 
-- prior reuse precision 提升 `+0.2683`。
-- planner action accuracy 提升 `+0.0900`。
-- low relevance false reuse 从 `11` 降为 `0`。
-- memory citation source 与 long-term enabled 均保持 `0`。
+- 53B 只做标签化和可观测化，不改变 planner 既有 action 路由。
+- 标签应覆盖现有 planner route：knowledge search、table search、figure search、image analysis、prior evidence answer、refuse/final answer。
+- `latency_trace` 已有 `planner_model`、`planner_latency_ms` 等字段；新增 `retrieval_strategy` 应保持字符串枚举，不记录 query、chunk 或 provider 原始响应。
+- 实现采用独立 `adaptive_retrieval.py`，避免把策略标签散落到具体工具中。
+- ReAct runtime event 的 `agent_step` payload 可以带 `retrieval_strategy`，该字段只含枚举标签，不含 query/chunk。
+- 53B focused tests 覆盖 action 映射、prior evidence strategy、LangGraph trace、ReAct trace。
 
-## 真实 API 暴露并已修复的问题
+## Phase 53C 研究笔记
 
-- off-topic intent 可以仍走 memory-context route，真实 judge 认为存在记忆越界风险。
-  修复：`decide_memory_policy()` 对 `off_topic` 返回 `refuse_or_clarify`，不使用 memory retrieval 或 answer。
+- 53C 需要先做 schema 和 extractor，不应直接进入图存储。
+- 抽取结果应是 JSON 派生物，默认 deterministic/dry-run；真实 LLM 抽取必须显式开启。
+- 为避免保存完整 chunk，批量脚本输出应保存 chunk_id、document_id、短 title、实体、三元组和脱敏短 error/status，不保存 chunk content 或 provider raw response。
+- 实体规范化要先做轻量版本：trim、大小写/空白归一、保留原文 mention，后续图阶段再统一节点合并。
+- 53C 实现采用独立 `app/services/graphrag` 包：schema 负责白名单、规范化、dict round-trip 和去重；extractor 负责 deterministic 与 LLM 两条抽取路径。
+- LLM 抽取只解析 `ChatModelResult.answer` 的 JSON，不保留 `raw_response`；unsupported entity/relation types 会被丢弃。
+- 批量脚本 `scripts/extract_phase53_graphrag_triples.py` 输出派生 rows，不包含 `Chunk.content`、provider 原始响应或 hidden reasoning。
+- 53C focused tests 覆盖 schema 白名单、deterministic 抽取、fake LLM JSON 解析、批量脚本安全输出边界。
 
-- 英文 `it` contextual 匹配使用子串逻辑，会误命中 `testing` 等词。
-  修复：英文 `it` / `that` 使用词边界匹配。
+## Phase 53D 研究笔记
 
-- 长对话中近期主题已经迁移时，中等相似 prior 仍可能被直接复用。
-  修复：近期 session anchors 表明话题迁移且 prior relevance 低于直接复用阈值时，阻断 `answer_from_prior_evidence`。
+- `.venv` 初始缺少 `networkx`，阶段 53D 已将 `networkx>=3.4.0` 加入 `pyproject.toml` 并安装本地 `networkx-3.6.1`。
+- 图存储使用 `nx.MultiDiGraph`，允许同一节点对之间存在多种关系；JSON 持久化采用自定义 deterministic dict，避免 pickle。
+- 节点 id 使用 `type:normalized_name`，节点属性包含 `type`、`name`、`normalized_name`、`mentions`、`chunk_ids`。
+- 边属性包含 `type`、`source_chunk_id` 和可选短 `evidence`；不包含 chunk 正文或 provider 原始响应。
+- 图统计基于 undirected view 计算连通分量和度分布，同时输出 node/edge type counts。
 
-- 部分 stale correction 句式未被 deterministic correction detector 覆盖。
-  修复：增加中文“不是 X，...” / “不是 X。”和英文 “Not X; continue ...” 模式，同时避免把 “do not cite memory” 误判为纠错。
+## Phase 53E 研究笔记
 
-- 真实 judge 一度把“场景固有风险”误当作“observed decision 残余风险”。
-  修复：judge rubric 明确如果 observed safe fields 与 expected 一致，且 `memory_citation_source=false` / long-term disabled，则不应仅因场景困难判 high risk。
+- 图增强检索实现为 `GraphEnhancedSearchService` wrapper，不替换现有 `HybridSearchService`，因此图不可用时能 fail-open 返回既有 hybrid 结果。
+- 查询实体匹配基于图节点 `name`、`normalized_name` 与 `mentions`，再对 NetworkX graph 的 undirected view 做 1-2 hop 遍历。
+- 图候选 chunk 来自节点 `chunk_ids` 和边 `source_chunk_id`；融合时按 `chunk_id` 去重，对既有 hybrid 命中进行小幅 graph boost，并追加 graph-only chunks。
+- `LatencyTrace` 新增 graph search 摘要字段，只记录 available/fallback/error/count/hop/latency，不记录 query、chunk 正文或 provider 原始响应。
+- 53E 尚未改变 LangGraph planner 路由；工具/节点集成留到 53F。
 
-## 证据等级
+## Phase 53F 研究笔记
 
-- `phase52_memory_real_api_*`：正式质量证据。
-- `scripts/evaluate_phase52_memory.py`：deterministic code regression，只能证明代码路径稳定。
-- pytest / Stage30：回归护栏，不能替代真实 API 语义测评。
+- `search_graph_knowledge` 已作为只读 ReAct action 接入，映射到 AgentToolbox 的 graph-enhanced retrieval 工具。
+- Adaptive RAG strategy 新增 `graph_enhanced_search`，只作为安全枚举标签进入 latency trace/runtime events。
+- Deterministic planner 仅对标准引用链、跨文档关系、知识图谱、linked concept 等明显 graph-shaped query 路由到图检索；普通问题仍默认 `search_knowledge`。
+- LangGraph route 为 `planner -> search_graph_knowledge -> planner`，图工具有结果后 planner 进入 `answer_with_citations`。
+- API/SSE 响应契约保持不变；新增工具名只出现在 `tool_calls`/`workflow_steps`，graph trace 字段仍为脱敏 operational metadata。
 
-## 安全扫描
+## Phase 53G 研究笔记
 
-正式 real API CSV 结果中未命中：
-
-```text
-api_key
-bearer
-authorization
-raw_response
-reasoning_content
-```
-
-结果文件只保存结构化标签、数值指标、provider/model 名称、latency 和脱敏短理由。
-
-## 最终回归护栏
-
-```text
-python scripts/evaluate_phase52_memory.py -> cases=32 pass=32 fail=0 pass_rate=1.0000
-Phase 52 focused tests -> 67 passed
-python -m pytest -q -> 1162 passed, 1 skipped
-python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
-git diff --check -> no whitespace errors, LF/CRLF warnings only
-```
-
-最终 `git status -sb` 显示分支为 `codex/key-improvements-obsidian-sync`，与开工时记录的 `codex/phase-52-agent-memory-context` 不一致。本轮没有执行分支切换命令；提交前需要人工确认分支归属。
-
-## 当前开放问题
-
-- current 的 `intent_accuracy=0.9200` 未满分，主要来自 LLM 对新主题 / contextual / expand 边界的非关键差异；由于 prior decision、planner action、safety gate 均达标，本阶段不继续追求 intent label 满分。
-- legacy baseline 是有意模拟旧 source-count prior reuse，用于证明 Phase 52 relevance gate 和 stale/recency policy 的收益。
+- GraphRAG 评测资产采用 30 条 manually authored dry-run cases，覆盖 standard_reference_chain、cross_document_material_property、parameter_range、method_applies_to、organization_standard、ordinary_hybrid_baseline 和 off-topic negative。
+- `scripts/evaluate_phase53_graphrag_ablation.py` 默认 dry-run，只输出策略标签、case/category、expected_delta 和安全 summary；Phase 53G 不启用真实检索执行。
+- Stage 30 脚本会重写 `data/evaluation/stage30_quality_summary.csv` 与追加 `stage30_quality_scores.csv`，本轮结果仍为 `91.52 / A / pass`。
+- `git diff --check` 通过；Windows 工作区仅报告 LF/CRLF conversion warnings，不是 whitespace error。
+- 全量 pytest 在安装 Pillow/networkx 后通过，当前总数为 `1226 passed, 1 skipped, 1 warning`。

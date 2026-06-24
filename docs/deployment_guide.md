@@ -19,7 +19,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## 可选 Planner 快模型配置
 
-`react_agent` 与 `langgraph_agent` 支持可选 `PLANNER_CHAT_MODEL_*` 配置，用低延迟模型做 action 路由，主 `CHAT_MODEL_*` 仍用于最终引用式回答生成。留空时自动使用确定性 planner，不调用 planner API。
+`react_agent` 与 `langgraph_agent` 支持 `PLANNER_CHAT_MODEL_*` 配置，用低延迟模型做 action 路由，主 `CHAT_MODEL_*` 仍用于最终引用式回答生成。生产 Docker Compose 要求显式配置 planner provider，避免生产环境静默退回 `DeterministicReActPlanner`；测试入口会在 `tests/conftest.py` 清空这些变量，确保 CI 仍走 deterministic 路径。
 
 ```text
 PLANNER_CHAT_MODEL_PROVIDER=openai-compatible
@@ -149,16 +149,18 @@ CHAT_MODEL_TEMPERATURE=0.2
 CHAT_MODEL_TIMEOUT_SECONDS=30
 ```
 
-可选 ReAct planner provider：
+生产 ReAct / LangGraph planner provider：
 
 ```text
-PLANNER_CHAT_MODEL_PROVIDER=
-PLANNER_CHAT_MODEL_NAME=
-PLANNER_CHAT_MODEL_API_KEY=
-PLANNER_CHAT_MODEL_BASE_URL=
+PLANNER_CHAT_MODEL_PROVIDER=openai-compatible
+PLANNER_CHAT_MODEL_NAME=deepseek-v4-flash
+PLANNER_CHAT_MODEL_API_KEY=<local-only>
+PLANNER_CHAT_MODEL_BASE_URL=<provider-base-url>
 PLANNER_CHAT_MODEL_TEMPERATURE=0
-PLANNER_CHAT_MODEL_TIMEOUT_SECONDS=30
+PLANNER_CHAT_MODEL_TIMEOUT_SECONDS=10
 ```
+
+真实 planner API key 只允许写入服务器本地 `.env.prod` 或等价 secret 管理，不得写入 Git、CSV、文档、测试或 Obsidian。
 
 Embedding provider：
 

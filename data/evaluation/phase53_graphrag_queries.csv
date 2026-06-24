@@ -1,0 +1,31 @@
+case_id,category,question,expected_graph_intent,expected_entities,expected_relation_focus
+phase53_graph_001,standard_reference_chain,How does GB/T 50080 relate to slump flow requirements for self-compacting concrete?,true,"GB/T 50080;slump flow;self-compacting concrete",standard_defines
+phase53_graph_002,standard_reference_chain,Trace the standard reference chain around RFC compressive strength testing.,true,"RFC;compressive strength",standard_references
+phase53_graph_003,cross_document_material_property,Which materials are linked to filling capacity and slump flow across RFC documents?,true,"filling capacity;slump flow;rock-filled concrete",material_has_property
+phase53_graph_004,cross_document_material_property,Find linked evidence connecting rock-filled concrete, SCC, and compressive strength.,true,"rock-filled concrete;SCC;compressive strength",material_has_property
+phase53_graph_005,parameter_range,What value ranges are connected to slump flow in SCC tests?,true,"slump flow;SCC",parameter_range
+phase53_graph_006,parameter_range,Which RFC parameters are connected to 45 MPa or nearby compressive strength values?,true,"RFC;45 MPa;compressive strength",parameter_range
+phase53_graph_007,method_applies_to,Which construction methods are connected to rock-filled concrete placement and curing?,true,"placement;curing;rock-filled concrete",applies_to
+phase53_graph_008,method_applies_to,Show the linked methods that apply to SCC filling in RFC voids.,true,"SCC;filling;RFC",applies_to
+phase53_graph_009,organization_standard,Which organizations are linked to standards about SCC testing methods?,true,"organization;SCC;testing method",standard_defines
+phase53_graph_010,organization_standard,Find ACI or ASTM standard links for self-compacting concrete parameters.,true,"ACI;ASTM;self-compacting concrete",standard_references
+phase53_graph_011,standard_reference_chain,What standards define or reference water-binder ratio constraints?,true,"standard;water-binder ratio",standard_defines
+phase53_graph_012,cross_document_material_property,Connect aggregate void ratio evidence with RFC filling capacity.,true,"aggregate;void ratio;filling capacity",material_has_property
+phase53_graph_013,parameter_range,Which numeric values are graph-linked to adiabatic temperature rise?,true,"adiabatic temperature rise;value",parameter_range
+phase53_graph_014,cross_document_material_property,Find graph relationships between fly ash, hydration heat, and temperature control.,true,"fly ash;hydration heat;temperature control",material_has_property
+phase53_graph_015,standard_reference_chain,Which standard nodes are connected to material property definitions for RFC?,true,"standard;RFC;material property",standard_defines
+phase53_graph_016,method_applies_to,What test methods apply to slump-flow evaluation in SCC?,true,"slump-flow test;SCC",applies_to
+phase53_graph_017,parameter_range,Find graph-linked ranges for T500 and slump flow parameters.,true,"T500;slump flow",parameter_range
+phase53_graph_018,cross_document_material_property,"Connect cement, admixture, and SCC flowability evidence.",true,"cement;admixture;SCC flowability",material_has_property
+phase53_graph_019,standard_reference_chain,What is the reference path between construction standards and RFC temperature parameters?,true,"construction standard;RFC;temperature",standard_references
+phase53_graph_020,organization_standard,Which ministry or industry standards relate to hydraulic concrete methods?,true,"Ministry;standard;hydraulic concrete",standard_references
+phase53_graph_021,ordinary_hybrid_baseline,What affects filling capacity in rock-filled concrete?,false,"filling capacity;rock-filled concrete",material_has_property
+phase53_graph_022,ordinary_hybrid_baseline,Explain why SCC flowability matters for RFC construction.,false,"SCC flowability;RFC",material_has_property
+phase53_graph_023,ordinary_hybrid_baseline,Summarize temperature control measures for RFC dams.,false,"temperature control;RFC dam",material_has_property
+phase53_graph_024,ordinary_hybrid_baseline,What causes void defects in rock-filled concrete?,false,"void defects;rock-filled concrete",material_has_property
+phase53_graph_025,ordinary_hybrid_baseline,How does hydration heat affect mass concrete?,false,"hydration heat;mass concrete",material_has_property
+phase53_graph_026,graph_negative_offtopic,What is the relationship between pasta recipes and slump flow?,false,"pasta;slump flow",none
+phase53_graph_027,graph_negative_offtopic,Find a knowledge graph for stock trading advice.,false,"stock trading",none
+phase53_graph_028,standard_reference_chain,Which graph path links GB/T standards to SCC test values?,true,"GB/T;SCC;test values",standard_references
+phase53_graph_029,cross_document_material_property,How are aggregate gradation and cement loss connected in RFC evidence?,true,"aggregate gradation;cement loss;RFC",material_has_property
+phase53_graph_030,method_applies_to,"Which graph-linked methods connect mixing, pouring, and compaction for RFC?",true,"mixing;pouring;compaction;RFC",applies_to

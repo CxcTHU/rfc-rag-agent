@@ -14,6 +14,7 @@ from app.services.agent.memory_context import (
     build_agent_memory_context,
     should_use_prior_evidence_for_answer,
 )
+from app.services.agent.adaptive_retrieval import record_adaptive_strategy
 from app.services.agent.react_actions import (
     DeterministicReActPlanner,
     READ_ONLY_REACT_ACTIONS,
@@ -156,7 +157,11 @@ def planner_node(state: LangGraphAgentState) -> dict[str, Any]:
             question=question,
             reasoning_summary="A user-uploaded image is attached; analyze it before answering.",
         )
-    elif last_observation and last_observation.action == "search_knowledge" and last_observation.search_result_count > 0:
+    elif (
+        last_observation
+        and last_observation.action in {"search_knowledge", "search_graph_knowledge"}
+        and last_observation.search_result_count > 0
+    ):
         _record_planner_model("deterministic")
         action = ReActAction(
             action="answer_with_citations",
@@ -178,6 +183,7 @@ def planner_node(state: LangGraphAgentState) -> dict[str, Any]:
             reasoning_summary="Table evidence is available; answer with citations.",
         )
     elif iteration > max_iterations:
+        record_adaptive_strategy(get_current_latency_trace(), "refuse")
         return {
             "next_action": "refuse",
             "current_query": question,
@@ -227,10 +233,20 @@ def planner_node(state: LangGraphAgentState) -> dict[str, Any]:
         succeeded=True,
         iteration=iteration,
     )
+    retrieval_strategy = record_adaptive_strategy(
+        get_current_latency_trace(),
+        action,
+        use_prior_evidence=(
+            action.action == "answer_with_citations"
+            and not observations
+            and should_use_prior_evidence_for_answer(memory_context, question)
+        ),
+    )
     return {
         "next_action": action.action,
         "current_query": action.query or action.question or question,
         "iteration_count": iteration,
+        "retrieval_strategy": retrieval_strategy,
         "workflow_steps": [*state.get("workflow_steps", []), serialize_step(planner_step)],
     }
 
@@ -403,7 +419,13 @@ def memory_stale_anchor_count(memory_context: AgentMemoryContext | None) -> int:
 def parse_planner_action(payload: str, *, question: str) -> ReActAction:
     decoded = decode_planner_json(payload)
     action_name = decoded.get("action") or decoded.get("next_action")
-    if action_name in {"search_knowledge", "search_figures", "search_tables", "rewrite_query"}:
+    if action_name in {
+        "search_knowledge",
+        "search_graph_knowledge",
+        "search_figures",
+        "search_tables",
+        "rewrite_query",
+    }:
         decoded.setdefault("query", question)
     if action_name == "answer_with_citations":
         decoded.setdefault("question", question)
@@ -445,6 +467,7 @@ def _record_planner_model(value: str, *, overwrite: bool = False) -> None:
 
 PLANNER_TOOL_DESCRIPTIONS: dict[str, str] = {
     "search_knowledge": "Search the text knowledge base for RFC concepts, causes, mechanisms, or general evidence.",
+    "search_graph_knowledge": "Search graph-enhanced evidence for cross-document relationships, standards references, and linked RFC concepts.",
     "search_figures": "Search figure or image evidence when the user explicitly asks for pictures, diagrams, cracks, curves, or visual examples.",
     "search_tables": "Search table chunks when the user asks for tabulated parameters, mix ratios, rows, columns, or numeric table data.",
     "analyze_user_image": "Analyze a user-uploaded image. Only choose this when an image path is already attached.",
@@ -500,6 +523,43 @@ def search_knowledge_node(state: LangGraphAgentState) -> dict[str, Any]:
         query,
         top_k=int(state.get("top_k", 5)),
         progress_callback=emit_progress,
+    )
+    updates = _append_tool_result(state, action, tool_result)
+    updates["previous_queries"] = sorted(previous_queries)
+    return updates
+
+
+def search_graph_knowledge_node(state: LangGraphAgentState) -> dict[str, Any]:
+    memory_context = memory_context_for_state(state, _question(state))
+    query = augment_query_with_agent_memory(_current_query(state), memory_context)
+    previous_queries = set(state.get("previous_queries", []))
+    graph_query_key = f"graph:{query}"
+    if is_repeated_query(graph_query_key, previous_queries):
+        action = ReActAction(
+            action="search_graph_knowledge",
+            query=query,
+            reasoning_summary="Repeated graph query skipped.",
+        )
+        observation = ReActObservation(
+            action="search_graph_knowledge",
+            query=query,
+            observation_summary="repeated graph query skipped",
+            succeeded=False,
+            error="repeated graph query skipped",
+        )
+        return _append_observation(state, action, observation)
+
+    previous_queries.add(normalize_react_query(graph_query_key))
+    action = ReActAction(
+        action="search_graph_knowledge",
+        query=query,
+        reasoning_summary="Search graph-enhanced knowledge through AgentToolbox.",
+    )
+    iteration = int(state.get("iteration_count", 1))
+    _emit_tool_start(action, iteration)
+    tool_result = _toolbox(state).search_graph_knowledge(
+        query,
+        top_k=int(state.get("top_k", 5)),
     )
     updates = _append_tool_result(state, action, tool_result)
     updates["previous_queries"] = sorted(previous_queries)

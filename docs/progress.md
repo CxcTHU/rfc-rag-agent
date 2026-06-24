@@ -1,5 +1,20 @@
 # 项目进度
 
+## Latest Status: 2026-06-24 Phase 53 GraphRAG Knowledge Graph Retrieval
+
+Current branch: `codex/phase-53-graphrag`.
+
+Phase 53 has completed the main GraphRAG development pass: explicit production planner config, deterministic test isolation for planner/vision providers, Adaptive RAG strategy labels, RFC/domain entity-relation extraction, NetworkX graph storage, graph-enhanced retrieval with fail-open hybrid fallback, LangGraph/ReAct `search_graph_knowledge` integration, and a 30-case dry-run GraphRAG ablation set.
+
+Current Phase 53 validation:
+
+```text
+Phase 53 API/SSE/LangGraph focused regression -> 99 passed
+python scripts/evaluate_phase53_graphrag_ablation.py -> cases=30
+```
+
+Final full pytest, Stage 30, and `git diff --check` are run in Phase 53G closeout. No `git add`, commit, tag, push, or PR has been performed. Do not write credentials, provider payloads, hidden reasoning, full chunk bodies, or restricted full text to Git/CSV/docs/tests/Obsidian.
+
 ## Latest Status: 2026-06-24 Phase 52 Default Reranker Chain Follow-up
 
 Current branch: `codex/phase-52-default-reranker-chain`.
