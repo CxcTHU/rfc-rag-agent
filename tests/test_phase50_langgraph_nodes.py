@@ -8,6 +8,7 @@ from app.services.agent.graph_nodes import (
     reset_current_event_sink,
     rewrite_query_node,
     search_figures_node,
+    search_graph_knowledge_node,
     search_knowledge_node,
     search_tables_node,
     set_current_event_sink,
@@ -20,6 +21,11 @@ from app.services.agent.tools import (
     AgentToolResult,
 )
 from app.services.generation.chat_model import ChatMessage, ChatModelResult
+from app.services.observability.latency_trace import (
+    LatencyTrace,
+    reset_current_latency_trace,
+    set_current_latency_trace,
+)
 
 
 class RecordingChatProvider:
@@ -55,6 +61,16 @@ class FakeToolbox:
             output_summary="returned 1 hybrid results",
             search_results=[search_item(chunk_id=1)],
             sources=[source_reference(chunk_id=1)],
+        )
+
+    def search_graph_knowledge(self, query: str, top_k: int = 5) -> AgentToolResult:
+        self.calls.append(("search_graph_knowledge", query, top_k))
+        return tool_result(
+            "search_graph_knowledge",
+            query=query,
+            output_summary="returned 1 graph-enhanced results; graph_available=True",
+            search_results=[search_item(chunk_id=4)],
+            sources=[source_reference(chunk_id=4)],
         )
 
     def search_figures(self, query: str, top_k: int = 4) -> AgentToolResult:
@@ -177,6 +193,7 @@ def test_planner_node_selects_search_before_answering() -> None:
     updates = planner_node(state)
 
     assert updates["next_action"] == "search_knowledge"
+    assert updates["retrieval_strategy"] == "hybrid_knowledge_search"
     assert updates["current_query"] == "What affects filling capacity?"
     assert updates["iteration_count"] == 1
     assert updates["workflow_steps"][0]["name"] == "llm_with_tools"
@@ -204,9 +221,16 @@ def test_planner_node_answers_expand_followup_from_prior_sources() -> None:
         },
     ).to_state_dict()
 
-    updates = planner_node(state)
+    trace = LatencyTrace()
+    token = set_current_latency_trace(trace)
+    try:
+        updates = planner_node(state)
+    finally:
+        reset_current_latency_trace(token)
 
     assert updates["next_action"] == "answer_with_citations"
+    assert updates["retrieval_strategy"] == "answer_from_prior_evidence"
+    assert trace.values["retrieval_strategy"] == "answer_from_prior_evidence"
     assert updates["current_query"] == "请详细回答"
     assert updates["workflow_steps"][0]["output_summary"] == "selected action=answer_with_citations"
 
@@ -266,10 +290,16 @@ def test_planner_node_selects_image_analysis_when_image_is_attached() -> None:
 
 def test_planner_node_selects_table_search_for_table_questions() -> None:
     state = initialize_state(question="请返回配合比表中的参数")
-
-    updates = planner_node(state)
+    trace = LatencyTrace()
+    token = set_current_latency_trace(trace)
+    try:
+        updates = planner_node(state)
+    finally:
+        reset_current_latency_trace(token)
 
     assert updates["next_action"] == "search_tables"
+    assert updates["retrieval_strategy"] == "table_search"
+    assert trace.values["retrieval_strategy"] == "table_search"
     assert updates["workflow_steps"][0]["name"] == "llm_with_tools"
 
 
@@ -324,6 +354,21 @@ def test_search_knowledge_node_reuses_agent_toolbox_and_records_observation() ->
     assert updates["observations"][0]["action"] == "search_knowledge"
     assert len(updates["workflow_steps"]) == 2
     assert updates["workflow_steps"][0]["name"] == "llm_with_tools"
+    assert len(updates["search_results"]) == 1
+    assert len(updates["sources"]) == 1
+
+
+def test_search_graph_knowledge_node_reuses_agent_toolbox_and_records_observation() -> None:
+    toolbox = FakeToolbox()
+    state = initialize_state(question="standard reference chain", top_k=2, toolbox=toolbox)
+    state["current_query"] = "standard reference chain"
+    state["iteration_count"] = 1
+
+    updates = search_graph_knowledge_node(state)
+
+    assert toolbox.calls == [("search_graph_knowledge", "standard reference chain", 2)]
+    assert updates["observations"][0]["action"] == "search_graph_knowledge"
+    assert updates["workflow_steps"][0]["name"] == "search_graph_knowledge"
     assert len(updates["search_results"]) == 1
     assert len(updates["sources"]) == 1
 

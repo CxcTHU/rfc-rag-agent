@@ -85,6 +85,7 @@ def test_react_agent_service_searches_then_answers_with_citations(tmp_path) -> N
         "answer_with_citations",
     ]
     assert "react_agent" in result.reasoning_summary
+    assert result.latency_trace["retrieval_strategy"] == "answer_from_retrieved_evidence"
 
 
 def test_react_agent_service_emits_safe_runtime_events(tmp_path) -> None:
@@ -108,6 +109,11 @@ def test_react_agent_service_emits_safe_runtime_events(tmp_path) -> None:
     serialized_payloads = " ".join(str(event.payload) for event in events)
     assert "raw_response" not in serialized_payloads
     assert "Bearer" not in serialized_payloads
+    assert any(
+        event.payload.get("retrieval_strategy") == "hybrid_knowledge_search"
+        for event in events
+        if event.event == "agent_step"
+    )
 
 
 def test_react_agent_service_converges_when_search_provider_fails(tmp_path) -> None:

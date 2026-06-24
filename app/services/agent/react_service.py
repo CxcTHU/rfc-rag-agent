@@ -17,6 +17,7 @@ from app.services.agent.react_actions import (
     parse_react_action_json,
     should_search_figures,
 )
+from app.services.agent.adaptive_retrieval import record_adaptive_strategy
 from app.services.agent.service import AgentQueryResult
 from app.services.agent.tools import (
     AgentSearchItem,
@@ -143,7 +144,7 @@ class ReActAgentService:
                 elif (
                     not llm_driven
                     and observations
-                    and observations[-1].action == "search_knowledge"
+                    and observations[-1].action in {"search_knowledge", "search_graph_knowledge"}
                     and observations[-1].search_result_count > 0
                 ):
                     action = ReActAction(
@@ -164,6 +165,7 @@ class ReActAgentService:
                     "planner_latency_ms",
                     (time.perf_counter() - planner_started) * 1000.0,
                 )
+                retrieval_strategy = record_adaptive_strategy(latency_trace, action)
                 self._emit(
                     event_sink,
                     "agent_step",
@@ -171,6 +173,7 @@ class ReActAgentService:
                         "iteration": iteration,
                         "action": action.action,
                         "step_summary": action.reasoning_summary,
+                        "retrieval_strategy": retrieval_strategy,
                     },
                 )
 
@@ -192,6 +195,41 @@ class ReActAgentService:
                     self._emit_tool_start(event_sink, action, iteration)
                     tool_started = time.perf_counter()
                     tool_result = self.toolbox.hybrid_search_knowledge(query, top_k=top_k)
+                    latency_trace.add_duration(
+                        "tool_latency_ms",
+                        (time.perf_counter() - tool_started) * 1000.0,
+                    )
+                    observation = observation_from_tool_result(
+                        action=action,
+                        tool_result=tool_result,
+                    )
+                    self._emit_tool_result(event_sink, action, observation, iteration)
+                    observations.append(observation)
+                    workflow_steps.append(step_from_observation(action, observation, iteration))
+                    tool_calls.append(tool_result.call)
+                    search_results = merge_search_results(search_results, tool_result.search_results)
+                    sources = merge_sources(sources, tool_result.sources)
+                    continue
+
+                if action.action == "search_graph_knowledge":
+                    query = action.query or normalized_question
+                    graph_query_key = f"graph:{query}"
+                    if is_repeated_query(graph_query_key, previous_queries):
+                        observation = ReActObservation(
+                            action="search_graph_knowledge",
+                            query=query,
+                            observation_summary="repeated graph query skipped",
+                            succeeded=False,
+                            error="repeated graph query skipped",
+                        )
+                        observations.append(observation)
+                        workflow_steps.append(step_from_observation(action, observation, iteration))
+                        continue
+
+                    previous_queries.add(normalize_react_query(graph_query_key))
+                    self._emit_tool_start(event_sink, action, iteration)
+                    tool_started = time.perf_counter()
+                    tool_result = self.toolbox.search_graph_knowledge(query, top_k=top_k)
                     latency_trace.add_duration(
                         "tool_latency_ms",
                         (time.perf_counter() - tool_started) * 1000.0,
@@ -490,7 +528,7 @@ class ReActAgentService:
             return action
 
         if observations and any(
-            obs.action in {"search_knowledge", "search_figures"} and obs.search_result_count > 0
+            obs.action in {"search_knowledge", "search_graph_knowledge", "search_figures"} and obs.search_result_count > 0
             for obs in observations
         ):
             if (
@@ -585,7 +623,7 @@ def react_planner_messages(
             content=(
                 "You are a controlled ReAct planner for a rock-filled concrete (RFC) "
                 "and hydraulic engineering knowledge base. Return only one JSON object. "
-                "Allowed actions: search_knowledge, search_figures, search_tables, "
+                "Allowed actions: search_knowledge, search_graph_knowledge, search_figures, search_tables, "
                 "rewrite_query, answer_with_citations, refuse, final_answer.\n\n"
                 "Decision policy:\n"
                 "- DEFAULT: if there are no observations, choose search_knowledge with "
@@ -594,6 +632,9 @@ def react_planner_messages(
                 "  filling, flowability, self-compacting, rock-filled, RCC, RFC, dam, "
                 "  concrete, mix design, thermal control, hydration, durability, etc. — "
                 "  in Chinese OR English OR mixed — IS in scope).\n"
+                "- Choose search_graph_knowledge for cross-document relationships, "
+                "standard reference chains, knowledge graph requests, or linked RFC "
+                "concept questions.\n"
                 "- Choose search_figures only when the user asks for or would clearly "
                 "  benefit from visual evidence: figures, photos, charts, curves, plots, "
                 "  diagrams, flowcharts, experimental data visualizations, failure "
@@ -613,11 +654,11 @@ def react_planner_messages(
                 "  sports, personal advice); or the question explicitly requests a "
                 "  binding engineering judgment, code-compliance ruling, or design "
                 "  approval that only a licensed engineer should give.\n"
-                "- If the latest search_knowledge returned results (result_count > 0), "
+                "- If the latest search_knowledge or search_graph_knowledge returned results (result_count > 0), "
                 "  you SHOULD choose answer_with_citations now. Only choose another "
                 "  search_knowledge if existing evidence is clearly insufficient AND the "
                 "  new query is materially different from previous queries.\n"
-                "- If the latest search_knowledge returned 0 results, choose "
+                "- If the latest search_knowledge or search_graph_knowledge returned 0 results, choose "
                 "  rewrite_query once with a more specific query, then search again. "
                 "  After a repeated empty search, choose refuse.\n"
                 "- Never choose final_answer without going through "

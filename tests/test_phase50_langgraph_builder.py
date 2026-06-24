@@ -32,6 +32,7 @@ def test_langgraph_agent_graph_compiles_with_expected_nodes() -> None:
     assert node_names == {
         "planner",
         "search_knowledge",
+        "search_graph_knowledge",
         "search_figures",
         "search_tables",
         "analyze_user_image",
@@ -64,6 +65,27 @@ def test_langgraph_agent_graph_runs_search_then_answer_with_fake_toolbox() -> No
     assert [step["name"] for step in final_state["workflow_steps"]] == [
         "llm_with_tools",
         "search_knowledge",
+        "llm_with_tools",
+        "answer_with_citations",
+    ]
+
+
+def test_langgraph_agent_graph_runs_graph_search_then_answer_with_fake_toolbox() -> None:
+    toolbox = FakeToolbox()
+    initial_state = initialize_state(
+        question="How are RFC standard reference chains related?",
+        top_k=2,
+        toolbox=toolbox,  # type: ignore[arg-type]
+    )
+    compiled = build_langgraph_agent_graph().compile()
+
+    final_state = compiled.invoke(initial_state, config={"recursion_limit": 15})
+
+    assert final_state["answer"] == "cited answer from existing evidence [1]"
+    assert [call[0] for call in toolbox.calls] == ["search_graph_knowledge"]
+    assert [step["name"] for step in final_state["workflow_steps"]] == [
+        "llm_with_tools",
+        "search_graph_knowledge",
         "llm_with_tools",
         "answer_with_citations",
     ]

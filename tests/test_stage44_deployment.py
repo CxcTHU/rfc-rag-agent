@@ -9,6 +9,10 @@ def test_stage44_production_compose_uses_postgres_auth_and_migrations() -> None:
     assert 'AUTH_ENABLED: "true"' in compose
     assert "postgresql+psycopg2://" in compose
     assert "JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY" in compose
+    assert "PLANNER_CHAT_MODEL_PROVIDER: ${PLANNER_CHAT_MODEL_PROVIDER:?set PLANNER_CHAT_MODEL_PROVIDER" in compose
+    assert "PLANNER_CHAT_MODEL_NAME: ${PLANNER_CHAT_MODEL_NAME:?set PLANNER_CHAT_MODEL_NAME" in compose
+    assert "PLANNER_CHAT_MODEL_API_KEY: ${PLANNER_CHAT_MODEL_API_KEY:?set PLANNER_CHAT_MODEL_API_KEY" in compose
+    assert "PLANNER_CHAT_MODEL_BASE_URL: ${PLANNER_CHAT_MODEL_BASE_URL:?set PLANNER_CHAT_MODEL_BASE_URL" in compose
     assert "alembic upgrade head" in compose
     assert "PIP_INDEX_URL: ${PIP_INDEX_URL:-}" in compose
     assert "PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}" in compose

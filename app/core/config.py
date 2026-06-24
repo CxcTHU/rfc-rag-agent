@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     enable_user_image_upload: bool = True
     table_extraction_min_rows: int = 2
     user_image_max_size_mb: float = 10.0
+    graphrag_graph_path: str = "data/evaluation/phase53_graphrag_graph.json"
 
     model_config = SettingsConfigDict(
         env_file=".env",
