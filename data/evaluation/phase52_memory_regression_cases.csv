@@ -1,0 +1,33 @@
+case_id,question,history_json,prior_source_count,prior_answer_summary,relevance_score,expected_decision_hint,expected_next_action,expected_use_prior
+expand_followup_reuses_prior,please expand,"[""user: What affects rock-filled concrete filling capacity?""]",3,rock-filled concrete filling capacity and flowability,,reuse_prior_evidence,answer_with_citations,true
+new_topic_refreshes_search,What thermal control measures apply to rock-filled concrete?,"[""user: What affects rock-filled concrete filling capacity?""]",3,rock-filled concrete filling capacity and flowability,,session_memory_retrieval_hint,search_knowledge,false
+correction_stale_anchor_search,"correction, I meant Peridynamics for crack analysis","[""user: Peridynamics is a construction quality control method?""]",3,old construction quality control answer,,stale_anchor_refresh_search,search_knowledge,false
+contextual_session_hint_search,why is that important?,"[""user: What affects rock-filled concrete filling capacity?""]",0,,,session_memory_retrieval_hint,search_knowledge,false
+no_memory_search,What affects rock-filled concrete permeability?,[],0,,,no_memory,search_knowledge,false
+prior_two_expand_reuses_when_relevant,please expand,"[""user: What affects rock-filled concrete filling capacity?""]",2,rock-filled concrete filling capacity and aggregate grading,,reuse_prior_evidence,answer_with_citations,true
+contextual_prior_available_search,why is that important?,"[""user: What affects rock-filled concrete filling capacity?""]",2,rock-filled concrete filling capacity,,prior_evidence_available,search_knowledge,false
+single_turn_no_memory_search,What affects rock-filled concrete permeability?,[],0,,,no_memory,search_knowledge,false
+english_expand_reuses_prior,please elaborate,[],3,rock-filled concrete durability prior answer,,reuse_prior_evidence,answer_with_citations,true
+continue_reuses_prior,continue,[],3,thermal control and cooling pipes prior answer,,reuse_prior_evidence,answer_with_citations,true
+english_expand_prior_two_reuses,please elaborate,[],2,rock-filled concrete durability prior answer,,reuse_prior_evidence,answer_with_citations,true
+contextual_that_prior_search,why is that important?,[],3,rock-filled concrete filling prior answer,,prior_evidence_available,search_knowledge,false
+contextual_it_prior_one_search,it matters how?,[],1,rock-filled concrete filling prior answer,,prior_evidence_available,search_knowledge,false
+history_expand_without_prior_search,please expand,"[""user: Rock-filled concrete filling capacity depends on flowability and aggregate grading.""]",0,,,session_memory_retrieval_hint,search_knowledge,false
+contextual_this_session_search,how does that relate to impermeability?,"[""user: Rock-filled concrete flowability affects filling compactness.""]",0,,,session_memory_retrieval_hint,search_knowledge,false
+non_context_history_search,Compare thermal control measures,"[""user: Rock-filled concrete hydration heat and cooling pipes were discussed.""]",0,,,session_memory_retrieval_hint,search_knowledge,false
+correction_thermal_to_impermeability,"correction, not thermal control, impermeability performance","[""user: Rock-filled concrete thermal control, hydration heat, and cooling pipes.""]",3,thermal control prior answer,,stale_anchor_refresh_search,search_knowledge,false
+correction_without_prior_search,"correction, I want crack numerical analysis","[""user: How is rock-filled concrete construction quality evaluated?""]",0,,,stale_anchor_refresh_search,search_knowledge,false
+off_topic_no_memory_search,How do I cook pasta?,[],0,,,no_memory,search_knowledge,false
+new_topic_prior_no_history_search,What are cooling pipes used for?,[],3,rock-filled concrete filling prior answer,,no_memory,search_knowledge,false
+high_relevance_expand_reuses,please expand,"[""user: Rock-filled concrete durability and impermeability evidence""]",1,durability and impermeability evidence,0.9,reuse_prior_evidence,answer_with_citations,true
+low_relevance_expand_with_history_search,please expand,"[""user: Rock-filled concrete durability and impermeability evidence""]",3,unrelated cooking recipe,0.0,session_memory_retrieval_hint,search_knowledge,false
+low_relevance_expand_no_history_search,please expand,[],3,unrelated cooking recipe,0.0,no_memory,search_knowledge,false
+threshold_relevance_expand_reuses,please expand,"[""user: Rock-filled concrete aggregate grading""]",1,aggregate grading prior answer,0.5,reuse_prior_evidence,answer_with_citations,true
+below_threshold_expand_search,please expand,"[""user: Rock-filled concrete aggregate grading""]",1,unrelated prior answer,0.49,session_memory_retrieval_hint,search_knowledge,false
+contextual_prior_low_relevance_still_search,why is that important?,"[""user: Rock-filled concrete aggregate grading""]",3,unrelated prior answer,0.0,prior_evidence_available,search_knowledge,false
+off_topic_with_prior_search,How do I cook pasta?,[],3,rock-filled concrete filling prior answer,,no_memory,search_knowledge,false
+stale_anchor_blocks_high_relevance,"correction, I meant cracking risk","[""user: construction quality control method""]",3,cracking risk prior answer,1.0,stale_anchor_refresh_search,search_knowledge,false
+recent_history_memory_search,how does that affect cooling pipes?,"[""user: Rock-filled concrete hydration heat was discussed."",""assistant: It relates to thermal gradients.""]",0,,,session_memory_retrieval_hint,search_knowledge,false
+long_history_recent_anchor_search,how does that affect cracking risk?,"[""user: early topic durability"",""assistant: ok"",""user: recent topic hydration heat and cooling pipes""]",0,,,session_memory_retrieval_hint,search_knowledge,false
+prior_source_one_no_magic_reuses,please expand,[],1,rock-filled concrete filling prior answer,,reuse_prior_evidence,answer_with_citations,true
+prior_without_summary_uses_source_content,please expand,[],1,,,reuse_prior_evidence,answer_with_citations,true

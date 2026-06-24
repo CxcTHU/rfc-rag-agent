@@ -1,5 +1,48 @@
 # 架构说明
 
+## Phase 52 Real API Memory Evaluation Delta
+
+Phase 52 now includes a real API evaluation layer for the memory policy. It does not change the corpus, provider topology, default Agent mode, or citation contract.
+
+```text
+phase52_memory_real_api_cases.csv
+-> evaluate_phase52_memory_real_api.py
+-> real chat MemoryIntentClassifier
+-> real embedding PriorEvidenceRelevanceGate
+-> current AgentMemoryContext policy
+-> legacy source_count>=3 prior-reuse baseline
+-> real judge over structured, sanitized decisions
+-> summary + ablation CSV
+```
+
+The evaluation exposed and fixed policy edges that deterministic regression did not cover:
+
+- `off_topic` intent now maps to `refuse_or_clarify` and does not use memory for retrieval or answer.
+- English `it` / `that` contextual references use word boundaries so words such as `testing` do not become false follow-ups.
+- Direct prior reuse is blocked when recent session anchors indicate a newer topic and prior relevance is below the stricter direct-reuse threshold.
+- Stale-topic correction detection covers Chinese "不是 X，..." / "不是 X。" and English "Not X; continue ..." patterns.
+
+The final real API gate passes for current memory policy and remains blocked for the legacy source-count baseline. Memory summaries remain planner/retrieval hints only; `memory_citation_source=false` and long-term memory remains disabled.
+
+## Phase 52 Architecture Delta: AgentMemoryContext
+
+Phase 52 adds a unified short-term memory context for LangGraph planning. It does not change the default provider topology, corpus, retrieval backend, or final citation contract.
+
+```text
+history + Phase 43 SessionMemory
++ latest LangGraph checkpoint prior evidence
+-> AgentMemoryContext
+-> planner_node
+   -> reuse prior evidence for expansion follow-ups
+   -> refresh search for new-topic or stale-anchor follow-ups
+-> search_knowledge_node retrieval-only memory hints
+-> generate_answer_node cited answer from retrieved/prior retrieved sources
+```
+
+`AgentMemoryContext` is serialized as JSON-native state so Redis checkpoints remain safe. It includes `session`, `prior_evidence`, `prior_relevance`, `intent`, `long_term`, `decision_hint`, and `policy`. `MemoryIntentClassifier` provides an LLM JSON classifier with deterministic fallback. `PriorEvidenceRelevanceGate` uses embedding similarity instead of a fixed prior-source-count threshold. `SessionMemory` stores `MemoryItem(text, turn_index, importance)` so recent anchors can outrank stale early-turn anchors. `MemoryPolicyDecision` centralizes routes such as `answer_from_prior_evidence`, `search_with_memory_context`, and `refresh_search_ignore_stale_memory`, and keeps `memory_citation_source=false` so memory summaries never become final citations. Long-term memory is disabled by default through `DisabledLongTermMemoryProvider`, which performs no reads or writes and returns a disabled no-op audit record for deletion requests.
+
+Observability is added through `latency_trace` fields such as `memory_context_present`, `memory_prior_source_count`, `memory_session_anchor_count`, `memory_session_stale_anchor_count`, `memory_long_term_enabled`, `memory_decision_hint`, `memory_policy_route`, `memory_used_for_planning`, `memory_used_for_retrieval`, `memory_used_for_answer`, `memory_prior_evidence_used_for_answer`, and `memory_citation_source`. These fields are counts, booleans, and labels only.
+
 ## Phase 51 Architecture Delta: Performance Evaluation And Planner Naming
 
 Phase 51 does not change the default runtime chain. It aligns LangGraph naming and adds an evaluation layer:

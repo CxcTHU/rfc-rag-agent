@@ -1,3 +1,61 @@
+# 阶段 52 真实 API 记忆测评最新交班状态（2026-06-23）
+
+当前分支：`codex/phase-52-agent-memory-context`。
+
+阶段 52 在语义升级后追加完成真实 API 记忆测评：新增 100 条人工标注 memory cases、真实 API 测评脚本、current vs legacy 对照结果和阶段报告。正式质量结论只使用真实 API：真实 chat intent、真实 embedding relevance、真实 judge。
+
+最终真实 API 结果：
+
+```text
+current -> rows=100 completed=100 gate=pass
+intent_accuracy=0.9200
+correction_recall=1.0000
+prior_reuse_precision=1.0000
+planner_action_accuracy=0.9700
+low_relevance_false_reuse_count=0
+stale_anchor_prior_reuse_count=0
+memory_citation_source_true_count=0
+long_term_enabled_count=0
+
+legacy -> rows=100 completed=100 gate=blocked
+prior_reuse_precision=0.7317
+low_relevance_false_reuse_count=11
+```
+
+真实 API 测评暴露并已修复：off-topic 记忆 route 越界、英文 `it` 子串误匹配、长对话近期主题迁移时 prior 直接复用过宽、部分中英文 stale correction 句式未识别，以及 judge rubric 对场景固有风险和决策残余风险区分不清。
+
+新增正式产物：
+
+```text
+data/evaluation/phase52_memory_real_api_cases.csv
+scripts/evaluate_phase52_memory_real_api.py
+data/evaluation/phase52_memory_real_api_results.csv
+data/evaluation/phase52_memory_real_api_summary.csv
+data/evaluation/phase52_memory_real_api_ablation.csv
+docs/phase_reviews/phase-52-real-api-memory-eval.md
+```
+
+阶段 52 仍停在人工核验前。当前未 `git add`、commit、tag、push 或创建 PR。不得把 `.env`、`.env.prod`、数据库密码、JWT secret、API key、Bearer token、供应商原始响应、`raw_response`、`reasoning_content`、hidden thought、完整 chunk、受限全文或长期用户画像写入 Git/CSV/文档/测试/Obsidian。
+
+# 阶段 52 最新交班状态（2026-06-22）
+
+当前分支：`codex/phase-52-agent-memory-context`。
+
+阶段 52 从 Phase 51 已合并的 `main / origin/main -> 3b34e23e Merge pull request #16 from CxcTHU/codex/phase-51-performance-evaluation` 出发；`phase-51-complete` 已确认存在且是 `main` 祖先，未移动任何已有阶段 tag。
+
+阶段 52 已完成短期/会话记忆工程化主体，并完成语义升级：新增 `AgentMemoryContext`，统一 Phase 43 `SessionMemory` 与 Phase 51 LangGraph prior evidence；新增 `MemoryIntentClassifier`（LLM JSON 分类 + deterministic fallback）、`PriorEvidenceRelevanceGate`（embedding similarity，移除 `source_count >= 3` magic number）、`MemoryItem(text, turn_index, importance)` session recency decay；LangGraph planner 可基于 memory context 判断展开追问、新主题追问、stale anchor 和 prior evidence 复用；`generate_answer_node` 继续只使用 retrieved/prior retrieved sources 作为引用来源，不把 memory summary 当证据；`latency_trace` 新增脱敏 memory trace 字段；长期记忆仅有 disabled/read-none/write-none stub。
+
+当前验证：
+
+```text
+focused memory/LangGraph regression -> 63 passed
+python scripts/evaluate_phase52_memory.py -> cases=32 pass=32 fail=0 pass_rate=1.0000
+```
+
+阶段 52 语义升级已完成并停在人工核验前。最终验证：API/SSE/LangGraph focused regression `124 passed`；Phase 52 memory regression `32/32 pass`；`python -m pytest -q -> 1158 passed, 1 skipped`；`python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`；`git diff --check` 无 whitespace error，仅 CRLF warnings。
+
+当前仍未 `git add`、commit、tag、push 或创建 PR，等待用户人工核验。不得把 `.env`、`.env.prod`、数据库密码、JWT secret、API key、Bearer token、供应商原始响应、`raw_response`、`reasoning_content`、hidden thought、完整 chunk、受限全文或长期用户画像写入 Git/CSV/文档/测试/Obsidian。
+
 # 阶段 51 最新交班状态（2026-06-22）
 
 当前分支：`codex/phase-51-performance-evaluation`。

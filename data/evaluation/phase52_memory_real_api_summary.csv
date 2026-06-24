@@ -1,0 +1,3 @@
+mode,status,total_rows,completed_rows,error_rows,skipped_rows,intent_accuracy,correction_recall,prior_reuse_precision,planner_action_accuracy,avg_judge_intent_score,avg_judge_prior_decision_score,avg_judge_planner_score,avg_judge_safety_score,low_relevance_false_reuse_count,stale_anchor_prior_reuse_count,memory_citation_source_true_count,long_term_enabled_count,judge_high_risk_count,gate,decision
+current,completed,100,100,0,0,0.9200,1.0000,1.0000,0.9700,0.980,0.984,0.985,0.995,0,0,0,0,0,pass,phase52_memory_policy_passed_real_api_gate
+legacy,completed,100,100,0,0,0.9200,1.0000,0.7317,0.8800,0.975,0.889,0.889,0.900,11,0,0,0,11,blocked,comparison_baseline

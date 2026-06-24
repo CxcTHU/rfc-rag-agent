@@ -228,13 +228,14 @@ class DeterministicReActPlanner:
         previous_queries: set[str] | None = None,
         prior_source_count: int = 0,
         expand_followup: bool = False,
+        stale_anchor_count: int = 0,
     ) -> ReActAction:
         normalized_question = question.strip()
         if not normalized_question:
             raise ValueError("question must not be empty")
 
         previous_queries = previous_queries or set()
-        if not observations and prior_source_count >= 3 and expand_followup:
+        if not observations and prior_source_count > 0 and expand_followup and stale_anchor_count == 0:
             return ReActAction(
                 action="answer_with_citations",
                 question=normalized_question,

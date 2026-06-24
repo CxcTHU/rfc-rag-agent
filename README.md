@@ -1,5 +1,23 @@
 # RFC-RAG-Agent
 
+## Phase 52 Real API Memory Evaluation
+
+Current branch: `codex/phase-52-agent-memory-context`.
+
+Phase 52 now includes a formal real API memory evaluation set and runner. The evaluation uses real chat intent classification, real embedding relevance checks, and a real judge over 100 manually labeled memory cases. The current `AgentMemoryContext` policy passed the real API gate: `intent_accuracy=0.9200`, `correction_recall=1.0000`, `prior_reuse_precision=1.0000`, `planner_action_accuracy=0.9700`, `low_relevance_false_reuse_count=0`, `memory_citation_source_true_count=0`, and `long_term_enabled_count=0`. The legacy source-count baseline remained blocked with `prior_reuse_precision=0.7317` and `low_relevance_false_reuse_count=11`.
+
+New artifacts: `data/evaluation/phase52_memory_real_api_cases.csv`, `scripts/evaluate_phase52_memory_real_api.py`, `data/evaluation/phase52_memory_real_api_results.csv`, `data/evaluation/phase52_memory_real_api_summary.csv`, `data/evaluation/phase52_memory_real_api_ablation.csv`, and `docs/phase_reviews/phase-52-real-api-memory-eval.md`. Formal quality conclusions are based on these real API results; deterministic memory regression remains a code-regression guard only.
+
+## Phase 52 AgentMemoryContext Semantic Upgrade
+
+Current branch: `codex/phase-52-agent-memory-context`.
+
+Phase 52 unifies Phase 43 `SessionMemory` and Phase 51 LangGraph prior evidence into a short-lived `AgentMemoryContext`. The semantic upgrade adds `MemoryIntentClassifier` (LLM JSON classifier with deterministic fallback), `PriorEvidenceRelevanceGate` (embedding similarity instead of `source_count >= 3`), and `MemoryItem(text, turn_index, importance)` recency decay for session memory. `MemoryPolicyDecision` makes decisions auditable through explicit routes such as `answer_from_prior_evidence`, `search_with_memory_context`, and `refresh_search_ignore_stale_memory`. It is used for planner decisions and retrieval hints only; final citations still come from retrieved or prior retrieved sources, never from memory summaries.
+
+Main additions: `app/services/agent/memory_context.py`, `tests/test_phase52_memory_intent_classifier.py`, `tests/test_phase52_prior_relevance_gate.py`, memory trace fields in `latency_trace`, `scripts/evaluate_phase52_memory.py`, `data/evaluation/phase52_memory_regression_cases.csv`, and `docs/stage52_agent_memory_context.md`. Long-term memory is represented only by disabled governance interfaces and a read-none/write-none/delete-noop provider stub. No external data source or default provider changed.
+
+Final validation: API/SSE/LangGraph focused `124 passed`; Phase 52 memory regression `32/32 pass`; full `python -m pytest -q -> 1158 passed, 1 skipped`; Stage 30 remains `91.52 / A / pass`; `git diff --check` has no whitespace errors, only CRLF warnings.
+
 ## Phase 51 Performance Evaluation Update
 
 Current branch: `codex/phase-51-performance-evaluation`.

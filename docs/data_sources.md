@@ -1,5 +1,45 @@
 # 数据来源登记
 
+## Phase 52 Real API Memory Evaluation Data Note
+
+Phase 52 real API memory evaluation adds no external corpus, crawler, PDF download, source registry entry, production table, or embedding rebuild. It adds manually authored evaluation scenarios and derived real API result files only:
+
+```text
+data/evaluation/phase52_memory_real_api_cases.csv
+data/evaluation/phase52_memory_real_api_results.csv
+data/evaluation/phase52_memory_real_api_summary.csv
+data/evaluation/phase52_memory_real_api_ablation.csv
+scripts/evaluate_phase52_memory_real_api.py
+docs/phase_reviews/phase-52-real-api-memory-eval.md
+```
+
+The case CSV contains synthetic conversation scenarios, expected labels, and short sanitized prior-answer summaries. It is not a new knowledge source and does not add document chunks. The formal run uses configured real chat, embedding, and judge APIs only when `--execute` is explicitly passed.
+
+The result CSVs store case ids, categories, structured memory-policy labels, model/provider names, numeric scores, safe latency, and sanitized short judge reasons. They do not store API keys, bearer tokens, Authorization headers, provider raw responses, `raw_response`, `reasoning_content`, hidden thoughts, complete chunks, restricted full text, raw model answers, or long-term user profiles.
+
+## Phase 52 Agent Memory Data Note
+
+Phase 52 adds no external data source, crawler, PDF download, corpus row, embedding rebuild, or provider raw-response artifact. It derives short-lived memory context only from:
+
+```text
+current conversation history
+latest LangGraph checkpoint prior sources/citations/answer summary
+existing deterministic memory regression CSV
+```
+
+New derived artifacts:
+
+```text
+data/evaluation/phase52_memory_regression_cases.csv
+data/evaluation/phase52_memory_regression_results.csv
+data/evaluation/phase52_memory_regression_summary.csv
+scripts/evaluate_phase52_memory.py
+```
+
+The CSVs store case ids, memory decision labels, policy routes, prior relevance scores/pass flags, safe memory usage flags, action labels, counts, pass/fail status, and disabled long-term memory flags. They do not store API keys, bearer tokens, Authorization headers, provider raw responses, `raw_response`, `reasoning_content`, hidden thoughts, complete chunks, restricted full text, or long-term user profiles.
+
+The long-term memory governance interfaces added in Phase 52 are code contracts only. They do not create a production table, write user profile data, store deletion reasons, or add a persistence data source.
+
 ## Phase 51 Performance Evaluation Data Note
 
 Phase 51 adds no external data source, crawler, PDF download, corpus row, embedding rebuild, or provider raw-response artifact. It adds derived evaluation artifacts only:

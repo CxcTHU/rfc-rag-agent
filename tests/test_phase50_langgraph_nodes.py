@@ -12,6 +12,7 @@ from app.services.agent.graph_nodes import (
     search_tables_node,
     set_current_event_sink,
 )
+from app.services.agent.memory_context import build_agent_memory_context
 from app.services.agent.tools import (
     AgentSearchItem,
     AgentSourceReference,
@@ -193,6 +194,15 @@ def test_planner_node_answers_expand_followup_from_prior_sources() -> None:
     ]
     state["prior_citations"] = [1, 2, 3]
     state["prior_answer_summary"] = "上一轮回答说明填充性能受颗粒阻塞、流体阻塞和施工参数影响。"
+    state["memory_context"] = build_agent_memory_context(
+        question="请详细回答",
+        history=state["history"],
+        prior_evidence={
+            "prior_sources": state["prior_sources"],
+            "prior_citations": state["prior_citations"],
+            "prior_answer_summary": state["prior_answer_summary"],
+        },
+    ).to_state_dict()
 
     updates = planner_node(state)
 
@@ -213,6 +223,27 @@ def test_planner_node_searches_new_direction_despite_prior_sources() -> None:
 
     assert updates["next_action"] == "search_knowledge"
     assert updates["current_query"] == "堆石混凝土温控措施有哪些？"
+
+
+def test_planner_node_refreshes_search_when_session_anchor_is_stale() -> None:
+    state = initialize_state(
+        question="更正一下，我想问 Peridynamics 用于裂纹分析的证据",
+        history=["user:Peridynamics is a construction quality control method?"],
+    )
+    state["prior_sources"] = [
+        source_reference(chunk_id=1).__dict__,
+        source_reference(chunk_id=2).__dict__,
+        source_reference(chunk_id=3).__dict__,
+    ]
+    state["memory_context"] = build_agent_memory_context(
+        question=state["question"],
+        history=state["history"],
+        prior_evidence={"prior_sources": state["prior_sources"]},
+    ).to_state_dict()
+
+    updates = planner_node(state)
+
+    assert updates["next_action"] == "search_knowledge"
 
 
 def test_planner_node_keeps_original_behavior_without_prior_sources() -> None:
@@ -297,6 +328,27 @@ def test_search_knowledge_node_reuses_agent_toolbox_and_records_observation() ->
     assert len(updates["sources"]) == 1
 
 
+def test_search_knowledge_node_augments_contextual_query_with_memory_hint() -> None:
+    toolbox = FakeToolbox()
+    state = initialize_state(
+        question="它的流动性为什么重要？",
+        history=["用户：自密实混凝土在堆石混凝土中起什么作用？"],
+        top_k=2,
+        toolbox=toolbox,
+    )
+    state["current_query"] = "它的流动性为什么重要？"
+    state["memory_context"] = build_agent_memory_context(
+        question=state["question"],
+        history=state["history"],
+        prior_evidence={},
+    ).to_state_dict()
+
+    search_knowledge_node(state)
+
+    assert "会话检索记忆" in toolbox.calls[0][1]
+    assert "不作为引用来源" in toolbox.calls[0][1]
+
+
 def test_search_knowledge_node_emits_safe_search_progress() -> None:
     toolbox = FakeToolbox()
     state = initialize_state(question="filling capacity", top_k=2, toolbox=toolbox)
@@ -373,6 +425,14 @@ def test_generate_answer_node_uses_prior_sources_when_current_sources_are_missin
         source_reference(chunk_id=3).__dict__,
     ]
     state["prior_citations"] = [1, 2, 3]
+    state["memory_context"] = build_agent_memory_context(
+        question=state["question"],
+        history=state["history"],
+        prior_evidence={
+            "prior_sources": state["prior_sources"],
+            "prior_citations": state["prior_citations"],
+        },
+    ).to_state_dict()
 
     updates = generate_answer_node(state)
 
@@ -382,6 +442,73 @@ def test_generate_answer_node_uses_prior_sources_when_current_sources_are_missin
     assert updates["citations"] == [1]
     assert len(updates["sources"]) == 3
     assert updates["refused"] is False
+
+
+def test_generate_answer_node_rebuilds_policy_for_legacy_prior_sources() -> None:
+    toolbox = FakeToolbox()
+    state = initialize_state(
+        question="please expand",
+        top_k=3,
+        toolbox=toolbox,
+        history=["user: What affects rock-filled concrete filling capacity?"],
+    )
+    state["prior_sources"] = [
+        source_reference(chunk_id=1).__dict__,
+        source_reference(chunk_id=2).__dict__,
+        source_reference(chunk_id=3).__dict__,
+    ]
+    state["prior_citations"] = [1, 2, 3]
+
+    updates = generate_answer_node(state)
+
+    assert toolbox.calls == []
+    assert len(toolbox.chat_model_provider.messages) == 1
+    assert len(updates["sources"]) == 3
+
+
+def test_generate_answer_node_accepts_legacy_prior_sources_when_relevance_passes() -> None:
+    toolbox = FakeToolbox()
+    state = initialize_state(
+        question="please expand",
+        top_k=3,
+        toolbox=toolbox,
+        history=["user: What affects rock-filled concrete filling capacity?"],
+    )
+    state["prior_sources"] = [
+        source_reference(chunk_id=1).__dict__,
+        source_reference(chunk_id=2).__dict__,
+    ]
+    state["prior_citations"] = [1, 2]
+
+    updates = generate_answer_node(state)
+
+    assert toolbox.calls == []
+    assert updates["answer"] == "cited answer from existing evidence [1]"
+
+
+def test_generate_answer_node_does_not_use_prior_sources_when_stale() -> None:
+    toolbox = FakeToolbox()
+    state = initialize_state(
+        question="更正一下，我想问 Peridynamics 用于裂纹分析的证据",
+        top_k=3,
+        toolbox=toolbox,
+        history=["user:Peridynamics is a construction quality control method?"],
+    )
+    state["prior_sources"] = [
+        source_reference(chunk_id=1).__dict__,
+        source_reference(chunk_id=2).__dict__,
+        source_reference(chunk_id=3).__dict__,
+    ]
+    state["memory_context"] = build_agent_memory_context(
+        question=state["question"],
+        history=state["history"],
+        prior_evidence={"prior_sources": state["prior_sources"]},
+    ).to_state_dict()
+
+    updates = generate_answer_node(state)
+
+    assert toolbox.calls == [("answer_with_citations", state["question"], 3)]
+    assert updates["answer"] == "cited answer [1]"
 
 
 def test_generate_answer_node_refuses_off_topic_before_llm_generation() -> None:
