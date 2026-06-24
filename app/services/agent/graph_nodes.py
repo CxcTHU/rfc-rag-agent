@@ -7,6 +7,13 @@ from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from app.services.agent.graph_state import LangGraphAgentState, LangGraphAgentRoute
+from app.services.agent.memory_context import (
+    AgentMemoryContext,
+    agent_memory_context_from_state,
+    augment_query_with_agent_memory,
+    build_agent_memory_context,
+    should_use_prior_evidence_for_answer,
+)
 from app.services.agent.react_actions import (
     DeterministicReActPlanner,
     READ_ONLY_REACT_ACTIONS,
@@ -100,6 +107,7 @@ def initialize_state(
         "prior_sources": [],
         "prior_citations": [],
         "prior_answer_summary": "",
+        "memory_context": {},
         "image_path": image_path,
         "image_analysis": None,
         "answer": "",
@@ -111,10 +119,31 @@ def initialize_state(
     return state
 
 
+def memory_context_for_state(
+    state: LangGraphAgentState,
+    question: str,
+) -> AgentMemoryContext:
+    memory_context = agent_memory_context_from_state(state.get("memory_context"))
+    if memory_context.has_memory or not state.get("prior_sources"):
+        return memory_context
+    return build_agent_memory_context(
+        question=question,
+        history=list(state.get("history", [])),
+        prior_evidence={
+            "prior_sources": state.get("prior_sources", []),
+            "prior_citations": state.get("prior_citations", []),
+            "prior_answer_summary": state.get("prior_answer_summary", ""),
+        },
+    )
+
+
 def planner_node(state: LangGraphAgentState) -> dict[str, Any]:
     question = _question(state)
     observations = deserialize_observations(state.get("observations", []))
-    prior_sources = deserialize_prior_source_references(state.get("prior_sources", []))
+    memory_context = memory_context_for_state(state, question)
+    prior_sources = deserialize_prior_source_references(
+        list(memory_context.prior_evidence.sources) or state.get("prior_sources", [])
+    )
     iteration = int(state.get("iteration_count", 0)) + 1
     max_iterations = int(state.get("max_iterations", 3))
     last_observation = observations[-1] if observations else None
@@ -175,7 +204,11 @@ def planner_node(state: LangGraphAgentState) -> dict[str, Any]:
             observations=observations,
             previous_queries=set(state.get("previous_queries", [])),
             prior_sources=prior_sources,
-            prior_answer_summary=state.get("prior_answer_summary", ""),
+            prior_answer_summary=(
+                memory_context.prior_evidence.answer_summary
+                or state.get("prior_answer_summary", "")
+            ),
+            memory_context=memory_context,
         )
 
     _emit(
@@ -209,6 +242,7 @@ def _plan_route_action(
     previous_queries: set[str],
     prior_sources: list[AgentSourceReference] | None = None,
     prior_answer_summary: str = "",
+    memory_context: AgentMemoryContext | None = None,
 ) -> ReActAction:
     planner_provider = _CURRENT_PLANNER_PROVIDER.get()
     if planner_provider is not None:
@@ -220,6 +254,7 @@ def _plan_route_action(
                         observations=observations,
                         prior_sources=prior_sources or [],
                         prior_answer_summary=prior_answer_summary,
+                        memory_context=memory_context,
                     )
                 )
             _record_planner_model(f"{result.provider}/{result.model_name}")
@@ -234,16 +269,24 @@ def _plan_route_action(
                 question=question,
                 observations=observations,
                 previous_queries=previous_queries,
-                prior_source_count=len(prior_sources or []),
-                expand_followup=is_expand_followup_question(question),
+                prior_source_count=usable_prior_source_count(
+                    prior_sources or [],
+                    memory_context,
+                ),
+                expand_followup=should_plan_from_prior_evidence(
+                    question,
+                    memory_context,
+                ),
+                stale_anchor_count=memory_stale_anchor_count(memory_context),
             )
     _record_planner_model("deterministic")
     return DeterministicReActPlanner().plan(
         question=question,
         observations=observations,
         previous_queries=previous_queries,
-        prior_source_count=len(prior_sources or []),
-        expand_followup=is_expand_followup_question(question),
+        prior_source_count=usable_prior_source_count(prior_sources or [], memory_context),
+        expand_followup=should_plan_from_prior_evidence(question, memory_context),
+        stale_anchor_count=memory_stale_anchor_count(memory_context),
     )
 
 
@@ -253,6 +296,7 @@ def build_planner_messages(
     observations: list[ReActObservation],
     prior_sources: list[AgentSourceReference] | None = None,
     prior_answer_summary: str = "",
+    memory_context: AgentMemoryContext | None = None,
 ) -> list[ChatMessage]:
     tool_lines = "\n".join(
         f"- {name}: {description}"
@@ -261,6 +305,7 @@ def build_planner_messages(
     )
     observation_summary = summarize_observations_for_planner(observations)
     prior_evidence_summary = summarize_prior_sources_for_planner(prior_sources or [])
+    memory_summary = summarize_memory_context_for_planner(memory_context)
     prior_answer_summary = truncate_text(prior_answer_summary, 200) if prior_answer_summary else "(none)"
     system_prompt = (
         "You route one RAG agent step. Choose exactly one allowed action. "
@@ -272,6 +317,7 @@ def build_planner_messages(
         f"Current question:\n{question}\n\n"
         f"Prior answer summary:\n{prior_answer_summary}\n\n"
         f"Prior evidence from the same conversation:\n{prior_evidence_summary}\n\n"
+        f"Short-term memory trace:\n{memory_summary}\n\n"
         f"Recent observations:\n{observation_summary}\n\n"
         'Return JSON like {"action":"search_knowledge","query":"...","reasoning_summary":"..."}'
     )
@@ -309,6 +355,49 @@ def summarize_prior_sources_for_planner(sources: list[AgentSourceReference]) -> 
             f"source_id={source.source_id}; snippet={snippet}"
         )
     return "\n".join(lines)
+
+
+def summarize_memory_context_for_planner(memory_context: AgentMemoryContext | None) -> str:
+    if memory_context is None:
+        return "(none)"
+    session = memory_context.session
+    parts = [
+        f"decision_hint={memory_context.decision_hint}",
+        f"policy_route={memory_context.policy.planner_route}",
+        f"intent={memory_context.intent.label}",
+        f"prior_relevance={memory_context.prior_relevance.score:.3f}/{memory_context.prior_relevance.passed}",
+        f"entities={';'.join(item.text for item in session.entities[:5]) or '(none)'}",
+        f"retrieval_anchors={';'.join(item.text for item in session.retrieval_anchors[:8]) or '(none)'}",
+        f"stale_anchors={';'.join(item.text for item in session.stale_anchors[:8]) or '(none)'}",
+    ]
+    return " | ".join(parts)
+
+
+def should_plan_from_prior_evidence(
+    question: str,
+    memory_context: AgentMemoryContext | None,
+) -> bool:
+    if memory_context is not None:
+        return (
+            memory_context.intent.label == "expand_followup"
+            and memory_context.policy.use_prior_evidence_for_answer
+        )
+    return is_expand_followup_question(question)
+
+
+def usable_prior_source_count(
+    prior_sources: list[AgentSourceReference],
+    memory_context: AgentMemoryContext | None,
+) -> int:
+    if memory_context is not None and not memory_context.policy.use_prior_evidence_for_answer:
+        return 0
+    return len(prior_sources)
+
+
+def memory_stale_anchor_count(memory_context: AgentMemoryContext | None) -> int:
+    if memory_context is None:
+        return 0
+    return len(memory_context.session.stale_anchors)
 
 
 def parse_planner_action(payload: str, *, question: str) -> ReActAction:
@@ -366,7 +455,8 @@ PLANNER_TOOL_DESCRIPTIONS: dict[str, str] = {
 
 
 def search_knowledge_node(state: LangGraphAgentState) -> dict[str, Any]:
-    query = _current_query(state)
+    memory_context = memory_context_for_state(state, _question(state))
+    query = augment_query_with_agent_memory(_current_query(state), memory_context)
     previous_queries = set(state.get("previous_queries", []))
     if is_repeated_query(query, previous_queries):
         action = ReActAction(
@@ -490,8 +580,13 @@ def generate_answer_node(state: LangGraphAgentState) -> dict[str, Any]:
         question=question,
         reasoning_summary="Generate a cited answer from existing LangGraph evidence.",
     )
+    memory_context = memory_context_for_state(state, question)
     sources = deserialize_source_references(state.get("sources", []))
-    prior_sources = deserialize_prior_source_references(state.get("prior_sources", []))
+    prior_sources = deserialize_prior_source_references(
+        list(memory_context.prior_evidence.sources) or state.get("prior_sources", [])
+    )
+    if not should_use_prior_evidence_for_answer(memory_context, question):
+        prior_sources = []
     answer_sources = sources or prior_sources
     evidence_count = len(state.get("search_results", [])) or len(sources) or len(prior_sources)
     source_count = len(answer_sources)

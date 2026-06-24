@@ -1,0 +1,9 @@
+metric,current,legacy,delta,improved
+intent_accuracy,0.9200,0.9200,0.0000,false
+correction_recall,1.0000,1.0000,0.0000,false
+prior_reuse_precision,1.0000,0.7317,0.2683,true
+planner_action_accuracy,0.9700,0.8800,0.0900,true
+low_relevance_false_reuse_count,0,11,-11.0000,true
+stale_anchor_prior_reuse_count,0,0,0.0000,false
+memory_citation_source_true_count,0,0,0.0000,false
+long_term_enabled_count,0,0,0.0000,false

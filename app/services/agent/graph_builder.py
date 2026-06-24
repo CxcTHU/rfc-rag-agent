@@ -32,6 +32,11 @@ from app.services.agent.graph_nodes import (
 )
 from app.services.agent.graph_checkpointer import create_graph_checkpointer
 from app.services.agent.graph_state import LangGraphAgentRoute, LangGraphAgentState
+from app.services.agent.memory_context import (
+    DeterministicMemoryIntentClassifier,
+    LLMMemoryIntentClassifier,
+    build_agent_memory_context,
+)
 from app.services.agent.react_service import (
     REACT_DEFAULT_MAX_ITERATIONS,
     REACT_HARD_MAX_ITERATIONS,
@@ -112,6 +117,7 @@ class LangGraphAgentService:
         log_answers: bool = True,
     ) -> None:
         self.planner_chat_provider = planner_chat_provider
+        self.embedding_provider = embedding_provider
         self.toolbox = AgentToolbox(
             db=db,
             embedding_provider=embedding_provider,
@@ -162,12 +168,19 @@ class LangGraphAgentService:
                     "thread_id": thread_id or default_thread_id(normalized_question),
                 },
             }
-            initial_state.update(
-                load_prior_evidence_from_checkpoint(
-                    compiled_graph=compiled_graph,
-                    config=graph_config,
-                )
+            prior_evidence = load_prior_evidence_from_checkpoint(
+                compiled_graph=compiled_graph,
+                config=graph_config,
             )
+            memory_context = build_agent_memory_context(
+                question=normalized_question,
+                history=list(history or []),
+                prior_evidence=prior_evidence,
+                intent_classifier=self._memory_intent_classifier(),
+                embedding_provider=self.embedding_provider,
+            )
+            initial_state.update(prior_evidence)
+            initial_state["memory_context"] = memory_context.to_state_dict()
             final_state = compiled_graph.invoke(
                 initial_state,
                 config=graph_config,
@@ -182,6 +195,7 @@ class LangGraphAgentService:
             )
             latency["langgraph_checkpointer_backend"] = checkpointer_selection.backend
             latency["langgraph_checkpointer_reason"] = checkpointer_selection.reason
+            latency.update(memory_context.trace())
             return AgentQueryResult(
                 question=normalized_question,
                 answer=final_state.get("answer", ""),
@@ -215,6 +229,23 @@ class LangGraphAgentService:
             reset_current_event_sink(event_sink_token)
             reset_current_toolbox(toolbox_token)
             reset_current_latency_trace(latency_token)
+
+    def _memory_intent_classifier(self):
+        if self.planner_chat_provider is None:
+            return DeterministicMemoryIntentClassifier()
+        provider_name = getattr(self.planner_chat_provider, "provider_name", "")
+        if str(provider_name).casefold() not in {
+            "openai-compatible",
+            "openai",
+            "compatible",
+            "domestic",
+            "jina",
+            "zhipu",
+            "siliconflow",
+            "paratera",
+        }:
+            return DeterministicMemoryIntentClassifier()
+        return LLMMemoryIntentClassifier(self.planner_chat_provider)
 
 
 def default_thread_id(question: str) -> str:

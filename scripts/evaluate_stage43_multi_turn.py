@@ -258,8 +258,8 @@ def build_memory_hint(
     current_question: str = "",
 ) -> str:
     memory = refine_memory_for_question(current_question, memory_from_turns(previous_turns))
-    entity_text = ";".join(memory.entities)
-    anchor_text = ";".join(memory.retrieval_anchors)
+    entity_text = ";".join(item.text for item in memory.entities)
+    anchor_text = ";".join(item.text for item in memory.retrieval_anchors)
     constraint_text = ";".join(memory.constraints)
     if not entity_text and not anchor_text:
         return ""
@@ -313,8 +313,16 @@ def make_dry_run_rows(
                 if history_mode == "layered_memory"
                 else None
             )
-            memory_entities = memory.entities if memory is not None else ()
-            retrieval_anchors = memory.retrieval_anchors if memory is not None else ()
+            memory_entities = (
+                tuple(item.text for item in memory.entities)
+                if memory is not None
+                else ()
+            )
+            retrieval_anchors = (
+                tuple(item.text for item in memory.retrieval_anchors)
+                if memory is not None
+                else ()
+            )
             rows.append(
                 {
                     "case_id": turn.case_id,
@@ -433,8 +441,8 @@ def make_retrieval_rows(
                             "status": "completed",
                             "planned_question": query[:240],
                             "history_items_used": str(len(history)),
-                            "memory_entities_used": ";".join(memory.entities) if memory else "",
-                            "retrieval_anchors_used": ";".join(memory.retrieval_anchors) if memory else "",
+                            "memory_entities_used": ";".join(item.text for item in memory.entities) if memory else "",
+                            "retrieval_anchors_used": ";".join(item.text for item in memory.retrieval_anchors) if memory else "",
                             "retrieval_hit": str(hit).lower(),
                             "citation_support": f"{citation_support:.3f}",
                             "answer_coverage": f"{answer_coverage:.3f}",

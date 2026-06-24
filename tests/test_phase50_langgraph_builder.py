@@ -16,6 +16,7 @@ from app.services.agent.graph_nodes import (
     reset_current_toolbox,
     set_current_toolbox,
 )
+from app.services.agent.memory_context import MEMORY_TRACE_FIELDS
 from app.core.config import Settings
 from app.services.generation.chat_model import DeterministicChatModelProvider
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
@@ -190,3 +191,42 @@ def test_langgraph_agent_service_preserves_agent_query_result_contract(monkeypat
     assert result.workflow_steps[2].tool_name == "llm_with_tools"
     assert result.workflow_steps[3].tool_name == "answer_with_citations"
     assert result.reasoning_summary == "langgraph_agent iterations=4; tool_calls=2"
+    assert result.latency_trace["memory_context_present"] is False
+    assert result.latency_trace["memory_long_term_enabled"] is False
+    for field in MEMORY_TRACE_FIELDS:
+        assert field in result.latency_trace
+    assert result.latency_trace["memory_citation_source"] is False
+
+
+def test_langgraph_agent_service_records_memory_trace_for_history(monkeypatch) -> None:
+    toolbox = FakeToolbox()
+
+    class FakeSession:
+        pass
+
+    service = LangGraphAgentService(
+        db=FakeSession(),  # type: ignore[arg-type]
+        embedding_provider=DeterministicEmbeddingProvider(),
+        chat_model_provider=DeterministicChatModelProvider(),
+    )
+    service.toolbox = toolbox  # type: ignore[assignment]
+
+    result = service.query(
+        "它的流动性为什么重要？",
+        top_k=2,
+        history=["用户：自密实混凝土在堆石混凝土中起什么作用？"],
+    )
+
+    assert result.latency_trace["memory_context_present"] is True
+    assert result.latency_trace["memory_session_entity_count"] >= 1
+    assert result.latency_trace["memory_session_anchor_count"] >= 1
+    assert result.latency_trace["memory_prior_source_count"] == 0
+    assert result.latency_trace["memory_long_term_enabled"] is False
+    assert result.latency_trace["memory_decision_hint"] in {
+        "session_memory_retrieval_hint",
+        "no_memory",
+    }
+    for field in MEMORY_TRACE_FIELDS:
+        assert field in result.latency_trace
+    assert result.latency_trace["memory_used_for_planning"] in {True, False}
+    assert result.latency_trace["memory_citation_source"] is False

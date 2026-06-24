@@ -1,5 +1,98 @@
 # 项目进度
 
+## Latest Status: 2026-06-23 Phase 52 Real API Memory Evaluation Complete Before Human Verification
+
+Current branch: `codex/phase-52-agent-memory-context`.
+
+Phase 52 now has a formal real API memory evaluation set and runner:
+
+```text
+data/evaluation/phase52_memory_real_api_cases.csv -> 100 manually labeled cases
+scripts/evaluate_phase52_memory_real_api.py -> real chat intent + real embedding relevance + real judge
+data/evaluation/phase52_memory_real_api_results.csv
+data/evaluation/phase52_memory_real_api_summary.csv
+data/evaluation/phase52_memory_real_api_ablation.csv
+docs/phase_reviews/phase-52-real-api-memory-eval.md
+```
+
+Final real API result:
+
+```text
+current -> rows=100 completed=100 gate=pass
+intent_accuracy=0.9200
+correction_recall=1.0000
+prior_reuse_precision=1.0000
+planner_action_accuracy=0.9700
+low_relevance_false_reuse_count=0
+stale_anchor_prior_reuse_count=0
+memory_citation_source_true_count=0
+long_term_enabled_count=0
+
+legacy -> rows=100 completed=100 gate=blocked
+prior_reuse_precision=0.7317
+low_relevance_false_reuse_count=11
+```
+
+The real API run drove additional fixes: off-topic memory policy now refuses without memory retrieval, English `it` matching uses word boundaries, recent topic shifts block direct prior reuse below the stricter direct threshold, stale correction phrases such as "不是 X。" and "Not X; continue ..." are detected, and the judge rubric now scores residual decision risk rather than inherent case difficulty.
+
+Boundary remains unchanged: long-term memory is disabled/read-none/write-none; memory summaries are not citation sources; no `git add`, commit, tag, push, or PR has been performed.
+
+## Latest Status: 2026-06-23 Phase 52 Memory Semantic Upgrade Complete Before Human Verification
+
+Current branch: `codex/phase-52-agent-memory-context`.
+
+Phase 52 now includes the semantic memory upgrade requested after the initial AgentMemoryContext closeout:
+
+```text
+MemoryIntentClassifier -> LLM JSON classifier + deterministic fallback
+PriorEvidenceRelevanceGate -> embedding similarity gate, no source_count >= 3 magic number
+SessionMemory -> MemoryItem(text, turn_index, importance) with recency decay
+graph_nodes.py -> AgentMemoryContext typed memory path, no memory_context Any/getattr target hits
+phase52 memory regression -> 32 cases
+```
+
+Latest focused validation:
+
+```text
+python -m pytest tests/test_session_memory.py tests/test_agent_memory_context.py tests/test_phase52_prior_relevance_gate.py tests/test_phase52_memory_intent_classifier.py tests/test_phase52_memory_eval.py tests/test_phase50_langgraph_nodes.py tests/test_phase50_langgraph_builder.py -q -> 63 passed
+python scripts/evaluate_phase52_memory.py -> cases=32 pass=32 fail=0 pass_rate=1.0000
+API/SSE/LangGraph focused regression -> 124 passed
+python -m pytest -q -> 1158 passed, 1 skipped
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+```
+
+Boundary remains unchanged: long-term memory is disabled/read-none/write-none; memory summaries are not citation sources; no `git add`, commit, tag, push, or PR has been performed.
+
+## Previous Status: 2026-06-22 Phase 52 AgentMemoryContext Complete Before Human Verification
+
+Current branch: `codex/phase-52-agent-memory-context`.
+
+Phase 52 starts from the Phase 51 merge baseline `main / origin/main -> 3b34e23e`. The `phase-51-complete` tag exists and remains unmoved. The phase unifies short-lived conversation memory from Phase 43 and LangGraph prior evidence from Phase 51 into `AgentMemoryContext`.
+
+Completed so far:
+
+```text
+app/services/agent/memory_context.py -> AgentMemoryContext / MemoryPolicyDecision / PriorEvidenceMemory / DisabledLongTermMemoryProvider
+LangGraphAgentService.query() -> builds memory_context after checkpoint prior evidence load
+planner_node -> reads memory_context for prior evidence, session anchors, stale anchors
+search_knowledge_node -> can add retrieval-only session memory hints for contextual follow-ups
+generate_answer_node -> reuses prior evidence only when memory rules allow it
+latency_trace -> memory_context_present, counts, policy route, usage flags, long-term disabled flag, decision hint
+scripts/evaluate_phase52_memory.py -> deterministic memory regression
+```
+
+Validation:
+
+```text
+python -m pytest tests/test_agent_memory_context.py tests/test_phase52_memory_eval.py tests/test_phase50_langgraph_nodes.py tests/test_phase50_langgraph_builder.py tests/test_phase50_langgraph_planner.py tests/test_session_memory.py -q -> 58 passed
+python scripts/evaluate_phase52_memory.py -> cases=20 pass=20 fail=0 pass_rate=1.0000
+python -m pytest tests/test_agent_memory_context.py tests/test_phase52_memory_eval.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_phase50_semantic_cache.py tests/test_phase50_langgraph_nodes.py tests/test_phase50_langgraph_builder.py tests/test_phase50_langgraph_planner.py tests/test_session_memory.py -q -> 114 passed
+python -m pytest -q -> 1148 passed, 1 skipped
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+```
+
+Boundary: long-term memory remains disabled/read-none/write-none. Memory summaries are planner/retrieval hints only and are not citation sources. No external data source, default provider, or write tool is added. The phase is complete before human verification and is not yet submitted.
+
 ## Latest Status: 2026-06-22 Phase 51 Performance Evaluation Approved For Submission
 
 Current branch: `codex/phase-51-performance-evaluation`.
