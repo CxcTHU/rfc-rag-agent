@@ -228,6 +228,74 @@ def test_hybrid_search_uses_reranking_provider_by_default(tmp_path) -> None:
     assert results[0].document_title == "Thermal control note"
 
 
+def test_hybrid_search_quality_default_fetches_75_candidates(monkeypatch, tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    observed_top_k: list[int] = []
+
+    class NoOpReRankingProvider:
+        provider_name = "test"
+        model_name = "noop"
+
+        def rerank(self, query, candidates, top_k=5):
+            return [
+                ReRankResult(index=index, score=float(len(candidates) - index), content=candidates[index])
+                for index in range(min(top_k, len(candidates)))
+            ]
+
+    def fake_keyword_search(self, query, top_k=5):
+        observed_top_k.append(top_k)
+        return []
+
+    def fake_vector_search(self, query, top_k=5):
+        observed_top_k.append(top_k)
+        return []
+
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.KeywordSearchService.search",
+        fake_keyword_search,
+    )
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.VectorSearchService.search",
+        fake_vector_search,
+    )
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        HybridSearchService(
+            db,
+            provider,
+            reranking_provider=NoOpReRankingProvider(),
+            reranking_enabled=True,
+            reranking_recall_k=75,
+            parallel=False,
+        ).search("filling capacity", top_k=8)
+
+    assert observed_top_k == [75, 75]
+
+
+def test_hybrid_search_falls_open_when_default_reranker_factory_fails(monkeypatch, tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    def fail_create_reranking_provider(*args, **kwargs):
+        raise RuntimeError("remote reranker unavailable")
+
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.create_reranking_provider",
+        fail_create_reranking_provider,
+    )
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+
+        service = HybridSearchService(db, provider, reranking_enabled=True)
+        results = service.search("filling capacity", top_k=1)
+
+    assert service.reranking_provider is None
+    assert len(results) == 1
+
+
 def test_hybrid_search_falls_back_when_reranker_fails(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 

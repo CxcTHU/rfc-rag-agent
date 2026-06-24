@@ -32,6 +32,12 @@ Final Stage 3 validation ran the BGE service on the GPU server at server-local `
 
 The frozen-candidate A/B result over 38 queries favors `remote-bge-lora` over `glm-reranker`: BGE reached `MRR@5=0.639035`, `NDCG@5=0.609474`, `P@1=0.605263`, `P@5=0.710526`, `avg_latency_ms=269.682`, and `p95_latency_ms=315.543`; GLM reached `MRR@5=0.563596`, `NDCG@5=0.545920`, `P@1=0.473684`, `P@5=0.684211`, `avg_latency_ms=939.337`, and `p95_latency_ms=2985.302`. The Stage 3 decision is `switch_default_to_remote_bge_lora` after user verification.
 
+The default RAG/Agent chain now applies the Stage 3 quality-first setting:
+`remote-bge-lora`, `candidate_pool_size=75`, and final evidence `top_k=8`.
+The service remains private through a local tunnel such as `127.0.0.1:8091`;
+do not expose the reranker port publicly. If remote BGE is unavailable, the
+chain fails open to the original hybrid/RRF order.
+
 ## Phase 52 Real API Memory Evaluation Delta
 
 Phase 52 now includes a real API evaluation layer for the memory policy. It does not change the corpus, provider topology, default Agent mode, or citation contract.

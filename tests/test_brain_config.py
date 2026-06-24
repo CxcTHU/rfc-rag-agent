@@ -13,7 +13,7 @@ def test_default_retrieval_config_contains_required_fields_and_workflow() -> Non
     config = RetrievalConfig()
 
     assert config.retrieval_mode == "auto"
-    assert config.top_k == 5
+    assert config.top_k == 8
     assert config.min_score == 0.0
     assert config.max_history == 0
     assert config.rerank_top_n == 0

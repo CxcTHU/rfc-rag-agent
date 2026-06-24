@@ -58,12 +58,12 @@ class Settings(BaseSettings):
     embedding_timeout_seconds: float = 30.0
 
     reranking_enabled: bool = True
-    reranking_provider: str = "deterministic"
-    reranking_model_name: str = "keyword-overlap-reranker-v1"
+    reranking_provider: str = "remote-bge-lora"
+    reranking_model_name: str = "rfc-domain-bge-lora"
     reranking_api_key: str = ""
-    reranking_base_url: str = ""
+    reranking_base_url: str = "http://127.0.0.1:8091"
     reranking_timeout_seconds: float = 30.0
-    reranking_recall_k: int = 25
+    reranking_recall_k: int = 75
 
     vision_model_provider: str = ""
     vision_model_name: str = ""

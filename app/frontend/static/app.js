@@ -2479,7 +2479,7 @@ async function submitAgent() {
     let imageWasSubmitted = false;
     const body = {
       question,
-      top_k: 5,
+      top_k: 8,
       max_tool_calls: 2,
       mode: "tool_calling_agent",
     };

@@ -84,6 +84,19 @@ def test_parse_openai_compatible_rerank_response() -> None:
     assert results[0].content == "second"
 
 
+def test_parse_openai_compatible_rerank_response_supports_scores_array() -> None:
+    payload = {"scores": [0.12, 0.94, 0.50]}
+
+    results = parse_openai_compatible_rerank_response(
+        payload,
+        ["first", "second", "third"],
+        top_k=2,
+    )
+
+    assert [result.index for result in results] == [1, 2]
+    assert [result.content for result in results] == ["second", "third"]
+
+
 def test_reranker_retries_transient_ssl_error(monkeypatch) -> None:
     attempts = {"count": 0}
 
@@ -195,12 +208,9 @@ def test_openai_compatible_reranker_allows_private_service_without_api_key(monke
 
 
 def test_create_reranking_provider_supports_remote_bge_lora_alias() -> None:
-    provider = create_reranking_provider(
-        "remote-bge-lora",
-        model_name="bge-reranker-base-rfc-lora",
-        api_key="",
-        base_url="http://127.0.0.1:8091/v1",
-    )
+    provider = create_reranking_provider("remote-bge-lora")
 
     assert isinstance(provider, OpenAICompatibleReRankingProvider)
     assert provider.provider_name == "openai-compatible"
+    assert provider.model_name == "rfc-domain-bge-lora"
+    assert provider.base_url == "http://127.0.0.1:8091"

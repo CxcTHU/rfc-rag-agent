@@ -98,7 +98,7 @@ class ToolCallingAgentService:
     def query(
         self,
         question: str,
-        top_k: int = 5,
+        top_k: int = 8,
         max_tool_calls: int = TOOL_CALLING_DEFAULT_MAX_ITERATIONS,
         history: Sequence[str] | None = None,
         event_sink: ToolCallingEventSink | None = None,
