@@ -12,6 +12,11 @@ from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.hybrid_search import normalize_score
 from app.services.retrieval.keyword_search import KeywordSearchResult
+from app.services.observability.latency_trace import (
+    LatencyTrace,
+    reset_current_latency_trace,
+    set_current_latency_trace,
+)
 from app.services.retrieval.reranking import ReRankResult
 from app.services.retrieval.vector_search import VectorSearchResult
 from app.services.retrieval.vector_index import VectorIndexService
@@ -247,6 +252,40 @@ def test_hybrid_search_falls_back_when_reranker_fails(tmp_path) -> None:
 
     # A transient reranker failure must degrade to the fusion order, not crash.
     assert len(results) == 1
+
+
+def test_hybrid_search_records_reranker_trace_and_fallback(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class FailingReRankingProvider:
+        provider_name = "remote-bge-lora"
+        model_name = "bge-reranker-base-rfc-lora"
+
+        def rerank(self, query, candidates, top_k=5):
+            raise RuntimeError("Reranking model request failed: HTTP 500")
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            results = HybridSearchService(
+                db,
+                provider,
+                reranking_provider=FailingReRankingProvider(),
+                reranking_enabled=True,
+            ).search("filling capacity", top_k=1)
+        finally:
+            reset_current_latency_trace(token)
+
+    assert len(results) == 1
+    assert trace.values["reranking_provider"] == "remote-bge-lora"
+    assert trace.values["reranking_model"] == "bge-reranker-base-rfc-lora"
+    assert trace.values["reranking_fallback"] is True
+    assert trace.values["reranking_fallback_count"] == 1
+    assert trace.values["reranking_error"] == "runtime_error"
 
 
 def test_hybrid_search_can_disable_reranking(tmp_path) -> None:

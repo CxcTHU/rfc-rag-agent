@@ -106,8 +106,6 @@ class OpenAICompatibleReRankingProvider:
     def __post_init__(self) -> None:
         if not self.model_name.strip():
             raise ValueError("model_name must not be empty")
-        if not self.api_key.strip():
-            raise ValueError("api_key must not be empty")
         if not self.base_url.strip():
             raise ValueError("base_url must not be empty")
         if self.timeout_seconds <= 0:
@@ -133,17 +131,22 @@ class OpenAICompatibleReRankingProvider:
         request = urllib.request.Request(
             self._endpoint_url(),
             data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "api-key": self.api_key,
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "User-Agent": "rfc-rag-agent/reranking-provider",
-            },
+            headers=self._headers(),
             method="POST",
         )
         response_data = self._request_with_retry(request)
         return parse_openai_compatible_rerank_response(response_data, candidates, top_k)
+
+    def _headers(self) -> dict[str, str]:
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "rfc-rag-agent/reranking-provider",
+        }
+        if self.api_key.strip():
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            headers["api-key"] = self.api_key
+        return headers
 
     def _request_with_retry(self, request: urllib.request.Request) -> dict[str, Any]:
         """Send the request, retrying transient network failures.
@@ -210,6 +213,9 @@ def create_reranking_provider(
         "cohere",
         "siliconflow",
         "paratera",
+        "remote-bge-lora",
+        "bge-lora",
+        "rfc-bge-lora",
     }:
         return OpenAICompatibleReRankingProvider(
             model_name=(model_name or "").strip(),

@@ -167,6 +167,12 @@ class HybridSearchService:
     ) -> list[HybridSearchResult]:
         if not self.reranking_enabled or self.reranking_provider is None or not results:
             return results[:top_k]
+        trace = get_current_latency_trace()
+        if trace is not None:
+            trace.set_value("reranking_provider", self.reranking_provider.provider_name)
+            trace.set_value("reranking_model", self.reranking_provider.model_name)
+            trace.set_value("reranking_fallback", False)
+            trace.set_value("reranking_error", "")
         try:
             self._progress("正在重排候选证据")
             with latency_timer("rerank_latency_ms"):
@@ -179,6 +185,11 @@ class HybridSearchService:
             # Reranking is a quality enhancement, not a hard requirement. If the
             # rerank service has a transient failure, fall back to the fusion
             # order instead of failing the whole query.
+            if trace is not None:
+                trace.set_value("reranking_fallback", True)
+                fallback_count = int(trace.values.get("reranking_fallback_count", 0)) + 1
+                trace.set_value("reranking_fallback_count", fallback_count)
+                trace.set_value("reranking_error", "runtime_error")
             return results[:top_k]
         return [results[item.index] for item in reranked]
 

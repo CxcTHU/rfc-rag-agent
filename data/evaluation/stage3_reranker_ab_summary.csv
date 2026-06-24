@@ -1,0 +1,5 @@
+reranker,queries,completed,error_count,fallback_count,mrr_at_5,ndcg_at_5,precision_at_1,precision_at_3,precision_at_5,coverage_ratio,refusal_accuracy,avg_latency_ms,p95_latency_ms,decision
+deterministic,38,38,0,0,0.592982,0.560869,0.552632,0.631579,0.657895,0.608772,0.131579,2.057368,4.569,switch_default_to_remote_bge_lora
+glm-reranker,38,38,0,0,0.563596,0.54592,0.473684,0.657895,0.684211,0.610965,0.131579,939.337395,2985.302,switch_default_to_remote_bge_lora
+none,38,38,0,0,0.432895,0.385058,0.315789,0.552632,0.605263,0.527632,0.131579,0.012211,0.016,switch_default_to_remote_bge_lora
+remote-bge-lora,38,38,0,0,0.639035,0.609474,0.605263,0.657895,0.710526,0.639474,0.131579,269.682053,315.543,switch_default_to_remote_bge_lora
