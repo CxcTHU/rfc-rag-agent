@@ -1,5 +1,37 @@
 # 架构说明
 
+## RFC-DomainReranker Stage 3 Architecture Delta
+
+Stage 3 keeps the `ReRankingProvider` boundary intact and connects the RFC-domain BGE LoRA model through HTTP rather than local model loading:
+
+```text
+GPU server
+-> scripts/reranker/serve_lora_reranker.py
+-> BAAI/bge-reranker-base + models/bge-reranker-base-rfc-lora
+-> GET /health
+-> POST /rerank and /v1/rerank
+-> results[index,relevance_score]
+```
+
+```text
+RAG app
+-> create_reranking_provider("openai-compatible" or "remote-bge-lora")
+-> OpenAICompatibleReRankingProvider
+-> HybridSearchService._rerank_results()
+-> fail-open to hybrid fusion order on RuntimeError
+-> Brain / Agent existing retrieval paths
+```
+
+The local Windows app never imports BGE, torch, transformers, peft, or model weights for production reranking. The server script imports those dependencies only when the GPU service starts, and `--require-cuda` fails fast if CUDA is unavailable.
+
+`latency_trace` now records `reranking_provider`, `reranking_model`, `reranking_fallback`, `reranking_fallback_count`, and `reranking_error` in addition to `rerank_latency_ms`. These fields are operational summaries only; they do not include candidate text, provider raw responses, logits, keys, tokens, or hidden reasoning.
+
+The A/B evaluation layer is `scripts/reranker/evaluate_rag_reranker_ab.py`. It freezes a shared candidate pool by running `HybridSearchService(..., reranking_enabled=False)`, then applies `none`, `deterministic`, optional `glm-reranker`, and optional `remote-bge-lora` to the same candidates. GLM reranking requires `--execute-glm`; remote BGE requires `--remote-bge-url`.
+
+Final Stage 3 validation ran the BGE service on the GPU server at server-local `127.0.0.1:8091`, reached locally through SSH tunnel `127.0.0.1:18091`. `/health` reported `model_loaded=true`, `cuda_available=true`, and `device=cuda`; the service is not exposed on a public port. End-to-end `/chat`, `/agent/query`, and `/agent/query/stream` smoke passed with remote BGE configured.
+
+The frozen-candidate A/B result over 38 queries favors `remote-bge-lora` over `glm-reranker`: BGE reached `MRR@5=0.639035`, `NDCG@5=0.609474`, `P@1=0.605263`, `P@5=0.710526`, `avg_latency_ms=269.682`, and `p95_latency_ms=315.543`; GLM reached `MRR@5=0.563596`, `NDCG@5=0.545920`, `P@1=0.473684`, `P@5=0.684211`, `avg_latency_ms=939.337`, and `p95_latency_ms=2985.302`. The Stage 3 decision is `switch_default_to_remote_bge_lora` after user verification.
+
 ## Phase 51 Architecture Delta: Performance Evaluation And Planner Naming
 
 Phase 51 does not change the default runtime chain. It aligns LangGraph naming and adds an evaluation layer:

@@ -1,5 +1,37 @@
 # 数据来源登记
 
+## RFC-DomainReranker Stage 3 Data Note
+
+Stage 3 adds no new corpus source, crawler, PDF download, training dataset, model weight, embedding rebuild, or provider raw-response artifact. It adds code and derived evaluation outputs for comparing rerankers on existing RAG evaluation queries.
+
+New code paths:
+
+```text
+scripts/reranker/serve_lora_reranker.py
+scripts/reranker/evaluate_rag_reranker_ab.py
+tests/test_rfc_domain_reranker_stage3.py
+```
+
+Expected derived outputs, generated only when the Stage 3 evaluator is run:
+
+```text
+data/evaluation/stage3_reranker_ab_results.csv
+data/evaluation/stage3_reranker_ab_summary.csv
+data/evaluation/stage3_reranker_candidate_snapshot.jsonl
+data/evaluation/stage3_reranker_pool_ab_results.csv
+data/evaluation/stage3_reranker_pool_ab_summary.csv
+```
+
+The candidate snapshot stores only `query_id`, candidate hash/id, `chunk_id`, rank, source type, title summary, score, and relevance flag. It must not store full chunk content, full candidate text, API keys, Bearer tokens, Authorization headers, provider raw responses, `raw_response`, `reasoning_content`, hidden thoughts, restricted full text, training data, model weights, or service logs.
+
+Real GLM reranking requires `--execute-glm`. Remote BGE LoRA reranking requires `--remote-bge-url` or local private configuration. The local Windows worktree must not load BGE, run CUDA, or download Hugging Face models.
+
+Final Stage 3 validation used the existing local evaluation database and explicit runtime provider configuration only. The GLM reranker API key was loaded from the other local worktree `.env` into process environment and was not copied into this worktree. The BGE LoRA model and adapter remained on the GPU server at `models/bge-reranker-base-rfc-lora`; no model weight or adapter file was copied into Git.
+
+The generated Stage 3 CSV/JSONL outputs contain metrics, ids/hashes, source type, title summary, ranks, scores, relevance flags, latency, and sanitized status only. They do not contain full chunk bodies, server passwords, API keys, Bearer tokens, Authorization headers, raw GLM responses, BGE logits, hidden reasoning, service logs, or model weights.
+
+The pool/top-k ablation CSVs reuse the existing Stage 3 query labels and store candidate-pool/top-k settings, summary metrics, title summaries, ids, latency, and sanitized errors. They do not add a new evaluation corpus and do not store full candidate text.
+
 ## Phase 51 Performance Evaluation Data Note
 
 Phase 51 adds no external data source, crawler, PDF download, corpus row, embedding rebuild, or provider raw-response artifact. It adds derived evaluation artifacts only:

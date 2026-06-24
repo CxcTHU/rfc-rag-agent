@@ -1,5 +1,69 @@
 # 项目进度
 
+## Latest Status: 2026-06-23 RFC-DomainReranker Stage 3 Complete Before Human Verification
+
+Current branch: `feature/rfc-domain-reranker-stage3-rag-integration-eval`.
+
+Stage 3 starts from `origin/main -> 49cabbba Merge RFC-DomainReranker Stage 2/2.5`; tag `rfc-domain-reranker-stage-2-5-complete` points to the same baseline. This branch integrates the Stage 2.5 RFC-domain BGE LoRA reranker as a remote HTTP service and validates it against GLM reranker on frozen RAG candidates without loading BGE on Windows.
+
+Implemented:
+
+```text
+scripts/reranker/serve_lora_reranker.py -> GPU-side HTTP service with /health, /rerank, /v1/rerank
+app/services/retrieval/reranking.py -> OpenAI-compatible reranker can call private no-token services
+app/services/retrieval/hybrid_search.py -> latency trace records reranking provider/model/fallback
+scripts/reranker/evaluate_rag_reranker_ab.py -> frozen-candidate none/deterministic/GLM/remote-BGE A/B scaffold
+.env.example -> remote BGE LoRA placeholder config
+tests/test_rfc_domain_reranker_stage3.py -> Stage 3 service/eval guards
+```
+
+Remote service:
+
+```text
+server-local BGE LoRA service: 127.0.0.1:8091
+validation SSH tunnel used: 127.0.0.1:18091 -> 127.0.0.1:8091
+health: model_loaded=true, cuda_available=true, device=cuda
+```
+
+Real A/B over 38 queries:
+
+```text
+remote-bge-lora: MRR@5=0.639035 NDCG@5=0.609474 P@1=0.605263 P@5=0.710526 avg_latency_ms=269.682 p95_latency_ms=315.543
+glm-reranker:     MRR@5=0.563596 NDCG@5=0.545920 P@1=0.473684 P@5=0.684211 avg_latency_ms=939.337 p95_latency_ms=2985.302
+decision=switch_default_to_remote_bge_lora
+```
+
+Route smoke:
+
+```text
+POST /chat -> 200, sources=1, retrieval_mode=hybrid
+POST /agent/query -> 200, sources=2, mode=tool_calling_agent
+POST /agent/query/stream -> 200, tail=token/metadata/done
+```
+
+Follow-up pool/top-k ablation:
+
+```text
+25/5:   MRR@5=0.639035 NDCG@5=0.609474 P@5=0.710526 coverage=0.639474 recall@pool=0.818182 p95_ms=279.185
+50/8:   MRR@5=0.684211 NDCG@5=0.634920 P@5=0.736842 coverage=0.683333 recall@pool=0.878788 p95_ms=497.365
+75/8:   MRR@5=0.697368 NDCG@5=0.645577 P@5=0.763158 coverage=0.705263 recall@pool=0.909091 p95_ms=687.263
+100/10: MRR@5=0.692982 NDCG@5=0.632742 P@5=0.763158 coverage=0.705263 recall@pool=0.909091 p95_ms=894.848
+```
+
+Recommendation: `candidate_pool_size=75, top_k=8` is the production default after human verification for this quality-first vertical RAG system; `50/8` remains the latency-sensitive fallback. `100/10` did not improve quality enough to justify the extra latency.
+
+Validation:
+
+```text
+python -m pytest tests\test_reranking.py tests\test_hybrid_search.py tests\test_rfc_domain_reranker_stage3.py -q -> 27 passed
+python -m pytest tests\test_rfc_domain_reranker_export.py tests\test_rfc_domain_reranker_pipeline.py tests\test_rfc_domain_reranker_training.py tests\test_rfc_domain_reranker_evaluation.py tests\test_rfc_domain_reranker_stage3.py -q -> 30 passed
+python -m pytest tests\test_reranking.py tests\test_hybrid_search.py tests\test_rfc_domain_reranker_stage3.py tests\test_rfc_domain_reranker_evaluation.py -q -> 37 passed
+python -m py_compile scripts\reranker\serve_lora_reranker.py scripts\reranker\evaluate_rag_reranker_ab.py -> passed
+python scripts\score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+```
+
+Boundary: real GLM reranker calls still require `--execute-glm`; remote BGE calls still require `--remote-bge-url`. No API keys, server passwords, raw provider responses, full chunks, model weights, or service logs are committed. No `git add`, commit, tag, push, or PR has been performed.
+
 ## Latest Status: 2026-06-22 Phase 51 Performance Evaluation Approved For Submission
 
 Current branch: `codex/phase-51-performance-evaluation`.

@@ -1,0 +1,6 @@
+combo,candidate_pool_size,top_k,reranker,queries,completed,error_count,fallback_count,mrr_at_5,ndcg_at_5,precision_at_1,precision_at_5,ndcg_at_8,precision_at_8,ndcg_at_10,precision_at_10,coverage_ratio,recall_at_candidate_pool,avg_latency_ms,p95_latency_ms
+pool25_top5,25,5,remote-bge-lora,38,38,0,0,0.639035,0.609474,0.605263,0.710526,0.0,0.0,0.0,0.0,0.639474,0.818182,267.244211,279.185
+pool50_top5,50,5,remote-bge-lora,38,38,0,0,0.684211,0.63492,0.631579,0.736842,0.0,0.0,0.0,0.0,0.676754,0.878788,467.359789,485.863
+pool50_top8,50,8,remote-bge-lora,38,38,0,0,0.684211,0.63492,0.631579,0.736842,0.643854,0.736842,0.0,0.0,0.683333,0.878788,471.843237,497.365
+pool75_top8,75,8,remote-bge-lora,38,38,0,0,0.697368,0.645577,0.631579,0.763158,0.647505,0.763158,0.0,0.0,0.705263,0.909091,665.227,687.263
+pool100_top10,100,10,remote-bge-lora,38,38,0,0,0.692982,0.632742,0.631579,0.763158,0.642432,0.763158,0.638724,0.763158,0.705263,0.909091,866.641421,894.848

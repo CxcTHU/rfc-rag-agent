@@ -166,3 +166,41 @@ def test_create_reranking_provider_supports_paratera_with_subpath() -> None:
     assert isinstance(provider, OpenAICompatibleReRankingProvider)
     # The /v1/p002 subpath must be preserved when appending /rerank.
     assert provider._endpoint_url() == "https://llmapi.paratera.com/v1/p002/rerank"
+
+
+def test_openai_compatible_reranker_allows_private_service_without_api_key(monkeypatch) -> None:
+    seen = {}
+
+    def fake_urlopen(request, timeout):
+        seen["headers"] = dict(request.header_items())
+        seen["body"] = json.loads(request.data.decode("utf-8"))
+        return _RerankFakeResponse()
+
+    monkeypatch.setattr(
+        "app.services.retrieval.reranking.urlopen_without_proxy", fake_urlopen
+    )
+    provider = OpenAICompatibleReRankingProvider(
+        model_name="bge-reranker-base-rfc-lora",
+        api_key="",
+        base_url="http://127.0.0.1:8091/v1",
+        retry_backoff_seconds=0,
+    )
+
+    provider.rerank("query", ["doc"], top_k=1)
+
+    assert seen["body"]["model"] == "bge-reranker-base-rfc-lora"
+    assert seen["body"]["documents"] == ["doc"]
+    assert "Authorization" not in seen["headers"]
+    assert "Api-key" not in seen["headers"]
+
+
+def test_create_reranking_provider_supports_remote_bge_lora_alias() -> None:
+    provider = create_reranking_provider(
+        "remote-bge-lora",
+        model_name="bge-reranker-base-rfc-lora",
+        api_key="",
+        base_url="http://127.0.0.1:8091/v1",
+    )
+
+    assert isinstance(provider, OpenAICompatibleReRankingProvider)
+    assert provider.provider_name == "openai-compatible"
