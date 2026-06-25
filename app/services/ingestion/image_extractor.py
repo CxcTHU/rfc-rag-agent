@@ -5,6 +5,14 @@ from pathlib import Path
 
 import fitz
 
+try:
+    from PIL import Image, UnidentifiedImageError
+except ImportError:  # pragma: no cover - Pillow is available in normal runtime/tests.
+    Image = None  # type: ignore[assignment]
+
+    class UnidentifiedImageError(Exception):
+        pass
+
 
 @dataclass(frozen=True)
 class ExtractedPdfImage:
@@ -22,6 +30,9 @@ class PdfImageExtractionConfig:
     page_render_dpi: int = 150
     merge_gap_points: float = 20.0
     merge_iou_threshold: float = 0.3
+    max_page_area_ratio: float = 0.70
+    max_aspect_ratio: float = 8.0
+    render_displayed_images: bool = False
 
 
 class PdfImageExtractor:
@@ -44,17 +55,30 @@ class PdfImageExtractor:
                 page = pdf.load_page(page_index)
                 for image_index, image_info in enumerate(page.get_images(full=True), start=1):
                     xref = image_info[0]
+                    display_rect = largest_image_rect(page, xref)
+                    if not image_rect_passes_quality_gate(display_rect, page, self.config):
+                        continue
                     pixmap = None
                     try:
-                        pixmap = fitz.Pixmap(pdf, xref)
-                        if pixmap.n - pixmap.alpha > 3:
-                            pixmap = fitz.Pixmap(fitz.csRGB, pixmap)
+                        if self.config.render_displayed_images and display_rect is not None:
+                            pixmap = page.get_pixmap(
+                                clip=display_rect,
+                                dpi=self.config.page_render_dpi,
+                                alpha=False,
+                            )
+                        else:
+                            pixmap = fitz.Pixmap(pdf, xref)
+                            if pixmap.n - pixmap.alpha > 3:
+                                pixmap = fitz.Pixmap(fitz.csRGB, pixmap)
                         width = int(pixmap.width)
                         height = int(pixmap.height)
-                        if width < self.config.min_width or height < self.config.min_height:
+                        if not image_dimensions_pass_quality_gate(width, height, self.config):
                             continue
                         image_path = document_output_dir / f"page{page_index + 1}_img{image_index}.png"
                         pixmap.save(image_path)
+                        if not saved_image_is_readable(image_path):
+                            image_path.unlink(missing_ok=True)
+                            continue
                         extracted.append(
                             ExtractedPdfImage(
                                 page_num=page_index + 1,
@@ -90,13 +114,18 @@ class PdfImageExtractor:
                     gap_points=self.config.merge_gap_points,
                 )
                 for render_index, rect in enumerate(merged_rects, start=1):
+                    if not image_rect_passes_quality_gate(rect, page, self.config):
+                        continue
                     pixmap = page.get_pixmap(clip=rect, dpi=self.config.page_render_dpi, alpha=False)
                     width = int(pixmap.width)
                     height = int(pixmap.height)
-                    if width < self.config.min_width or height < self.config.min_height:
+                    if not image_dimensions_pass_quality_gate(width, height, self.config):
                         continue
                     image_path = document_output_dir / f"page{page_index + 1}_render{render_index}.png"
                     pixmap.save(image_path)
+                    if not saved_image_is_readable(image_path):
+                        image_path.unlink(missing_ok=True)
+                        continue
                     extracted.append(
                         ExtractedPdfImage(
                             page_num=page_index + 1,
@@ -106,6 +135,51 @@ class PdfImageExtractor:
                         )
                     )
         return extracted
+
+
+def largest_image_rect(page: fitz.Page, xref: int) -> fitz.Rect | None:
+    rects = page.get_image_rects(xref)
+    usable = [rect for rect in rects if not rect.is_empty and rect.width > 0 and rect.height > 0]
+    if not usable:
+        return None
+    return max(usable, key=lambda rect: rect.width * rect.height)
+
+
+def image_rect_passes_quality_gate(
+    rect: fitz.Rect | None,
+    page: fitz.Page,
+    config: PdfImageExtractionConfig,
+) -> bool:
+    if rect is None or rect.is_empty or rect.width <= 0 or rect.height <= 0:
+        return True
+    page_area = max(1.0, page.rect.width * page.rect.height)
+    area_ratio = (rect.width * rect.height) / page_area
+    if config.max_page_area_ratio > 0 and area_ratio > config.max_page_area_ratio:
+        return False
+    aspect_ratio = max(rect.width / rect.height, rect.height / rect.width)
+    return aspect_ratio <= config.max_aspect_ratio
+
+
+def image_dimensions_pass_quality_gate(
+    width: int,
+    height: int,
+    config: PdfImageExtractionConfig,
+) -> bool:
+    if width < config.min_width or height < config.min_height:
+        return False
+    aspect_ratio = max(width / height, height / width)
+    return aspect_ratio <= config.max_aspect_ratio
+
+
+def saved_image_is_readable(path: Path) -> bool:
+    if Image is None:
+        return True
+    try:
+        with Image.open(path) as image:
+            image.verify()
+    except (OSError, UnidentifiedImageError):
+        return False
+    return True
 
 
 def image_rects_from_page(page: fitz.Page) -> list[fitz.Rect]:

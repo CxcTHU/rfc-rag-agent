@@ -1,3 +1,29 @@
+# 阶段 54 GraphRAG 最新交班状态（2026-06-25）
+
+当前分支：`codex/phase-54-graphrag-evaluation`。
+
+阶段 54 按用户确认路线执行：全量 regex 铺 GraphRAG 骨架，LLM 只对 high-value text/table chunk 做语义补充，不再首轮盲跑 33182 条 text chunk 全量 LLM。54A/54B/54C 已完成；54D 已完成 dry-run、47 条 retrieval-only、47 条 answer-only full 真实生成链路，以及 47 条 GLM-5.2 formal judge 真实评分。
+
+关键结果：
+
+```text
+LLM supplement target=4331/4331 attempted
+merged extraction rows=34502 ok=27655
+domain_graph.json node_count=11396 edge_count=104522
+isolated_node_ratio=0.1408
+largest_connected_component_ratio=0.8002
+retrieval-only rows=47 error_rows=0 negative_graph_false_positive_count=0
+answer-only full rows=47 error_rows=0
+formal judge completed_rows=47 error_rows=0 formal_judge_scored_rows=47
+graph_intent_completeness_delta=0.4412 ordinary_accuracy_delta=0.0000
+formal_judge_gate_decision=pass
+completion audit complete=16 partial=0 missing=0
+```
+
+当前工作重点：Phase 54 已完成到 formal judge gate pass，进入用户人工核验前收尾。当前基线已通过：Stage 30 `91.52 / A / pass`、full pytest `1253 passed, 1 skipped`、`git diff --check` 无 whitespace error、targeted Phase 54 CSV 敏感扫描无命中。当前仍未 `git add`、commit、tag、push 或创建 PR，等待用户人工核验。
+
+安全边界不变：不得把 `.env`、`.env.prod`、credentials、API key、Bearer token、provider raw response、raw answer text、`raw_response`、`reasoning_content`、hidden thought、完整 chunk、受限全文或长期用户画像写入 Git/CSV/文档/测试/Obsidian。
+
 # 阶段 53 GraphRAG 最新交班状态（2026-06-24）
 
 当前分支：`codex/phase-53-graphrag`。

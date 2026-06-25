@@ -61,6 +61,13 @@ def main() -> None:
     parser.add_argument("--image-output-dir", default="data/images")
     parser.add_argument("--min-width", type=int, default=100)
     parser.add_argument("--min-height", type=int, default=100)
+    parser.add_argument("--max-page-area-ratio", type=float, default=0.70)
+    parser.add_argument("--max-aspect-ratio", type=float, default=8.0)
+    parser.add_argument(
+        "--render-displayed-images",
+        action="store_true",
+        help="Render images from their displayed PDF page region to avoid raw-image rotation/orientation issues.",
+    )
     parser.add_argument("--skip-embeddings", action="store_true")
     parser.add_argument("--limit", type=int, default=0, help="Maximum number of PDFs to process. 0 means no limit.")
     parser.add_argument("--offset", type=int, default=0, help="Skip this many PDFs from the ordered selection.")
@@ -97,6 +104,9 @@ def main() -> None:
             output_dir=Path(args.image_output_dir),
             min_width=args.min_width,
             min_height=args.min_height,
+            max_page_area_ratio=args.max_page_area_ratio,
+            max_aspect_ratio=args.max_aspect_ratio,
+            render_displayed_images=args.render_displayed_images,
         )
     )
 

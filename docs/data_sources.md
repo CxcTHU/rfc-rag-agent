@@ -1,5 +1,32 @@
 # 数据来源登记
 
+## Phase 54 GraphRAG Derived Data Note
+
+Phase 54 adds no external corpus, crawler, PDF download, source registry entry, model weight, or embedding rebuild. It derives GraphRAG extraction and evaluation artifacts from existing local chunks.
+
+New derived artifacts include:
+
+```text
+docs/phase54_formal_judge_runbook.md
+docs/phase54_completion_audit.md
+scripts/evaluate_phase54_extraction_sample.py
+scripts/review_phase54_extraction_sample.py
+scripts/extract_phase54_graphrag_full.py
+scripts/plan_phase54_llm_coverage.py
+scripts/evaluate_phase54_graphrag_e2e.py
+data/evaluation/phase54_* CSV/JSON summaries
+data/evaluation/phase54_completion_audit.csv
+data/knowledge_graph/extraction_regex.json
+data/knowledge_graph/extraction_text_chunks.json
+data/knowledge_graph/extraction_table_chunks.json
+data/knowledge_graph/extraction_merged.json
+data/knowledge_graph/domain_graph.json
+```
+
+`data/knowledge_graph/` is gitignored derived runtime data. The committed evaluation files contain chunk ids, document ids, short titles/headings, scores, counts, title hashes, answer lengths, statuses, and judge metrics only. They must not contain full chunk content, raw model answers, provider payloads, API keys, Bearer tokens, Authorization headers, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, or service logs.
+
+Formal Phase 54D quality conclusions require explicit `--execute` with a configured judge provider. Dry-run, retrieval-only, and answer-only rows are operational evidence only.
+
 ## Phase 53 GraphRAG Data Note
 
 Phase 53 adds no external corpus, crawler, PDF download, source registry entry, model weight, or embedding rebuild. It adds derived GraphRAG artifacts from existing local chunks and manually authored evaluation questions:
@@ -1873,3 +1900,11 @@ pgvector does not add any external data source. It stores a second database repr
 - HNSW indexes are database indexes, not new content.
 - Existing FAISS files under `data/faiss/` remain gitignored, rebuildable runtime artifacts and are kept as fallback.
 - No API key, Bearer token, provider raw response, or restricted full text is written to docs, tests, CSV, Git, or Obsidian.
+
+## Phase 54D Standards Batch Data Note
+
+Phase 54D uses a user-provided local standards batch under `standards_0625`. The source standard files, rendered images, table assets, local SQLite database, FAISS indexes, and rebuilt knowledge graph JSON files remain local runtime data and are not committed.
+
+Committed Phase 54D artifacts are derived evaluation outputs only: ids, labels, counts, short titles/headings, metric values, status fields, and reranking trace labels. They do not contain full chunk text, raw answers, provider raw responses, hidden reasoning, credentials, service logs, restricted full text, or source PDFs.
+
+The standards batch was used to produce full LLM semantic supplementation for new standard text/table chunks, then rebuild the domain graph for the D experiment. The resulting production-risk conclusion is captured in `docs/phase_reviews/phase-54.md`: graph-intent answers improve strongly, while ordinary in-domain query routing still needs tuning before enabling the chain by default.

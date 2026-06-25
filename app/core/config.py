@@ -46,9 +46,21 @@ class Settings(BaseSettings):
     planner_chat_model_provider: str = ""
     planner_chat_model_name: str = ""
     planner_chat_model_api_key: str = ""
+    planner_chat_model_api_keys: str = ""
     planner_chat_model_base_url: str = ""
     planner_chat_model_temperature: float = 0.0
     planner_chat_model_timeout_seconds: float = 30.0
+
+    judge_model_provider: str = ""
+    judge_model_name: str = ""
+    judge_model_api_key: str = ""
+    judge_model_base_url: str = ""
+    judge_model_temperature: float = 0.0
+    judge_model_timeout_seconds: float = 30.0
+    stage34_judge_provider: str = ""
+    stage34_judge_model: str = ""
+    stage34_judge_api_key: str = ""
+    stage34_judge_base_url: str = ""
 
     embedding_provider: str = ""
     embedding_model_name: str = ""
@@ -76,13 +88,25 @@ class Settings(BaseSettings):
     enable_user_image_upload: bool = True
     table_extraction_min_rows: int = 2
     user_image_max_size_mb: float = 10.0
-    graphrag_graph_path: str = "data/evaluation/phase53_graphrag_graph.json"
+    graphrag_graph_path: str = "data/knowledge_graph/domain_graph.json"
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    def model_post_init(self, __context: object) -> None:
+        if not self.judge_model_provider and self.stage34_judge_provider:
+            self.judge_model_provider = self.stage34_judge_provider
+        if not self.judge_model_name and self.stage34_judge_model:
+            self.judge_model_name = self.stage34_judge_model
+        if not self.judge_model_api_key and self.stage34_judge_api_key:
+            self.judge_model_api_key = self.stage34_judge_api_key
+        if not self.judge_model_base_url and self.stage34_judge_base_url:
+            self.judge_model_base_url = self.stage34_judge_base_url
+        if self.judge_model_provider.strip().casefold() in {"deepseek", "paratera", "glm", "zhipu"}:
+            self.judge_model_provider = "openai-compatible"
 
 
 @lru_cache

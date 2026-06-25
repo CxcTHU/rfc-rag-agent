@@ -545,6 +545,8 @@ def test_tool_calling_structured_final_answer_prompt_is_default() -> None:
     assert "Do not omit a supported point" in messages[0].content
     assert "cite each side separately" in messages[0].content
     assert "evidence gap" in messages[0].content
+    assert "concrete retrieved source title" in messages[0].content
+    assert "generic 'source [1]'" in messages[0].content
     assert "Do not reveal internal outline" in messages[0].content
 
 

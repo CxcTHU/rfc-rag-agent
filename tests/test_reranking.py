@@ -211,6 +211,6 @@ def test_create_reranking_provider_supports_remote_bge_lora_alias() -> None:
     provider = create_reranking_provider("remote-bge-lora")
 
     assert isinstance(provider, OpenAICompatibleReRankingProvider)
-    assert provider.provider_name == "openai-compatible"
+    assert provider.provider_name == "remote-bge-lora"
     assert provider.model_name == "rfc-domain-bge-lora"
     assert provider.base_url == "http://127.0.0.1:8091"

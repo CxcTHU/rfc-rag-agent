@@ -79,12 +79,44 @@ def test_deterministic_extractor_finds_domain_entities_and_relations() -> None:
     assert any(relation.predicate == "parameter_range" for relation in result.relations)
 
 
+def test_deterministic_extractor_finds_chinese_industry_and_local_standards() -> None:
+    text = (
+        "NB/T 10077-2024 defines design requirements for rock-filled concrete dams. "
+        "DB63/T 2086-2022 and DB50/T 1045-2020 cover quality evaluation."
+    )
+
+    result = GraphRAGTripleExtractor().extract(
+        chunk_id=11,
+        document_id=21,
+        document_title="Chinese RFC standards",
+        text=text,
+    )
+
+    standards = {entity.name for entity in result.entities if entity.type == "Standard"}
+    assert "NB/T 10077-2024" in standards
+    assert "DB63/T 2086-2022" in standards
+    assert "DB50/T 1045-2020" in standards
+
+
+def test_deterministic_extractor_uses_document_title_for_standard_entities() -> None:
+    result = GraphRAGTripleExtractor().extract(
+        chunk_id=12,
+        document_id=22,
+        document_title="DB63/T 2086-2022《水利水电工程堆石混凝土坝施工质量检验与评定规范》",
+        text="This chunk only describes quality evaluation details without repeating the standard number.",
+    )
+
+    standards = {entity.name for entity in result.entities if entity.type == "Standard"}
+    assert "DB63/T 2086-2022" in standards
+
+
 class FakeGraphExtractionProvider:
     provider_name = "fake"
     model_name = "graph-extractor"
 
     def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
-        assert "Do not include raw source text" in messages[1].content
+        assert "Do not include source prose" in messages[1].content
+        assert "at most 8 high-confidence entities" in messages[1].content
         return ChatModelResult(
             answer=json.dumps(
                 {

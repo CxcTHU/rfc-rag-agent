@@ -74,6 +74,17 @@ def test_build_rag_prompt_includes_answer_quality_requirements() -> None:
     assert "explain the characteristics of both sides" in user_message
 
 
+def test_build_rag_prompt_requires_named_sources_for_evidence_gaps() -> None:
+    prompt = build_rag_prompt("Which standards mention compressive strength?", [fake_result()])
+    system_message = prompt.messages[0].content
+    user_message = prompt.messages[1].content
+
+    assert "concrete retrieved Title or File name" in system_message
+    assert "concrete retrieved Title or File name" in user_message
+    assert "do not refer to evidence only as 'source [1]'" in user_message
+    assert "Title A [1] only states X" in user_message
+
+
 def test_build_rag_prompt_supports_prompt_profile_ab_test(monkeypatch) -> None:
     monkeypatch.setenv("RAG_PROMPT_PROFILE", "coverage_first")
 

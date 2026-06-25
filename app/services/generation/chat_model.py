@@ -375,6 +375,11 @@ class OpenAICompatibleChatModelProvider:
         normalized_base_url = self.base_url.rstrip("/")
         if normalized_base_url.endswith("/chat/completions"):
             return normalized_base_url
+        if (
+            "llmapi.paratera.com" in normalized_base_url
+            and not normalized_base_url.endswith("/v1")
+        ):
+            return f"{normalized_base_url}/v1/chat/completions"
         return f"{normalized_base_url}/chat/completions"
 
 
@@ -669,6 +674,7 @@ def create_chat_model_provider(
     base_url: str | None = None,
     temperature: float = 0.2,
     timeout_seconds: float = 30.0,
+    max_attempts: int = 3,
 ) -> ChatModelProvider:
     provider = (provider_name or "deterministic").strip().casefold()
     if provider in {"", "deterministic", "fake", "local"}:
@@ -683,5 +689,6 @@ def create_chat_model_provider(
             base_url=(base_url or "").strip(),
             temperature=temperature,
             timeout_seconds=timeout_seconds,
+            max_attempts=max_attempts,
         )
     raise ValueError(f"Unsupported chat model provider: {provider_name}")

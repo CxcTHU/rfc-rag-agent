@@ -32,6 +32,45 @@ def test_pdf_image_extractor_saves_valid_images_and_skips_small_images(tmp_path)
     assert Path(extracted[0].image_path).exists()
 
 
+def test_pdf_image_extractor_skips_full_page_scan_images(tmp_path) -> None:
+    pdf_path = tmp_path / "scan.pdf"
+    document = fitz.open()
+    page = document.new_page(width=360, height=240)
+    page.insert_image(fitz.Rect(5, 5, 355, 235), stream=make_png_bytes(350, 230, (30, 120, 220)))
+    document.save(pdf_path)
+    document.close()
+    extractor = PdfImageExtractor(
+        PdfImageExtractionConfig(
+            output_dir=tmp_path / "images",
+            min_width=50,
+            min_height=50,
+            max_page_area_ratio=0.70,
+        )
+    )
+
+    assert extractor.extract_images(pdf_path, document_id=42) == []
+
+
+def test_pdf_image_extractor_can_render_displayed_image_orientation(tmp_path) -> None:
+    pdf_path = tmp_path / "displayed.pdf"
+    write_pdf_with_images(pdf_path)
+    extractor = PdfImageExtractor(
+        PdfImageExtractionConfig(
+            output_dir=tmp_path / "images",
+            min_width=50,
+            min_height=50,
+            render_displayed_images=True,
+            page_render_dpi=72,
+        )
+    )
+
+    extracted = extractor.extract_images(pdf_path, document_id=42)
+
+    assert len(extracted) == 2
+    assert extracted[0].image_path.endswith("images/42/page1_img1.png")
+    assert Path(extracted[0].image_path).exists()
+
+
 def test_pdf_image_extractor_rejects_non_pdf(tmp_path) -> None:
     text_path = tmp_path / "not-pdf.txt"
     text_path.write_text("not a PDF", encoding="utf-8")

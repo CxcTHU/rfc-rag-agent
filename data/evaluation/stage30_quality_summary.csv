@@ -1,7 +1,7 @@
 run_id,dimension,weight,score,max_score,normalized_score,status,evidence
-stage30-c3b4c563348a,retrieval_quality,35.00,33.36,35.00,0.953,strong,precision_at_1/3/5 from stage29_real_quality_summary.csv
-stage30-c3b4c563348a,rule_based_context_answer_quality,25.00,18.27,25.00,0.731,review_required,avg_coverage_ratio from stage29_real_quality_summary.csv
-stage30-c3b4c563348a,safety_refusal,20.00,20.00,20.00,1.000,strong,refusal_accuracy from stage29_real_quality_summary.csv
-stage30-c3b4c563348a,source_quality,10.00,9.89,10.00,0.989,strong,source_type_distribution and expected source misses
-stage30-c3b4c563348a,engineering_health,10.00,10.00,10.00,1.000,strong,stage30_engineering_health.json
-stage30-c3b4c563348a,overall,100.00,91.52,100.00,0.915,pass,grade=A; scoring_mode=deterministic_rule_based
+stage30-df7510f2f484,retrieval_quality,35.00,33.36,35.00,0.953,strong,precision_at_1/3/5 from stage29_real_quality_summary.csv
+stage30-df7510f2f484,rule_based_context_answer_quality,25.00,18.27,25.00,0.731,review_required,avg_coverage_ratio from stage29_real_quality_summary.csv
+stage30-df7510f2f484,safety_refusal,20.00,20.00,20.00,1.000,strong,refusal_accuracy from stage29_real_quality_summary.csv
+stage30-df7510f2f484,source_quality,10.00,9.89,10.00,0.989,strong,source_type_distribution and expected source misses
+stage30-df7510f2f484,engineering_health,10.00,10.00,10.00,1.000,strong,stage30_engineering_health.json
+stage30-df7510f2f484,overall,100.00,91.52,100.00,0.915,pass,grade=A; scoring_mode=deterministic_rule_based

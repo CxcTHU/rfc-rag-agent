@@ -264,6 +264,16 @@ def test_openai_compatible_provider_requires_configuration() -> None:
         )
 
 
+def test_openai_compatible_provider_paratera_root_base_url_uses_v1_endpoint() -> None:
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="glm-test",
+        api_key="test-key",
+        base_url="https://llmapi.paratera.com",
+    )
+
+    assert provider._endpoint_url() == "https://llmapi.paratera.com/v1/chat/completions"
+
+
 def test_openai_compatible_provider_posts_chat_request_headers(monkeypatch) -> None:
     captured: dict[str, object] = {}
 

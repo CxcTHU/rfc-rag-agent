@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from importlib import import_module
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +116,9 @@ def extract_tables_from_page(
             skipped_small += 1
             continue
         normalized_rows = pad_rows(rows, col_count)
+        if not has_table_structure(normalized_rows):
+            skipped_small += 1
+            continue
         bbox = rect_tuple(getattr(raw_table, "bbox", (0.0, 0.0, 0.0, 0.0)))
         extracted.append(
             TableChunk(
@@ -151,6 +155,29 @@ def normalize_cell(value: Any) -> str:
 
 def pad_rows(rows: list[list[str]], col_count: int) -> list[list[str]]:
     return [row + [""] * (col_count - len(row)) for row in rows]
+
+
+def has_table_structure(rows: list[list[str]]) -> bool:
+    """Reject layout noise that collapses a row into one filled cell plus blanks."""
+
+    if not rows:
+        return False
+    col_count = max((len(row) for row in rows), default=0)
+    if col_count < 2:
+        return False
+    nonempty_counts = [sum(1 for cell in row if cell.strip()) for row in rows]
+    multi_cell_rows = sum(1 for count in nonempty_counts if count >= 2)
+    if multi_cell_rows < max(2, math.ceil(len(rows) * 0.5)):
+        return False
+    active_columns = {
+        index
+        for row in rows
+        for index, cell in enumerate(row)
+        if cell.strip()
+    }
+    if len(active_columns) < 2:
+        return False
+    return True
 
 
 def rows_to_markdown(rows: list[list[str]]) -> str:

@@ -1,0 +1,16 @@
+metric,value
+total_cases,47
+graph_intent_cases,34
+ordinary_baseline_cases,8
+negative_offtopic_cases,5
+completed_rows,0
+retrieval_only_rows,47
+error_rows,0
+graph_candidate_avg,22397.9362
+graph_candidate_max,25434
+graph_used_match_avg,178.7234
+graph_used_match_max,200
+negative_graph_false_positive_count,0
+same_top_chunk_count,43
+same_top_chunk_comparable_count,47
+safety_boundary,ids_title_hashes_counts_scores_only_no_full_chunks_no_provider_payloads

@@ -1,0 +1,9 @@
+metric,value
+total_cases,47
+graph_intent_cases,34
+ordinary_baseline_cases,8
+negative_offtopic_cases,5
+completed_rows,0
+retrieval_only_rows,0
+error_rows,0
+safety_boundary,ids_title_hashes_counts_scores_only_no_full_chunks_no_provider_payloads

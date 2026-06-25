@@ -1,0 +1,17 @@
+requirement,status,evidence,next_action
+llm_coverage_target_complete,complete,completed=4331 target=4331 remaining=0,none
+graph_isolated_node_gate,complete,isolated_node_ratio=0.1408,rebuild graph with normalization/pruning if >=0.30
+graph_lcc_gate,complete,largest_connected_component_ratio=0.8002,rebuild graph with stronger canonicalization if <=0.40
+preflight_non_judge_prereqs,complete,cases=pass graph=pass chat=pass embedding=pass,fix cases/graph/chat/embedding configuration
+judge_provider_ready,complete,judge_provider_configured=pass missing_fields=,configure local JUDGE_MODEL_*
+retrieval_only_all_cases,complete,retrieval_only_rows=47 error_rows=0,rerun --execute-retrieval --resume
+negative_graph_false_positive_gate,complete,negative_graph_false_positive_count=0,tighten graph matching filters
+answer_only_all_cases,complete,answer_only_rows=47 error_rows=0,rerun --execute-answers --resume
+stage30_quality_gate,complete,score=91.52 status=pass evidence=grade=A; scoring_mode=deterministic_rule_based,rerun python scripts\score_stage30_quality.py
+full_pytest_baseline,complete,status=pass,rerun python -m pytest -q
+diff_check_clean,complete,status=pass,rerun git diff --check
+phase54_sensitive_scan,complete,status=pass,rerun targeted Phase 54 sensitive scan
+phase54_docs_synced,complete,synced_files=8,sync README/AGENT/docs/phase review with current Phase 54 status
+git_submission_boundary,complete,status=pass,keep git index unstaged until user verification
+formal_judge_rows,complete,completed=47 scored=47 total=47,run formal --execute after judge preflight passes
+formal_judge_gate,complete,decision=pass reason=all_phase54d_gates_passed,inspect formal gate reason and tune if review_required
