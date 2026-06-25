@@ -1,0 +1,5 @@
+check,status,value
+full_pytest,pass,"1255 passed, 1 skipped"
+git_diff_check,pass,"no whitespace errors; CRLF warnings only"
+phase54_sensitive_scan,pass,"targeted Phase 54 artifact scan found no credentials or provider payloads"
+git_staged_changes_absent,pass,"git diff --cached --name-only produced no output; no git add/commit/tag/push/PR performed"

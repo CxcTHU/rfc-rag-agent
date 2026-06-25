@@ -9,7 +9,7 @@ from app.db.session import create_sqlite_engine
 from app.services.agent.service import AgentQueryResult
 from app.services.agent.tools import AgentToolbox
 from app.services.generation.chat_model import DeterministicChatModelProvider
-from app.services.ingestion.table_extractor import extract_tables_from_page
+from app.services.ingestion.table_extractor import extract_tables_from_page, has_table_structure
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from scripts.backfill_phase47_tables import chunk_create_from_table
 from app.services.ingestion.table_extractor import TableChunk
@@ -57,6 +57,26 @@ def test_extract_tables_from_page_outputs_markdown_and_header() -> None:
     assert tables[0].header_text == "Table 3 Mix ratio results"
     assert "| Mix | Strength |" in tables[0].markdown_content
     assert tables[0].bbox == (10.0, 40.0, 200.0, 140.0)
+
+
+def test_table_structure_rejects_rows_collapsed_into_one_cell() -> None:
+    assert not has_table_structure(
+        [
+            ["all values were collapsed into one noisy cell", "", ""],
+            ["another collapsed row", "", ""],
+        ]
+    )
+    assert not has_table_structure(
+        [
+            ["Header", "Value", ""],
+            ["Subheader", "Value", ""],
+            ["collapsed drawing coordinates", "", ""],
+            ["more drawing coordinates", "", ""],
+            ["more drawing coordinates", "", ""],
+            ["more drawing coordinates", "", ""],
+        ]
+    )
+    assert has_table_structure([["Name", "Value"], ["A", "42 MPa"]])
 
 
 def test_chunk_create_from_table_stores_table_metadata() -> None:

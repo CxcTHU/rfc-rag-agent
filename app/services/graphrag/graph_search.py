@@ -19,10 +19,43 @@ from app.services.observability.latency_trace import (
     latency_timer,
 )
 from app.services.retrieval.embedding import EmbeddingProvider
-from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
+from app.services.retrieval.hybrid_search import (
+    HybridSearchResult,
+    HybridSearchService,
+    add_results,
+    candidate_to_result,
+    max_result_score,
+)
+from app.services.retrieval.keyword_search import KeywordSearchService, source_type_rank
+from app.services.retrieval.reranking import ReRankingProvider
+from app.services.retrieval.vector_search import VectorSearchService
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9./+-]*|[\u4e00-\u9fff]{2,}")
+QUERY_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "about",
+        "between",
+        "for",
+        "from",
+        "how",
+        "in",
+        "is",
+        "of",
+        "or",
+        "the",
+        "to",
+        "what",
+        "which",
+        "who",
+        "with",
+        "write",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -31,6 +64,8 @@ class GraphSearchMatch:
     score: float
     matched_node_ids: tuple[str, ...]
     hop_count: int
+    relation_types: tuple[str, ...] = ()
+    relation_evidence: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -60,6 +95,13 @@ class GraphEnhancedSearchService:
         graph_path: Path | None = None,
         hybrid_service_factory: Callable[[], HybridSearchService] | None = None,
         graph_boost: float = 0.25,
+        max_graph_matches: int = 200,
+        hybrid_candidate_k: int | None = None,
+        multi_channel_candidate_k: int | None = None,
+        final_reranking_provider: ReRankingProvider | None = None,
+        final_rerank_candidate_k: int | None = None,
+        relation_focus: str | None = None,
+        final_graph_candidate_quota: int = 0,
     ) -> None:
         self.db = db
         self.embedding_provider = embedding_provider
@@ -67,6 +109,13 @@ class GraphEnhancedSearchService:
         self.graph_path = graph_path
         self.hybrid_service_factory = hybrid_service_factory
         self.graph_boost = graph_boost
+        self.max_graph_matches = max_graph_matches
+        self.hybrid_candidate_k = hybrid_candidate_k
+        self.multi_channel_candidate_k = multi_channel_candidate_k
+        self.final_reranking_provider = final_reranking_provider
+        self.final_rerank_candidate_k = final_rerank_candidate_k
+        self.relation_focus = normalize_relation_focus(relation_focus)
+        self.final_graph_candidate_quota = final_graph_candidate_quota
 
     def search(self, query: str, top_k: int = 5, max_hops: int = 2) -> GraphEnhancedSearchOutcome:
         normalized_query = query.strip()
@@ -82,7 +131,12 @@ class GraphEnhancedSearchService:
         with latency_timer("graph_search_latency_ms"):
             try:
                 graph = self._load_graph()
-                graph_matches = graph_search_matches(graph, normalized_query, max_hops=max_hops)
+                graph_matches = graph_search_matches(
+                    graph,
+                    normalized_query,
+                    max_hops=max_hops,
+                    relation_focus=self.relation_focus,
+                )
                 graph_summary = GraphSearchSummary(
                     available=True,
                     fallback=False,
@@ -99,25 +153,63 @@ class GraphEnhancedSearchService:
                 )
         record_graph_summary(graph_summary)
 
-        hybrid_results = self._hybrid_search(normalized_query, top_k=top_k)
+        hybrid_results = self._hybrid_search(
+            normalized_query,
+            top_k=max(top_k, self.hybrid_candidate_k or top_k),
+        )
         if not graph_matches:
+            if self.final_reranking_provider is not None:
+                hybrid_results = rerank_fused_results(
+                    query=normalized_query,
+                    results=hybrid_results,
+                    provider=self.final_reranking_provider,
+                    top_k=top_k,
+                    candidate_k=self.final_rerank_candidate_k,
+                    relation_types_by_chunk={},
+                    relation_evidence_by_chunk={},
+                    graph_priority_chunk_ids=(),
+                    graph_candidate_quota=0,
+                )
+            else:
+                hybrid_results = hybrid_results[:top_k]
             return GraphEnhancedSearchOutcome(
                 results=hybrid_results,
                 graph_matches=[],
                 summary=graph_summary,
             )
 
-        graph_results = graph_results_from_matches(self.db, graph_matches)
+        capped_graph_matches = cap_graph_matches(graph_matches, self.max_graph_matches)
+        graph_results = graph_results_from_matches(self.db, capped_graph_matches)
         fused = fuse_graph_and_hybrid_results(
             hybrid_results=hybrid_results,
             graph_results=graph_results,
-            graph_matches=graph_matches,
-            top_k=top_k,
+            graph_matches=capped_graph_matches,
+            top_k=max(top_k, len(hybrid_results) + len(graph_results)),
             graph_boost=self.graph_boost,
         )
+        if self.final_reranking_provider is not None:
+            fused = rerank_fused_results(
+                query=normalized_query,
+                results=fused,
+                provider=self.final_reranking_provider,
+                top_k=top_k,
+                candidate_k=self.final_rerank_candidate_k,
+                relation_types_by_chunk={
+                    match.chunk_id: match.relation_types
+                    for match in capped_graph_matches
+                },
+                relation_evidence_by_chunk={
+                    match.chunk_id: match.relation_evidence
+                    for match in capped_graph_matches
+                },
+                graph_priority_chunk_ids=tuple(match.chunk_id for match in capped_graph_matches),
+                graph_candidate_quota=self.final_graph_candidate_quota,
+            )
+        else:
+            fused = fused[:top_k]
         return GraphEnhancedSearchOutcome(
             results=fused,
-            graph_matches=graph_matches,
+            graph_matches=capped_graph_matches,
             summary=graph_summary,
         )
 
@@ -129,9 +221,36 @@ class GraphEnhancedSearchService:
         return load_graph(self.graph_path)
 
     def _hybrid_search(self, query: str, *, top_k: int) -> list[HybridSearchResult]:
+        if self.multi_channel_candidate_k is not None:
+            return self._multi_channel_hybrid_search(
+                query,
+                per_channel_k=max(top_k, self.multi_channel_candidate_k),
+            )
         if self.hybrid_service_factory is not None:
             return self.hybrid_service_factory().search(query=query, top_k=top_k)
         return HybridSearchService(self.db, self.embedding_provider).search(query=query, top_k=top_k)
+
+    def _multi_channel_hybrid_search(self, query: str, *, per_channel_k: int) -> list[HybridSearchResult]:
+        keyword_results = KeywordSearchService(self.db).search(query, top_k=per_channel_k)
+        vector_results = VectorSearchService(self.db, self.embedding_provider).search(query, top_k=per_channel_k)
+        candidates = {}
+        add_results(candidates, keyword_results, "keyword", max_result_score(keyword_results))
+        add_results(candidates, vector_results, "vector", max_result_score(vector_results))
+        scoring_service = HybridSearchService(
+            self.db,
+            self.embedding_provider,
+            reranking_enabled=False,
+        )
+        hybrid_results = [candidate_to_result(candidate, scoring_service) for candidate in candidates.values()]
+        return sorted(
+            hybrid_results,
+            key=lambda item: (
+                -item.score,
+                source_type_rank(item.source_type),
+                item.document_id,
+                item.chunk_index,
+            ),
+        )
 
 
 def graph_search_matches(
@@ -139,14 +258,18 @@ def graph_search_matches(
     query: str,
     *,
     max_hops: int = 2,
+    relation_focus: str | None = None,
 ) -> list[GraphSearchMatch]:
     anchors = matched_query_node_ids(graph, query)
     if not anchors:
         return []
+    normalized_relation_focus = normalize_relation_focus(relation_focus)
     undirected = graph.to_undirected()
     chunk_scores: dict[int, float] = defaultdict(float)
     chunk_nodes: dict[int, set[str]] = defaultdict(set)
     chunk_hops: dict[int, int] = {}
+    chunk_relation_types: dict[int, set[str]] = defaultdict(set)
+    chunk_relation_evidence: dict[int, set[str]] = defaultdict(set)
 
     for anchor in anchors:
         path_lengths = nx.single_source_shortest_path_length(
@@ -156,17 +279,26 @@ def graph_search_matches(
         )
         for node_id, distance in path_lengths.items():
             node_score = 1.0 / (1.0 + float(distance))
-            for chunk_id in safe_ints(graph.nodes[node_id].get("chunk_ids") or ()):
-                chunk_scores[chunk_id] += node_score
-                chunk_nodes[chunk_id].add(node_id)
-                chunk_hops[chunk_id] = min(chunk_hops.get(chunk_id, max_hops), int(distance))
-            for _, _, attrs in graph.edges(node_id, data=True):
+            if not normalized_relation_focus:
+                for chunk_id in safe_ints(graph.nodes[node_id].get("chunk_ids") or ()):
+                    chunk_scores[chunk_id] += node_score
+                    chunk_nodes[chunk_id].add(node_id)
+                    chunk_hops[chunk_id] = min(chunk_hops.get(chunk_id, max_hops), int(distance))
+            for _, target_id, attrs in graph.edges(node_id, data=True):
+                relation_type = str(attrs.get("type") or "")
+                if normalized_relation_focus and relation_type != normalized_relation_focus:
+                    continue
                 chunk_id = safe_int(attrs.get("source_chunk_id"))
                 if chunk_id is None:
                     continue
                 chunk_scores[chunk_id] += node_score * 0.5
                 chunk_nodes[chunk_id].add(node_id)
                 chunk_hops[chunk_id] = min(chunk_hops.get(chunk_id, max_hops), int(distance))
+                if relation_type:
+                    chunk_relation_types[chunk_id].add(relation_type)
+                edge_text = graph_edge_evidence(graph, node_id, str(target_id), attrs)
+                if edge_text:
+                    chunk_relation_evidence[chunk_id].add(edge_text)
 
     return [
         GraphSearchMatch(
@@ -174,12 +306,40 @@ def graph_search_matches(
             score=round(score, 6),
             matched_node_ids=tuple(sorted(chunk_nodes[chunk_id])),
             hop_count=chunk_hops.get(chunk_id, max_hops),
+            relation_types=tuple(sorted(chunk_relation_types.get(chunk_id, ()))),
+            relation_evidence=tuple(sorted(chunk_relation_evidence.get(chunk_id, ()))[:3]),
         )
         for chunk_id, score in sorted(
             chunk_scores.items(),
             key=lambda item: (-item[1], item[0]),
         )
     ]
+
+
+def graph_edge_evidence(graph: nx.MultiDiGraph, node_id: str, target_id: str, attrs: dict[str, Any]) -> str:
+    relation_type = str(attrs.get("type") or "")
+    if not relation_type:
+        return ""
+    source_name = str(graph.nodes[node_id].get("name") or node_id)
+    target_name = str(graph.nodes[target_id].get("name") or target_id)
+    evidence = str(attrs.get("evidence") or "")
+    relation = f"{source_name} --{relation_type}--> {target_name}".strip()
+    if evidence:
+        relation = f"{relation}; evidence: {evidence[:120]}"
+    return relation[:240]
+
+
+def normalize_relation_focus(relation_focus: str | None) -> str | None:
+    value = (relation_focus or "").strip()
+    if not value or value == "none":
+        return None
+    return value
+
+
+def cap_graph_matches(matches: list[GraphSearchMatch], limit: int) -> list[GraphSearchMatch]:
+    if limit <= 0:
+        return []
+    return matches[:limit]
 
 
 def matched_query_node_ids(graph: nx.MultiDiGraph, query: str) -> list[str]:
@@ -199,12 +359,51 @@ def matched_query_node_ids(graph: nx.MultiDiGraph, query: str) -> list[str]:
 
 def candidate_matches_query(candidate: str, normalized_query: str, query_tokens: set[str]) -> bool:
     normalized_candidate = normalize_query_text(candidate)
-    if not normalized_candidate:
+    if not normalized_candidate or not is_meaningful_query_candidate(normalized_candidate):
         return False
-    if normalized_candidate in normalized_query:
+    if standard_candidate_matches_query(normalized_candidate, normalized_query):
         return True
     candidate_tokens = set(query_terms(candidate))
+    if is_short_ascii_query_candidate(normalized_candidate):
+        return bool(candidate_tokens and candidate_tokens <= query_tokens)
+    if normalized_candidate in normalized_query:
+        return True
     return bool(candidate_tokens and candidate_tokens <= query_tokens)
+
+
+def standard_candidate_matches_query(normalized_candidate: str, normalized_query: str) -> bool:
+    match = re.search(
+        r"\b(?P<prefix>gb/t|gb|dl/t|dl|nb/t|db\d+/t|sl/t|sl|astm|aci)\s+"
+        r"(?P<number>\d{2,6})(?:\s+(?P<year>\d{4}))?\b",
+        normalized_candidate,
+    )
+    if not match:
+        return False
+    prefix = match.group("prefix")
+    number = match.group("number")
+    year = match.group("year")
+    without_year = f"{prefix} {number}"
+    compact_without_year = without_year.replace("/", "").replace(" ", "")
+    compact_query = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", normalized_query)
+    if without_year in normalized_query or compact_without_year in compact_query:
+        return True
+    if year:
+        with_year = f"{without_year} {year}"
+        compact_with_year = with_year.replace("/", "").replace(" ", "")
+        return with_year in normalized_query or compact_with_year in compact_query
+    return False
+
+
+def is_meaningful_query_candidate(normalized_candidate: str) -> bool:
+    compact = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", normalized_candidate)
+    if len(compact) <= 1 and compact.isascii():
+        return False
+    return True
+
+
+def is_short_ascii_query_candidate(normalized_candidate: str) -> bool:
+    compact = re.sub(r"[^0-9a-zA-Z]+", "", normalized_candidate)
+    return bool(compact and compact.isascii() and len(compact) <= 2)
 
 
 def normalize_query_text(text: str) -> str:
@@ -213,9 +412,10 @@ def normalize_query_text(text: str) -> str:
 
 def query_terms(text: str) -> list[str]:
     return [
-        normalize_query_text(match.group(0))
+        term
         for match in TOKEN_RE.finditer(text)
-        if len(normalize_query_text(match.group(0))) >= 2
+        if len(term := normalize_query_text(match.group(0))) >= 2
+        and term not in QUERY_STOPWORDS
     ]
 
 
@@ -292,6 +492,107 @@ def fuse_graph_and_hybrid_results(
         merged.values(),
         key=lambda item: (-item.score, item.document_id, item.chunk_index, item.chunk_id),
     )[:top_k]
+
+
+def rerank_fused_results(
+    *,
+    query: str,
+    results: list[HybridSearchResult],
+    provider: ReRankingProvider,
+    top_k: int,
+    candidate_k: int | None = None,
+    relation_types_by_chunk: dict[int, tuple[str, ...]] | None = None,
+    relation_evidence_by_chunk: dict[int, tuple[str, ...]] | None = None,
+    graph_priority_chunk_ids: tuple[int, ...] = (),
+    graph_candidate_quota: int = 0,
+) -> list[HybridSearchResult]:
+    if not results:
+        return []
+    candidates = select_final_rerank_candidates(
+        results,
+        max_candidates=max(top_k, candidate_k or top_k),
+        graph_priority_chunk_ids=graph_priority_chunk_ids,
+        graph_candidate_quota=graph_candidate_quota,
+    )
+    relation_types_by_chunk = relation_types_by_chunk or {}
+    relation_evidence_by_chunk = relation_evidence_by_chunk or {}
+    rerank_texts = [
+        graph_augmented_candidate_text(
+            result,
+            relation_types=relation_types_by_chunk.get(result.chunk_id, ()),
+            relation_evidence=relation_evidence_by_chunk.get(result.chunk_id, ()),
+        )
+        for result in candidates
+    ]
+    trace = get_current_latency_trace()
+    if trace is not None:
+        trace.set_value("graph_final_reranking_provider", provider.provider_name)
+        trace.set_value("graph_final_reranking_model", provider.model_name)
+        trace.set_value("graph_final_reranking_fallback", False)
+        trace.set_value("graph_final_reranking_error", "")
+    try:
+        with latency_timer("graph_final_rerank_latency_ms"):
+            reranked = provider.rerank(
+                query=query,
+                candidates=rerank_texts,
+                top_k=top_k,
+            )
+    except Exception:
+        if trace is not None:
+            trace.set_value("graph_final_reranking_fallback", True)
+            trace.set_value("graph_final_reranking_error", "runtime_error")
+        return results[:top_k]
+    return [candidates[item.index] for item in reranked]
+
+
+def select_final_rerank_candidates(
+    results: list[HybridSearchResult],
+    *,
+    max_candidates: int,
+    graph_priority_chunk_ids: tuple[int, ...] = (),
+    graph_candidate_quota: int = 0,
+) -> list[HybridSearchResult]:
+    if max_candidates <= 0:
+        return []
+    by_chunk = {result.chunk_id: result for result in results}
+    selected: list[HybridSearchResult] = []
+    seen: set[int] = set()
+    if graph_candidate_quota > 0:
+        for chunk_id in graph_priority_chunk_ids:
+            result = by_chunk.get(chunk_id)
+            if result is None or result.chunk_id in seen:
+                continue
+            selected.append(result)
+            seen.add(result.chunk_id)
+            if len(selected) >= min(graph_candidate_quota, max_candidates):
+                break
+    for result in results:
+        if result.chunk_id in seen:
+            continue
+        selected.append(result)
+        seen.add(result.chunk_id)
+        if len(selected) >= max_candidates:
+            break
+    return selected
+
+
+def graph_augmented_candidate_text(
+    result: HybridSearchResult,
+    *,
+    relation_types: tuple[str, ...] = (),
+    relation_evidence: tuple[str, ...] = (),
+) -> str:
+    if not relation_types and not relation_evidence:
+        return result.content
+    relation_label = ", ".join(str(item) for item in relation_types)
+    relation_lines = "\n".join(f"Graph relation: {item}" for item in relation_evidence)
+    heading = f" heading={result.heading_path}" if result.heading_path else ""
+    return (
+        f"Graph relation types: {relation_label}.{heading}\n"
+        f"{relation_lines}\n"
+        f"Document title: {result.document_title}\n"
+        f"{result.content}"
+    )
 
 
 def record_graph_summary(summary: GraphSearchSummary) -> None:

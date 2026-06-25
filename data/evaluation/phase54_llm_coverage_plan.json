@@ -1,0 +1,52 @@
+{
+  "chunk_counts": {
+    "image_description": 15628,
+    "table": 1440,
+    "text": 33182
+  },
+  "decision": {
+    "text_score_threshold": 180,
+    "text_target_rule": "score >= 180",
+    "table_target_rule": "all table chunks",
+    "rationale": "score>=180 selects the top high-value text band within the planned 2000-5000 range; all table chunks are included because table chunks are only 1440 rows and dense in material/parameter/value relations."
+  },
+  "text": {
+    "total": 33182,
+    "score_distribution": {
+      "150": 5809,
+      "180": 2891,
+      "200": 1596,
+      "240": 315,
+      "280": 45,
+      "320": 5
+    },
+    "target": 2891,
+    "completed_target": 2891,
+    "remaining_target": 0,
+    "completed_any": 2909
+  },
+  "table": {
+    "total": 1440,
+    "score_distribution": {
+      "1": 1440,
+      "40": 1440,
+      "60": 1254,
+      "80": 1209,
+      "100": 762,
+      "120": 440,
+      "150": 166,
+      "180": 77,
+      "200": 45,
+      "240": 5
+    },
+    "target": 1440,
+    "completed_target": 1440,
+    "remaining_target": 0,
+    "completed_any": 1440
+  },
+  "combined": {
+    "target": 4331,
+    "completed_target": 4331,
+    "remaining_target": 0
+  }
+}

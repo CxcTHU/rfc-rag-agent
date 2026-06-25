@@ -1,5 +1,40 @@
 # 架构说明
 
+## Phase 54 Architecture Delta: Regex Skeleton Plus High-Value LLM Graph
+
+Phase 54 changes GraphRAG from an empty fail-open lane into a real derived graph built from existing corpus chunks:
+
+```text
+text chunks
+-> full regex extraction
+-> high-precision standard/value/reference skeleton
+
+high-value text chunks + all table chunks
+-> planner LLM semantic extraction
+-> material/property/applies_to/standard_defines supplements
+
+regex-priority merge
+-> NetworkX MultiDiGraph
+-> prune isolated Value noise
+-> data/knowledge_graph/domain_graph.json
+-> GraphEnhancedSearchService
+```
+
+The graph is still derived runtime data, not a new source corpus. `data/knowledge_graph/domain_graph.json` is gitignored and rebuildable. Runtime GraphRAG defaults now point to this formal graph path through `GRAPHRAG_GRAPH_PATH`.
+
+Phase 54 also hardens graph query matching. Single-character ASCII nodes are ignored, two-character ASCII nodes require exact token matches, common English stopwords are filtered from query terms, and graph matches used for DB fetch/fusion are capped at 200 while raw candidate counts remain observable. This prevents off-topic queries from anchoring on noisy `Value` or parameter nodes while preserving broad graph traversal for in-domain queries.
+
+The evaluation architecture separates evidence levels:
+
+```text
+dry-run -> case design only
+--execute-retrieval -> baseline vs graph retrieval ids/counts
+--execute-answers -> retrieval + real answer generation, no stored answer text
+--execute -> retrieval + answer generation + judge scores
+```
+
+Only `--execute` rows with judge scores are formal Phase 54D quality evidence.
+
 ## Phase 53 Architecture Delta: GraphRAG Knowledge Graph Retrieval
 
 Phase 53 adds a graph retrieval lane while keeping the existing citation-first answer contract and hybrid retrieval fallback.

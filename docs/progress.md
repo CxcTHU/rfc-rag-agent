@@ -1,5 +1,38 @@
 # 项目进度
 
+## Latest Status: 2026-06-25 Phase 54 GraphRAG Real Data And Evaluation
+
+Current branch: `codex/phase-54-graphrag-evaluation`.
+
+Phase 54 now uses the user-confirmed route: full regex extraction builds the graph skeleton, and LLM extraction only supplements high-value text/table chunks. The Phase 54B target is complete: `4331/4331` high-value candidates attempted (`2891` text by `score>=180` plus `1440` table chunks). The merged extraction has `rows=34502` and `ok=27655`.
+
+Phase 54C graph quality passes with the formal graph at `data/knowledge_graph/domain_graph.json`:
+
+```text
+node_count=11396
+edge_count=104522
+isolated_node_ratio=0.1408
+largest_connected_component_ratio=0.8002
+pruned_isolated_value_nodes=4632
+```
+
+Phase 54D has 47 sanitized evaluation cases and an E2E runner with dry-run, retrieval-only, answer-only, and judge modes. Current real-provider progress:
+
+```text
+dry-run -> cases=47
+retrieval-only with real embedding and reranker disabled -> rows=47, error_rows=0, negative_graph_false_positive_count=0
+answer-only full -> rows=47, error_rows=0
+formal GLM-5.2 judge -> completed_rows=47, error_rows=0, formal_judge_scored_rows=47
+formal gate -> pass
+graph_intent_completeness_delta=0.4412
+ordinary_accuracy_delta=0.0000
+negative_graph_false_positive_count=0
+post-answer-only regression -> Stage 30 91.52 / A / pass; full pytest 1253 passed, 1 skipped
+focused Phase 54/GraphRAG regression -> 31 passed
+```
+
+Formal Phase 54D quality acceptance passed with reranker disabled. No `git add`, commit, tag, push, or PR has been performed.
+
 ## Latest Status: 2026-06-24 Phase 53 GraphRAG Knowledge Graph Retrieval
 
 Current branch: `codex/phase-53-graphrag`.
@@ -3990,3 +4023,92 @@ Status: complete before user human verification. No `git add`, commit, tag, push
 Phase 14 migrated the vector retrieval substrate from FAISS-only runtime files toward PostgreSQL-native pgvector HNSW search. Dev/prod PostgreSQL images now use `pgvector/pgvector:pg16`; Alembic adds `chunk_embeddings.embedding_vector Vector(2048)` and an HNSW cosine index; `VectorSearchService` defaults to HNSW-first retrieval when PostgreSQL is active and the embedding dimension is 2048. Otherwise it falls back to the existing FAISS/numpy path.
 
 Phase 15 validation passed: `python -m pytest -q -> 1100 passed, 1 skipped`; Stage 30 remains `overall=91.52 grade=A release_decision=pass`; Docker Compose dev/prod config passed with temporary local placeholders.
+
+## Latest Status: 2026-06-25 Phase 54 Graph-Aware BGE Comparison Complete
+
+Current branch: `codex/phase-54-graphrag-evaluation`.
+
+Phase 54C reranker-enabled comparison has completed on the same 47-case GraphRAG E2E set. The accepted C design uses the GPU-hosted private BGE-LoRA model as a final reranker after hybrid/keyword/vector recall and graph relation expansion. The earlier naive chain, where hybrid was reranked before graph fusion, is retained only as diagnostic evidence.
+
+Formal graph-aware BGE outputs:
+
+```text
+data/evaluation/phase54_graphrag_eval_results_reranker_bge_graphaware.csv
+data/evaluation/phase54_graphrag_eval_summary_reranker_bge_graphaware.csv
+data/evaluation/phase54_graphrag_eval_ablation_reranker_bge_graphaware.csv
+data/evaluation/phase54_graphrag_eval_comparison_reranker_bge_graphaware.csv
+```
+
+Formal result:
+
+```text
+completed_rows=47
+error_rows=0
+formal_judge_scored_rows=47
+graph_intent_accuracy_delta=0.4412
+graph_intent_completeness_delta=0.5000
+graph_intent_citation_quality_delta=0.2941
+ordinary_accuracy_delta=0.2500
+negative_graph_false_positive_count=0
+formal_judge_gate_decision=pass
+```
+
+Compared with the reranker-disabled formal judge run, graph-aware BGE improved graph-intent accuracy delta by `+0.2941`, completeness delta by `+0.0588`, and citation-quality delta by `+0.0294`. Ordinary baseline accuracy delta improved by `+0.2500`; negative off-topic graph false positives remained `0`.
+
+Risk note: ordinary in-domain baseline questions still create broad graph candidate pools. Before making this chain the production default, tune graph trigger precision so ordinary single-document questions do not pay unnecessary graph-expansion cost.
+
+No `git add`, commit, tag, push, or PR has been performed.
+
+## Latest Status: 2026-06-25 Phase 54D Standards-Expanded GraphRAG Evaluation Complete
+
+Current branch: `codex/phase-54-graphrag-evaluation`.
+
+Phase 54D added the user-provided standards batch from the local `standards_0625` folder to the local corpus, including text/table/image ingestion checks. The new standard text and table chunks were fully LLM-supplemented instead of using high-value sampling only:
+
+```text
+standards text LLM rows=1193 ok=1193
+standards table LLM rows=260 ok=260
+merged standards LLM rows=1453 ok=1453
+merged entities=12319
+merged relations=10634
+rebuilt graph node_count=14372 edge_count=114544
+largest_connected_component_ratio=0.7935
+isolated_node_ratio=0.1586
+```
+
+The D experiment reran the same 47-case Phase 54 evaluation set with the expanded standards corpus and GPU-hosted private BGE-LoRA final reranking. All rows completed and the reranking trace confirmed `remote-bge-lora` for all 47 graph-final rerank steps with no fallback.
+
+Formal D artifacts:
+
+```text
+data/evaluation/phase54_graphrag_eval_results_d_full_standards_llm_bge.csv
+data/evaluation/phase54_graphrag_eval_summary_d_full_standards_llm_bge.csv
+data/evaluation/phase54_graphrag_eval_ablation_d_full_standards_llm_bge.csv
+data/evaluation/phase54_graphrag_eval_comparison_d_full_standards_llm_bge.csv
+```
+
+Formal D result:
+
+```text
+completed_rows=47
+error_rows=0
+formal_judge_scored_rows=47
+graph_intent_accuracy_delta=0.5294
+graph_intent_completeness_delta=0.4412
+graph_intent_citation_quality_delta=0.5882
+ordinary_accuracy_delta=-0.2500
+negative_graph_false_positive_count=0
+formal_judge_gate_decision=review_required
+formal_judge_gate_reason=ordinary_accuracy_delta<-0.1
+```
+
+Conclusion: the expanded standards plus GraphRAG+BGE chain materially improves graph-intent standard-aware answers and citation quality, but it is not a production default until ordinary in-domain query routing is tightened. The GPU server was shut down after the BGE run; no runtime graph files, source PDFs, images, local database files, API keys, raw provider responses, or full chunk contents are committed.
+
+Final closeout validation:
+
+```text
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m pytest -q -> 1267 passed, 1 skipped
+python scripts/audit_phase54_completion.py --output data/evaluation/phase54_completion_audit.csv -> complete=16 partial=0 missing=0
+git diff --check -> no whitespace errors; CRLF warnings only
+```

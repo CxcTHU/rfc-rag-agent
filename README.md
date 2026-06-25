@@ -1,5 +1,18 @@
 # RFC-RAG-Agent
 
+## Phase 54 GraphRAG Real Data And Evaluation
+
+Current branch: `codex/phase-54-graphrag-evaluation`.
+
+Phase 54 fills the Phase 53 GraphRAG skeleton with real derived graph data. The accepted route is full regex extraction for the graph skeleton plus high-value text/table LLM semantic supplement, not full-corpus LLM extraction. The formal LLM supplement target is complete: `2891` high-value text chunks and all `1440` table chunks were attempted (`4331/4331`). The merged extraction builds the formal gitignored graph at `data/knowledge_graph/domain_graph.json`.
+
+Phase 54C graph quality now passes after pruning isolated degree-zero `Value` nodes: `node_count=11396`, `edge_count=104522`, `isolated_node_ratio=0.1408`, and `largest_connected_component_ratio=0.8002`. Phase 54D formal GLM-5.2 judge evaluation is complete over 47 cases with `completed_rows=47`, `error_rows=0`, `formal_judge_scored_rows=47`, `graph_intent_completeness_delta=0.4412`, `ordinary_accuracy_delta=0.0000`, `negative_graph_false_positive_count=0`, and `formal_judge_gate_decision=pass`.
+
+New artifacts include `scripts/extract_phase54_graphrag_full.py`, `scripts/plan_phase54_llm_coverage.py`, `scripts/evaluate_phase54_graphrag_e2e.py`, Phase 54 evaluation CSVs under `data/evaluation/`, and `docs/phase_reviews/phase-54.md`. Evaluation outputs store ids, counts, title hashes, answer lengths, and judge scores only; they must not store full chunk bodies, provider payloads, raw model answers, hidden reasoning, credentials, or restricted full text.
+
+Formal judge execution is documented in `docs/phase54_formal_judge_runbook.md`; the completed formal artifacts are `phase54_graphrag_eval_results_real_api.csv`, `phase54_graphrag_eval_summary_real_api.csv`, and `phase54_graphrag_eval_ablation_real_api.csv`.
+Current completion status is audited in `docs/phase54_completion_audit.md`.
+
 ## Phase 53 GraphRAG Knowledge Graph Retrieval
 
 Current branch: `codex/phase-53-graphrag`.
@@ -1919,3 +1932,9 @@ Phase 50 now includes Phase 14-15 pgvector HNSW migration on top of the LangGrap
 The default retrieval backend is now HNSW-first: `pgvector_search_enabled=True` by default, so PostgreSQL + pgvector + 2048-dimensional embeddings use `pgvector_hnsw`. If pgvector is disabled, unavailable, non-PostgreSQL, or non-2048-dimensional, retrieval falls back to the existing FAISS/numpy path and keeps `data/faiss/` as a rebuildable runtime artifact.
 
 Verification: `python -m pytest -q -> 1100 passed, 1 skipped`; `python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`; dev/prod Docker Compose config passed with temporary local placeholders. No `git add`, commit, tag, push, or PR has been performed; this branch remains stopped before user human verification.
+
+## Phase 54 GraphRAG Evaluation Closeout
+
+Phase 54 adds the GraphRAG extraction/evaluation harness, graph-aware evidence expansion, final post-fusion BGE reranking support, and formal GLM judge reporting for `accuracy`, `completeness`, and `citation_quality`.
+
+The final D experiment expands the corpus with the user-supplied standards batch, runs full LLM semantic supplementation for the new standard text/table chunks, rebuilds the domain graph, and evaluates the same 47-case set with GPU-hosted private BGE-LoRA reranking. D completed all 47 rows with no errors and no BGE fallback. Main metric deltas were: graph-intent accuracy `+0.5294`, completeness `+0.4412`, citation quality `+0.5882`, ordinary accuracy `-0.2500`, negative graph false positives `0`. The formal gate is `review_required` because ordinary accuracy regressed, so the result is strong evidence for standard-aware graph questions but not yet a production-default retrieval chain.

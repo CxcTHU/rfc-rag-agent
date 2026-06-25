@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,24 @@ from app.services.graphrag.schema import (
 
 
 GRAPH_SCHEMA_VERSION = "phase53-networkx-v1"
+STANDARD_CANONICAL_RE = re.compile(
+    r"\b(?P<prefix>GB/T|GB|GBT|DL/T|DL|NB/T|NB|NBT|DB\d+/T|DBT|JTG|SL/T|SL|ACI|ASTM|EN|ISO)\s*[-/]?\s*(?P<number>[A-Z]?\s*\d{2,6}(?:[-:]\d+)?)\b",
+    re.IGNORECASE,
+)
+MATERIAL_ALIASES: dict[str, tuple[str, ...]] = {
+    "rock-filled concrete": (
+        "rock-filled concrete",
+        "rock filled concrete",
+        "rfc",
+        "堆石混凝土",
+    ),
+    "self-compacting concrete": (
+        "self-compacting concrete",
+        "self compacting concrete",
+        "scc",
+        "自密实混凝土",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -24,6 +43,10 @@ class GraphStats:
     node_count: int
     edge_count: int
     connected_components: int
+    isolated_node_count: int
+    isolated_node_ratio: float
+    largest_connected_component_node_count: int
+    largest_connected_component_ratio: float
     degree_distribution: dict[int, int]
     node_type_counts: dict[str, int]
     edge_type_counts: dict[str, int]
@@ -33,6 +56,10 @@ class GraphStats:
             "node_count": self.node_count,
             "edge_count": self.edge_count,
             "connected_components": self.connected_components,
+            "isolated_node_count": self.isolated_node_count,
+            "isolated_node_ratio": f"{self.isolated_node_ratio:.4f}",
+            "largest_connected_component_node_count": self.largest_connected_component_node_count,
+            "largest_connected_component_ratio": f"{self.largest_connected_component_ratio:.4f}",
             "degree_distribution": {
                 str(degree): count
                 for degree, count in sorted(self.degree_distribution.items())
@@ -43,7 +70,47 @@ class GraphStats:
 
 
 def entity_node_id(entity: GraphEntity) -> str:
-    return f"{entity.type}:{entity.normalized_name}"
+    return f"{entity.type}:{canonical_entity_normalized_name(entity)}"
+
+
+def canonical_entity_normalized_name(entity: GraphEntity) -> str:
+    return canonical_normalized_name(entity.type, entity.normalized_name or entity.name)
+
+
+def canonical_normalized_name(entity_type: str, name: str) -> str:
+    normalized = normalize_entity_name(name)
+    if entity_type == "Standard":
+        return canonical_standard_name(normalized)
+    if entity_type == "Material":
+        return canonical_material_name(normalized)
+    return normalized
+
+
+def canonical_standard_name(name: str) -> str:
+    compact = name.replace(" ", "")
+    compact = re.sub(r"^gbt(?=\d)", "gb/t", compact, flags=re.IGNORECASE)
+    compact = re.sub(r"^nbt(?=\d)", "nb/t", compact, flags=re.IGNORECASE)
+    compact = re.sub(r"^(db\d+)t(?=\d)", r"\1/t", compact, flags=re.IGNORECASE)
+    match = STANDARD_CANONICAL_RE.search(compact)
+    if not match:
+        return name
+    prefix = match.group("prefix").casefold()
+    number = re.sub(r"\s+", "", match.group("number")).casefold()
+    if prefix == "gbt":
+        prefix = "gb/t"
+    if prefix in {"nb", "nbt"}:
+        prefix = "nb/t"
+    dbt_match = re.fullmatch(r"db(\d+)t", prefix)
+    if dbt_match:
+        prefix = f"db{dbt_match.group(1)}/t"
+    return f"{prefix} {number}"
+
+
+def canonical_material_name(name: str) -> str:
+    for canonical, aliases in MATERIAL_ALIASES.items():
+        if name in {normalize_entity_name(alias) for alias in aliases}:
+            return canonical
+    return name
 
 
 def build_knowledge_graph(results: list[GraphExtractionResult]) -> nx.MultiDiGraph:
@@ -53,21 +120,29 @@ def build_knowledge_graph(results: list[GraphExtractionResult]) -> nx.MultiDiGra
     for result in results:
         chunk_id = result.chunk_id
         for entity in result.entities:
+            canonical_name = canonical_entity_normalized_name(entity)
             node_id = entity_node_id(entity)
             if graph.has_node(node_id):
                 attrs = graph.nodes[node_id]
                 attrs["chunk_ids"] = sorted(set(attrs.get("chunk_ids", [])) | {chunk_id}, key=str)
-                attrs["mentions"] = sorted(set(attrs.get("mentions", [])) | set(entity.mentions))
+                attrs["mentions"] = sorted(
+                    set(attrs.get("mentions", []))
+                    | set(entity.mentions)
+                    | {entity.name, entity.normalized_name}
+                )
             else:
                 graph.add_node(
                     node_id,
                     name=entity.name,
                     type=entity.type,
-                    normalized_name=entity.normalized_name,
-                    mentions=sorted(entity.mentions),
+                    normalized_name=canonical_name,
+                    mentions=sorted(set(entity.mentions) | {entity.name, entity.normalized_name}),
                     chunk_ids=[chunk_id],
                 )
-            name_index[(chunk_id, normalize_entity_name(entity.name))] = node_id
+            for candidate_name in {entity.name, entity.normalized_name, canonical_name, *entity.mentions}:
+                if candidate_name:
+                    name_index[(chunk_id, canonical_normalized_name(entity.type, candidate_name))] = node_id
+                    name_index[(chunk_id, normalize_entity_name(candidate_name))] = node_id
 
         for relation in result.relations:
             source_id = resolve_relation_node_id(relation.subject, chunk_id, name_index)
@@ -83,6 +158,25 @@ def build_knowledge_graph(results: list[GraphExtractionResult]) -> nx.MultiDiGra
             )
 
     return graph
+
+
+def prune_isolated_nodes_by_type(
+    graph: nx.MultiDiGraph,
+    *,
+    node_types: set[str] | frozenset[str],
+) -> int:
+    """Remove degree-zero nodes whose type has little relationship value."""
+
+    if not node_types:
+        return 0
+    undirected = graph.to_undirected()
+    nodes_to_remove = [
+        node_id
+        for node_id, degree in undirected.degree()
+        if degree == 0 and str(graph.nodes[node_id].get("type") or "") in node_types
+    ]
+    graph.remove_nodes_from(nodes_to_remove)
+    return len(nodes_to_remove)
 
 
 def resolve_relation_node_id(
@@ -173,6 +267,13 @@ def graph_stats(graph: nx.MultiDiGraph) -> GraphStats:
     undirected = graph.to_undirected()
     connected_components = nx.number_connected_components(undirected) if graph.number_of_nodes() else 0
     degree_counter = Counter(dict(undirected.degree()).values())
+    component_sizes = [
+        len(component)
+        for component in nx.connected_components(undirected)
+    ] if graph.number_of_nodes() else []
+    largest_component_size = max(component_sizes) if component_sizes else 0
+    isolated_node_count = degree_counter.get(0, 0)
+    node_count = graph.number_of_nodes()
     node_type_counter = Counter(
         str(attrs.get("type") or "Unknown")
         for _, attrs in graph.nodes(data=True)
@@ -182,9 +283,13 @@ def graph_stats(graph: nx.MultiDiGraph) -> GraphStats:
         for _, _, attrs in graph.edges(data=True)
     )
     return GraphStats(
-        node_count=graph.number_of_nodes(),
+        node_count=node_count,
         edge_count=graph.number_of_edges(),
         connected_components=connected_components,
+        isolated_node_count=isolated_node_count,
+        isolated_node_ratio=(isolated_node_count / node_count) if node_count else 0.0,
+        largest_connected_component_node_count=largest_component_size,
+        largest_connected_component_ratio=(largest_component_size / node_count) if node_count else 0.0,
         degree_distribution=dict(degree_counter),
         node_type_counts=dict(node_type_counter),
         edge_type_counts=dict(edge_type_counter),

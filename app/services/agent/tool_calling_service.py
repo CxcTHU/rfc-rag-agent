@@ -808,7 +808,10 @@ def final_answer_strategy_instruction(
             "retrieved evidence supports "
             "only part of the question, answer the supported part with citations and "
             "add a brief 'evidence gap' sentence for unsupported parts instead of "
-            "guessing. Do not cite a source that does not support the sentence; refuse "
+            "guessing. In evidence-gap or refusal sentences, name the concrete "
+            "retrieved source title together with its marker, such as 'Title [1]', "
+            "instead of referring only to generic 'source [1]', 'document [1]', "
+            "'literature [1]', or 'snippet [1]'. Do not cite a source that does not support the sentence; refuse "
             "safely only when the available sources cannot support any reliable domain "
             "answer. Do not reveal internal outline or hidden reasoning."
         )

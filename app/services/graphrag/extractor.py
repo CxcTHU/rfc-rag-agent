@@ -20,7 +20,7 @@ from app.services.graphrag.schema import (
 MAX_EXTRACTION_CHARS = 4500
 
 STANDARD_RE = re.compile(
-    r"\b(?:GB/T|GB|DL/T|SL|ASTM|ACI)\s*[-A-Z0-9.]+(?:[-:]\d+)?\b",
+    r"\b(?:GB/T|GBT|GB|DL/T|DL|NB/T|NBT|DB\d+/T|DBT|SL/T|SL|ASTM|ACI)\s*[-A-Z0-9.]+(?:[-:]\d+)?\b",
     re.IGNORECASE,
 )
 VALUE_RE = re.compile(
@@ -100,14 +100,15 @@ class GraphRAGTripleExtractor:
     ) -> GraphExtractionResult:
         entities: list[GraphEntity] = []
         relations: list[GraphRelation] = []
+        extraction_text = f"{document_title}\n{text}"
 
-        for standard in find_standards(text):
+        for standard in find_standards(extraction_text):
             entities.append(GraphEntity(name=standard, type="Standard"))
         for value in find_values(text):
             entities.append(GraphEntity(name=value, type="Value"))
         for entity_type, groups in TERM_PATTERNS.items():
             for canonical, mentions in groups.items():
-                matched_mentions = find_mentions(text, mentions)
+                matched_mentions = find_mentions(extraction_text, mentions)
                 if matched_mentions:
                     entities.append(
                         GraphEntity(
@@ -260,7 +261,9 @@ def build_llm_messages(*, document_title: str, text: str) -> list[ChatMessage]:
         "Entity type must be one of: Standard, Material, Parameter, Value, Organization, Method. "
         "Relation predicate must be one of: standard_defines, standard_references, "
         "material_has_property, parameter_range, applies_to. "
-        "Do not include raw source text, hidden reasoning, markdown, or commentary."
+        "Return at most 8 high-confidence entities and at most 8 high-confidence relations. "
+        "Use short entity names and short evidence only when necessary. "
+        "Do not include source prose, reasoning, markdown, or commentary."
     )
     clipped_text = text[:MAX_EXTRACTION_CHARS]
     return [

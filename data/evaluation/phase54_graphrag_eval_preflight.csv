@@ -1,0 +1,16 @@
+check,status,value
+cases_total,pass,47
+graph_intent_cases,pass,34
+negative_offtopic_cases,pass,5
+graph_file_exists,pass,data\knowledge_graph\domain_graph.json
+graph_file_size_bytes,pass,24824682
+chat_provider_configured,pass,true
+judge_provider_configured,pass,true
+judge_model_provider_configured,pass,true
+judge_model_name_configured,pass,true
+judge_model_api_key_configured,pass,true
+judge_model_base_url_configured,pass,true
+judge_model_missing_fields,pass,
+embedding_provider_configured,pass,true
+reranking_enabled,info,true
+formal_judge_ready,pass,true

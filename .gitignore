@@ -26,6 +26,7 @@ data/exports/
 data/fulltext/
 data/logs/
 data/incoming/
+data/knowledge_graph/
 data/user_uploads/
 data/reranker_training/
 models/bge-reranker-base-rfc-lora/

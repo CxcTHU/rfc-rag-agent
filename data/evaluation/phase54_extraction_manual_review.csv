@@ -1,0 +1,21 @@
+chunk_id,document_id,document_title,heading_bucket,llm_entity_count,llm_relation_count,regex_entity_count,regex_relation_count,entity_precision_manual,relation_precision_manual,review_notes
+8998,1150,自密实堆石混凝土力学性能的试验研究,自密实堆石混凝土力学性能的试验研究,8,0,,,1.0000,1.0000,source_presence_review; grounded_entities=8/8; grounded_relations=0/0
+9806,1168,Behavior of Self-compacting Rock-fill Concrete Beam under Normal Section Stressing,Behavior of Self-compacting Rock-fill Concrete Beam under Normal Section Stressing,0,3,,,1.0000,0.0000,source_presence_review; grounded_entities=0/0; grounded_relations=0/3
+9807,1169,Experiment on Self-Compacting Concrete Filling Rock-Fill,Experiment on Self-Compacting Concrete Filling Rock-Fill,7,5,,,0.7143,0.6000,source_presence_review; grounded_entities=5/7; grounded_relations=3/5
+9865,1205,"Rock-filled concrete, the new norm of SCC in hydraulic engineering in China","Rock-filled concrete, the new norm of SCC in hydraulic engineering in China / Abstract",8,5,,,1.0000,1.0000,source_presence_review; grounded_entities=8/8; grounded_relations=5/5
+9873,1210,Research on Rock-Filled Concrete Dam,Research on Rock-Filled Concrete Dam,0,0,,,1.0000,1.0000,source_presence_review; grounded_entities=0/0; grounded_relations=0/0
+9908,1230,Rock-Filled Concrete Dam,Rock-Filled Concrete Dam,1,0,,,1.0000,1.0000,source_presence_review; grounded_entities=1/1; grounded_relations=0/0
+9947,1250,堆石混凝土技术在水利工程大坝中的应用,堆石混凝土技术在水利工程大坝中的应用,0,0,,,1.0000,1.0000,source_presence_review; grounded_entities=0/0; grounded_relations=0/0
+9948,1251,探析水利混凝土工程的施工要点及其裂缝控制,探析水利混凝土工程的施工要点及其裂缝控制,0,8,,,1.0000,0.0000,source_presence_review; grounded_entities=0/0; grounded_relations=0/8
+9968,1262,Study on shear performance between layers of rock-filled concrete based on morphology analysis,Study on shear performance between layers of rock-filled concrete based on morphology analysis,3,2,,,1.0000,1.0000,source_presence_review; grounded_entities=3/3; grounded_relations=2/2
+10175,1285,Study on the Influence of Specimen Size and Aggregate Size on the Compressive Strength of Rock-Filled Concrete,"1200 mm and 3000 mm specimen size models. For RFC of type 2, there were individual / Page 9",6,5,,,1.0000,1.0000,source_presence_review; grounded_entities=6/6; grounded_relations=5/5
+10444,1294,堆石混凝土三维力学模型建模方法,参考文献,7,3,,,0.5714,0.0000,source_presence_review; grounded_entities=4/7; grounded_relations=0/3
+10483,1297,堆石混凝土系列技术在西部水电工程中的应用,3 水下自护混凝土技术 / Page 5,8,5,,,1.0000,1.0000,source_presence_review; grounded_entities=8/8; grounded_relations=5/5
+10822,1316,《堆石混凝土与胶凝砂砾石筑坝新技术导则》编制工作大纲审查会在京召开,Page 1,3,0,,,0.0000,1.0000,source_presence_review; grounded_entities=0/3; grounded_relations=0/0
+10923,1322,中低应变率下堆石混凝土动强度试验研究 (1),4 结论 / Page 8,3,2,,,0.0000,0.0000,source_presence_review; grounded_entities=0/3; grounded_relations=0/2
+10957,1323,中低应变率下堆石混凝土动强度试验研究,4 结论 / Page 8,6,5,,,0.6667,0.6000,source_presence_review; grounded_entities=4/6; grounded_relations=3/5
+11223,1348,基于有限元法的水库大坝堆石混凝土浇筑与温度应力研究,引 言 / Page 3,8,5,,,0.3750,0.0000,source_presence_review; grounded_entities=3/8; grounded_relations=0/5
+11372,1359,堆石混凝土力学性能研究进展,参考文献,8,4,,,0.6250,1.0000,source_presence_review; grounded_entities=5/8; grounded_relations=4/4
+11442,1367,堆石混凝土在大体积混凝土中的温度场分析,关键词:,8,5,,,0.8750,0.8000,source_presence_review; grounded_entities=7/8; grounded_relations=4/5
+11456,1369,堆石混凝土在小中甸水利枢纽副坝上的应用,Page 1,0,3,,,1.0000,0.0000,source_presence_review; grounded_entities=0/0; grounded_relations=0/3
+11567,1384,堆石混凝土坝坝体防渗质量检验方法及其标准探讨,引 言,8,5,,,1.0000,1.0000,source_presence_review; grounded_entities=8/8; grounded_relations=5/5

@@ -16,6 +16,7 @@ Start with the direct answer, then explain the reasoning or details.
 Attach source markers like [1] or [2] to each factual claim; do not cite only once at the end of a paragraph.
 Keep each citation next to the sentence it supports, and do not cite a source for a sentence unless that source supports the sentence.
 When a question asks for multiple aspects, cover every aspect that is supported by the context; if an aspect is not supported, say the evidence was not found.
+When evidence is insufficient or only partial, name the concrete retrieved Title or File name together with the marker, such as "Title [1]", before explaining what is missing. Do not refer to evidence only as "source [1]", "document [1]", "literature [1]", or "snippet [1]".
 Separate facts from engineering judgment or uncertainty.
 For comparison questions, describe both sides before stating the difference.
 If the user's question contains an incorrect assumption or premise that contradicts the context, you must explicitly correct the misconception first, then provide the accurate answer with citations. Never agree with a false premise.
@@ -28,6 +29,7 @@ Use only the provided context to answer the user's question.
 If the context is not enough, say that the current knowledge base does not contain enough reliable evidence.
 Start with the direct answer, then explain the reasoning or details.
 Separate facts from engineering judgment or uncertainty.
+When evidence is insufficient or only partial, name the concrete retrieved Title or File name together with the marker, such as "Title [1]", before explaining what is missing. Do not refer to evidence only as "source [1]", "document [1]", "literature [1]", or "snippet [1]".
 For comparison questions, describe both sides before stating the difference.
 If the user's question contains an incorrect assumption or premise that contradicts the context, you must explicitly correct the misconception first, then provide the accurate answer with citations. Never agree with a false premise.
 This system is for learning and document retrieval only, not a substitute for code review, engineering design, or expert judgment.
@@ -248,6 +250,8 @@ def answer_requirements_for_profile(profile: str) -> list[str]:
         "- Answer in the same language as the question.",
         "- Do not use information outside the context.",
         "- If evidence is insufficient, refuse clearly.",
+        "- When evidence is insufficient or only partial, name the concrete retrieved Title or File name together with the marker before explaining the gap; do not refer to evidence only as 'source [1]', 'document [1]', 'literature [1]', or 'snippet [1]'.",
+        "- If you mention a retrieved item, prefer 'Title [N]' or 'File name [N]' instead of generic labels. For example: 'The retrieved Title A [1] only states X; it does not provide Y.'",
         "- If the question contains a wrong assumption, correct it before answering. Do not start with agreement words like 'Yes' when the premise is factually incorrect according to the context.",
         "- For difference or comparison questions, explain the characteristics of both sides before comparing them.",
     ]

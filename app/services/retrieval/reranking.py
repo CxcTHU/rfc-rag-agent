@@ -235,6 +235,7 @@ def create_reranking_provider(
             api_key=(api_key or "").strip(),
             base_url=(base_url or default_base_url).strip(),
             timeout_seconds=timeout_seconds,
+            provider_name=provider,
         )
     raise ValueError(f"Unsupported reranking provider: {provider_name}")
 
