@@ -259,6 +259,22 @@ python scripts/run_production_smoke.py --execute --base-url http://127.0.0.1:800
 
 smoke CSV 只记录 endpoint、状态、耗时、mode 校验、citation_count、refused、错误摘要等安全字段，不保存 response body、API key、Bearer token、raw provider response、`reasoning_content` 或受限全文。
 
+## Phase 55 生产上线前闭环（不含域名/HTTPS）
+
+Phase 55 的集中 runbook 是 `docs/phase55_production_readiness.md`。它覆盖正式上线前除域名/DNS/HTTPS 之外的剩余检查：`.env.prod` value-blind readiness checklist、placeholder compose config smoke、AUTH_ENABLED=true 鉴权 smoke、CPU Docker 容器到独立 GPU BGE reranker 的私有网络路径、PostgreSQL/pgvector/Redis/data/images/FAISS/GraphRAG 资产完整性、日志、备份、恢复和安全暴露面审计。
+
+生产开启鉴权后推荐使用：
+
+```powershell
+python scripts/run_production_smoke.py --execute --auth-enabled --base-url http://127.0.0.1:8000 --timeout-seconds 180
+```
+
+`--auth-enabled` 会先验证未登录 protected Agent 请求返回 401，再注册或登录 smoke 用户，并把 token 只保存在进程内存中用于 `/auth/me`、`/chat`、`/agent/query` 和 `/agent/query/stream`。CSV 仍不得保存 token、response body、answer text、完整 chunk、API key 或 provider payload。
+
+私有 BGE reranker 生产路径必须按 `docs/phase55_production_readiness.md` 验证。若 Agent 位于 CPU 服务器 Docker 容器、BGE 位于另一台 GPU 服务器，则容器内 `127.0.0.1:8091` 指向 app 容器自身，不能冒充 GPU 服务地址；应使用 GPU 私网 IP/VPN、SSH tunnel sidecar、host-gateway 可达 tunnel，或显式关闭 `RERANKING_ENABLED`。
+
+Phase 55 当前已验证的运行形态是：CPU app 容器通过 CPU Docker-host tunnel endpoint `172.18.0.1:18091` 私有转发到 GPU `10.0.22.42:8091`；GPU BGE 由 `rfc-bge-reranker.service` 管理，CPU tunnel 由 `rfc-bge-tunnel.service` 管理。BGE 端口不得公网暴露。
+
 ## 结构化日志
 
 阶段 39 使用标准 logging JSON 输出。请求日志包含：

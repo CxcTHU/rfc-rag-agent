@@ -1,5 +1,17 @@
 # RFC-RAG-Agent
 
+## Phase 55 Production Readiness Closure
+
+Current branch: `codex/phase-55-production-readiness`.
+
+Phase 55 closes the pre-launch deployment work that remains after Phase 54, excluding domain/DNS/HTTPS. The central runbook is `docs/phase55_production_readiness.md`, with requirement traceability in `docs/phase55_completion_audit.md`; it covers value-blind `.env.prod` readiness, placeholder production compose validation, private BGE reranker networking from the CPU Docker app container to the separate GPU server, PostgreSQL/pgvector/Redis/data/images/FAISS/GraphRAG asset integrity, AUTH_ENABLED=true smoke, logs, backups, restore, and security exposure review.
+
+Key implementation updates: `scripts/run_production_smoke.py` now supports `--auth-enabled`, including unauthenticated Agent 401, register/login, token held only in memory, `/auth/me`, `/chat`, `/agent/query`, `/agent/query/stream`, frontend `/`, and representative image asset smoke. `scripts/check_phase55_runtime_readiness.py` is intended to run inside the production app container and write sanitized runtime rows for DB, assets, pgvector, GraphRAG, and optional BGE health. `scripts/audit_phase55_production_readiness.py` writes a sanitized readiness audit to `data/evaluation/phase55_production_readiness_audit.csv`. `docker-compose.prod.yml` now uses the neutral image tag `rfc-rag-agent:production`.
+
+Private BGE production note: when Agent runs in Docker on the CPU server and BGE runs on a separate GPU server, container-local `127.0.0.1:8091` is not the GPU server. Use a private GPU/VPN URL, SSH tunnel sidecar, host-gateway-reachable tunnel, or intentionally disable reranking.
+
+Current Phase 55 validation: placeholder production compose config passed, focused Phase 55 tests `15 passed`, readiness audit `complete=14 partial=0 missing=0 manual_required=1`, Stage 30 `91.52 / A / pass`, and full pytest `1274 passed, 1 skipped`. No Git submission action has been performed.
+
 ## Phase 54 GraphRAG Real Data And Evaluation
 
 Current branch: `codex/phase-54-graphrag-evaluation`.
@@ -1938,3 +1950,21 @@ Verification: `python -m pytest -q -> 1100 passed, 1 skipped`; `python scripts/s
 Phase 54 adds the GraphRAG extraction/evaluation harness, graph-aware evidence expansion, final post-fusion BGE reranking support, and formal GLM judge reporting for `accuracy`, `completeness`, and `citation_quality`.
 
 The final D experiment expands the corpus with the user-supplied standards batch, runs full LLM semantic supplementation for the new standard text/table chunks, rebuilds the domain graph, and evaluates the same 47-case set with GPU-hosted private BGE-LoRA reranking. D completed all 47 rows with no errors and no BGE fallback. Main metric deltas were: graph-intent accuracy `+0.5294`, completeness `+0.4412`, citation quality `+0.5882`, ordinary accuracy `-0.2500`, negative graph false positives `0`. The formal gate is `review_required` because ordinary accuracy regressed, so the result is strong evidence for standard-aware graph questions but not yet a production-default retrieval chain.
+
+## Phase 55 Production Readiness Closeout
+
+Phase 55 synchronizes the Phase 54 full-state runtime to the cloud CPU/GPU deployment target, excluding domain/DNS/HTTPS and final launch acceptance.
+
+Verified cloud runtime:
+
+```text
+PostgreSQL/pgvector -> documents=1153, chunks=51738, chunk_embeddings=74067, vector_rows=42051
+data/images -> 17013 files
+FAISS -> paratera/GLM-Embedding-3, dim=2048, vector_count=42051, complete=true
+GraphRAG -> data/knowledge_graph/domain_graph.json synced
+BGE -> app container reaches GPU BGE through private CPU-host tunnel 172.18.0.1:18091 -> 10.0.22.42:8091
+runtime readiness with --check-reranker -> ok=21 warn=0 error=0 manual=0
+public AUTH_ENABLED=true smoke -> rows=18 execute=true failed=0
+```
+
+GPU BGE is supervised by user-level systemd service `rfc-bge-reranker.service`; the CPU private tunnel is supervised by `rfc-bge-tunnel.service`. The BGE endpoint remains private and is not publicly exposed.

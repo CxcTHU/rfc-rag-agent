@@ -1,5 +1,52 @@
 # 项目进度
 
+## Latest Status: 2026-06-26 Phase 55 Production Readiness Closure
+
+Current branch: `codex/phase-55-production-readiness`.
+
+Phase 55 is in progress and focuses on the production launch checklist excluding domain/DNS/HTTPS. New/updated artifacts:
+
+```text
+docs/phase55_production_readiness.md
+docs/phase55_completion_audit.md
+docs/phase_reviews/phase-55.md
+scripts/audit_phase55_production_readiness.py
+scripts/check_phase55_runtime_readiness.py
+data/evaluation/phase55_production_readiness_audit.csv
+scripts/run_production_smoke.py --auth-enabled
+tests/test_phase55_production_readiness.py
+tests/test_phase55_runtime_readiness.py
+```
+
+The production smoke now supports `AUTH_ENABLED=true`: unauthenticated protected Agent request returns 401, smoke user register/login is supported, the bearer token is held only in memory, and authenticated `/auth/me`, `/chat`, `/agent/query`, and `/agent/query/stream` are checked. It also checks frontend `/` and a representative `/assets/images/...` path.
+
+The Phase 55 runbook documents the correct private BGE production topology: Agent runs in Docker on the CPU server, while BGE runs on a separate GPU server. Container-local `127.0.0.1:8091` is not a valid GPU-server address in that topology. Use a private GPU/VPN URL, SSH tunnel sidecar, host-gateway-reachable tunnel, or intentionally disable reranking.
+
+Current validation:
+
+```text
+docker compose -f docker-compose.prod.yml --env-file <placeholder-temp-env> config --quiet -> passed
+python -m py_compile scripts/run_production_smoke.py scripts/audit_phase55_production_readiness.py scripts/check_phase55_runtime_readiness.py -> passed
+python -m pytest tests/test_phase55_runtime_readiness.py tests/test_phase55_production_readiness.py tests/test_run_production_smoke.py -q -> 15 passed
+python scripts/audit_phase55_production_readiness.py -> complete=14 partial=0 missing=0 manual_required=1
+python scripts/run_production_smoke.py --auth-enabled --timeout-seconds 1 --out data/evaluation/phase55_production_smoke_dry_run.csv -> rows=18 execute=false failed=0
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m pytest -q -> 1274 passed, 1 skipped
+git diff --check -> no whitespace errors; CRLF warnings only
+```
+
+No `git add`, commit, tag, push, or PR has been performed. Real production smoke still requires the CPU server and local-only `.env.prod`; do not write secrets into Git/docs/CSV/tests/Obsidian.
+
+Completion audit closeout:
+
+```text
+docs/phase55_completion_audit.md added
+python scripts/audit_phase55_production_readiness.py -> complete=14 partial=0 missing=0 manual_required=1
+python -m pytest tests/test_phase55_runtime_readiness.py tests/test_phase55_production_readiness.py tests/test_run_production_smoke.py -q -> 15 passed
+python scripts/run_production_smoke.py --auth-enabled --timeout-seconds 1 --out data/evaluation/phase55_production_smoke_dry_run.csv -> rows=18 execute=false failed=0
+targeted sensitive scan -> only placeholder/test-pattern matches, no real secrets
+```
+
 ## Latest Status: 2026-06-25 Phase 54 GraphRAG Real Data And Evaluation
 
 Current branch: `codex/phase-54-graphrag-evaluation`.
@@ -4112,3 +4159,75 @@ python -m pytest -q -> 1267 passed, 1 skipped
 python scripts/audit_phase54_completion.py --output data/evaluation/phase54_completion_audit.csv -> complete=16 partial=0 missing=0
 git diff --check -> no whitespace errors; CRLF warnings only
 ```
+
+## Latest Status: 2026-06-26 Phase 55 Production Readiness Runtime Closure
+
+Current branch: `codex/phase-55-production-readiness`.
+
+Phase 55 brings the Phase 54 full-state system to the cloud CPU/GPU runtime before user human verification. Domain/DNS/HTTPS and final launch acceptance remain outside this status.
+
+Cloud runtime evidence:
+
+```text
+PostgreSQL/pgvector -> documents=1153, chunks=51738, chunk_embeddings=74067, vector_rows=42051
+data/images -> 17013 files
+data/knowledge_graph/domain_graph.json -> synced
+FAISS -> paratera/GLM-Embedding-3, dimension=2048, vector_count=42051, complete=true
+providers -> chat=openai-compatible/deepseek-v4-pro, embedding=paratera/GLM-Embedding-3, reranking=remote-bge-lora/rfc-domain-bge-lora
+BGE path -> app container reaches GPU BGE through private CPU tunnel 172.18.0.1:18091 -> 10.0.22.42:8091
+runtime readiness with --check-reranker -> ok=21 warn=0 error=0 manual=0
+public AUTH_ENABLED=true smoke at http://36.103.199.132:8044 -> rows=18 execute=true failed=0
+```
+
+Operational note: GPU BGE is managed by user-level systemd service `rfc-bge-reranker.service`; the CPU private tunnel is managed by `rfc-bge-tunnel.service`. The BGE endpoint remains private and is not publicly exposed.
+
+Final validation:
+
+```text
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m pytest tests/test_chat_model_provider.py tests/test_agent_api.py tests/test_run_production_smoke.py tests/test_phase55_runtime_readiness.py tests/test_phase55_production_readiness.py -q -> 85 passed
+python -m pytest -q -> 1275 passed, 1 skipped
+git diff --check -> no whitespace errors; CRLF warnings only
+```
+
+No `git add`, commit, tag, push, or PR has been performed. Do not store `.env`, `.env.prod`, database passwords, JWT secrets, Redis passwords, API keys, bearer tokens, provider raw responses, full answers, full chunks, restricted full text, or private service logs in Git/CSV/docs/tests/Obsidian.
+
+## Latest Status: 2026-06-27 Phase 55 Provider Egress Latency Fix
+
+The public-domain UI latency issue was traced to the CPU cloud server's direct provider egress/DNS route, not to BGE, FAISS, pgvector, CPU, memory, or disk.
+
+Evidence:
+
+```text
+local deepseek-v4-pro minimal chat -> about 4.5s
+CPU app direct deepseek-v4-pro minimal chat -> about 185s
+local GLM-Embedding-3 query -> about 0.2s
+CPU app direct GLM-Embedding-3 query -> about 31s
+GPU provider TLS checks -> healthy
+```
+
+Fix:
+
+```text
+docker-compose.provider-tunnel.yml maps provider hostnames to CPU Docker host
+rfc-provider-tunnel.service forwards provider HTTPS through GPU egress:
+  172.18.0.1:18443 -> api.deepseek.com:443
+  172.18.0.1:18444 -> llmapi.paratera.com:443
+cloud .env.prod uses:
+  CHAT_MODEL_BASE_URL=https://api.deepseek.com:18443
+  PLANNER_CHAT_MODEL_BASE_URL=https://api.deepseek.com:18443
+  EMBEDDING_BASE_URL=https://llmapi.paratera.com:18444/v1
+```
+
+Post-fix evidence:
+
+```text
+cloud provider benchmark via tunnel:
+  deepseek-v4-pro chat -> about 3.4s
+  tool-call request -> about 3.2s
+  GLM-Embedding-3 query -> about 0.3s
+authenticated /agent/query for 堆石混凝土的优势 -> about 27s, refused=false, citations=5
+runtime readiness with --check-reranker -> ok=21 warn=0 error=0 manual=0
+```
+
+This is not a downgrade. The same provider/model choices are preserved; only the current cloud network route changed.

@@ -26,6 +26,7 @@ SMOKE_FIELDS = [
     "endpoint",
     "method",
     "execute_requested",
+    "auth_required",
     "status",
     "http_status",
     "latency_ms",
@@ -67,6 +68,8 @@ class SmokeCase:
     required_fields: tuple[str, ...] = ()
     stream: bool = False
     expected_mode: str | None = None
+    auth_required: bool = False
+    expected_http_statuses: tuple[int, ...] = (200,)
 
 
 @dataclass(frozen=True)
@@ -82,6 +85,11 @@ def main() -> None:
         base_url=args.base_url,
         execute=args.execute,
         timeout_seconds=args.timeout_seconds,
+        auth_enabled=args.auth_enabled,
+        smoke_username=args.smoke_username,
+        smoke_email=args.smoke_email,
+        smoke_password=args.smoke_password,
+        image_asset_path=args.image_asset_path,
         urlopen_func=urllib.request.urlopen,
     )
     write_csv(Path(args.out), rows)
@@ -105,16 +113,97 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Actually call the configured service endpoints.",
     )
+    parser.add_argument(
+        "--auth-enabled",
+        action="store_true",
+        help="Run AUTH_ENABLED=true smoke: register/login/me and bearer-token protected endpoints.",
+    )
+    parser.add_argument("--smoke-username", default="phase55_smoke")
+    parser.add_argument("--smoke-email", default="phase55_smoke@example.com")
+    parser.add_argument(
+        "--image-asset-path",
+        default="/assets/images/1059/page10_img1.png",
+        help="Representative image asset path to verify data/images sync.",
+    )
+    parser.add_argument(
+        "--smoke-password",
+        default="phase55-local-password",
+        help="Local smoke password. Do not use or print real user credentials.",
+    )
     return parser.parse_args()
 
 
-def smoke_cases() -> list[SmokeCase]:
+def auth_smoke_cases(
+    *,
+    smoke_username: str = "phase55_smoke",
+    smoke_email: str = "phase55_smoke@example.com",
+    smoke_password: str = "phase55-local-password",
+) -> list[SmokeCase]:
+    return [
+        SmokeCase(
+            case_id="agent_query_unauthenticated_401",
+            method="POST",
+            endpoint="/agent/query",
+            payload={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 5,
+            },
+            expected_http_statuses=(401,),
+        ),
+        SmokeCase(
+            case_id="auth_register_smoke_user",
+            method="POST",
+            endpoint="/auth/register",
+            payload={
+                "username": smoke_username,
+                "email": smoke_email,
+                "password": smoke_password,
+            },
+            required_fields=("id", "username", "email"),
+            expected_http_statuses=(200, 409),
+        ),
+        SmokeCase(
+            case_id="auth_login_smoke_user",
+            method="POST",
+            endpoint="/auth/login",
+            payload={
+                "username_or_email": smoke_username,
+                "password": smoke_password,
+            },
+            required_fields=("access_token", "token_type", "expires_in", "user"),
+        ),
+        SmokeCase(
+            case_id="auth_me",
+            method="GET",
+            endpoint="/auth/me",
+            required_fields=("id", "username", "email"),
+            auth_required=True,
+        ),
+    ]
+
+
+def smoke_cases(
+    *,
+    authenticated: bool = False,
+    image_asset_path: str = "/assets/images/1059/page10_img1.png",
+) -> list[SmokeCase]:
+    auth_required = authenticated
     return [
         SmokeCase(
             case_id="health",
             method="GET",
             endpoint="/health",
             required_fields=("status",),
+        ),
+        SmokeCase(
+            case_id="frontend_home",
+            method="GET",
+            endpoint="/",
+        ),
+        SmokeCase(
+            case_id="image_asset",
+            method="GET",
+            endpoint=image_asset_path,
         ),
         SmokeCase(
             case_id="quality_report_html",
@@ -128,6 +217,18 @@ def smoke_cases() -> list[SmokeCase]:
             required_fields=("run_id", "dimension", "score", "status"),
         ),
         SmokeCase(
+            case_id="chat_authenticated" if authenticated else "chat",
+            method="POST",
+            endpoint="/chat",
+            payload={
+                "question": "What affects filling capacity in rock-filled concrete?",
+                "top_k": 5,
+                "retrieval_mode": "auto",
+            },
+            required_fields=("answer", "refused", "citations", "sources"),
+            auth_required=auth_required,
+        ),
+        SmokeCase(
             case_id="agent_query_default_tool_calling",
             method="POST",
             endpoint="/agent/query",
@@ -138,6 +239,7 @@ def smoke_cases() -> list[SmokeCase]:
             },
             required_fields=("answer", "refused", "citations", "sources", "mode"),
             expected_mode="tool_calling_agent",
+            auth_required=auth_required,
         ),
         SmokeCase(
             case_id="agent_query_react_agent_rollback",
@@ -151,6 +253,7 @@ def smoke_cases() -> list[SmokeCase]:
             },
             required_fields=("answer", "refused", "citations", "sources", "mode"),
             expected_mode="react_agent",
+            auth_required=auth_required,
         ),
         SmokeCase(
             case_id="agent_query_tool_calling",
@@ -164,6 +267,7 @@ def smoke_cases() -> list[SmokeCase]:
             },
             required_fields=("answer", "refused", "citations", "sources", "mode"),
             expected_mode="tool_calling_agent",
+            auth_required=auth_required,
         ),
         SmokeCase(
             case_id="agent_query_multiturn_transform",
@@ -178,6 +282,7 @@ def smoke_cases() -> list[SmokeCase]:
             },
             required_fields=("answer", "refused", "mode"),
             expected_mode="default",
+            auth_required=auth_required,
         ),
         SmokeCase(
             case_id="agent_query_model_meta",
@@ -186,6 +291,7 @@ def smoke_cases() -> list[SmokeCase]:
             payload={"question": "What model are you using?", "mode": "default"},
             required_fields=("answer", "refused", "mode"),
             expected_mode="meta",
+            auth_required=auth_required,
         ),
         SmokeCase(
             case_id="agent_query_stream_default_tool_calling",
@@ -199,6 +305,7 @@ def smoke_cases() -> list[SmokeCase]:
             required_fields=("metadata", "done"),
             stream=True,
             expected_mode="tool_calling_agent",
+            auth_required=auth_required,
         ),
         SmokeCase(
             case_id="agent_query_stream_react_agent_rollback",
@@ -213,6 +320,7 @@ def smoke_cases() -> list[SmokeCase]:
             required_fields=("metadata", "done"),
             stream=True,
             expected_mode="react_agent",
+            auth_required=auth_required,
         ),
         SmokeCase(
             case_id="agent_query_tool_calling_stream",
@@ -227,6 +335,7 @@ def smoke_cases() -> list[SmokeCase]:
             required_fields=("metadata", "done"),
             stream=True,
             expected_mode="tool_calling_agent",
+            auth_required=auth_required,
         ),
     ]
 
@@ -236,23 +345,39 @@ def run_smoke(
     base_url: str,
     execute: bool,
     timeout_seconds: float,
+    auth_enabled: bool = False,
+    smoke_username: str = "phase55_smoke",
+    smoke_email: str = "phase55_smoke@example.com",
+    smoke_password: str = "phase55-local-password",
+    image_asset_path: str = "/assets/images/1059/page10_img1.png",
     urlopen_func: Callable[..., Any],
 ) -> list[dict[str, str]]:
     run_at = datetime.now(timezone.utc).isoformat()
     rows: list[dict[str, str]] = []
-    for case in smoke_cases():
+    auth_token = ""
+    cases = smoke_cases(authenticated=auth_enabled, image_asset_path=image_asset_path)
+    if auth_enabled:
+        auth_cases = auth_smoke_cases(
+            smoke_username=smoke_username,
+            smoke_email=smoke_email,
+            smoke_password=smoke_password,
+        )
+        cases = auth_cases + cases
+    for case in cases:
         if not execute:
             rows.append(dry_run_row(run_at, case))
             continue
-        rows.append(
-            execute_case(
-                run_at=run_at,
-                base_url=base_url,
-                case=case,
-                timeout_seconds=timeout_seconds,
-                urlopen_func=urlopen_func,
-            )
+        row, maybe_token = execute_case(
+            run_at=run_at,
+            base_url=base_url,
+            case=case,
+            timeout_seconds=timeout_seconds,
+            auth_token=auth_token,
+            urlopen_func=urlopen_func,
         )
+        rows.append(row)
+        if maybe_token:
+            auth_token = maybe_token
     return rows
 
 
@@ -262,23 +387,28 @@ def execute_case(
     base_url: str,
     case: SmokeCase,
     timeout_seconds: float,
+    auth_token: str = "",
     urlopen_func: Callable[..., Any],
-) -> dict[str, str]:
+) -> tuple[dict[str, str], str]:
     try:
         result = perform_http_request(
             base_url=base_url,
             case=case,
             timeout_seconds=timeout_seconds,
+            auth_token=auth_token,
             urlopen_func=urlopen_func,
         )
-        return evaluate_http_result(run_at, case, result)
+        return evaluate_http_result(run_at, case, result), extract_access_token(case, result)
     except Exception as exc:  # noqa: BLE001 - smoke should report sanitized failures.
-        return base_row(
-            run_at=run_at,
-            case=case,
-            execute_requested=True,
-            status="failed",
-            error_summary=sanitize_text(str(exc), limit=240),
+        return (
+            base_row(
+                run_at=run_at,
+                case=case,
+                execute_requested=True,
+                status="failed",
+                error_summary=sanitize_text(str(exc), limit=240),
+            ),
+            "",
         )
 
 
@@ -287,10 +417,11 @@ def perform_http_request(
     base_url: str,
     case: SmokeCase,
     timeout_seconds: float,
+    auth_token: str = "",
     urlopen_func: Callable[..., Any],
 ) -> HttpResult:
     started = time.perf_counter()
-    request = build_request(base_url=base_url, case=case)
+    request = build_request(base_url=base_url, case=case, auth_token=auth_token)
     try:
         with urlopen_func(request, timeout=timeout_seconds) as response:
             body = response.read().decode("utf-8", errors="replace")
@@ -302,7 +433,7 @@ def perform_http_request(
     return HttpResult(status_code=status_code, text=body, latency_ms=latency_ms)
 
 
-def build_request(*, base_url: str, case: SmokeCase) -> urllib.request.Request:
+def build_request(*, base_url: str, case: SmokeCase, auth_token: str = "") -> urllib.request.Request:
     url = f"{base_url.rstrip('/')}{case.endpoint}"
     data = None
     headers = {"Accept": "application/json"}
@@ -311,6 +442,8 @@ def build_request(*, base_url: str, case: SmokeCase) -> urllib.request.Request:
         headers["Content-Type"] = "application/json"
     if case.stream:
         headers["Accept"] = "text/event-stream"
+    if case.auth_required and auth_token:
+        headers["Authorization"] = f"Bearer {auth_token}"
     return urllib.request.Request(url, data=data, headers=headers, method=case.method)
 
 
@@ -336,8 +469,12 @@ def evaluate_http_result(
     mode_matched = case.expected_mode is None or actual_mode == case.expected_mode
     validator_marker = contains_validator_marker(body)
     sensitive = contains_sensitive_marker(body)
+    expected_status = result.status_code in case.expected_http_statuses
+    if case.case_id == "auth_register_smoke_user" and result.status_code == 409:
+        required_present = True
+
     passed = (
-        200 <= result.status_code < 300
+        expected_status
         and required_present
         and mode_matched
         and not validator_marker
@@ -357,7 +494,7 @@ def evaluate_http_result(
         mode_matched=str(mode_matched).lower(),
         validator_marker=str(validator_marker).lower(),
         sensitive_field_detected=str(sensitive).lower(),
-        error_summary="" if passed else failure_summary(result.status_code, required_present, mode_matched, validator_marker, sensitive),
+        error_summary="" if passed else failure_summary(result.status_code, case.expected_http_statuses, required_present, mode_matched, validator_marker, sensitive),
     )
 
 
@@ -398,6 +535,7 @@ def base_row(
         "endpoint": case.endpoint,
         "method": case.method,
         "execute_requested": str(execute_requested).lower(),
+        "auth_required": str(case.auth_required).lower(),
         "status": status,
         "http_status": http_status,
         "latency_ms": latency_ms,
@@ -470,14 +608,16 @@ def contains_sensitive_marker(text: str) -> bool:
 
 def failure_summary(
     http_status: int,
+    expected_http_statuses: Sequence[int],
     required_present: bool,
     mode_matched: bool,
     validator_marker: bool,
     sensitive: bool,
 ) -> str:
     failures: list[str] = []
-    if not (200 <= http_status < 300):
-        failures.append(f"http_status={http_status}")
+    if http_status not in expected_http_statuses:
+        expected = "|".join(str(status) for status in expected_http_statuses)
+        failures.append(f"http_status={http_status};expected={expected}")
     if not required_present:
         failures.append("required_fields_missing")
     if not mode_matched:
@@ -487,6 +627,16 @@ def failure_summary(
     if sensitive:
         failures.append("sensitive_field_detected")
     return "; ".join(failures)
+
+
+def extract_access_token(case: SmokeCase, result: HttpResult) -> str:
+    if case.case_id != "auth_login_smoke_user" or result.status_code != 200:
+        return ""
+    payload = parse_json_body(result.text)
+    if not isinstance(payload, dict):
+        return ""
+    token = payload.get("access_token")
+    return token if isinstance(token, str) else ""
 
 
 def sanitize_text(value: str, *, limit: int = 500) -> str:

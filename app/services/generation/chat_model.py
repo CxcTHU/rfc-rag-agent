@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -405,8 +406,12 @@ def request_deepseek_with_curl(
             or headers.get("Content-Type")
             or "application/json; charset=utf-8"
         )
+        curl_executable = shutil.which("curl") or shutil.which("curl.exe")
+        if not curl_executable:
+            with urlopen_without_proxy(request, timeout=timeout_seconds) as response:
+                return json.loads(response.read().decode("utf-8"))
         curl_args = [
-            "curl.exe",
+            curl_executable,
             "-sS",
             "-m",
             str(max(1, int(timeout_seconds))),

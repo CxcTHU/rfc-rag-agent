@@ -1,5 +1,26 @@
 # 数据来源登记
 
+## Phase 55 Production Readiness Data Note
+
+Phase 55 adds production readiness and operations artifacts only. It does not add a corpus source, crawler, PDF download, model weight, embedding rebuild, source registry entry, or new runtime content.
+
+New Phase 55 artifacts:
+
+```text
+docs/phase55_production_readiness.md
+docs/phase55_completion_audit.md
+scripts/audit_phase55_production_readiness.py
+scripts/check_phase55_runtime_readiness.py
+data/evaluation/phase55_production_readiness_audit.csv
+data/evaluation/phase55_runtime_readiness.csv
+data/evaluation/phase55_production_smoke_dry_run.csv
+updated scripts/run_production_smoke.py auth-enabled mode
+```
+
+The readiness audit, runtime readiness audit, and smoke dry-run record requirement ids, endpoint ids, statuses, counts, short evidence, and next actions. They do not print `.env`, `.env.prod`, production database passwords, JWT secrets, Redis passwords, API keys, bearer tokens, provider raw responses, full chunks, restricted full text, source PDFs, image bytes, FAISS files, or graph JSON contents.
+
+Actual production smoke and server data checks must run on the CPU server with local-only `.env.prod`. Those runtime results should be recorded as sanitized pass/fail evidence only, never as secrets or response bodies.
+
 ## Phase 54 GraphRAG Derived Data Note
 
 Phase 54 adds no external corpus, crawler, PDF download, source registry entry, model weight, or embedding rebuild. It derives GraphRAG extraction and evaluation artifacts from existing local chunks.
@@ -1908,3 +1929,15 @@ Phase 54D uses a user-provided local standards batch under `standards_0625`. The
 Committed Phase 54D artifacts are derived evaluation outputs only: ids, labels, counts, short titles/headings, metric values, status fields, and reranking trace labels. They do not contain full chunk text, raw answers, provider raw responses, hidden reasoning, credentials, service logs, restricted full text, or source PDFs.
 
 The standards batch was used to produce full LLM semantic supplementation for new standard text/table chunks, then rebuild the domain graph for the D experiment. The resulting production-risk conclusion is captured in `docs/phase_reviews/phase-54.md`: graph-intent answers improve strongly, while ordinary in-domain query routing still needs tuning before enabling the chain by default.
+
+## Phase 55 Runtime Sync Data Boundary
+
+Phase 55 adds no new external source corpus, crawler, PDF download, restricted full text, or user-profile data. It synchronizes the already-developed Phase 54 runtime state to the cloud readiness environment:
+
+- PostgreSQL/pgvector tables and derived embedding rows.
+- `data/images` runtime image assets.
+- `data/faiss` derived FAISS files for the GLM-Embedding-3 2048-dimensional index.
+- `data/knowledge_graph/domain_graph.json` derived GraphRAG asset.
+- Sanitized quality report summary CSV used by `/quality-report/data.json`.
+
+The synced cloud baseline is operational evidence, not a new data-source category. No API key, Bearer token, Authorization header, provider raw response, hidden reasoning, full answer text, full chunk body, restricted full text, source PDF, or private BGE service log is added to Git, docs, tests, public CSVs, or Obsidian.
