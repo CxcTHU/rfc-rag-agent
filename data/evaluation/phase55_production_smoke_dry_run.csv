@@ -1,0 +1,19 @@
+run_at,case_id,endpoint,method,execute_requested,auth_required,status,http_status,latency_ms,required_fields_present,refused,citation_count,expected_mode,actual_mode,mode_matched,validator_marker,sensitive_field_detected,error_summary
+2026-06-26T09:18:58.925270+00:00,agent_query_unauthenticated_401,/agent/query,POST,false,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,auth_register_smoke_user,/auth/register,POST,false,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,auth_login_smoke_user,/auth/login,POST,false,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,auth_me,/auth/me,GET,false,true,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,health,/health,GET,false,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,frontend_home,/,GET,false,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,image_asset,/assets/images/1059/page10_img1.png,GET,false,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,quality_report_html,/quality-report,GET,false,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,quality_report_data,/quality-report/data.json,GET,false,false,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,chat_authenticated,/chat,POST,false,true,dry_run,,,not_run,,,,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,agent_query_default_tool_calling,/agent/query,POST,false,true,dry_run,,,not_run,,,tool_calling_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,agent_query_react_agent_rollback,/agent/query,POST,false,true,dry_run,,,not_run,,,react_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,agent_query_tool_calling,/agent/query,POST,false,true,dry_run,,,not_run,,,tool_calling_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,agent_query_multiturn_transform,/agent/query,POST,false,true,dry_run,,,not_run,,,default,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,agent_query_model_meta,/agent/query,POST,false,true,dry_run,,,not_run,,,meta,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,agent_query_stream_default_tool_calling,/agent/query/stream,POST,false,true,dry_run,,,not_run,,,tool_calling_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,agent_query_stream_react_agent_rollback,/agent/query/stream,POST,false,true,dry_run,,,not_run,,,react_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.
+2026-06-26T09:18:58.925270+00:00,agent_query_tool_calling_stream,/agent/query/stream,POST,false,true,dry_run,,,not_run,,,tool_calling_agent,,not_run,not_run,not_run,Run with --execute to call real service endpoints.

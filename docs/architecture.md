@@ -1,5 +1,32 @@
 # 架构说明
 
+## Phase 55 Architecture Delta: Production Readiness Closure
+
+Phase 55 adds operational readiness around the existing production shape without changing the core RAG/Agent answer contract.
+
+```text
+docker-compose.prod.yml
+-> app + PostgreSQL/pgvector + Redis Stack
+-> AUTH_ENABLED=true
+-> mounted runtime data at /app/data
+-> health + auth-aware smoke + readiness audit
+```
+
+The production smoke path is now authentication-aware:
+
+```text
+unauthenticated /agent/query -> expected 401
+/auth/register or existing-user 409
+/auth/login -> token kept only in process memory
+bearer token -> /auth/me, /chat, /agent/query, /agent/query/stream
+```
+
+Smoke output is intentionally narrow: endpoint, status, latency, schema/mode checks, refusal/citation counts, and sanitized errors. It does not store response bodies, answer text, bearer tokens, provider payloads, full chunks, or restricted full text.
+
+Phase 55 also fixes the production BGE topology language. The accepted production topology is CPU server Docker app -> separate GPU server reranker. Therefore `127.0.0.1:8091` inside the app container is not the GPU server; production must use a container-reachable private GPU route, a sidecar tunnel, a host-gateway reachable tunnel, or intentional reranker disablement.
+
+`docs/phase55_production_readiness.md` is the operational source for env readiness, BGE path verification, data/images/FAISS/GraphRAG integrity, logs, backups, restore, and exposure review.
+
 ## Phase 54 Architecture Delta: Regex Skeleton Plus High-Value LLM Graph
 
 Phase 54 changes GraphRAG from an empty fail-open lane into a real derived graph built from existing corpus chunks:
@@ -4534,3 +4561,19 @@ query
 `chunk_embeddings.embedding_json` remains the canonical serialized embedding history. `chunk_embeddings.embedding_vector Vector(2048)` is the PostgreSQL search column for GLM-Embedding-3. The HNSW index uses a `halfvec(2048)` expression with `halfvec_cosine_ops`, because pgvector HNSW indexes on `vector` columns are limited to 2000 dimensions. Runtime search uses `<=>` cosine distance and records `latency_trace.vector_search_backend`.
 
 Default vector retrieval is HNSW-first because `pgvector_search_enabled=True`. PostgreSQL + pgvector + 2048-dimensional embeddings use `pgvector_hnsw`; SQLite tests, low-dimensional deterministic embeddings, and environments without pgvector continue to use FAISS/numpy fallback.
+
+## Phase 55 Production Runtime Topology Addendum
+
+The current production-readiness runtime uses a split CPU/GPU topology:
+
+```text
+public app HTTP port
+-> CPU server Docker app container
+-> PostgreSQL/pgvector, Redis, mounted data assets, FAISS fallback
+-> private CPU-host SSH tunnel endpoint for reranking
+-> separate GPU server BGE-LoRA reranker on a private interface
+```
+
+The app container must not use container-local `127.0.0.1:8091` to reach a separate GPU server. For the current verified deployment, `RERANKING_BASE_URL` points to the CPU Docker-host tunnel endpoint, which forwards privately to the GPU BGE service. The GPU reranker remains private; only the app HTTP port is exposed before domain/DNS/HTTPS.
+
+GPU BGE and the CPU tunnel are supervised by user-level systemd services. Retrieval remains conservative for production: pgvector/FAISS and existing Agent modes stay available, while GraphRAG+BGE routing should still respect the Phase 54 ordinary-query regression caveat.

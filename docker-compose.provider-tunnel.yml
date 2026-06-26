@@ -1,0 +1,5 @@
+services:
+  app:
+    extra_hosts:
+      - "api.deepseek.com:${PROVIDER_TUNNEL_HOST_IP:-172.18.0.1}"
+      - "llmapi.paratera.com:${PROVIDER_TUNNEL_HOST_IP:-172.18.0.1}"

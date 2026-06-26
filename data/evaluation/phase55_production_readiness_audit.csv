@@ -1,0 +1,16 @@
+requirement_id,area,status,evidence,next_action
+compose_auth_enabled,config,complete,docker-compose.prod.yml forces production auth and JWT secret injection.,Keep AUTH_ENABLED=true in production compose.
+compose_pgvector_redis,config,complete,docker-compose.prod.yml uses pgvector PostgreSQL and Redis Stack.,Keep DB/Redis private and password protected.
+compose_placeholder_config_documented,config,complete,Phase 55 runbook includes value-blind compose config smoke.,Run the command on the operator machine before launch.
+bge_cpu_to_gpu_topology,reranker,complete,Runbook documents CPU Docker app to separate GPU reranker topology.,Set RERANKING_BASE_URL to a container-reachable private route.
+bge_container_health_smoke,reranker,complete,Runbook includes app-container reranker /health smoke.,Run from the app container after GPU/private route is configured.
+runtime_asset_integrity,data,complete,"Runbook includes database, pgvector, images, FAISS, and graph asset checks.",Record actual server counts in launch evidence.
+runtime_readiness_script,data,complete,"Runtime readiness script checks DB, assets, pgvector, and optional reranker health.",Run inside the production app container after compose startup.
+auth_enabled_smoke_script,smoke,complete,Production smoke supports AUTH_ENABLED=true login/token flow and unauthenticated 401 check.,Run with --execute --auth-enabled against the production base URL.
+auth_enabled_smoke_runbook,smoke,complete,Runbook documents auth-enabled smoke expectations.,Do not paste returned tokens into logs or docs.
+backup_restore_runbook,ops,complete,Runbook includes PostgreSQL and runtime asset backup/restore commands.,Rehearse restore on a non-production target before official launch.
+security_exposure_checklist,security,complete,Runbook includes public exposure and auth security checklist.,Keep domain/HTTPS as the remaining separate launch blocker.
+deployment_guide_links_phase55,docs,complete,Deployment guide links to the Phase 55 readiness runbook.,Update docs/deployment_guide.md to point operators at Phase 55.
+data_sources_phase55_note,docs,complete,Data sources doc records that Phase 55 adds operational artifacts only.,Update docs/data_sources.md with the Phase 55 data boundary.
+completion_audit_traceability,docs,complete,Completion audit maps Phase 55 requirements to evidence and the remaining manual runtime gate.,Keep docs/phase55_completion_audit.md aligned with final validation results.
+server_runtime_smoke,manual,manual_required,Requires running production stack on CPU server with local-only .env.prod.,Run auth-enabled production smoke and BGE/data checks on the server before official launch.

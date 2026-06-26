@@ -1,3 +1,27 @@
+# 阶段 55 生产上线前部署闭环最新交班状态（2026-06-26）
+
+当前分支：`codex/phase-55-production-readiness`。
+
+阶段 55 目标是完成正式上线前除域名/DNS/HTTPS 之外的部署闭环。当前新增 `docs/phase55_production_readiness.md`、`docs/phase_reviews/phase-55.md`、`scripts/audit_phase55_production_readiness.py`、`scripts/check_phase55_runtime_readiness.py`，并增强 `scripts/run_production_smoke.py --auth-enabled`。生产 smoke 现在覆盖未登录 Agent 401、注册/登录、进程内 bearer token、`/auth/me`、`/chat`、`/agent/query`、`/agent/query/stream`、首页 `/` 和代表性图片资产 `/assets/images/...`。
+
+关键结论：Agent 在 CPU 服务器 Docker 容器内运行，私有 BGE reranker 在另一台 GPU 服务器运行；因此容器内 `127.0.0.1:8091` 指 app 容器自己，不是 GPU 服务器。生产必须使用容器可达的 GPU 私网/VPN URL、SSH tunnel sidecar、host-gateway 可达 tunnel，或显式 `RERANKING_ENABLED=false`。
+
+当前验证：
+
+```text
+docker compose -f docker-compose.prod.yml --env-file <placeholder-temp-env> config --quiet -> passed
+python -m py_compile scripts/run_production_smoke.py scripts/audit_phase55_production_readiness.py scripts/check_phase55_runtime_readiness.py -> passed
+python -m pytest tests/test_phase55_runtime_readiness.py tests/test_phase55_production_readiness.py tests/test_run_production_smoke.py -q -> 15 passed
+python scripts/audit_phase55_production_readiness.py -> complete=14 partial=0 missing=0 manual_required=1
+python scripts/run_production_smoke.py --auth-enabled --timeout-seconds 1 --out data/evaluation/phase55_production_smoke_dry_run.csv -> rows=18 execute=false failed=0
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m pytest -q -> 1274 passed, 1 skipped
+git diff --check -> no whitespace errors; CRLF warnings only
+Completion audit closeout: `docs/phase55_completion_audit.md` has been added; current audit is `complete=14 partial=0 missing=0 manual_required=1`. The only `manual_required` item is actual CPU-server runtime smoke with local-only `.env.prod`, synced runtime assets, and the private BGE route or intentional reranking disablement.
+```
+
+当前仍未 `git add`、commit、tag、push 或创建 PR，等待用户人工核验。不得把 `.env`、`.env.prod`、credentials、API key、Bearer token、provider raw response、raw answer text、`raw_response`、`reasoning_content`、hidden thought、完整 chunk、受限全文或长期用户画像写入 Git/CSV/文档/测试/Obsidian。
+
 # 阶段 54 GraphRAG 最新交班状态（2026-06-25）
 
 当前分支：`codex/phase-54-graphrag-evaluation`。
@@ -2499,3 +2523,25 @@ python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decisio
 docker compose -f docker-compose.dev.yml config -> passed
 docker compose -f docker-compose.prod.yml config -> passed with temporary local placeholders
 ```
+
+## Phase 55 Handoff Update: 2026-06-26 Production Readiness Runtime Closure
+
+Current branch: `codex/phase-55-production-readiness`.
+
+The Phase 54 full-state cloud runtime has been synchronized and verified before user human verification. Do not run `git add`, commit, tag, push, or PR until the user explicitly approves after reviewing the diff.
+
+Verified cloud runtime:
+
+```text
+PostgreSQL/pgvector -> documents=1153, chunks=51738, chunk_embeddings=74067, vector_rows=42051
+data/images -> 17013 files
+FAISS -> paratera/GLM-Embedding-3, dim=2048, vector_count=42051, complete=true
+GraphRAG -> data/knowledge_graph/domain_graph.json synced
+BGE -> app container reaches GPU BGE through private CPU-host tunnel 172.18.0.1:18091 -> 10.0.22.42:8091
+runtime readiness with --check-reranker -> ok=21 warn=0 error=0 manual=0
+public AUTH_ENABLED=true smoke -> rows=18 execute=true failed=0
+```
+
+GPU BGE is supervised by user-level systemd service `rfc-bge-reranker.service`; the CPU private tunnel is supervised by `rfc-bge-tunnel.service`. The BGE endpoint must remain private. Domain/DNS/HTTPS and final user acceptance remain official-launch items.
+
+Security boundary: do not read, print, commit, or write `.env`, `.env.prod`, database passwords, JWT secrets, Redis passwords, API keys, bearer tokens, provider raw responses, full answers, full chunks, restricted full text, or private service logs into Git/CSV/docs/tests/Obsidian.

@@ -1,0 +1,22 @@
+check_id,area,status,value,evidence,next_action
+app_env_production,config,ok,production,APP_ENV should be production in docker-compose.prod.yml.,No action.
+auth_enabled,security,ok,true,AUTH_ENABLED should be true before public launch.,No action.
+jwt_secret_configured,security,ok,configured,JWT secret is present and not printed.,No action.
+embedding_dimension,retrieval,ok,2048,GLM-Embedding-3 production vector path expects 2048 dimensions.,No action.
+graph_path_configured,graphrag,ok,data/knowledge_graph/domain_graph.json,GraphRAG path is configured.,No action.
+documents,database,ok,1153,documents count=1153.,No action.
+chunks,database,ok,51738,chunks count=51738.,No action.
+chunk_embeddings,database,ok,74067,chunk_embeddings count=74067.,No action.
+users,auth,ok,10,users count=10.,No action.
+conversations,auth,ok,14,conversations count=14.,No action.
+messages,auth,ok,168,messages count=168.,No action.
+qa_feedback,feedback,ok,1,qa_feedback count=1.,No action.
+chunks_image_description,database,ok,15663,chunks_image_description count=15663.,No action.
+chunks_table,database,ok,1700,chunks_table count=1700.,No action.
+chunks_text,database,ok,34375,chunks_text count=34375.,No action.
+data_images_dir,assets,ok,data/images,directory exists.,No action.
+data_faiss_dir,assets,ok,data/faiss,directory exists.,No action.
+faiss_index_files,assets,ok,present,At least one FAISS index file exists.,No action.
+graphrag_graph_file,graphrag,ok,data/knowledge_graph/domain_graph.json,file exists.,No action.
+pgvector_extension,database,ok,vector,pgvector extension is installed.,No action.
+reranker_health,reranker,ok,200,Private BGE /health responded from the app runtime.,No action.

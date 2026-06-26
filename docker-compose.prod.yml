@@ -37,7 +37,7 @@ services:
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-}
         PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}
-    image: rfc-rag-agent:phase44-production-auth
+    image: rfc-rag-agent:production
     depends_on:
       db:
         condition: service_healthy

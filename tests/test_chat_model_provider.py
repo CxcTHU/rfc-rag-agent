@@ -523,6 +523,29 @@ def test_openai_compatible_provider_uses_curl_for_deepseek_endpoint(monkeypatch)
     assert captured["payload"]["model"] == "deepseek-v4-flash"
 
 
+def test_deepseek_request_falls_back_to_urlopen_when_curl_missing(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_urlopen(request, timeout):
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return _ChatFakeResponse()
+
+    monkeypatch.setattr("app.services.generation.chat_model.shutil.which", lambda _: None)
+    monkeypatch.setattr(
+        "app.services.generation.chat_model.urlopen_without_proxy", fake_urlopen
+    )
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="deepseek-v4-flash",
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+    )
+
+    result = provider.generate([ChatMessage(role="user", content="What is RFC?")])
+
+    assert captured["payload"]["model"] == "deepseek-v4-flash"
+    assert result.answer == "Answer with [1]."
+
+
 def test_chat_provider_retries_transient_ssl_error(monkeypatch) -> None:
     attempts = {"count": 0}
 
