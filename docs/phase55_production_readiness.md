@@ -41,7 +41,7 @@ Create `.env.prod` on the CPU server only. Use a secret manager or a local file 
 | Chat | `CHAT_MODEL_PROVIDER`, `CHAT_MODEL_NAME`, `CHAT_MODEL_API_KEY`, `CHAT_MODEL_BASE_URL` | yes for real answers | `/chat` smoke returns schema fields |
 | Planner | `PLANNER_CHAT_MODEL_PROVIDER`, `PLANNER_CHAT_MODEL_NAME`, `PLANNER_CHAT_MODEL_API_KEY`, `PLANNER_CHAT_MODEL_BASE_URL` | yes in current production compose | `docker compose config` succeeds |
 | Embedding | `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL_NAME`, `EMBEDDING_API_KEY`, `EMBEDDING_BASE_URL`, `EMBEDDING_DIMENSION` | yes for real retrieval | `/health/details` provider config is not degraded |
-| Reranking | `RERANKING_ENABLED`, `RERANKING_PROVIDER`, `RERANKING_MODEL_NAME`, `RERANKING_BASE_URL`, `RERANKING_RECALL_K` | yes if BGE is expected | app-container BGE health smoke and rerank trace show no fallback |
+| Reranking | `RERANKING_ENABLED`, `RERANKING_PROVIDER`, `RERANKING_MODEL_NAME`, `RERANKING_BASE_URL`, `RERANKING_RECALL_K`, `RERANKING_FALLBACK_*` | yes if BGE is expected | app-container BGE health smoke and rerank trace show no fallback; GLM fallback is configured for GPU-off operation |
 | GraphRAG | `GRAPHRAG_GRAPH_PATH` | yes if graph route is enabled | file exists inside app container |
 | Vision/uploads | `VISION_MODEL_*`, `ENABLE_USER_IMAGE_UPLOAD`, `USER_IMAGE_MAX_SIZE_MB` | required only for image analysis launch | upload smoke and size policy reviewed |
 | Optional gates | `JUDGE_MODEL_*`, `SEMANTIC_CACHE_*`, `RATE_LIMIT_*` | no | keep judge out of production runtime; keep cache/rate limit disabled until traffic expectations are clear |
@@ -75,6 +75,11 @@ RERANKING_ENABLED=true
 RERANKING_PROVIDER=remote-bge-lora
 RERANKING_MODEL_NAME=rfc-domain-bge-lora
 RERANKING_BASE_URL=http://gpu-private.example.invalid:8091
+RERANKING_FALLBACK_ENABLED=true
+RERANKING_FALLBACK_PROVIDER=paratera
+RERANKING_FALLBACK_MODEL_NAME=GLM-Rerank
+RERANKING_FALLBACK_BASE_URL=https://llmapi.paratera.com/v1/p002
+RERANKING_FALLBACK_TIMEOUT_SECONDS=30
 GRAPHRAG_GRAPH_PATH=data/knowledge_graph/domain_graph.json
 EOF
 docker compose -f docker-compose.prod.yml --env-file "$tmp_env" config --quiet
@@ -242,6 +247,16 @@ python scripts/run_production_smoke.py \
 ```
 
 Then inspect the app logs or latency trace for `reranking_provider=remote-bge-lora` and `reranking_fallback=false`. If BGE is required and fallback is true, block launch.
+
+GPU-off fallback behavior:
+
+```text
+primary remote BGE succeeds -> reranking_fallback=false
+primary remote BGE fails and GLM fallback succeeds -> reranking_fallback=true, reranking_fallback_used=true, reranking_fallback_provider=paratera
+primary remote BGE and GLM fallback both fail -> reranking_fallback=true, reranking_fallback_used=false, final order falls back to hybrid fusion
+```
+
+For the current Paratera GLM fallback, set `RERANKING_FALLBACK_PROVIDER=paratera`, `RERANKING_FALLBACK_MODEL_NAME=GLM-Rerank`, and `RERANKING_FALLBACK_BASE_URL=https://llmapi.paratera.com/v1/p002`. If `RERANKING_FALLBACK_API_KEY` is empty, the app reuses `EMBEDDING_API_KEY` only for `paratera`; otherwise set a dedicated fallback reranker key in `.env.prod`. Do not write the key into docs, CSV, Git, or terminal transcripts.
 
 ## 55C Data And Runtime Asset Integrity
 

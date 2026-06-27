@@ -322,6 +322,86 @@ def test_hybrid_search_falls_back_when_reranker_fails(tmp_path) -> None:
     assert len(results) == 1
 
 
+def test_hybrid_search_uses_secondary_reranker_when_primary_fails(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class FailingReRankingProvider:
+        provider_name = "remote-bge-lora"
+        model_name = "rfc-domain-bge-lora"
+
+        def rerank(self, query, candidates, top_k=5):
+            raise RuntimeError("GPU reranker unavailable")
+
+    class SecondaryReRankingProvider:
+        provider_name = "paratera"
+        model_name = "GLM-Rerank"
+
+        def rerank(self, query, candidates, top_k=5):
+            return [
+                ReRankResult(index=index, score=float(index), content=candidates[index])
+                for index in reversed(range(len(candidates)))
+            ][:top_k]
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            results = HybridSearchService(
+                db,
+                provider,
+                reranking_provider=FailingReRankingProvider(),
+                reranking_fallback_provider=SecondaryReRankingProvider(),
+                reranking_enabled=True,
+            ).search("concrete", top_k=1)
+        finally:
+            reset_current_latency_trace(token)
+
+    assert len(results) == 1
+    assert results[0].document_title == "Thermal control note"
+    assert trace.values["reranking_fallback"] is True
+    assert trace.values["reranking_fallback_used"] is True
+    assert trace.values["reranking_fallback_provider"] == "paratera"
+    assert trace.values["reranking_fallback_model"] == "GLM-Rerank"
+    assert trace.values["reranking_fallback_error"] == ""
+
+
+def test_hybrid_search_falls_back_to_fusion_when_secondary_reranker_fails(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class FailingReRankingProvider:
+        provider_name = "remote-bge-lora"
+        model_name = "rfc-domain-bge-lora"
+
+        def rerank(self, query, candidates, top_k=5):
+            raise RuntimeError("reranker unavailable")
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            results = HybridSearchService(
+                db,
+                provider,
+                reranking_provider=FailingReRankingProvider(),
+                reranking_fallback_provider=FailingReRankingProvider(),
+                reranking_enabled=True,
+            ).search("filling capacity", top_k=1)
+        finally:
+            reset_current_latency_trace(token)
+
+    assert len(results) == 1
+    assert results[0].document_title == "Filling Capacity Evaluation of Self-Compacting Concrete"
+    assert trace.values["reranking_fallback"] is True
+    assert trace.values["reranking_fallback_used"] is False
+    assert trace.values["reranking_fallback_error"] == "runtime_error"
+
+
 def test_hybrid_search_records_reranker_trace_and_fallback(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 

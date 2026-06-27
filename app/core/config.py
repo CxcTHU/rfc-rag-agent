@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     reranking_base_url: str = "http://127.0.0.1:8091"
     reranking_timeout_seconds: float = 30.0
     reranking_recall_k: int = 75
+    reranking_fallback_enabled: bool = False
+    reranking_fallback_provider: str = ""
+    reranking_fallback_model_name: str = ""
+    reranking_fallback_api_key: str = ""
+    reranking_fallback_base_url: str = ""
+    reranking_fallback_timeout_seconds: float = 30.0
 
     vision_model_provider: str = ""
     vision_model_name: str = ""

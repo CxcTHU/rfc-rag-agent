@@ -60,6 +60,7 @@ class HybridSearchService:
         reranking_provider: ReRankingProvider | None = None,
         reranking_enabled: bool | None = None,
         reranking_recall_k: int | None = None,
+        reranking_fallback_provider: ReRankingProvider | None = None,
         progress_callback: Callable[[str], None] | None = None,
     ) -> None:
         self.db = db
@@ -72,6 +73,7 @@ class HybridSearchService:
         self.reranking_enabled = settings.reranking_enabled if reranking_enabled is None else reranking_enabled
         self.reranking_recall_k = reranking_recall_k or settings.reranking_recall_k
         self.reranking_provider = reranking_provider
+        self.reranking_fallback_provider = reranking_fallback_provider
         self.progress_callback = progress_callback
         if self.reranking_enabled and self.reranking_provider is None:
             try:
@@ -84,6 +86,27 @@ class HybridSearchService:
                 )
             except Exception:
                 self.reranking_provider = None
+        if (
+            self.reranking_enabled
+            and settings.reranking_fallback_enabled
+            and self.reranking_fallback_provider is None
+        ):
+            fallback_api_key = settings.reranking_fallback_api_key
+            if (
+                not fallback_api_key
+                and settings.reranking_fallback_provider.strip().casefold() == "paratera"
+            ):
+                fallback_api_key = settings.embedding_api_key
+            try:
+                self.reranking_fallback_provider = create_reranking_provider(
+                    provider_name=settings.reranking_fallback_provider,
+                    model_name=settings.reranking_fallback_model_name,
+                    api_key=fallback_api_key,
+                    base_url=settings.reranking_fallback_base_url,
+                    timeout_seconds=settings.reranking_fallback_timeout_seconds,
+                )
+            except Exception:
+                self.reranking_fallback_provider = None
 
     def search(self, query: str, top_k: int = 5) -> list[HybridSearchResult]:
         normalized_query = query.strip()
@@ -186,14 +209,57 @@ class HybridSearchService:
                 )
         except Exception:
             # Reranking is a quality enhancement, not a hard requirement. If the
-            # rerank service has a transient failure, fall back to the fusion
-            # order instead of failing the whole query.
+            # primary reranker has a transient failure, try the configured
+            # secondary reranker before falling back to the fusion order.
             if trace is not None:
                 trace.set_value("reranking_fallback", True)
                 fallback_count = int(trace.values.get("reranking_fallback_count", 0)) + 1
                 trace.set_value("reranking_fallback_count", fallback_count)
                 trace.set_value("reranking_error", "runtime_error")
+            fallback_reranked = self._rerank_with_fallback_provider(
+                query,
+                results,
+                top_k=top_k,
+            )
+            if fallback_reranked is not None:
+                return fallback_reranked
             return results[:top_k]
+        return [results[item.index] for item in reranked]
+
+    def _rerank_with_fallback_provider(
+        self,
+        query: str,
+        results: list[HybridSearchResult],
+        *,
+        top_k: int,
+    ) -> list[HybridSearchResult] | None:
+        if self.reranking_fallback_provider is None:
+            return None
+        trace = get_current_latency_trace()
+        if trace is not None:
+            trace.set_value(
+                "reranking_fallback_provider",
+                self.reranking_fallback_provider.provider_name,
+            )
+            trace.set_value(
+                "reranking_fallback_model",
+                self.reranking_fallback_provider.model_name,
+            )
+            trace.set_value("reranking_fallback_used", False)
+            trace.set_value("reranking_fallback_error", "")
+        try:
+            with latency_timer("rerank_fallback_latency_ms"):
+                reranked = self.reranking_fallback_provider.rerank(
+                    query=query,
+                    candidates=[result.content for result in results],
+                    top_k=top_k,
+                )
+        except Exception:
+            if trace is not None:
+                trace.set_value("reranking_fallback_error", "runtime_error")
+            return None
+        if trace is not None:
+            trace.set_value("reranking_fallback_used", True)
         return [results[item.index] for item in reranked]
 
     def _progress(self, summary: str) -> None:
