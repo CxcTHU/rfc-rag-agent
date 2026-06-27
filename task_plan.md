@@ -121,7 +121,7 @@ Acceptance:
 Result:
 - `docs/phase55_production_readiness.md` contains compose log commands, PostgreSQL dump/restore, runtime asset backup/restore, and GPU BGE start/verify/stop guidance.
 - Actual GPU BGE and CPU tunnel are now supervised by user-level systemd services. Operators can inspect them with `systemctl --user status rfc-bge-reranker.service` on the GPU server and `systemctl --user status rfc-bge-tunnel.service` on the CPU server.
-- CPU provider egress latency was fixed without model/provider downgrade by adding `rfc-provider-tunnel.service` and `docker-compose.provider-tunnel.yml`; provider HTTPS requests now route through GPU egress while preserving `api.deepseek.com`, `llmapi.paratera.com`, `deepseek-v4-pro`, `deepseek-v4-flash`, and `GLM-Embedding-3`.
+- CPU provider egress latency was fixed without model/provider downgrade by adding `rfc-provider-local-forward.service`, `scripts/ops/provider_tcp_forward.py`, and `docker-compose.provider-egress.yml`; provider HTTPS requests now route through a CPU-host local forwarder while preserving `api.deepseek.com`, `llmapi.paratera.com`, `deepseek-v4-pro`, `deepseek-v4-flash`, and `GLM-Embedding-3`.
 
 ## Phase 55F: security and exposure review
 
@@ -164,4 +164,4 @@ Result:
 - `git diff --check` has no whitespace errors, only CRLF warnings.
 - `docs/phase55_completion_audit.md` maps each Phase 55 requirement to repository/tooling evidence and the now-verified cloud runtime evidence.
 - Final state remains before `git add`, commit, tag, push, or PR.
-- Post-domain latency investigation fixed the main live UI performance issue: a representative authenticated `/agent/query` dropped from about `238s` to about `27s` after provider egress was routed through the GPU tunnel.
+- Post-domain latency investigation fixed the main live UI performance issue: a representative authenticated `/agent/query` dropped from about `238s` to about `24s` after provider egress was routed through the CPU-host local forwarder.

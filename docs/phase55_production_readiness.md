@@ -126,7 +126,7 @@ systemctl --user status rfc-bge-reranker.service
 curl -sS --max-time 10 http://10.0.22.42:8091/health
 ```
 
-## 55B.1 Provider Egress Tunnel For Current Cloud Runtime
+## 55B.1 Provider Egress Override For Current Cloud Runtime
 
 The current CPU cloud server has unreliable direct egress/DNS for provider APIs. Symptoms observed on 2026-06-27:
 
@@ -138,18 +138,18 @@ local workstation GLM embedding baseline -> about 0.2s
 GPU server TLS to provider hosts -> tens of milliseconds
 ```
 
-The current verified fix keeps the same providers and models, but routes provider HTTPS traffic through the GPU server egress:
+The first emergency fix routed provider HTTPS traffic through the GPU server egress. The current verified production-readiness path no longer requires GPU for provider APIs: the app container maps selected provider hostnames to a CPU Docker-host endpoint, and the CPU host runs a local TCP forwarder to the real provider hosts.
 
 ```text
 CPU app container
--> provider hostname mapped to CPU Docker host by docker-compose.provider-tunnel.yml
--> CPU user systemd service rfc-provider-tunnel.service
--> SSH local forwards:
-   172.18.0.1:18443 -> GPU -> api.deepseek.com:443
-   172.18.0.1:18444 -> GPU -> llmapi.paratera.com:443
+-> provider hostname mapped to CPU Docker host by docker-compose.provider-egress.yml
+-> CPU user systemd service rfc-provider-local-forward.service
+-> local TCP forwards:
+   172.18.0.1:18443 -> api.deepseek.com:443
+   172.18.0.1:18444 -> llmapi.paratera.com:443
 ```
 
-Cloud `.env.prod` should use provider hostnames with the tunnel ports:
+Cloud `.env.prod` should use provider hostnames with the egress ports:
 
 ```text
 CHAT_MODEL_BASE_URL=https://api.deepseek.com:18443
@@ -157,13 +157,61 @@ PLANNER_CHAT_MODEL_BASE_URL=https://api.deepseek.com:18443
 EMBEDDING_BASE_URL=https://llmapi.paratera.com:18444/v1
 ```
 
-Start the current cloud app with:
+Install or refresh the CPU host forwarder from the repository checkout:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f docker-compose.provider-tunnel.yml --env-file .env.prod up -d app
+install -m 700 -d ~/.config/systemd/user
+install -m 644 deploy/systemd/rfc-provider-local-forward.service ~/.config/systemd/user/rfc-provider-local-forward.service
+systemctl --user daemon-reload
+systemctl --user enable --now rfc-provider-local-forward.service
+loginctl enable-linger "$USER"
+```
+
+Operate and inspect it on the CPU host:
+
+```bash
+systemctl --user status rfc-provider-local-forward.service
+journalctl --user -u rfc-provider-local-forward.service -n 100 --no-pager
+ss -ltnp | grep -E '172.18.0.1:(18443|18444)'
+```
+
+Start the current cloud app with the provider egress override:
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.provider-egress.yml --env-file .env.prod up -d app
 ```
 
 This is not a model downgrade. It preserves `deepseek-v4-pro`, `deepseek-v4-flash`, and `GLM-Embedding-3`; only the cloud network route changes.
+
+Container-internal provider TLS smoke:
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.provider-egress.yml --env-file .env.prod exec app python - <<'PY'
+import socket
+import ssl
+import time
+
+checks = [
+    ("deepseek", "api.deepseek.com", 18443),
+    ("paratera", "llmapi.paratera.com", 18444),
+]
+for name, host, port in checks:
+    start = time.perf_counter()
+    raw = socket.create_connection((host, port), timeout=10)
+    context = ssl.create_default_context()
+    tls = context.wrap_socket(raw, server_hostname=host)
+    tls.close()
+    print(f"{name}_tls_ms={(time.perf_counter() - start) * 1000:.1f}")
+PY
+```
+
+Rollback if the local CPU host forwarder becomes unhealthy:
+
+```bash
+systemctl --user disable --now rfc-provider-local-forward.service
+# Then switch to a known-good private egress option, such as a GPU SSH tunnel,
+# VPN gateway, or cloud provider network fix, and rerun provider TLS smoke.
+```
 
 Container-internal health smoke:
 

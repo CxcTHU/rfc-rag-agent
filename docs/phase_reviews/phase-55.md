@@ -120,7 +120,7 @@ Phase 55 was scoped as "production readiness closure excluding domain/DNS/HTTPS.
 
 1. **`chat_model.py` curl fallback** — Good fix. `shutil.which("curl")` with `urlopen_without_proxy` fallback is correct for Linux containers that lack `curl.exe`. The test covers the fallback path.
 2. **`docker-compose.prod.yml` image tag** — Neutral `rfc-rag-agent:production` replaces stale `phase44-production-auth`. Correct.
-3. **`docker-compose.provider-tunnel.yml`** — Minimal 6-line overlay with `extra_hosts` for provider DNS steering. Clean design. See observation #1 below on naming.
+3. **`docker-compose.provider-egress.yml`** — Minimal overlay with `extra_hosts` for provider DNS steering to a Docker-host egress endpoint.
 4. **`run_production_smoke.py` auth extension** — Well-structured: `auth_smoke_cases()` separated from `smoke_cases()`, token extracted only from login response, bearer header injected only when `auth_required=True`, token never written to CSV. `expected_http_statuses` tuple handles 401/409 correctly.
 5. **`audit_phase55_production_readiness.py`** — Fixed off-by-one (1274→1275) during this review. Now passes.
 6. **No secrets in diff** — Verified: no API keys, bearer tokens, JWT secrets, passwords, or provider raw responses in any tracked or untracked file.
@@ -128,9 +128,9 @@ Phase 55 was scoped as "production readiness closure excluding domain/DNS/HTTPS.
 
 ### Observations For User Decision
 
-1. **`docker-compose.provider-tunnel.yml` naming**: The file is named "provider-tunnel" but its content is `extra_hosts` DNS overrides, not a tunnel definition. It could be called `docker-compose.provider-override.yml` or `docker-compose.extra-hosts.yml` for clarity. The tunnel itself lives in systemd on the host. This is cosmetic — rename only if it would confuse operators.
+1. **Provider egress overlay naming resolved**: The earlier `docker-compose.provider-tunnel.yml` name was replaced with `docker-compose.provider-egress.yml`, which better reflects that the file only maps provider hostnames to a Docker-host egress endpoint.
 
-2. **CPU host provider forwarder runbook**: The `rfc-provider-tunnel.service` systemd unit runs on the CPU host and is critical for production — without it, provider calls time out (~185s→~3.4s). It is documented in `findings.md` and `progress.md` but not yet templated in a committed systemd unit file or a setup script. If the CPU server is reprovisioned, the operator needs to recreate this manually. Consider adding a `deploy/systemd/` directory with unit file templates (with placeholder values) in a future phase.
+2. **CPU host provider forwarder runbook resolved**: The CPU-host provider egress path is now documented in `docs/phase55_production_readiness.md`, with `scripts/ops/provider_tcp_forward.py` and `deploy/systemd/rfc-provider-local-forward.service` added as repository templates. If the CPU server is reprovisioned, the operator can reinstall the service from the repo checkout.
 
 3. **GPU BGE on/off strategy**: Currently GPU must be running for reranking. Three options for cost control: (a) keep GPU always-on (current), (b) configure `RERANKING_ENABLED=false` as a degraded-but-functional mode, (c) add a health-check-based auto-disable in the reranker chain. Option (b) already works today — the app falls back gracefully. The choice depends on whether reranking quality is worth the GPU cost for the expected traffic level.
 
@@ -154,6 +154,6 @@ Phase 55 was scoped as "production readiness closure excluding domain/DNS/HTTPS.
 ### Carry-Forward Items (Not Blockers)
 
 - Domain/DNS/HTTPS activation
-- Systemd unit file templates for `rfc-provider-tunnel.service` and `rfc-bge-tunnel.service`
+- Optional systemd unit template for `rfc-bge-tunnel.service`
 - GPU cost optimization strategy decision
 - Backup/restore drill on non-production target

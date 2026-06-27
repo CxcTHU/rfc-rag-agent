@@ -4209,8 +4209,8 @@ GPU provider TLS checks -> healthy
 Fix:
 
 ```text
-docker-compose.provider-tunnel.yml maps provider hostnames to CPU Docker host
-rfc-provider-tunnel.service forwards provider HTTPS through GPU egress:
+docker-compose.provider-egress.yml maps provider hostnames to CPU Docker host
+rfc-provider-local-forward.service forwards provider HTTPS from the CPU host:
   172.18.0.1:18443 -> api.deepseek.com:443
   172.18.0.1:18444 -> llmapi.paratera.com:443
 cloud .env.prod uses:

@@ -336,11 +336,11 @@ GPU server provider TLS checks -> healthy
 Implemented without downgrading provider/model:
 
 ```text
-added docker-compose.provider-tunnel.yml for provider host extra_hosts
-created CPU user service rfc-provider-tunnel.service
-provider SSH forwards:
-  172.18.0.1:18443 -> GPU -> api.deepseek.com:443
-  172.18.0.1:18444 -> GPU -> llmapi.paratera.com:443
+added docker-compose.provider-egress.yml for provider host extra_hosts
+added scripts/ops/provider_tcp_forward.py and deploy/systemd/rfc-provider-local-forward.service
+provider local forwards:
+  172.18.0.1:18443 -> api.deepseek.com:443
+  172.18.0.1:18444 -> llmapi.paratera.com:443
 cloud .env.prod base URLs now use the same provider hostnames with tunnel ports:
   CHAT_MODEL_BASE_URL=https://api.deepseek.com:18443
   PLANNER_CHAT_MODEL_BASE_URL=https://api.deepseek.com:18443
@@ -360,4 +360,4 @@ authenticated /agent/query for 堆石混凝土的优势 -> about 27s, refused=fa
 runtime readiness with --check-reranker -> ok=21 warn=0 error=0 manual=0
 ```
 
-This preserves `deepseek-v4-pro`, `deepseek-v4-flash`, `GLM-Embedding-3`, and private BGE. It changes only the current cloud provider egress route.
+This preserves `deepseek-v4-pro`, `deepseek-v4-flash`, `GLM-Embedding-3`, and private BGE. It changes only the current cloud provider egress route and no longer requires the GPU server for provider API traffic.

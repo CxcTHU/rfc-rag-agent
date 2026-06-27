@@ -1,0 +1,9 @@
+services:
+  app:
+    # Route selected provider hostnames to a Docker-host egress endpoint.
+    # The host endpoint may be a local TCP forwarder, SSH tunnel, VPN gateway,
+    # or other private egress path. It must listen on ports expected by the
+    # provider base URLs, for example 18443 for DeepSeek and 18444 for Paratera.
+    extra_hosts:
+      - "api.deepseek.com:${PROVIDER_EGRESS_HOST_IP:-172.18.0.1}"
+      - "llmapi.paratera.com:${PROVIDER_EGRESS_HOST_IP:-172.18.0.1}"
