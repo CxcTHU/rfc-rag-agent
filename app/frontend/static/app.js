@@ -1710,7 +1710,10 @@ function stopAgentThinkingTimer(messageElement) {
 }
 
 function liveAgentEventView(eventName, payload = {}) {
-  const summary = userFacingAgentSummary(payload.step_summary || payload.observation_summary || payload.output_summary || "");
+  const summary = userFacingAgentSummary(
+    payload.step_summary || payload.observation_summary || payload.output_summary || "",
+    payload,
+  );
   if (eventName === "tool_call_start") {
     return {
       kind: "tool-call-start",
@@ -1749,11 +1752,13 @@ function localizeAgentAction(action) {
   const labels = {
     llm_with_tools: "分析问题并选择检索工具",
     search_knowledge: "检索知识库",
+    hybrid_search_knowledge: "混合检索",
     search_figures: "检索示例图片",
     search_tables: "检索表格证据",
     analyze_user_image: "分析上传图片",
     rewrite_query: "改写查询",
     answer_with_citations: "生成带引用回答",
+    retrieval_diagnostics: "检索诊断",
     refuse: "安全拒答",
     final_answer: "最终回答",
   };
@@ -1768,6 +1773,7 @@ function localizeAgentTool(toolName) {
     search_tables: "检索表格证据",
     analyze_user_image: "分析上传图片",
     answer_with_citations: "引用式回答",
+    retrieval_diagnostics: "检索诊断",
     rewrite_query: "改写查询",
     refuse: "安全拒答",
     final_answer: "最终回答",
@@ -1780,7 +1786,22 @@ function isSkippedAgentStep(step = {}) {
   return text.includes("skipped") || step.skipped === true;
 }
 
-function userFacingAgentSummary(summary) {
+function skippedToolSummary(toolName, reasonText = "") {
+  const label = localizeAgentTool(toolName);
+  const normalized = String(reasonText || "").toLowerCase();
+  if (normalized.includes("near-duplicate")) {
+    return `已跳过：${label}；原因：与已执行检索重复`;
+  }
+  if (normalized.includes("existing evidence available")) {
+    return `已跳过：${label}；原因：已有可用证据`;
+  }
+  if (normalized.includes("per-iteration search tool budget reached")) {
+    return `已跳过：${label}；原因：本轮只执行一个检索工具`;
+  }
+  return `已跳过：${label}`;
+}
+
+function userFacingAgentSummary(summary, context = {}) {
   const text = String(summary || "");
   const normalized = text.toLowerCase();
   if (!text) {
@@ -1790,7 +1811,10 @@ function userFacingAgentSummary(summary) {
     return "正在分析问题并选择检索工具";
   }
   if (normalized.includes("near-duplicate") || normalized.includes("existing evidence available")) {
-    return "已有可用证据，已跳过重复工具调用";
+    return skippedToolSummary(context.tool_name || context.name || context.action, text);
+  }
+  if (normalized.includes("per-iteration search tool budget reached")) {
+    return skippedToolSummary(context.tool_name || context.name || context.action, text);
   }
   if (normalized.includes("model request failed") || normalized.includes("llm") || normalized.includes("provider")) {
     return "模型服务暂时不可用，已切换到错误处理";
@@ -1799,7 +1823,10 @@ function userFacingAgentSummary(summary) {
 }
 
 function agentLiveStatusText(eventName, payload = {}) {
-  const summary = userFacingAgentSummary(payload.step_summary || payload.observation_summary || payload.output_summary || "");
+  const summary = userFacingAgentSummary(
+    payload.step_summary || payload.observation_summary || payload.output_summary || "",
+    payload,
+  );
   if (summary) {
     return summary;
   }
@@ -1808,7 +1835,7 @@ function agentLiveStatusText(eventName, payload = {}) {
   }
   if (eventName === "tool_call_result") {
     if (payload.skipped) {
-      return `${localizeAgentTool(payload.tool_name || payload.action)}已跳过`;
+      return skippedToolSummary(payload.tool_name || payload.action, payload.output_summary || payload.error || "");
     }
     return payload.succeeded === false
       ? `${localizeAgentTool(payload.tool_name || payload.action)}失败`
@@ -1850,12 +1877,15 @@ function agentThoughtStepHtml(step, index) {
   const skipped = isSkippedAgentStep(step);
   const succeeded = step.succeeded !== false || skipped;
   const statusText = skipped ? "已跳过" : succeeded ? "已完成" : "已处理";
-  const summary = userFacingAgentSummary(step.step_summary || step.observation_summary || step.output_summary || step.input_summary || "");
+  const summary = userFacingAgentSummary(
+    step.step_summary || step.observation_summary || step.output_summary || step.input_summary || "",
+    step,
+  );
   const summaryHtml = summary
     ? `<div class="agent-thought-line">${escapeHtml(summary)}</div>`
     : "";
   const error = step.error && !skipped
-    ? `<div class="agent-thought-line agent-thought-line--error">提示：${escapeHtml(userFacingAgentSummary(step.error))}</div>`
+    ? `<div class="agent-thought-line agent-thought-line--error">提示：${escapeHtml(userFacingAgentSummary(step.error, step))}</div>`
     : "";
   return `
     <li class="agent-thought-step">
@@ -1869,11 +1899,95 @@ function agentThoughtStepHtml(step, index) {
   `;
 }
 
+function retrievalTraceStepFromResult(result = {}) {
+  const trace = result.latency_trace || {};
+  const hasRetrievalTrace = Array.isArray(trace.retrieval_selected_chunk_ids)
+    || Array.isArray(trace.retrieval_candidate_chunk_ids)
+    || trace.semantic_cache_hit === true;
+  if (!hasRetrievalTrace) {
+    return null;
+  }
+  const parts = [];
+  if (trace.semantic_cache_hit === true) {
+    parts.push(`semantic_cache_hit=true`);
+    if (trace.semantic_cache_similarity !== undefined && trace.semantic_cache_similarity !== null) {
+      parts.push(`similarity=${trace.semantic_cache_similarity}`);
+    }
+  }
+  if (trace.retrieval_query) {
+    parts.push(`query=${trace.retrieval_query}`);
+  }
+  const cacheParts = [];
+  if (trace.retrieval_cache_hit !== undefined) {
+    cacheParts.push(`retrieval_cache_hit=${trace.retrieval_cache_hit}`);
+  }
+  if (trace.rerank_cache_hit !== undefined) {
+    cacheParts.push(`rerank_cache_hit=${trace.rerank_cache_hit}`);
+  }
+  if (trace.tool_result_cache_hit !== undefined) {
+    cacheParts.push(`tool_result_cache_hit=${trace.tool_result_cache_hit}`);
+  }
+  if (cacheParts.length) {
+    parts.push(cacheParts.join(","));
+  }
+  if (trace.reranking_fallback !== undefined) {
+    parts.push(`rerank_fallback=${trace.reranking_fallback}`);
+  }
+  if (trace.reranking_fallback_used !== undefined) {
+    parts.push(`rerank_fallback_used=${trace.reranking_fallback_used}`);
+  }
+  if (trace.reranking_provider || trace.reranking_model) {
+    parts.push(`reranker=${[trace.reranking_provider, trace.reranking_model].filter(Boolean).join("/")}`);
+  }
+  if (trace.retrieval_candidate_count !== undefined) {
+    parts.push(`candidate_count=${trace.retrieval_candidate_count}`);
+  }
+  if (Array.isArray(trace.retrieval_candidate_chunk_ids)) {
+    parts.push(`candidate_chunk_ids=${trace.retrieval_candidate_chunk_ids.slice(0, 20).join(",")}`);
+  }
+  if (trace.retrieval_selected_count !== undefined) {
+    parts.push(`selected_count=${trace.retrieval_selected_count}`);
+  }
+  if (trace.retrieval_dynamic_top_k_enabled !== undefined) {
+    parts.push(`dynamic_top_k=${trace.retrieval_dynamic_top_k_enabled}`);
+  }
+  if (trace.retrieval_selection_reason) {
+    parts.push(`selection_reason=${trace.retrieval_selection_reason}`);
+  }
+  if (Array.isArray(trace.retrieval_selected_chunk_ids)) {
+    parts.push(`selected_chunk_ids=${trace.retrieval_selected_chunk_ids.slice(0, 12).join(",")}`);
+  }
+  if (Array.isArray(trace.retrieval_selected_preview)) {
+    const selectedSources = trace.retrieval_selected_preview
+      .slice(0, 8)
+      .map((item) => {
+        if (!item || typeof item !== "object") {
+          return "";
+        }
+        const chunkId = item.chunk_id ?? "";
+        const sourceType = item.source_type || "";
+        const title = String(item.title || "").slice(0, 48);
+        return `${chunkId}:${sourceType}:${title}`;
+      })
+      .filter(Boolean);
+    if (selectedSources.length) {
+      parts.push(`selected_sources=${selectedSources.join(" | ")}`);
+    }
+  }
+  return {
+    action: "retrieval_diagnostics",
+    name: "retrieval_diagnostics",
+    input_summary: "",
+    output_summary: parts.join("; "),
+    succeeded: true,
+  };
+}
+
 function agentThoughtHtml(result = {}) {
   const liveThoughtSteps = result._live_thought_steps || [];
   const workflowSteps = result.workflow_steps || [];
   const toolCalls = result.tool_calls || [];
-  const baseSteps = workflowSteps.length
+  let baseSteps = workflowSteps.length
     ? workflowSteps
     : toolCalls.map((call) => ({
         action: call.tool_name,
@@ -1883,6 +1997,10 @@ function agentThoughtHtml(result = {}) {
         succeeded: call.succeeded,
         error: call.error,
       }));
+  const retrievalTraceStep = retrievalTraceStepFromResult(result);
+  if (retrievalTraceStep) {
+    baseSteps = [...baseSteps, retrievalTraceStep];
+  }
   const steps = liveThoughtSteps.length ? liveThoughtSteps : baseSteps;
   if (!steps.length) {
     return "";

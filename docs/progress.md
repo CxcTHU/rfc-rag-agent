@@ -1,5 +1,69 @@
 # 项目进度
 
+## Latest Status: 2026-06-27 Phase 56 Layered Agent Cache Complete Before Human Verification
+
+Current branch: `codex/phase-56-layered-agent-cache`.
+
+Phase 56 adds layered Redis caches for repeated standalone Agent evidence work without downgrading providers, disabling tool calling, or enabling broad answer-level Semantic Cache. The default production switches remain off until human verification:
+
+```text
+RETRIEVAL_CANDIDATE_CACHE_ENABLED=false
+RERANK_ORDER_CACHE_ENABLED=false
+TOOL_RESULT_CACHE_ENABLED=false
+SEMANTIC_CACHE_ENABLED=false
+```
+
+Implemented:
+
+```text
+app/services/cache/layered_cache.py
+app/services/retrieval/hybrid_search.py -> retrieval candidate cache + rerank order cache
+app/services/agent/tools.py -> read-only tool result cache
+app/services/observability/latency_trace.py -> cache hit/backend/reason/saved_ms fields
+app/frontend/static/app.js -> skipped tool labels + retrieval diagnostics
+scripts/evaluate_phase56_layered_cache.py
+scripts/evaluate_phase56_real_chain_cache.py
+tests/test_phase56_layered_cache.py
+tests/test_hybrid_search.py -> dynamic rerank-K semantics
+docs/phase_reviews/phase-56.md
+data/evaluation/phase56_layered_cache_eval.csv
+data/evaluation/phase56_real_chain_cache_eval.csv
+```
+
+Cache entries store derived ids/order/scores and safe labels, then hydrate source content from PostgreSQL. BGE primary and GLM fallback rerank identities are separated by provider/model/fallback lane and candidate id hash. Redis unavailable or malformed entries fail open to the normal Agent path.
+
+Current verification:
+
+```text
+python -m py_compile app/services/cache/layered_cache.py app/services/retrieval/hybrid_search.py app/services/agent/tools.py app/services/observability/latency_trace.py app/core/config.py -> passed
+python -m pytest tests/test_hybrid_search.py tests/test_tool_calling_agent_service.py -q -> 31 passed
+python -m pytest tests/test_phase56_layered_cache.py -q -> 4 passed
+python scripts/evaluate_phase56_layered_cache.py --out data/evaluation/phase56_layered_cache_eval.csv -> rows=5 warm_hit_rows=2
+python -m pytest tests/test_hybrid_search.py tests/test_agent_tools.py tests/test_frontend_app.py tests/test_phase56_layered_cache.py -q -> 43 passed
+python scripts/evaluate_phase56_real_chain_cache.py --base-url http://127.0.0.1:8000 --out data/evaluation/phase56_real_chain_cache_eval.csv --top-k 8 --max-tool-calls 5 --timeout-seconds 180 --limit 30 -> cases=30 rows=60 completed=60 warm_cache_hit_rows=30 warm_speedup_rows=27 diagnostic_rows=31 median_cold_ms=31029.751 median_warm_ms=18677.037
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m pytest tests/test_phase56_layered_cache.py tests/test_hybrid_search.py tests/test_tool_calling_agent_service.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_reranking.py -q -> 93 passed
+python -m pytest -q -> 1283 passed, 1 skipped
+git diff --check -> no whitespace errors; CRLF warnings only
+targeted sensitive scan -> only pre-existing .env.dev.example placeholder passwords matched; no real secrets or Phase 56 payload leaks
+```
+
+Local deterministic cold/warm evidence:
+
+```text
+hybrid_search cold -> retrieval=false rerank=false elapsed=2706.115ms reranker_calls=1
+hybrid_search warm -> retrieval=true rerank=true elapsed=2.125ms reranker_calls=1
+tool_hybrid_search_knowledge warm -> tool_result_cache_hit=true elapsed=1.168ms
+dynamic_top_k_rerank_threshold -> retrieval_dynamic_top_k_enabled=true retrieval_selected_count=4
+real_chain_cache_eval -> cases=30 rows=60 completed=60 warm_cache_hit_rows=30 warm_speedup_rows=27 diagnostic_rows=31 median_cold_ms=31029.751 median_warm_ms=18677.037
+```
+
+User-facing diagnostics now show the executed retrieval query, retrieval candidate chunk ids, selected chunk ids, selected source title/source_type preview, rerank fallback/cache state, tool-result cache state, and answer-level `semantic_cache_hit` when applicable. Dynamic rerank-K is configurable and off by default: baseline `RERANKING_DYNAMIC_MIN_RESULTS=4`, cap `RERANKING_DYNAMIC_MAX_RESULTS=12`, relative threshold `RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65`, candidate pool `RERANKING_RECALL_K=75`.
+
+The real-chain evaluator now uses 30 real local-corpus questions and 60 Agent API requests. A first expanded run exposed that exact planner-query cache keys produced `warm_cache_hit_rows=0` because the tool-calling planner can rewrite the same user question into different retrieval queries. Phase 56 now binds a hashed stable user-question cache key into `latency_trace` and uses it for tool-result cache identity while keeping retrieval/rerank lower-layer identities exact and provider/corpus bounded. After this fix, the 30-case run produced `warm_cache_hit_rows=30` and `warm_speedup_rows=27`. The final answer LLM still runs live, so warm latency remains seconds-level rather than fixture-level milliseconds.
+
+No `git add`, commit, tag, push, or PR has been performed. Do not store `.env`, `.env.prod`, database passwords, JWT secrets, Redis passwords, API keys, bearer tokens, provider raw responses, full answers, full chunks, restricted full text, or private service logs in Git/CSV/docs/tests/Obsidian.
+
 ## Latest Status: 2026-06-26 Phase 55 Production Readiness Closure
 
 Current branch: `codex/phase-55-production-readiness`.

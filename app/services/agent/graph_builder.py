@@ -48,6 +48,7 @@ from app.services.agent.tools import AgentToolCallRecord, AgentToolbox
 from app.services.generation.chat_model import ChatModelProvider
 from app.services.observability.latency_trace import (
     LatencyTrace,
+    bind_user_question_cache_key,
     reset_current_latency_trace,
     set_current_latency_trace,
 )
@@ -149,6 +150,7 @@ class LangGraphAgentService:
             raise ValueError("max_tool_calls must be greater than 0")
 
         latency_trace = LatencyTrace()
+        bind_user_question_cache_key(latency_trace, normalized_question)
         latency_token = set_current_latency_trace(latency_trace)
         toolbox_token = set_current_toolbox(self.toolbox)
         event_sink_token = set_current_event_sink(event_sink)

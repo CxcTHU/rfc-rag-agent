@@ -1,5 +1,56 @@
 # 数据来源登记
 
+## Phase 56 Layered Cache Data Boundary
+
+Phase 56 adds no external corpus, crawler, PDF download, source registry entry, model weight, embedding rebuild, or user-profile data. It adds derived runtime cache entries and sanitized evaluation output only.
+
+Runtime Redis cache entries may contain:
+
+```text
+normalized query hash / cache identity hash
+hashed stable user-question cache key
+chunk ids
+safe numeric scores
+chunk/source labels
+candidate id hash
+reranker provider/model labels
+retrieval candidate and selected chunk id previews
+selected source title/source_type previews
+cache hit/fallback booleans
+TTL and created_at metadata
+```
+
+Runtime Redis cache entries must not contain:
+
+```text
+API keys
+Bearer tokens
+JWT or Redis passwords
+provider raw responses
+hidden reasoning
+full final answers
+full chunk text as the durable cache contract
+restricted full text
+long-term user profiles
+raw uploaded image bytes
+```
+
+New Phase 56 artifacts:
+
+```text
+app/services/cache/layered_cache.py
+app/frontend/static/app.js
+scripts/evaluate_phase56_layered_cache.py
+scripts/evaluate_phase56_real_chain_cache.py
+tests/test_phase56_layered_cache.py
+tests/test_hybrid_search.py
+data/evaluation/phase56_layered_cache_eval.csv
+data/evaluation/phase56_real_chain_cache_eval.csv
+docs/phase_reviews/phase-56.md
+```
+
+The fixture and real-chain evaluation CSVs store scenario/case labels, cold/warm run labels, elapsed milliseconds, cache-hit booleans, backend labels, source/citation counts, tool/workflow names, top source type/title previews, evidence-chain field-presence booleans, selected counts, and dynamic-K status only. They do not store answer text, provider payloads, full chunks, source PDFs, image bytes, secrets, or restricted full text.
+
 ## Phase 55 Production Readiness Data Note
 
 Phase 55 adds production readiness and operations artifacts only. It does not add a corpus source, crawler, PDF download, model weight, embedding rebuild, source registry entry, or new runtime content.

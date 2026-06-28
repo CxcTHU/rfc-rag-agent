@@ -30,6 +30,7 @@ from app.services.agent.tools import (
 from app.services.generation.chat_model import ChatMessage, ChatModelProvider
 from app.services.observability.latency_trace import (
     LatencyTrace,
+    bind_user_question_cache_key,
     reset_current_latency_trace,
     set_current_latency_trace,
 )
@@ -122,6 +123,7 @@ class ReActAgentService:
         image_analysis: dict[str, object] | None = None
         previous_queries: set[str] = set()
         latency_trace = LatencyTrace()
+        bind_user_question_cache_key(latency_trace, normalized_question)
         latency_token = set_current_latency_trace(latency_trace)
 
         try:

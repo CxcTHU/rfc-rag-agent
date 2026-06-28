@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     semantic_cache_enabled: bool = False
     semantic_cache_similarity_threshold: float = 0.92
     semantic_cache_ttl_seconds: int = 3600
+    layered_cache_namespace: str = "phase56-v1"
+    retrieval_candidate_cache_enabled: bool = False
+    retrieval_candidate_cache_ttl_seconds: int = 900
+    rerank_order_cache_enabled: bool = False
+    rerank_order_cache_ttl_seconds: int = 900
+    tool_result_cache_enabled: bool = False
+    tool_result_cache_ttl_seconds: int = 900
     rate_limit_enabled: bool = False
     rate_limit_requests_per_minute: int = 30
     rate_limit_window_seconds: int = 60
@@ -76,6 +83,10 @@ class Settings(BaseSettings):
     reranking_base_url: str = "http://127.0.0.1:8091"
     reranking_timeout_seconds: float = 30.0
     reranking_recall_k: int = 75
+    reranking_dynamic_top_k_enabled: bool = False
+    reranking_dynamic_min_results: int = 4
+    reranking_dynamic_max_results: int = 12
+    reranking_dynamic_relative_score_threshold: float = 0.65
     reranking_fallback_enabled: bool = False
     reranking_fallback_provider: str = ""
     reranking_fallback_model_name: str = ""

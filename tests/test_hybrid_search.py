@@ -228,6 +228,142 @@ def test_hybrid_search_uses_reranking_provider_by_default(tmp_path) -> None:
     assert results[0].document_title == "Thermal control note"
 
 
+def test_hybrid_search_dynamic_top_k_uses_rerank_score_threshold(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class ScoredReRankingProvider:
+        provider_name = "test"
+        model_name = "scored"
+
+        def rerank(self, query, candidates, top_k=5):
+            scores = [1.0, 0.8, 0.1]
+            return [
+                ReRankResult(index=index, score=scores[index], content=candidates[index])
+                for index in range(min(top_k, len(candidates), len(scores)))
+            ]
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            service = HybridSearchService(
+                db,
+                provider,
+                reranking_provider=ScoredReRankingProvider(),
+                reranking_enabled=True,
+            )
+            original_dynamic = (
+                service.settings.reranking_dynamic_top_k_enabled,
+                service.settings.reranking_dynamic_min_results,
+                service.settings.reranking_dynamic_max_results,
+                service.settings.reranking_dynamic_relative_score_threshold,
+            )
+            try:
+                service.settings.reranking_dynamic_top_k_enabled = True
+                service.settings.reranking_dynamic_min_results = 1
+                service.settings.reranking_dynamic_max_results = 3
+                service.settings.reranking_dynamic_relative_score_threshold = 0.75
+                results = service.search("concrete", top_k=1)
+            finally:
+                (
+                    service.settings.reranking_dynamic_top_k_enabled,
+                    service.settings.reranking_dynamic_min_results,
+                    service.settings.reranking_dynamic_max_results,
+                    service.settings.reranking_dynamic_relative_score_threshold,
+                ) = original_dynamic
+        finally:
+            reset_current_latency_trace(token)
+
+    assert len(results) == 2
+    assert [row["score"] for row in trace.values["rerank_score_preview"]][:2] == [1.0, 0.8]
+    assert trace.values["retrieval_dynamic_top_k_enabled"] is True
+    assert trace.values["retrieval_selected_count"] == 2
+    assert trace.values["retrieval_selection_reason"] == "rerank_scored"
+
+
+def test_hybrid_search_dynamic_top_k_keeps_minimum_then_filters_tail(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class FiveScoreReRankingProvider:
+        provider_name = "test"
+        model_name = "five-score"
+
+        def rerank(self, query, candidates, top_k=5):
+            scores = [1.0, 0.9, 0.8, 0.7, 0.2]
+            return [
+                ReRankResult(index=index, score=scores[index], content=candidates[index])
+                for index in range(min(top_k, len(candidates), len(scores)))
+            ]
+
+    def fake_keyword_search(self, query, top_k=5):
+        return [
+            KeywordSearchResult(
+                document_id=index + 1,
+                document_title=f"Doc {index + 1}",
+                source_type="local_file",
+                source_path=f"doc-{index + 1}.md",
+                file_name=f"doc-{index + 1}.md",
+                chunk_id=index + 1,
+                chunk_index=0,
+                content=f"concrete candidate {index + 1}",
+                heading_path="Candidate",
+                score=float(top_k - index),
+            )
+            for index in range(5)
+        ]
+
+    def fake_vector_search(self, query, top_k=5):
+        return []
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            service = HybridSearchService(
+                db,
+                provider,
+                reranking_provider=FiveScoreReRankingProvider(),
+                reranking_enabled=True,
+                parallel=False,
+            )
+            import app.services.retrieval.hybrid_search as hybrid_module
+
+            original_keyword = hybrid_module.KeywordSearchService.search
+            original_vector = hybrid_module.VectorSearchService.search
+            original_dynamic = (
+                service.settings.reranking_dynamic_top_k_enabled,
+                service.settings.reranking_dynamic_min_results,
+                service.settings.reranking_dynamic_max_results,
+                service.settings.reranking_dynamic_relative_score_threshold,
+            )
+            hybrid_module.KeywordSearchService.search = fake_keyword_search
+            hybrid_module.VectorSearchService.search = fake_vector_search
+            try:
+                service.settings.reranking_dynamic_top_k_enabled = True
+                service.settings.reranking_dynamic_min_results = 4
+                service.settings.reranking_dynamic_max_results = 5
+                service.settings.reranking_dynamic_relative_score_threshold = 0.65
+                results = service.search("concrete", top_k=1)
+            finally:
+                hybrid_module.KeywordSearchService.search = original_keyword
+                hybrid_module.VectorSearchService.search = original_vector
+                (
+                    service.settings.reranking_dynamic_top_k_enabled,
+                    service.settings.reranking_dynamic_min_results,
+                    service.settings.reranking_dynamic_max_results,
+                    service.settings.reranking_dynamic_relative_score_threshold,
+                ) = original_dynamic
+        finally:
+            reset_current_latency_trace(token)
+
+    assert [result.chunk_id for result in results] == [1, 2, 3, 4]
+    assert trace.values["retrieval_selected_count"] == 4
+
+
 def test_hybrid_search_quality_default_fetches_75_candidates(monkeypatch, tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
     observed_top_k: list[int] = []
