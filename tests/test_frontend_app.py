@@ -129,6 +129,14 @@ def test_frontend_static_assets_are_served() -> None:
     assert "appendAgentLiveStep" in response.text
     assert "liveAgentEventView" in response.text
     assert "agentThoughtHtml" in response.text
+    assert "retrievalTraceStepFromResult" in response.text
+    assert "retrieval_selected_chunk_ids" in response.text
+    assert "candidate_chunk_ids=" in response.text
+    assert "selected_sources=" in response.text
+    assert "rerank_cache_hit=" in response.text
+    assert "rerank_fallback=" in response.text
+    assert "dynamic_top_k=" in response.text
+    assert "semantic_cache_hit=true" in response.text
     assert "agent-thinking-status" in response.text
     assert "agent-thinking-timer" in response.text
     assert "startAgentThinkingTimer" in response.text
@@ -139,7 +147,10 @@ def test_frontend_static_assets_are_served() -> None:
     assert "agent_step" in response.text
     assert "tool_call_start" in response.text
     assert "tool_call_result" in response.text
-    assert "跳过重复工具调用" in response.text
+    assert "skippedToolSummary" in response.text
+    assert "已跳过：" in response.text
+    assert "原因：已有可用证据" in response.text
+    assert "原因：与已执行检索重复" in response.text
     assert "分析问题并选择检索工具" in response.text
     assert "step.name || step.tool_name || step.action" in response.text
     assert "userFacingAgentSummary" in response.text

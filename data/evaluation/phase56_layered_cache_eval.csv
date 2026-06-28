@@ -1,0 +1,6 @@
+scenario,run,elapsed_ms,retrieval_cache_hit,rerank_cache_hit,tool_result_cache_hit,vector_search_backend,source_count,citation_count,reranker_calls_cumulative,retrieval_query_present,retrieval_candidate_count,retrieval_candidate_ids_present,retrieval_selected_count,retrieval_selected_ids_present,retrieval_selected_preview_present,retrieval_dynamic_top_k_enabled,retrieval_selection_reason,reranking_fallback,reranking_fallback_used
+hybrid_search,cold,2706.115,False,False,False,faiss,1,0,1,True,5,True,1,True,True,False,rerank_scored,False,False
+hybrid_search,warm,2.125,True,True,False,not_run,1,0,1,True,5,True,1,True,True,False,rerank_cache_hit,False,False
+tool_hybrid_search_knowledge,cold,177.712,True,False,False,not_run,1,0,1,True,5,True,1,True,True,False,rerank_scored,False,False
+tool_hybrid_search_knowledge,warm,1.168,False,False,True,not_run,1,0,1,False,0,False,1,False,False,False,,False,False
+dynamic_top_k_rerank_threshold,single,2.864,False,False,False,faiss,4,0,0,True,6,True,4,True,True,True,rerank_scored,False,False

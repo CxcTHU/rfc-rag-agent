@@ -1,5 +1,58 @@
 # 架构说明
 
+## Phase 56 Architecture Delta: Layered Agent Cache
+
+Phase 56 keeps the default `tool_calling_agent` chain and provider topology unchanged, but adds cache layers around deterministic or semi-deterministic evidence work:
+
+```text
+standalone question
+-> tool_calling_agent
+-> tool planning model
+-> AgentToolbox read-only tool
+-> retrieval candidate cache
+   -> miss: keyword + pgvector HNSW / FAISS vector retrieval
+   -> hit: hydrate candidate ids from PostgreSQL
+-> rerank order cache
+   -> miss: BGE primary or GLM fallback reranker
+   -> hit: reuse cached chunk id order for same candidate hash/provider/model
+-> tool result cache
+   -> hit: hydrate read-only tool result ids from PostgreSQL
+-> final cited answer model
+```
+
+The cache storage contract is intentionally narrow: Redis stores derived `chunk_id` lists, ranks, safe scores, labels, TTLs, and short operational metadata. It does not become a second content store. Source text, captions, table content, image paths, and citation-location payloads are rehydrated from the database on each hit.
+
+Cache keys include a Phase 56 schema version, namespace, app version, database waterline fingerprint, normalized query, embedding provider/model/dimension, retrieval parameters, reranker provider/model/fallback lane, recall/top-k settings, and candidate id hash where needed. Tool-result cache identity uses a hashed stable user-question key when an Agent trace is active so repeated identical user questions survive normal planner query rewrites without storing the question text. BGE and GLM fallback rerank orders are separate identities and cannot reuse each other.
+
+`latency_trace` exposes safe observability fields:
+
+```text
+retrieval_cache_hit / backend / reason / saved_ms
+rerank_cache_hit / backend / reason / saved_ms
+tool_result_cache_hit / backend / reason / saved_ms
+retrieval_query
+retrieval_candidate_chunk_ids / candidate_count / candidate preview
+retrieval_selected_chunk_ids / selected_count / selected source title/source_type preview
+reranking_fallback / reranking_fallback_used / provider / model
+semantic_cache_hit
+```
+
+The frontend thinking panel renders these as a `retrieval_diagnostics` step so a user can distinguish "tool skipped" from "tool executed with a different evidence set." The diagnostics are ids, short titles, source types, scores, and flags only; they do not include full chunks or full answers.
+
+Dynamic rerank K remains off by default and is not domain-hard-coded:
+
+```text
+RERANKING_DYNAMIC_TOP_K_ENABLED=false
+RERANKING_DYNAMIC_MIN_RESULTS=4
+RERANKING_DYNAMIC_MAX_RESULTS=12
+RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65
+RERANKING_RECALL_K=75
+```
+
+When enabled, rerank selection keeps a baseline of `min_results`, then includes additional evidence whose score is at least `best_score * relative_threshold`, capped by `max_results`.
+
+Redis remains optional. If Redis is disabled, unavailable, stale, malformed, or missing hydrated ids, every layer fails open to the normal retrieval/rerank/tool path. The broad answer-level Semantic Cache remains disabled by default and is not required for Phase 56 speedups.
+
 ## Phase 55 Architecture Delta: Production Readiness Closure
 
 Phase 55 adds operational readiness around the existing production shape without changing the core RAG/Agent answer contract.
