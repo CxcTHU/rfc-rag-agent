@@ -1,5 +1,43 @@
 # RFC-RAG-Agent
 
+## Phase 56 Layered Agent Cache
+
+Current branch: `codex/phase-56-layered-agent-cache`.
+
+Phase 56 adds Redis-backed layered caching for the production `tool_calling_agent` evidence path without changing provider/model choices and without enabling broad answer-level Semantic Cache. The new layers cache derived ids/order/scores only and hydrate source content from PostgreSQL at request time:
+
+```text
+retrieval candidate cache -> merged chunk ids and safe scores
+rerank order cache -> reranked chunk id order keyed by provider/model/candidate hash
+tool result cache -> read-only tool result chunk ids for hybrid/search/table/figure tools, keyed by a hashed stable user-question key when an Agent trace is active
+```
+
+New implementation paths:
+
+```text
+app/services/cache/layered_cache.py
+app/frontend/static/app.js
+scripts/evaluate_phase56_layered_cache.py
+tests/test_phase56_layered_cache.py
+tests/test_hybrid_search.py
+docs/phase_reviews/phase-56.md
+```
+
+The default remains conservative:
+
+```text
+RETRIEVAL_CANDIDATE_CACHE_ENABLED=false
+RERANK_ORDER_CACHE_ENABLED=false
+TOOL_RESULT_CACHE_ENABLED=false
+SEMANTIC_CACHE_ENABLED=false
+RERANKING_DYNAMIC_TOP_K_ENABLED=false
+RERANKING_DYNAMIC_MIN_RESULTS=4
+RERANKING_DYNAMIC_MAX_RESULTS=12
+RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65
+```
+
+Local deterministic cold/warm evidence and the 30-case real-chain evaluator show warm repeated runs hitting retrieval/rerank/tool cache layers and skipping expensive work. The Agent thinking panel now includes safe retrieval diagnostics: actual retrieval query, candidate chunk ids, selected chunk ids, selected source title/source_type preview, rerank fallback/cache state, tool-result cache state, and `semantic_cache_hit`. Dynamic rerank K is score-driven and does not hard-code standards or other domain entities. Redis unavailable remains fail-open. No final answers, full chunks, provider raw responses, secrets, or restricted full text are written to evaluation CSVs or docs.
+
 ## Phase 55 Production Readiness Closure
 
 Current branch: `codex/phase-55-production-readiness`.

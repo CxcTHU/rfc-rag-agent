@@ -36,6 +36,7 @@ from app.services.generation.chat_model import (
 )
 from app.services.observability.latency_trace import (
     LatencyTrace,
+    bind_user_question_cache_key,
     reset_current_latency_trace,
     set_current_latency_trace,
 )
@@ -202,6 +203,7 @@ class ToolCallingAgentService:
         citation_repair_count = 0
         llm_call_count = 0
         latency_trace = LatencyTrace()
+        bind_user_question_cache_key(latency_trace, normalized_question)
         latency_token = set_current_latency_trace(latency_trace)
 
         try:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
@@ -35,6 +36,18 @@ class LatencyTrace:
         self.values.setdefault("query_embedding_cache_hits", 0)
         self.values.setdefault("query_embedding_cache_misses", 0)
         self.values.setdefault("query_embedding_cache_backend", "memory")
+        self.values.setdefault("retrieval_cache_hit", False)
+        self.values.setdefault("retrieval_cache_backend", "disabled")
+        self.values.setdefault("retrieval_cache_reason", "not_checked")
+        self.values.setdefault("retrieval_cache_saved_ms", 0.0)
+        self.values.setdefault("rerank_cache_hit", False)
+        self.values.setdefault("rerank_cache_backend", "disabled")
+        self.values.setdefault("rerank_cache_reason", "not_checked")
+        self.values.setdefault("rerank_cache_saved_ms", 0.0)
+        self.values.setdefault("tool_result_cache_hit", False)
+        self.values.setdefault("tool_result_cache_backend", "disabled")
+        self.values.setdefault("tool_result_cache_reason", "not_checked")
+        self.values.setdefault("tool_result_cache_saved_ms", 0.0)
         self.values.setdefault("vector_search_backend", "not_run")
         self.values.setdefault("planner_model", "deterministic")
         self.values.setdefault("retrieval_strategy", "none")
@@ -65,6 +78,15 @@ class LatencyTrace:
         self.values["tool_call_count"] = tool_call_count
         self.values["time_to_final_ms"] = round((time.perf_counter() - self.started_at) * 1000.0, 3)
         return dict(self.values)
+
+
+def stable_text_cache_key(text: str) -> str:
+    normalized = " ".join((text or "").strip().split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def bind_user_question_cache_key(trace: LatencyTrace, question: str) -> None:
+    trace.set_value("user_question_cache_key", stable_text_cache_key(question))
 
 
 _CURRENT_LATENCY_TRACE: ContextVar[LatencyTrace | None] = ContextVar(

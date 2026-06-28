@@ -7,6 +7,12 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.services.cache.layered_cache import (
+    base_cache_identity,
+    get_configured_layered_cache,
+    hydrate_chunk_rows,
+    normalized_query_identity,
+)
 from app.db.models import Chunk, Document, Source
 from app.db.repositories import SourceRepository
 from app.services.agent.image_analysis import UserImageAnalyzer, build_concise_image_answer
@@ -16,6 +22,7 @@ from app.services.generation.chat_model import ChatModelProvider
 from app.services.generation.prompt_builder import ContextSource
 from app.services.generation.vision_model import create_vision_model_provider
 from app.services.graphrag.graph_search import GraphEnhancedSearchService
+from app.services.observability.latency_trace import get_current_latency_trace
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.citation_locator import CitationLocator
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
@@ -263,6 +270,9 @@ class AgentToolbox:
 
     def search_knowledge(self, query: str, top_k: int = 5) -> AgentToolResult:
         tool_name = "search_knowledge"
+        cached = self._lookup_tool_result_cache(tool_name, query, top_k)
+        if cached is not None:
+            return cached
         try:
             results = KeywordSearchService(self.db).search(query=query, top_k=top_k)
         except ValueError as exc:
@@ -276,7 +286,7 @@ class AgentToolbox:
             sources_from_search_results(search_results),
             self.db,
         )
-        return AgentToolResult(
+        tool_result = AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
                 tool_name=tool_name,
@@ -289,6 +299,8 @@ class AgentToolbox:
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No keyword results were found.",
         )
+        self._store_tool_result_cache(tool_name, query, top_k, tool_result)
+        return tool_result
 
     def hybrid_search_knowledge(
         self,
@@ -297,6 +309,10 @@ class AgentToolbox:
         progress_callback: Callable[[str], None] | None = None,
     ) -> AgentToolResult:
         tool_name = "hybrid_search_knowledge"
+        if progress_callback is None:
+            cached = self._lookup_tool_result_cache(tool_name, query, top_k)
+            if cached is not None:
+                return cached
         try:
             results = HybridSearchService(
                 self.db,
@@ -317,12 +333,16 @@ class AgentToolbox:
             sources_from_search_results(search_results),
             self.db,
         )
-        return AgentToolResult(
+        tool_result = AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
                 tool_name=tool_name,
                 input_summary=summarize_input(query, top_k),
-                output_summary=f"returned {len(search_results)} hybrid results",
+                output_summary=hybrid_tool_output_summary(
+                    query=query,
+                    requested_top_k=top_k,
+                    result_count=len(search_results),
+                ),
                 succeeded=True,
             ),
             search_results=search_results,
@@ -330,6 +350,9 @@ class AgentToolbox:
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No hybrid results were found.",
         )
+        if progress_callback is None:
+            self._store_tool_result_cache(tool_name, query, top_k, tool_result)
+        return tool_result
 
     def search_graph_knowledge(self, query: str, top_k: int = 5) -> AgentToolResult:
         tool_name = "search_graph_knowledge"
@@ -380,6 +403,9 @@ class AgentToolbox:
             return failed_tool_result(tool_name, query, ValueError("query must not be empty"))
         if top_k <= 0:
             return failed_tool_result(tool_name, query, ValueError("top_k must be greater than 0"))
+        cached = self._lookup_tool_result_cache(tool_name, normalized_query, top_k)
+        if cached is not None:
+            return cached
         like_terms = table_query_terms(normalized_query)
         vector_rows: list[tuple[Chunk, Document, float]] = []
         vector_error: str | None = None
@@ -454,7 +480,7 @@ class AgentToolbox:
             sources_from_search_results(search_results),
             self.db,
         )
-        return AgentToolResult(
+        tool_result = AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
                 tool_name=tool_name,
@@ -472,6 +498,8 @@ class AgentToolbox:
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No matching table chunks were found.",
         )
+        self._store_tool_result_cache(tool_name, normalized_query, top_k, tool_result)
+        return tool_result
 
     def search_figures(self, query: str, top_k: int = 4) -> AgentToolResult:
         tool_name = "search_figures"
@@ -492,6 +520,9 @@ class AgentToolbox:
                 refused=True,
                 refusal_reason="The query does not request figure evidence.",
             )
+        cached = self._lookup_tool_result_cache(tool_name, normalized_query, top_k)
+        if cached is not None:
+            return cached
 
         try:
             query_embedding = get_query_embedding_cache().get_or_embed(
@@ -588,7 +619,7 @@ class AgentToolbox:
             sources_from_search_results(search_results),
             self.db,
         )
-        return AgentToolResult(
+        tool_result = AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
                 tool_name=tool_name,
@@ -602,6 +633,8 @@ class AgentToolbox:
             refused=not bool(figure_results),
             refusal_reason=None if figure_results else "No relevant figure results were found.",
         )
+        self._store_tool_result_cache(tool_name, normalized_query, top_k, tool_result)
+        return tool_result
 
     def analyze_user_image(
         self,
@@ -746,6 +779,127 @@ class AgentToolbox:
             )
         )
 
+    def _tool_cache_identity(self, tool_name: str, query: str, top_k: int) -> dict[str, object]:
+        trace = get_current_latency_trace()
+        stable_question_key = ""
+        if trace is not None and isinstance(trace.values.get("user_question_cache_key"), str):
+            stable_question_key = str(trace.values["user_question_cache_key"])
+        identity = base_cache_identity(self.db)
+        query_mode = "user_question" if stable_question_key else "tool_query"
+        identity.update(
+            {
+                "layer": "tool",
+                "tool_name": tool_name,
+                "query_mode": query_mode,
+                "query": stable_question_key or normalized_query_identity(query),
+                "top_k": "dynamic" if stable_question_key else top_k,
+                "embedding_provider": self.embedding_provider.provider_name,
+                "embedding_model": self.embedding_provider.model_name,
+                "embedding_dimension": self.embedding_provider.dimension,
+                "reranking_provider": get_settings().reranking_provider,
+                "reranking_model": get_settings().reranking_model_name,
+                "reranking_recall_k": get_settings().reranking_recall_k,
+                "graph_path": get_settings().graphrag_graph_path if tool_name == "search_graph_knowledge" else "",
+            }
+        )
+        return identity
+
+    def _lookup_tool_result_cache(
+        self,
+        tool_name: str,
+        query: str,
+        top_k: int,
+    ) -> AgentToolResult | None:
+        if tool_name not in {"search_knowledge", "hybrid_search_knowledge", "search_tables", "search_figures"}:
+            return None
+        cache = get_configured_layered_cache("tool")
+        if cache is None:
+            return None
+        lookup = cache.lookup(self._tool_cache_identity(tool_name, query, top_k))
+        if not lookup.hit or lookup.payload is None:
+            return None
+        payload = lookup.payload.get("payload", {})
+        chunk_ids = payload.get("chunk_ids")
+        if not isinstance(chunk_ids, list) or not all(isinstance(chunk_id, int) for chunk_id in chunk_ids):
+            return None
+        if len(chunk_ids) < top_k:
+            return None
+        chunk_ids = chunk_ids[:top_k]
+        scores = payload.get("scores")
+        score_by_chunk_id: dict[int, float] = {}
+        if isinstance(scores, dict):
+            for raw_chunk_id, raw_score in scores.items():
+                try:
+                    score_by_chunk_id[int(raw_chunk_id)] = float(raw_score)
+                except (TypeError, ValueError):
+                    continue
+        hydrated = hydrate_chunk_rows(self.db, chunk_ids)
+        if len(hydrated) != len(chunk_ids):
+            return None
+        search_results = _enrich_results_with_citation_location(
+            [
+                search_item_from_chunk(
+                    chunk=chunk,
+                    document=document,
+                    score=score_by_chunk_id.get(chunk.id, 0.0),
+                )
+                for chunk, document in hydrated
+            ],
+            self.db,
+        )
+        sources = _enrich_sources_with_citation_location(
+            sources_from_search_results(search_results),
+            self.db,
+        )
+        figure_results = [
+            figure_result_from_search_item(item)
+            for item in search_results
+            if item.chunk_type == "image_description" and item.image_url and item.source_image_path
+        ]
+        refused = bool(payload.get("refused")) and not search_results
+        refusal_reason = payload.get("refusal_reason") if isinstance(payload.get("refusal_reason"), str) else None
+        return AgentToolResult(
+            tool_name=tool_name,
+            call=AgentToolCallRecord(
+                tool_name=tool_name,
+                input_summary=summarize_input(query, top_k),
+                output_summary=f"cache hit; returned {len(search_results)} {tool_name} results",
+                succeeded=True,
+            ),
+            search_results=search_results,
+            figure_results=figure_results,
+            sources=sources,
+            refused=refused,
+            refusal_reason=refusal_reason if refused else None,
+        )
+
+    def _store_tool_result_cache(
+        self,
+        tool_name: str,
+        query: str,
+        top_k: int,
+        result: AgentToolResult,
+    ) -> None:
+        if tool_name not in {"search_knowledge", "hybrid_search_knowledge", "search_tables", "search_figures"}:
+            return
+        cache = get_configured_layered_cache("tool")
+        if cache is None:
+            return
+        chunk_ids = [item.chunk_id for item in result.search_results]
+        cache.store(
+            self._tool_cache_identity(tool_name, query, top_k),
+            {
+                "chunk_ids": chunk_ids,
+                "stored_top_k": top_k,
+                "scores": {
+                    str(item.chunk_id): round(float(item.score), 8)
+                    for item in result.search_results
+                },
+                "refused": result.refused,
+                "refusal_reason": result.refusal_reason,
+            },
+        )
+
     def list_sources(
         self,
         status: str | None = None,
@@ -888,6 +1042,46 @@ def search_item_from_table_chunk(
         chunk_type="table",
         page_number=chunk.page_number,
         table_content=chunk.content,
+    )
+
+
+def search_item_from_chunk(
+    *,
+    chunk: Chunk,
+    document: Document,
+    score: float,
+) -> AgentSearchItem:
+    return AgentSearchItem(
+        document_id=document.id,
+        document_title=document.title,
+        source_type=document.source_type,
+        source_path=document.source_path,
+        file_name=document.file_name,
+        chunk_id=chunk.id,
+        chunk_index=chunk.chunk_index,
+        content=chunk.content,
+        heading_path=chunk.heading_path,
+        score=score,
+        chunk_type=chunk.chunk_type,
+        source_image_path=chunk.source_image_path,
+        image_url=image_url_from_source_image_path(chunk.source_image_path),
+        caption=chunk.caption,
+        page_number=chunk.page_number or page_number_from_source_image_path(chunk.source_image_path),
+        table_content=chunk.content if chunk.chunk_type == "table" else None,
+    )
+
+
+def figure_result_from_search_item(item: AgentSearchItem) -> FigureSearchResult:
+    return FigureSearchResult(
+        image_url=item.image_url or "",
+        caption=item.caption,
+        page_number=item.page_number,
+        document_title=item.document_title,
+        relevance_score=item.score,
+        description_snippet=truncate_text(item.content, FIGURE_DESCRIPTION_SNIPPET_CHARS),
+        document_id=item.document_id,
+        chunk_id=item.chunk_id,
+        source_image_path=item.source_image_path or "",
     )
 
 
@@ -1079,6 +1273,50 @@ def image_file_is_usable(source_image_path: str | None) -> bool:
 
 def summarize_input(query: str, top_k: int) -> str:
     return f"query={truncate_text(query)}; top_k={top_k}"
+
+
+def hybrid_tool_output_summary(
+    *,
+    query: str,
+    requested_top_k: int,
+    result_count: int,
+) -> str:
+    trace = get_current_latency_trace()
+    if trace is None:
+        return f"returned {result_count} hybrid results"
+    selected_ids = trace.values.get("retrieval_selected_chunk_ids", [])
+    candidate_count = trace.values.get("retrieval_candidate_count", "")
+    dynamic_enabled = trace.values.get("retrieval_dynamic_top_k_enabled", False)
+    selection_reason = trace.values.get("retrieval_selection_reason", "")
+    source_types = []
+    selected_sources = []
+    selected_preview = trace.values.get("retrieval_selected_preview", [])
+    if isinstance(selected_preview, list):
+        for item in selected_preview:
+            if isinstance(item, dict):
+                source_type = item.get("source_type")
+                if isinstance(source_type, str) and source_type not in source_types:
+                    source_types.append(source_type)
+                chunk_id = item.get("chunk_id")
+                title = item.get("title")
+                if isinstance(chunk_id, int) and isinstance(title, str):
+                    selected_sources.append(
+                        f"{chunk_id}:{source_type or ''}:{truncate_text(title, 48)}"
+                    )
+    selected_text = ",".join(str(chunk_id) for chunk_id in selected_ids[:12]) if isinstance(selected_ids, list) else ""
+    source_type_text = ",".join(source_types[:8])
+    selected_source_text = "|".join(selected_sources[:6])
+    return (
+        f"returned {result_count} hybrid results; "
+        f"query={truncate_text(query, 80)}; "
+        f"requested_top_k={requested_top_k}; "
+        f"candidate_count={candidate_count}; "
+        f"selected_chunk_ids={selected_text}; "
+        f"selected_source_types={source_type_text}; "
+        f"selected_sources={selected_source_text}; "
+        f"dynamic_top_k={str(bool(dynamic_enabled)).lower()}; "
+        f"selection_reason={selection_reason}"
+    )
 
 
 def truncate_text(text: str, limit: int = 120) -> str:

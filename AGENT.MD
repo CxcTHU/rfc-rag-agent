@@ -1,3 +1,72 @@
+# 阶段 56 分层语义缓存与 Agent 延迟优化最新交班状态（2026-06-28，用户人工核验 PASS 后提交中）
+
+当前分支：`codex/phase-56-layered-agent-cache`。
+
+阶段 56 已完成人工核验 PASS，用户已授权提交阶段 56 整体开发、创建 `phase-56-complete` tag、推送 GitHub 并合并。目标是让重复 standalone Agent 问题命中 retrieval/rerank/tool-result 分层缓存，减少昂贵证据链路耗时；不降级 provider/model，不关闭 tool calling，不启用广义最终答案 Semantic Cache。
+
+关键新增：
+
+```text
+app/services/cache/layered_cache.py
+app/services/retrieval/hybrid_search.py -> retrieval candidate cache + rerank order cache
+app/services/agent/tools.py -> read-only tool result cache
+app/services/observability/latency_trace.py -> cache hit/backend/reason/saved_ms
+app/frontend/static/app.js -> skipped tool labels + retrieval diagnostics
+scripts/evaluate_phase56_layered_cache.py
+scripts/evaluate_phase56_real_chain_cache.py
+tests/test_phase56_layered_cache.py
+docs/phase_reviews/phase-56.md
+data/evaluation/phase56_layered_cache_eval.csv
+data/evaluation/phase56_real_chain_cache_eval.csv
+```
+
+默认开关保持保守：
+
+```text
+RETRIEVAL_CANDIDATE_CACHE_ENABLED=false
+RERANK_ORDER_CACHE_ENABLED=false
+TOOL_RESULT_CACHE_ENABLED=false
+SEMANTIC_CACHE_ENABLED=false
+RERANKING_DYNAMIC_TOP_K_ENABLED=false
+RERANKING_DYNAMIC_MIN_RESULTS=4
+RERANKING_DYNAMIC_MAX_RESULTS=12
+RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65
+```
+
+缓存只存派生 `chunk_id`、排序、分数和安全标签，请求时从 PostgreSQL hydrate 内容；BGE primary 与 GLM fallback rerank cache 通过 provider/model/fallback lane 和 candidate hash 分离；Redis 不可用或缓存损坏时 fail-open。真实 30-case 扩展评测曾暴露 exact planner-query tool cache key 因 planner 改写 query 波动而 `warm_cache_hit_rows=0`，已改为在 Agent trace 中绑定哈希化稳定用户问题 key，tool-result cache 使用该稳定 key，同时 retrieval/rerank 下层 cache 仍保持 exact/candidate/provider/corpus 边界；该修复不硬编码标准、GB/T、抗压强度或任何领域实体。
+Agent 思考过程现在会显示安全的 `retrieval_diagnostics`：实际检索 query、candidate chunk ids、selected chunk ids、selected source title/source_type 预览、rerank fallback/cache 状态、tool-result cache 状态和 `semantic_cache_hit`，但不显示完整 chunk、完整 answer、provider raw response、hidden reasoning、secret、token、受限全文或私有日志。动态 K 只按 reranker 分数和配置筛选，不硬编码标准或领域实体。
+
+当前验证：
+
+```text
+python -m py_compile app/services/cache/layered_cache.py app/services/retrieval/hybrid_search.py app/services/agent/tools.py app/services/observability/latency_trace.py app/core/config.py -> passed
+python -m pytest tests/test_hybrid_search.py tests/test_tool_calling_agent_service.py -q -> 31 passed
+python -m pytest tests/test_phase56_layered_cache.py -q -> 4 passed
+python -m pytest tests/test_phase56_layered_cache.py tests/test_agent_tools.py tests/test_tool_calling_agent_service.py -q -> 34 passed
+python -m pytest tests/test_hybrid_search.py tests/test_agent_tools.py tests/test_frontend_app.py tests/test_phase56_layered_cache.py -q -> 43 passed
+python scripts/evaluate_phase56_layered_cache.py --out data/evaluation/phase56_layered_cache_eval.csv -> rows=5 warm_hit_rows=2
+python scripts/evaluate_phase56_real_chain_cache.py --base-url http://127.0.0.1:8000 --out data/evaluation/phase56_real_chain_cache_eval.csv --top-k 8 --max-tool-calls 5 --timeout-seconds 180 --limit 30 -> cases=30 rows=60 completed=60 warm_cache_hit_rows=30 warm_speedup_rows=27 diagnostic_rows=31 median_cold_ms=31029.751 median_warm_ms=18677.037
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m pytest tests/test_phase56_layered_cache.py tests/test_hybrid_search.py tests/test_tool_calling_agent_service.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_reranking.py -q -> 93 passed
+python -m pytest -q -> 1283 passed, 1 skipped
+git diff --check -> no whitespace errors; CRLF warnings only
+targeted sensitive scan -> only pre-existing .env.dev.example placeholder passwords matched; no real secrets or Phase 56 payload leaks
+```
+
+30-case 真实链路有效评测结论：
+
+```text
+cases=30 rows=60 completed=60
+warm_tool_result_cache_hit_rows=30/30
+warm_speedup_rows=27/30
+median_cold_ms=31029.751
+median_warm_ms=18677.037
+```
+
+该评测使用 Redis、fresh namespace、`SEMANTIC_CACHE_ENABLED=false`，因此 warm 命中来自分层 tool-result/retrieval/rerank cache，而不是最终答案 Semantic Cache。最终回答 LLM 仍实时生成，所以 warm 端到端仍是秒级，不是 fixture 级毫秒。
+
+提交收口仍必须遵守：不得把 `.env`、`.env.prod`、数据库密码、JWT secret、Redis 密码、API key、Bearer token、provider raw response、raw answer text、`raw_response`、`reasoning_content`、hidden thought、完整 chunk、受限全文、私有服务日志或长期用户画像写入 Git/CSV/文档/测试/Obsidian。
+
 # 阶段 55 生产上线前部署闭环最新交班状态（2026-06-26）
 
 当前分支：`codex/phase-55-production-readiness`。
