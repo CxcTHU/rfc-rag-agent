@@ -2,12 +2,12 @@
 
 当前分支：`codex/phase-57-multichannel-hybrid-retrieval`。
 
-阶段 57 已完成人工核验 PASS，用户已授权提交阶段 57 整体开发、创建 `phase-57-complete` tag、推送 GitHub 并合并。阶段 57 保持默认 `tool_calling_agent` 工具面稳定，没有把 `search_graph_knowledge` 暴露给默认 tool-calling 模型；核心改动是把 `hybrid_search_knowledge` 升级为默认关闭的多通道 workflow kernel。
+阶段 57 已完成人工核验 PASS，用户已授权提交阶段 57 整体开发、创建 `phase-57-complete` tag、推送 GitHub 并合并。阶段 57 保持默认 `tool_calling_agent` 工具面稳定，没有把 `search_graph_knowledge` 暴露给默认 tool-calling 模型；人工核验后，Phase 56 分层 cache / dynamic K 与 Phase 57 多通道 `hybrid_search_knowledge` kernel 已接入默认链路。
 
 关键新增：
 
 ```text
-app/core/config.py -> HYBRID_MULTICHANNEL_* 默认关闭开关
+app/core/config.py -> HYBRID_MULTICHANNEL_* 默认启用开关
 app/services/retrieval/hybrid_search.py -> keyword/vector + gated graph/table_text/figure_caption channels
 app/services/observability/latency_trace.py -> channel diagnostics defaults
 tests/test_hybrid_search.py -> Phase 57 channel gate/fusion diagnostics tests
@@ -17,16 +17,21 @@ docs/stage57_multichannel_hybrid_retrieval_design.md
 docs/phase_reviews/phase-57.md
 ```
 
-默认开关保持保守：
+默认链路当前启用：
 
 ```text
-HYBRID_MULTICHANNEL_ENABLED=false
-HYBRID_GRAPH_CHANNEL_ENABLED=false
-HYBRID_TABLE_TEXT_CHANNEL_ENABLED=false
-HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=false
+HYBRID_MULTICHANNEL_ENABLED=true
+HYBRID_GRAPH_CHANNEL_ENABLED=true
+HYBRID_TABLE_TEXT_CHANNEL_ENABLED=true
+HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=true
+RETRIEVAL_CANDIDATE_CACHE_ENABLED=true
+RERANK_ORDER_CACHE_ENABLED=true
+TOOL_RESULT_CACHE_ENABLED=true
+RERANKING_DYNAMIC_TOP_K_ENABLED=true
+SEMANTIC_CACHE_ENABLED=false
 ```
 
-人工核验时使用 8000 端口启用了 Phase 57 多通道、Phase 56 分层 cache 和 dynamic K；核验 PASS 后未保留 8000 监听服务。
+`search_figures` 继续作为默认 `tool_calling_agent` 并列高层工具，明确图片/曲线/图示请求由它负责；`search_tables` 继续负责明确原始表格请求；graph 能力通过 `hybrid_search_knowledge` 内部 graph channel 进入默认链路，不暴露并列 `search_graph_knowledge`。
 
 当前验证：
 
@@ -86,14 +91,14 @@ data/evaluation/phase56_layered_cache_eval.csv
 data/evaluation/phase56_real_chain_cache_eval.csv
 ```
 
-默认开关保持保守：
+Phase 56 实现时默认开关保持保守；Phase 57 人工核验后，证据链路 cache 与 dynamic K 已接入默认链路：
 
 ```text
-RETRIEVAL_CANDIDATE_CACHE_ENABLED=false
-RERANK_ORDER_CACHE_ENABLED=false
-TOOL_RESULT_CACHE_ENABLED=false
+RETRIEVAL_CANDIDATE_CACHE_ENABLED=true
+RERANK_ORDER_CACHE_ENABLED=true
+TOOL_RESULT_CACHE_ENABLED=true
 SEMANTIC_CACHE_ENABLED=false
-RERANKING_DYNAMIC_TOP_K_ENABLED=false
+RERANKING_DYNAMIC_TOP_K_ENABLED=true
 RERANKING_DYNAMIC_MIN_RESULTS=4
 RERANKING_DYNAMIC_MAX_RESULTS=12
 RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65

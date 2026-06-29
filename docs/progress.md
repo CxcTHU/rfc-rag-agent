@@ -4,22 +4,23 @@
 
 Current branch: `codex/phase-57-multichannel-hybrid-retrieval`.
 
-Phase 57 implements the agreed `Agent shell + Workflow kernel` direction. The default `tool_calling_agent` still exposes the same high-level tools; `search_graph_knowledge` is not added as a parallel default tool. Instead, the retrieval kernel behind `hybrid_search_knowledge` now has default-off switches for gated multi-channel candidates:
+Phase 57 implements the agreed `Agent shell + Workflow kernel` direction. The default `tool_calling_agent` still exposes the same high-level tools; `search_graph_knowledge` is not added as a parallel default tool. Instead, graph evidence enters through the `hybrid_search_knowledge` graph channel. After human verification, the retrieval kernel defaults now enable gated multi-channel candidates:
 
 ```text
-HYBRID_MULTICHANNEL_ENABLED=false
-HYBRID_GRAPH_CHANNEL_ENABLED=false
-HYBRID_TABLE_TEXT_CHANNEL_ENABLED=false
-HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=false
+HYBRID_MULTICHANNEL_ENABLED=true
+HYBRID_GRAPH_CHANNEL_ENABLED=true
+HYBRID_TABLE_TEXT_CHANNEL_ENABLED=true
+HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=true
 ```
 
 Implemented:
 
 ```text
 docs/stage57_multichannel_hybrid_retrieval_design.md
-app/core/config.py -> default-off Phase 57 switches
+app/core/config.py -> Phase 57 multi-channel switches enabled by default after human verification
 app/services/retrieval/hybrid_search.py -> optional graph/table_text/figure_caption channels with rank fusion
 app/services/observability/latency_trace.py -> channel diagnostics defaults
+app/frontend/static/app.js -> default Agent max_tool_calls=5 for verified default-chain behavior
 scripts/evaluate_phase57_default_chain.py -> 30-case sanitized default-chain evaluator, dry-run by default
 tests/test_hybrid_search.py -> graph/table/figure channel tests
 data/evaluation/phase57_default_chain_eval.csv -> real default-chain rows, sanitized metadata only
@@ -52,12 +53,12 @@ Manual verification found one Phase 58 input: follow-up image requests load conv
 
 Current branch: `codex/phase-56-layered-agent-cache`.
 
-Phase 56 adds layered Redis caches for repeated standalone Agent evidence work without downgrading providers, disabling tool calling, or enabling broad answer-level Semantic Cache. The default production switches remain off until human verification:
+Phase 56 adds layered Redis caches for repeated standalone Agent evidence work without downgrading providers, disabling tool calling, or enabling broad answer-level Semantic Cache. These switches were introduced default-off; after Phase 57 human verification, the evidence-path caches are enabled by default while broad answer-level Semantic Cache remains off:
 
 ```text
-RETRIEVAL_CANDIDATE_CACHE_ENABLED=false
-RERANK_ORDER_CACHE_ENABLED=false
-TOOL_RESULT_CACHE_ENABLED=false
+RETRIEVAL_CANDIDATE_CACHE_ENABLED=true
+RERANK_ORDER_CACHE_ENABLED=true
+TOOL_RESULT_CACHE_ENABLED=true
 SEMANTIC_CACHE_ENABLED=false
 ```
 

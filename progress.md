@@ -132,7 +132,7 @@ Phase 57B design doc added: docs/stage57_multichannel_hybrid_retrieval_design.md
 First implementation pass:
 
 ```text
-app/core/config.py -> default-off HYBRID_* multichannel switches
+app/core/config.py -> HYBRID_* multichannel switches enabled in the default chain after human verification
 app/services/retrieval/hybrid_search.py -> optional graph/table_text/figure_caption channels
 app/services/observability/latency_trace.py -> channel diagnostics defaults
 tests/test_hybrid_search.py -> Phase 57 graph/table/figure channel tests

@@ -20,13 +20,13 @@ The LLM still chooses high-level actions. It does not choose whether vector, key
 
 ## Implementation
 
-New default-off configuration:
+Configuration after user human verification:
 
 ```text
-HYBRID_MULTICHANNEL_ENABLED=false
-HYBRID_GRAPH_CHANNEL_ENABLED=false
-HYBRID_TABLE_TEXT_CHANNEL_ENABLED=false
-HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=false
+HYBRID_MULTICHANNEL_ENABLED=true
+HYBRID_GRAPH_CHANNEL_ENABLED=true
+HYBRID_TABLE_TEXT_CHANNEL_ENABLED=true
+HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=true
 HYBRID_CHANNEL_RANK_CONSTANT=60
 HYBRID_GRAPH_CHANNEL_WEIGHT=1.1
 HYBRID_TABLE_TEXT_CHANNEL_WEIGHT=0.9
@@ -34,7 +34,7 @@ HYBRID_FIGURE_CAPTION_CHANNEL_WEIGHT=0.8
 HYBRID_GRAPH_MAX_MATCHES=75
 ```
 
-When enabled, `HybridSearchService` builds a channel plan:
+`HybridSearchService` builds a channel plan:
 
 ```text
 keyword + vector backbone

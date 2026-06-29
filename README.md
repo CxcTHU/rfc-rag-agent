@@ -4,18 +4,18 @@
 
 Current branch: `codex/phase-57-multichannel-hybrid-retrieval`.
 
-Phase 57 keeps the default `tool_calling_agent` tool surface stable and upgrades the retrieval workflow behind `hybrid_search_knowledge`. The new multi-channel path is default-off and can add gated `graph`, `table_text`, and `figure_caption` candidate channels to the existing keyword/vector backbone before dedupe, rank fusion, reranking, dynamic K, and cited answer generation.
+Phase 57 keeps the default `tool_calling_agent` tool surface stable and upgrades the retrieval workflow behind `hybrid_search_knowledge`. After user human verification, the multi-channel path is enabled by default and can add gated `graph`, `table_text`, and `figure_caption` candidate channels to the existing keyword/vector backbone before dedupe, rank fusion, reranking, dynamic K, and cited answer generation.
 
-New default-off switches:
+Default switches after verification:
 
 ```text
-HYBRID_MULTICHANNEL_ENABLED=false
-HYBRID_GRAPH_CHANNEL_ENABLED=false
-HYBRID_TABLE_TEXT_CHANNEL_ENABLED=false
-HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=false
+HYBRID_MULTICHANNEL_ENABLED=true
+HYBRID_GRAPH_CHANNEL_ENABLED=true
+HYBRID_TABLE_TEXT_CHANNEL_ENABLED=true
+HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=true
 ```
 
-`search_tables` remains the explicit raw-table tool and `search_figures` remains the explicit image/figure asset tool. The figure-caption channel only contributes text evidence. Phase 57 also adds `scripts/evaluate_phase57_default_chain.py`, a sanitized 30-case default-chain evaluator that is dry-run by default and calls real `/agent/query` only with `--execute`.
+`search_tables` remains the explicit raw-table tool and `search_figures` remains the explicit image/figure asset tool. The figure-caption channel only contributes text evidence. `search_graph_knowledge` is still not exposed as a parallel default tool; graph evidence enters through the `hybrid_search_knowledge` graph channel. Phase 57 also adds `scripts/evaluate_phase57_default_chain.py`, a sanitized 30-case default-chain evaluator that is dry-run by default and calls real `/agent/query` only with `--execute`.
 
 Latest local Phase 57 real-chain evidence:
 
@@ -49,14 +49,14 @@ tests/test_hybrid_search.py
 docs/phase_reviews/phase-56.md
 ```
 
-The default remains conservative:
+After human verification, the evidence-path defaults are enabled while broad answer-level semantic cache remains off:
 
 ```text
-RETRIEVAL_CANDIDATE_CACHE_ENABLED=false
-RERANK_ORDER_CACHE_ENABLED=false
-TOOL_RESULT_CACHE_ENABLED=false
+RETRIEVAL_CANDIDATE_CACHE_ENABLED=true
+RERANK_ORDER_CACHE_ENABLED=true
+TOOL_RESULT_CACHE_ENABLED=true
 SEMANTIC_CACHE_ENABLED=false
-RERANKING_DYNAMIC_TOP_K_ENABLED=false
+RERANKING_DYNAMIC_TOP_K_ENABLED=true
 RERANKING_DYNAMIC_MIN_RESULTS=4
 RERANKING_DYNAMIC_MAX_RESULTS=12
 RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65
