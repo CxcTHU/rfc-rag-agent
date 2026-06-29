@@ -1,22 +1,16 @@
-# Phase 56 Progress: layered semantic cache and Agent latency reduction
+# Phase 57 Progress: multi-channel hybrid retrieval and real default-chain evaluation
 
-## 2026-06-27 Planning Draft
+## 2026-06-28 Planning Draft
 
-User requested reading the project agent rules and the local Obsidian goal prompt template, then preparing the three Planning with Files documents and the Phase 56 goal prompt.
-
-Completed context checks:
+User agreed with the recommended architecture:
 
 ```text
-git status -sb -> ## main...origin/main
-git log --oneline -5:
-  3e27351e Add GLM reranker fallback
-  ecafef8a Document provider egress forwarder
-  5a444375 Merge pull request #23 from CxcTHU/codex/phase-55-production-readiness
-  ede92302 Complete phase 55 production readiness closure
-  99ac70d8 Merge pull request #22 from CxcTHU/codex/phase-54-graphrag-evaluation
+Agent shell + Workflow kernel
 ```
 
-Files read or sampled for planning:
+The next stage should not first expose `search_graph_knowledge` as a parallel default tool. Instead, Phase 57 should upgrade `hybrid_search_knowledge` / `HybridSearchService` into a unified multi-channel candidate workflow with gated graph, table-text, and figure-caption channels.
+
+Context already checked in this session:
 
 ```text
 AGENT.MD
@@ -27,25 +21,48 @@ docs/data_sources.md
 task_plan.md
 findings.md
 progress.md
-obsidian-vault/模板/goal prompt.md
-docs/stage52_goal_prompt.md
-docs/stage54_graphrag_evaluation_prompt.md
-app/core/config.py
-app/services/cache/semantic_cache.py
-app/services/cache/embedding_cache.py
-app/services/cache/redis_client.py
-app/services/agent/tool_calling_service.py
-app/services/agent/tools.py
-app/services/retrieval/hybrid_search.py
+git status -sb
+git log --oneline -5
+ToolCallingAgentService
+AgentToolbox
+HybridSearchService
+GraphEnhancedSearchService
+table and figure search code paths
 ```
 
-Planning conclusions:
+Observed git state:
 
-- Phase 55 is merged into `main`; current worktree started clean.
-- The observed repeated-question latency is not fixed by the existing answer-level Semantic Cache.
-- Current production still runs the real `tool_calling_agent` path: model tool planning, read-only tool execution, hybrid retrieval, pgvector/HNSW or FAISS vector search, BGE/GLM rerank, then final cited answer generation.
-- Redis is already present and should be used for Phase 56, but Redis must remain optional and fail-open.
-- Phase 56 should implement layered cache: retrieval candidate cache, rerank order cache, tool-result cache, and only guarded answer-level cache policy.
+```text
+current branch -> codex/phase-56-layered-agent-cache
+latest commit -> 31c3a949 Complete phase 56 layered agent cache
+recent commits include Phase 55 production readiness and Phase 56 layered cache work
+```
+
+Important code observations:
+
+```text
+default tool_calling_agent tools:
+  search_knowledge
+  hybrid_search_knowledge
+  search_figures
+  search_tables
+
+search_graph_knowledge:
+  exists in AgentToolbox
+  used by ReAct/LangGraph
+  not exposed to default ToolCallingAgentService
+
+HybridSearchService:
+  keyword + vector search
+  retrieval candidate cache
+  rerank order cache
+  BGE primary / GLM fallback identity
+  dynamic K
+  diagnostics
+
+GraphEnhancedSearchService:
+  separate graph-enhanced retrieval chain
+```
 
 Files updated by this planning pass:
 
@@ -53,136 +70,122 @@ Files updated by this planning pass:
 task_plan.md
 findings.md
 progress.md
-docs/stage56_layered_agent_cache_goal_prompt.md
+docs/stage57_multichannel_hybrid_retrieval_goal_prompt.md
 ```
 
-Current state:
+No code implementation has been started.
 
-- Branch remains `main`.
-- No Phase 56 code has been implemented yet.
-- No branch has been created yet.
-- No `git add`, commit, tag, push, or PR has been performed.
-- Waiting for the user to set the Phase 56 goal and authorize actual Phase 56 development.
+No `git add`, commit, tag, push, or PR has been performed.
 
-## Next Step After User Sets Goal
+## Planned Next Step After User Sets Goal
 
-1. Rename thread to `阶段56-分层语义缓存与Agent延迟优化`.
+1. Rename thread to `阶段57-多通道混合检索与默认链路真实评测`.
 2. Re-read required project files and the three planning files.
-3. Create or switch to `codex/phase-56-layered-agent-cache`.
-4. Begin Phase 56A: cache audit and cold/warm latency baseline.
-5. Preserve all security boundaries: never write secrets, provider raw responses, hidden reasoning, full chunks, full answers, restricted full text, or long-term user profiles to Git/CSV/docs/tests/Obsidian.
+3. Create or switch to `codex/phase-57-multichannel-hybrid-retrieval`.
+4. Begin Phase 57A startup calibration and baseline audit.
+5. Preserve security boundaries.
+6. Implement and evaluate the multi-channel retrieval kernel.
+7. Run roughly 30 real default-chain API evaluation cases before handoff.
 
-## 2026-06-27 Development Closeout Before Human Verification
+## Security Boundary
 
-Current branch: `codex/phase-56-layered-agent-cache`.
-
-Implemented Phase 56 layered cache:
+Do not write any of the following into Git, CSV, docs, tests, or Obsidian:
 
 ```text
-app/services/cache/layered_cache.py
-app/services/retrieval/hybrid_search.py
-app/services/agent/tools.py
-app/services/observability/latency_trace.py
-app/core/config.py
-scripts/evaluate_phase56_layered_cache.py
-tests/test_phase56_layered_cache.py
-docs/phase_reviews/phase-56.md
-data/evaluation/phase56_layered_cache_eval.csv
+.env
+.env.prod
+database passwords
+JWT secrets
+Redis passwords
+API keys
+Bearer tokens
+provider raw responses
+raw_response
+reasoning_content
+hidden reasoning
+full answers
+full chunks
+restricted full text
+private service logs
+long-term user profiles
+raw uploaded image bytes
 ```
 
-Configuration added and defaulted off:
+## Current Status
+
+Phase 57 implementation has started on:
 
 ```text
-LAYERED_CACHE_NAMESPACE=phase56-v1
-RETRIEVAL_CANDIDATE_CACHE_ENABLED=false
-RERANK_ORDER_CACHE_ENABLED=false
-TOOL_RESULT_CACHE_ENABLED=false
-SEMANTIC_CACHE_ENABLED=false
+codex/phase-57-multichannel-hybrid-retrieval
 ```
 
-Validation completed so far:
+Completed:
 
 ```text
-python -m py_compile app/services/cache/layered_cache.py app/services/retrieval/hybrid_search.py app/services/agent/tools.py app/services/observability/latency_trace.py app/core/config.py -> passed
-python -m pytest tests/test_hybrid_search.py tests/test_tool_calling_agent_service.py -q -> 31 passed
-python -m pytest tests/test_phase56_layered_cache.py -q -> 4 passed
-python scripts/evaluate_phase56_layered_cache.py --out data/evaluation/phase56_layered_cache_eval.csv -> rows=5 warm_hit_rows=2
-python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
-python -m pytest tests/test_phase56_layered_cache.py tests/test_hybrid_search.py tests/test_tool_calling_agent_service.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_reranking.py -q -> 93 passed
-python -m pytest -q -> 1281 passed, 1 skipped
+thread goal set
+thread title renamed to 阶段57-多通道混合检索与默认链路真实评测
+created branch codex/phase-57-multichannel-hybrid-retrieval
+Phase 57A startup calibration complete
+Phase 57B design doc added: docs/stage57_multichannel_hybrid_retrieval_design.md
+```
+
+First implementation pass:
+
+```text
+app/core/config.py -> default-off HYBRID_* multichannel switches
+app/services/retrieval/hybrid_search.py -> optional graph/table_text/figure_caption channels
+app/services/observability/latency_trace.py -> channel diagnostics defaults
+tests/test_hybrid_search.py -> Phase 57 graph/table/figure channel tests
+```
+
+Validation:
+
+```text
+python -m py_compile app/services/retrieval/hybrid_search.py app/services/graphrag/graph_search.py app/core/config.py app/services/observability/latency_trace.py -> passed
+python -m pytest tests/test_hybrid_search.py -q -> 18 passed
+python -m pytest tests/test_hybrid_search.py tests/test_phase53_graph_enhanced_search.py tests/test_phase56_layered_cache.py -q -> 35 passed
+```
+
+Completed after implementation:
+
+```text
+broader focused regression -> 65 passed
+expanded regression -> 123 passed
+full pytest -> 1285 passed, 1 skipped
+Stage 30 quality score -> overall=91.52 grade=A release_decision=pass
+30-case real default-chain evaluator -> cases=30 rows=30 completed=30 errors=0 channel_rows=22 median_elapsed_ms=28734.723
+docs/progress architecture/data_sources updates
+docs/phase_reviews/phase-57.md
+Obsidian handoff
 git diff --check -> no whitespace errors; CRLF warnings only
-targeted sensitive scan -> only pre-existing .env.dev.example placeholder passwords matched; no real secrets or Phase 56 payload leaks
-```
-
-Local deterministic cold/warm evidence shows the second `hybrid_search` hit retrieval + rerank caches and kept `reranker_calls_cumulative=1`; the second `hybrid_search_knowledge` tool call hit the tool-result cache.
-
-Still needed before production rollout:
-
-```text
-user human verification
-decide which cache switches to enable in .env.prod
-run authenticated production cold/warm smoke with sanitized latency_trace evidence
+targeted sensitive scan -> only .env.example placeholders and safety-policy mentions matched
 ```
 
 No `git add`, commit, tag, push, or PR has been performed.
 
-## 2026-06-28 Real-Chain 30-Case Evaluation Addendum
+## 2026-06-28 Real Evaluation Closeout
 
-Expanded `scripts/evaluate_phase56_real_chain_cache.py` from 5 real-domain cases to 30 cases / 60 `/agent/query` requests. The evaluation set covers standard parameters, text evidence, cross-document evidence, table evidence, material properties, construction quality, method comparison, and parameter details. It intentionally excludes direct image-retrieval prompts from the cache-effect benchmark after one image-oriented run exposed a very slow first-time image retrieval/index path; image retrieval should be profiled separately.
-
-The first expanded run completed but showed a real bug: exact tool cache keys tied to planner-generated retrieval query text gave `warm_cache_hit_rows=0`, because the tool-calling planner can rewrite the same user question differently between cold and warm runs. Fixed this without domain hard-coding by binding a hashed stable user-question key into the active latency trace and using it for tool-result cache identity. Retrieval and rerank lower-layer identities remain exact and provider/corpus bounded.
-
-Latest effective real-chain result with Redis enabled, answer-level Semantic Cache disabled, and a fresh namespace:
+Executed:
 
 ```text
-python scripts/evaluate_phase56_real_chain_cache.py --base-url http://127.0.0.1:8000 --out data/evaluation/phase56_real_chain_cache_eval.csv --top-k 8 --max-tool-calls 5 --timeout-seconds 180 --limit 30
--> cases=30 rows=60 completed=60 warm_cache_hit_rows=30 warm_speedup_rows=27 diagnostic_rows=31 median_cold_ms=31029.751 median_warm_ms=18677.037
+python scripts/evaluate_phase57_default_chain.py --execute --base-url http://127.0.0.1:8001 --out data/evaluation/phase57_default_chain_eval.csv --top-k 8 --max-tool-calls 5 --timeout-seconds 240 --limit 30 --config-label multichannel
 ```
 
-Local port 8000 has been restored for human verification with `SEMANTIC_CACHE_ENABLED=true`, all three layered cache switches enabled, Redis configured, namespace `phase56-local-review`, and dynamic rerank-K env vars set.
-
-## 2026-06-27 Evidence Diagnostics And Dynamic-K Addendum
-
-User review found that skipped-tool names alone are not enough to explain why two same-looking answers used different evidence. Added a safe evidence-chain diagnostic layer and dynamic rerank-K controls.
-
-New/updated behavior:
+Result:
 
 ```text
-Agent thinking panel -> retrieval_diagnostics step
-shows -> actual retrieval query, candidate chunk ids, selected chunk ids, selected source title/source_type preview
-shows -> retrieval/rerank/tool-result cache hit flags, rerank fallback state, semantic_cache_hit
-does not show -> full chunks, full answers, provider raw responses, secrets, hidden reasoning, restricted full text
+phase57_default_chain_eval cases=30 rows=30 completed=30 errors=0 channel_rows=22 median_elapsed_ms=28734.723 execute=True
 ```
 
-Dynamic K semantics:
+CSV recomputation:
 
 ```text
-RERANKING_DYNAMIC_TOP_K_ENABLED=false
-RERANKING_DYNAMIC_MIN_RESULTS=4
-RERANKING_DYNAMIC_MAX_RESULTS=12
-RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65
-candidate pool remains RERANKING_RECALL_K=75
-selection = first min_results + additional reranked candidates whose score >= best_score * relative threshold, capped by max_results
+status: completed=30
+category: ordinary=6, graph_intent=6, table_intent=6, visual_adjacent=6, boundary=6
+hybrid_search_knowledge rows=23
+search_tables rows=8
+refused=true rows=3
+median_elapsed_ms=28309.437
 ```
 
-Additional validation:
-
-```text
-python -m py_compile app/services/retrieval/hybrid_search.py app/services/agent/tools.py app/core/config.py scripts/evaluate_phase56_layered_cache.py -> passed
-node --check app/frontend/static/app.js -> passed
-python -m pytest tests/test_hybrid_search.py tests/test_agent_tools.py tests/test_frontend_app.py tests/test_phase56_layered_cache.py -q -> 43 passed
-python scripts/evaluate_phase56_layered_cache.py --out data/evaluation/phase56_layered_cache_eval.csv -> rows=5 warm_hit_rows=2
-python scripts/evaluate_phase56_real_chain_cache.py --base-url http://127.0.0.1:8000 --out data/evaluation/phase56_real_chain_cache_eval.csv --top-k 8 --max-tool-calls 5 --timeout-seconds 180 --limit 30 -> cases=30 rows=60 completed=60 warm_cache_hit_rows=30 warm_speedup_rows=27 diagnostic_rows=31
-python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
-python -m pytest -q -> 1283 passed, 1 skipped
-git diff --check -> no whitespace errors; CRLF warnings only
-```
-
-Sanitized eval evidence now includes diagnostic-field presence and dynamic-K selected count:
-
-```text
-hybrid_search warm -> retrieval_cache_hit=true rerank_cache_hit=true elapsed=2.125ms
-tool_hybrid_search_knowledge warm -> tool_result_cache_hit=true elapsed=1.168ms
-dynamic_top_k_rerank_threshold -> retrieval_dynamic_top_k_enabled=true retrieval_selected_count=4
-real_chain_cache_eval -> 5 real local-corpus Agent cases, cold/warm 10 requests, completed=10, warm_cache_hit_rows=3, diagnostic_rows=6
-```
+The temporary Phase 57 uvicorn server on port 8001 was stopped after evaluation.

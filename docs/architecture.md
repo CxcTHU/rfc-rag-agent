@@ -1,5 +1,33 @@
 # 架构说明
 
+## Phase 57 Architecture Delta: Multi-Channel Hybrid Retrieval Kernel
+
+Phase 57 keeps the Agent shell stable:
+
+```text
+tool_calling_agent -> hybrid_search_knowledge
+```
+
+The retrieval kernel can now be configured to collect candidates from multiple internal channels:
+
+```text
+keyword + vector
++ gated graph
++ gated table_text
++ gated figure_caption
+-> chunk_id dedupe
+-> reciprocal-rank style channel fusion
+-> existing reranker cache / BGE primary / GLM fallback
+-> dynamic K
+-> context sources
+```
+
+All Phase 57 switches default to `false`, so production behavior does not change before real-chain evaluation and human verification. Graph candidates reuse existing GraphRAG graph matching and fail open when the graph is unavailable. Table-text candidates only use `table` chunks as text evidence; `search_tables` remains the explicit raw-table tool. Figure-caption candidates only use `image_description` text/caption metadata; `search_figures` remains the explicit image asset tool.
+
+Diagnostics add safe channel metadata: enabled channels, eligible channels, per-channel candidate counts, selected chunk ids, selected source previews, and selected channel labels. They must not include full chunks, full answers, provider raw responses, secrets, hidden reasoning, restricted full text, or private logs.
+
+The Phase 57 real default-chain evaluator confirms the architecture through the live `/agent/query` path rather than retrieval-only code. The completed 30-case run returned `completed=30`, `errors=0`, and channel diagnostics in the majority of rows while preserving the default tool surface. Observed selected-channel combinations included `keyword|vector`, `graph|vector`, `graph|keyword|vector`, `table_text|vector`, and `figure_caption|keyword|vector`.
+
 ## Phase 56 Architecture Delta: Layered Agent Cache
 
 Phase 56 keeps the default `tool_calling_agent` chain and provider topology unchanged, but adds cache layers around deterministic or semi-deterministic evidence work:

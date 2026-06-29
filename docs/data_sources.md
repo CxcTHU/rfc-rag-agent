@@ -1,5 +1,30 @@
 # 数据来源登记
 
+## Phase 57 Multi-Channel Retrieval Data Boundary
+
+Phase 57 adds no external corpus, crawler, PDF download, source registry entry, model weight, embedding rebuild, or user-profile data. It reuses existing PostgreSQL chunks, existing GraphRAG derived graph data, table chunks, and image-description chunks as retrieval candidate channels.
+
+New artifacts:
+
+```text
+docs/stage57_multichannel_hybrid_retrieval_goal_prompt.md
+docs/stage57_multichannel_hybrid_retrieval_design.md
+docs/phase_reviews/phase-57.md
+scripts/evaluate_phase57_default_chain.py
+data/evaluation/phase57_default_chain_eval.csv
+obsidian-vault/阶段汇报/阶段 57 - 多通道混合检索与默认链路真实评测/Phase 57 - 多通道混合检索与默认链路真实评测.md
+```
+
+The Phase 57 evaluator is dry-run by default. With `--execute`, it calls the default `/agent/query` path and records sanitized metadata only: case id, category, config, status, latency, tool/workflow names, source/citation counts, channel counts, selected chunk ids, short source title/type previews, refusal/cache/reranker labels, and sanitized errors. It must not store full answers, full chunks, provider raw responses, API keys, bearer tokens, Authorization headers, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, private service logs, or raw uploaded images.
+
+Latest real run:
+
+```text
+cases=30 rows=30 completed=30 errors=0 channel_rows=22 median_elapsed_ms=28734.723
+```
+
+The committed CSV is an evaluation metadata artifact, not a content source. It contains no full answer text, full chunk bodies, provider payloads, secrets, or restricted full text.
+
 ## Phase 56 Layered Cache Data Boundary
 
 Phase 56 adds no external corpus, crawler, PDF download, source registry entry, model weight, embedding rebuild, or user-profile data. It adds derived runtime cache entries and sanitized evaluation output only.
