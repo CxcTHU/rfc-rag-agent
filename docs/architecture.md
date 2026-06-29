@@ -22,7 +22,7 @@ keyword + vector
 -> context sources
 ```
 
-All Phase 57 switches default to `false`, so production behavior does not change before real-chain evaluation and human verification. Graph candidates reuse existing GraphRAG graph matching and fail open when the graph is unavailable. Table-text candidates only use `table` chunks as text evidence; `search_tables` remains the explicit raw-table tool. Figure-caption candidates only use `image_description` text/caption metadata; `search_figures` remains the explicit image asset tool.
+After Phase 57 human verification, the multi-channel switches are enabled in the default chain. Graph candidates reuse existing GraphRAG graph matching and fail open when the graph is unavailable. Table-text candidates only use `table` chunks as text evidence; `search_tables` remains the explicit raw-table tool. Figure-caption candidates only use `image_description` text/caption metadata; `search_figures` remains the explicit image asset tool.
 
 Diagnostics add safe channel metadata: enabled channels, eligible channels, per-channel candidate counts, selected chunk ids, selected source previews, and selected channel labels. They must not include full chunks, full answers, provider raw responses, secrets, hidden reasoning, restricted full text, or private logs.
 
@@ -67,17 +67,17 @@ semantic_cache_hit
 
 The frontend thinking panel renders these as a `retrieval_diagnostics` step so a user can distinguish "tool skipped" from "tool executed with a different evidence set." The diagnostics are ids, short titles, source types, scores, and flags only; they do not include full chunks or full answers.
 
-Dynamic rerank K remains off by default and is not domain-hard-coded:
+Dynamic rerank K is enabled by default after Phase 57 human verification and remains score-driven rather than domain-hard-coded:
 
 ```text
-RERANKING_DYNAMIC_TOP_K_ENABLED=false
+RERANKING_DYNAMIC_TOP_K_ENABLED=true
 RERANKING_DYNAMIC_MIN_RESULTS=4
 RERANKING_DYNAMIC_MAX_RESULTS=12
 RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65
 RERANKING_RECALL_K=75
 ```
 
-When enabled, rerank selection keeps a baseline of `min_results`, then includes additional evidence whose score is at least `best_score * relative_threshold`, capped by `max_results`.
+Rerank selection keeps a baseline of `min_results`, then includes additional evidence whose score is at least `best_score * relative_threshold`, capped by `max_results`.
 
 Redis remains optional. If Redis is disabled, unavailable, stale, malformed, or missing hydrated ids, every layer fails open to the normal retrieval/rerank/tool path. The broad answer-level Semantic Cache remains disabled by default and is not required for Phase 56 speedups.
 

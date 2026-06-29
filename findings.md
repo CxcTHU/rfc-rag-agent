@@ -179,17 +179,17 @@ Success requires:
 
 ## Implementation Findings After First Pass
 
-- `HybridSearchService` is now the integration point for optional multi-channel retrieval.
-- The new configuration is default-off:
+- `HybridSearchService` is now the integration point for multi-channel retrieval.
+- After Phase 57 human verification, the default configuration enables the verified channels:
 
 ```text
-HYBRID_MULTICHANNEL_ENABLED=false
-HYBRID_GRAPH_CHANNEL_ENABLED=false
-HYBRID_TABLE_TEXT_CHANNEL_ENABLED=false
-HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=false
+HYBRID_MULTICHANNEL_ENABLED=true
+HYBRID_GRAPH_CHANNEL_ENABLED=true
+HYBRID_TABLE_TEXT_CHANNEL_ENABLED=true
+HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=true
 ```
 
-- When enabled, keyword/vector remain the backbone while graph/table-text/figure-caption enter only through gate checks.
+- Keyword/vector remain the backbone while graph/table-text/figure-caption enter only through gate checks.
 - Graph channel reuses existing GraphRAG matching and `graph_results_from_matches`; graph load or match failure records fail-open graph summary and returns no graph candidates.
 - Table-text and figure-caption channels query existing `Chunk` rows by `chunk_type`; figure-caption remains text evidence and does not replace `search_figures`.
 - Multi-channel fusion uses reciprocal-rank style scoring with channel weights and retained channel labels.
