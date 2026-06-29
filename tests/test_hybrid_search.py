@@ -9,6 +9,7 @@ from app.db.repositories import ChunkCreate
 from app.db.repositories import DocumentCreate
 from app.db.repositories import DocumentRepository
 from app.db.session import create_sqlite_engine
+from app.core.config import Settings
 from app.services.graphrag.graph_store import build_knowledge_graph, save_graph
 from app.services.graphrag.schema import GraphEntity, GraphExtractionResult, GraphRelation
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
@@ -159,7 +160,13 @@ def test_hybrid_search_uses_keyword_evidence_to_rank_expected_match(tmp_path) ->
         seed_hybrid_documents(db)
         VectorIndexService(db, provider).build_index()
 
-        results = HybridSearchService(db, provider).search("filling capacity rock-filled concrete", top_k=2)
+        service = HybridSearchService(db, provider)
+        original = service.settings.hybrid_multichannel_enabled
+        try:
+            service.settings.hybrid_multichannel_enabled = False
+            results = service.search("filling capacity rock-filled concrete", top_k=2)
+        finally:
+            service.settings.hybrid_multichannel_enabled = original
 
     assert results
     assert results[0].document_title == "Filling Capacity Evaluation of Self-Compacting Concrete"
@@ -180,6 +187,20 @@ def test_hybrid_search_returns_keyword_results_when_vector_index_is_missing(tmp_
     assert results[0].keyword_score > 0
     assert results[0].vector_score == 0
     assert "Filling Capacity" in results[0].document_title
+
+
+def test_hybrid_search_verified_defaults_are_enabled() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.hybrid_multichannel_enabled is True
+    assert settings.hybrid_graph_channel_enabled is True
+    assert settings.hybrid_table_text_channel_enabled is True
+    assert settings.hybrid_figure_caption_channel_enabled is True
+    assert settings.reranking_dynamic_top_k_enabled is True
+    assert settings.retrieval_candidate_cache_enabled is True
+    assert settings.rerank_order_cache_enabled is True
+    assert settings.tool_result_cache_enabled is True
+    assert settings.semantic_cache_enabled is False
 
 
 def test_hybrid_multichannel_graph_channel_enters_default_hybrid_kernel(tmp_path) -> None:
@@ -352,10 +373,29 @@ def test_hybrid_search_runs_keyword_and_vector_in_parallel(tmp_path, monkeypatch
     with TestingSessionLocal() as db:
         provider = DeterministicEmbeddingProvider(dimension=16)
         started = time.perf_counter()
-        results = HybridSearchService(db, provider, reranking_enabled=False).search(
-            "filling capacity",
-            top_k=1,
+        service = HybridSearchService(db, provider, reranking_enabled=False)
+        original = (
+            service.settings.hybrid_multichannel_enabled,
+            service.settings.retrieval_candidate_cache_enabled,
+            service.settings.rerank_order_cache_enabled,
+            service.settings.tool_result_cache_enabled,
         )
+        try:
+            service.settings.hybrid_multichannel_enabled = False
+            service.settings.retrieval_candidate_cache_enabled = False
+            service.settings.rerank_order_cache_enabled = False
+            service.settings.tool_result_cache_enabled = False
+            results = service.search(
+                "filling capacity",
+                top_k=1,
+            )
+        finally:
+            (
+                service.settings.hybrid_multichannel_enabled,
+                service.settings.retrieval_candidate_cache_enabled,
+                service.settings.rerank_order_cache_enabled,
+                service.settings.tool_result_cache_enabled,
+            ) = original
         elapsed = time.perf_counter() - started
 
     keyword_start = next(timestamp for channel, event, timestamp in events if channel == "keyword" and event == "start")
@@ -386,12 +426,18 @@ def test_hybrid_search_uses_reranking_provider_by_default(tmp_path) -> None:
         seed_hybrid_documents(db)
         VectorIndexService(db, provider).build_index()
 
-        results = HybridSearchService(
+        service = HybridSearchService(
             db,
             provider,
             reranking_provider=ReverseReRankingProvider(),
             reranking_enabled=True,
-        ).search("concrete", top_k=1)
+        )
+        original = service.settings.reranking_dynamic_top_k_enabled
+        try:
+            service.settings.reranking_dynamic_top_k_enabled = False
+            results = service.search("concrete", top_k=1)
+        finally:
+            service.settings.reranking_dynamic_top_k_enabled = original
 
     assert len(results) == 1
     assert results[0].document_title == "Thermal control note"
@@ -654,13 +700,19 @@ def test_hybrid_search_uses_secondary_reranker_when_primary_fails(tmp_path) -> N
         trace = LatencyTrace()
         token = set_current_latency_trace(trace)
         try:
-            results = HybridSearchService(
+            service = HybridSearchService(
                 db,
                 provider,
                 reranking_provider=FailingReRankingProvider(),
                 reranking_fallback_provider=SecondaryReRankingProvider(),
                 reranking_enabled=True,
-            ).search("concrete", top_k=1)
+            )
+            original = service.settings.reranking_dynamic_top_k_enabled
+            try:
+                service.settings.reranking_dynamic_top_k_enabled = False
+                results = service.search("concrete", top_k=1)
+            finally:
+                service.settings.reranking_dynamic_top_k_enabled = original
         finally:
             reset_current_latency_trace(token)
 

@@ -2598,14 +2598,14 @@ async function submitAgent() {
     const body = {
       question,
       top_k: 8,
-      max_tool_calls: 2,
+      max_tool_calls: 5,
       mode: "tool_calling_agent",
     };
     const uploadedImage = await uploadSelectedAgentImage();
     if (uploadedImage?.path) {
       body.image_path = uploadedImage.path;
       body.mode = "react_agent";
-      body.max_tool_calls = 2;
+      body.max_tool_calls = 5;
       imageWasSubmitted = true;
     }
     if (!state.currentConversationId) {
