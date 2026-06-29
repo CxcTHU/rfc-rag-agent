@@ -93,6 +93,15 @@ class Settings(BaseSettings):
     reranking_fallback_api_key: str = ""
     reranking_fallback_base_url: str = ""
     reranking_fallback_timeout_seconds: float = 30.0
+    hybrid_multichannel_enabled: bool = False
+    hybrid_graph_channel_enabled: bool = False
+    hybrid_table_text_channel_enabled: bool = False
+    hybrid_figure_caption_channel_enabled: bool = False
+    hybrid_channel_rank_constant: int = 60
+    hybrid_graph_channel_weight: float = 1.1
+    hybrid_table_text_channel_weight: float = 0.9
+    hybrid_figure_caption_channel_weight: float = 0.8
+    hybrid_graph_max_matches: int = 75
 
     vision_model_provider: str = ""
     vision_model_name: str = ""

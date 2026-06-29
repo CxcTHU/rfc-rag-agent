@@ -57,6 +57,10 @@ class LatencyTrace:
         self.values.setdefault("graph_entity_count", 0)
         self.values.setdefault("graph_candidate_chunk_count", 0)
         self.values.setdefault("graph_hop_count", 0)
+        self.values.setdefault("retrieval_enabled_channels", [])
+        self.values.setdefault("retrieval_eligible_channels", [])
+        self.values.setdefault("retrieval_channel_candidate_counts", {})
+        self.values.setdefault("retrieval_selected_channels", [])
 
     def add_duration(self, field_name: str, duration_ms: float) -> None:
         current = self.values.get(field_name, 0.0)

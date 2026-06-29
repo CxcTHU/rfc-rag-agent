@@ -1,5 +1,53 @@
 # 项目进度
 
+## Latest Status: 2026-06-29 Phase 57 Multi-Channel Hybrid Retrieval Passed Human Verification
+
+Current branch: `codex/phase-57-multichannel-hybrid-retrieval`.
+
+Phase 57 implements the agreed `Agent shell + Workflow kernel` direction. The default `tool_calling_agent` still exposes the same high-level tools; `search_graph_knowledge` is not added as a parallel default tool. Instead, the retrieval kernel behind `hybrid_search_knowledge` now has default-off switches for gated multi-channel candidates:
+
+```text
+HYBRID_MULTICHANNEL_ENABLED=false
+HYBRID_GRAPH_CHANNEL_ENABLED=false
+HYBRID_TABLE_TEXT_CHANNEL_ENABLED=false
+HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=false
+```
+
+Implemented:
+
+```text
+docs/stage57_multichannel_hybrid_retrieval_design.md
+app/core/config.py -> default-off Phase 57 switches
+app/services/retrieval/hybrid_search.py -> optional graph/table_text/figure_caption channels with rank fusion
+app/services/observability/latency_trace.py -> channel diagnostics defaults
+scripts/evaluate_phase57_default_chain.py -> 30-case sanitized default-chain evaluator, dry-run by default
+tests/test_hybrid_search.py -> graph/table/figure channel tests
+data/evaluation/phase57_default_chain_eval.csv -> real default-chain rows, sanitized metadata only
+docs/phase_reviews/phase-57.md
+obsidian-vault/阶段汇报/阶段 57 - 多通道混合检索与默认链路真实评测/Phase 57 - 多通道混合检索与默认链路真实评测.md
+```
+
+Current validation:
+
+```text
+python -m py_compile app/services/retrieval/hybrid_search.py app/services/graphrag/graph_search.py app/core/config.py app/services/observability/latency_trace.py -> passed
+python -m py_compile scripts/evaluate_phase57_default_chain.py -> passed
+python scripts/evaluate_phase57_default_chain.py --out data/evaluation/phase57_default_chain_eval.csv --limit 30 -> cases=30 rows=30 completed=0 errors=0 execute=false
+python -m pytest tests/test_hybrid_search.py tests/test_agent_tools.py tests/test_tool_calling_agent_service.py tests/test_phase53_graph_enhanced_search.py tests/test_phase56_layered_cache.py -q -> 65 passed
+python scripts/evaluate_phase57_default_chain.py --execute --base-url http://127.0.0.1:8001 --out data/evaluation/phase57_default_chain_eval.csv --top-k 8 --max-tool-calls 5 --timeout-seconds 240 --limit 30 --config-label multichannel -> cases=30 rows=30 completed=30 errors=0 channel_rows=22 median_elapsed_ms=28734.723
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python -m pytest tests/test_hybrid_search.py tests/test_agent_tools.py tests/test_tool_calling_agent_service.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_phase53_graph_enhanced_search.py tests/test_phase56_layered_cache.py tests/test_reranking.py -q -> 123 passed
+python -m pytest -q -> 1285 passed, 1 skipped
+git diff --check -> no whitespace errors; CRLF warnings only
+targeted sensitive scan -> only .env.example placeholders and safety-policy mentions matched; no real secrets or Phase 57 payload leaks
+```
+
+The real set covers 6 ordinary, 6 graph-intent, 6 table-intent, 6 visual-adjacent, and 6 boundary cases. CSV recomputation shows `completed=30`, `errors=0`, `hybrid_search_knowledge` in 23 rows, `search_tables` in 8 rows, `refused=true` in 3 boundary rows, and median elapsed time around `28309.437ms`. The evaluator stores safe metadata only: ids, categories, timings, tool names, source/citation counts, channel counts, selected chunk ids, short title/source-type previews, cache/reranker labels, and refusal flags.
+
+User human verification passed on 2026-06-29. The current action is authorized submission: commit the Phase 57 work, create `phase-57-complete`, push to GitHub, and merge. No secrets, raw provider payloads, full answers, full chunks, or private logs are included in the artifacts.
+
+Manual verification found one Phase 58 input: follow-up image requests load conversation history, but the default `tool_calling_agent` lacks a mature Agent Runtime contextualization layer for grounding tool arguments before execution. Example: `我需要图片支撑` selected `search_figures`, but the tool query did not inherit the previous topic and returned `visual_intent=false`. The user explicitly chose not to patch this ad hoc in Phase 57; it should be handled by Phase 58 Mature Agent Runtime Layer.
+
 ## Latest Status: 2026-06-27 Phase 56 Layered Agent Cache Complete Before Human Verification
 
 Current branch: `codex/phase-56-layered-agent-cache`.

@@ -1,10 +1,14 @@
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
+from pathlib import Path
+import re
 
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
+from app.db.models import Chunk, Document
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.core.config import get_settings
 from app.services.cache.layered_cache import (
@@ -28,6 +32,77 @@ from app.services.retrieval.vector_search import VectorSearchResult
 from app.services.retrieval.vector_search import VectorSearchService
 
 
+GRAPH_QUERY_TERMS = (
+    "reference",
+    "references",
+    "referenced",
+    "relationship",
+    "relationships",
+    "standard",
+    "standards",
+    "defines",
+    "defined",
+    "applies",
+    "applicable",
+    "range",
+    "ranges",
+    "relation",
+    "关联",
+    "关系",
+    "引用",
+    "参考",
+    "标准",
+    "规范",
+    "定义",
+    "适用",
+    "范围",
+    "规定",
+)
+TABLE_QUERY_TERMS = (
+    "table",
+    "tabulated",
+    "row",
+    "column",
+    "parameter",
+    "parameters",
+    "ratio",
+    "mix",
+    "numeric",
+    "range",
+    "data",
+    "表",
+    "表格",
+    "参数",
+    "配合比",
+    "试验数据",
+    "数值",
+    "范围",
+    "行",
+    "列",
+)
+FIGURE_CAPTION_QUERY_TERMS = (
+    "figure",
+    "image",
+    "photo",
+    "diagram",
+    "chart",
+    "curve",
+    "microscopy",
+    "crack",
+    "failure",
+    "morphology",
+    "图",
+    "图片",
+    "照片",
+    "曲线",
+    "图表",
+    "示意",
+    "裂缝",
+    "破坏",
+    "形态",
+)
+
+
 @dataclass(frozen=True)
 class HybridSearchResult:
     document_id: int
@@ -46,6 +121,7 @@ class HybridSearchResult:
     source_image_path: str | None = None
     caption: str | None = None
     page_number: int | None = None
+    channels: tuple[str, ...] = ()
 
 
 @dataclass
@@ -53,6 +129,8 @@ class _HybridCandidate:
     result: KeywordSearchResult | VectorSearchResult
     keyword_score: float = 0.0
     vector_score: float = 0.0
+    channel_scores: dict[str, float] | None = None
+    channel_ranks: dict[str, int] | None = None
 
 
 class HybridSearchService:
@@ -126,9 +204,14 @@ class HybridSearchService:
         fetch_k = max(top_k * 3, top_k)
         if self.reranking_enabled and self.reranking_provider is not None:
             fetch_k = max(fetch_k, top_k * 5, self.reranking_recall_k)
-        sorted_results = self._lookup_retrieval_cache(normalized_query, fetch_k=fetch_k)
+        channel_plan = self._channel_plan(normalized_query)
+        sorted_results = self._lookup_retrieval_cache(
+            normalized_query,
+            fetch_k=fetch_k,
+            channel_plan=channel_plan,
+        )
         if sorted_results is None:
-            if self.parallel:
+            if self.parallel and not channel_plan["multichannel_enabled"]:
                 self._progress("正在并行检索关键词和向量候选证据")
                 keyword_results, vector_results = self._search_parallel(normalized_query, fetch_k)
             else:
@@ -136,31 +219,62 @@ class HybridSearchService:
                 keyword_results, vector_results = self._search_serial(normalized_query, fetch_k)
 
             self._progress("已获得候选证据，正在合并排序")
-            candidates: dict[int, _HybridCandidate] = {}
-            add_results(candidates, keyword_results, "keyword", max_result_score(keyword_results))
-            add_results(candidates, vector_results, "vector", max_result_score(vector_results))
+            if channel_plan["multichannel_enabled"]:
+                channel_results: dict[str, list[KeywordSearchResult] | list[VectorSearchResult] | list[HybridSearchResult]] = {
+                    "keyword": keyword_results,
+                    "vector": vector_results,
+                }
+                channel_results.update(self._optional_channel_results(normalized_query, fetch_k, channel_plan))
+                sorted_results = self._fuse_multichannel_results(channel_results)
+            else:
+                candidates: dict[int, _HybridCandidate] = {}
+                add_results(candidates, keyword_results, "keyword", max_result_score(keyword_results))
+                add_results(candidates, vector_results, "vector", max_result_score(vector_results))
 
-            hybrid_results = [candidate_to_result(candidate, self) for candidate in candidates.values()]
-            sorted_results = sorted(
-                hybrid_results,
-                key=lambda item: (
-                    -item.score,
-                    source_type_rank(item.source_type),
-                    item.document_id,
-                    item.chunk_index,
-                ),
+                hybrid_results = [candidate_to_result(candidate, self) for candidate in candidates.values()]
+                sorted_results = sorted(
+                    hybrid_results,
+                    key=lambda item: (
+                        -item.score,
+                        source_type_rank(item.source_type),
+                        item.document_id,
+                        item.chunk_index,
+                    ),
+                )
+                trace_channel_counts(
+                    enabled=["keyword", "vector"],
+                    eligible=["keyword", "vector"],
+                    counts={"keyword": len(keyword_results), "vector": len(vector_results)},
+                )
+            self._store_retrieval_cache(
+                normalized_query,
+                sorted_results,
+                fetch_k=fetch_k,
+                channel_plan=channel_plan,
             )
-            self._store_retrieval_cache(normalized_query, sorted_results, fetch_k=fetch_k)
         trace_retrieval_candidates(normalized_query, sorted_results, fetch_k=fetch_k)
         return self._rerank_results(normalized_query, sorted_results, top_k=top_k)
 
-    def _retrieval_cache_identity(self, query: str, *, fetch_k: int) -> dict[str, object]:
+    def _retrieval_cache_identity(
+        self,
+        query: str,
+        *,
+        fetch_k: int,
+        channel_plan: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        channel_plan = channel_plan or self._channel_plan(query)
         identity = base_cache_identity(self.db)
         identity.update(
             {
                 "layer": "retrieval",
                 "query": normalized_query_identity(query),
                 "fetch_k": fetch_k,
+                "hybrid_multichannel_enabled": channel_plan["multichannel_enabled"],
+                "enabled_channels": channel_plan["enabled_channels"],
+                "eligible_channels": channel_plan["eligible_channels"],
+                "channel_fusion": "rrf-v1" if channel_plan["multichannel_enabled"] else "weighted-score-v1",
+                "channel_rank_constant": self.settings.hybrid_channel_rank_constant,
+                "graph_path": self.settings.graphrag_graph_path if "graph" in channel_plan["eligible_channels"] else "",
                 "keyword_weight": self.keyword_weight,
                 "vector_weight": self.vector_weight,
                 "both_match_bonus": self.both_match_bonus,
@@ -177,11 +291,14 @@ class HybridSearchService:
         query: str,
         *,
         fetch_k: int,
+        channel_plan: dict[str, object] | None = None,
     ) -> list[HybridSearchResult] | None:
         cache = get_configured_layered_cache("retrieval")
         if cache is None:
             return None
-        lookup = cache.lookup(self._retrieval_cache_identity(query, fetch_k=fetch_k))
+        lookup = cache.lookup(
+            self._retrieval_cache_identity(query, fetch_k=fetch_k, channel_plan=channel_plan)
+        )
         if not lookup.hit or lookup.payload is None:
             return None
         payload = lookup.payload.get("payload", {})
@@ -220,7 +337,14 @@ class HybridSearchService:
                     source_image_path=chunk.source_image_path,
                     caption=chunk.caption,
                     page_number=chunk.page_number,
+                    channels=tuple(str(item) for item in cached.get("channels", []) if isinstance(item, str)),
                 )
+            )
+        if isinstance(payload.get("channel_counts"), dict):
+            trace_channel_counts(
+                enabled=payload.get("enabled_channels", []),
+                eligible=payload.get("eligible_channels", []),
+                counts=payload.get("channel_counts", {}),
             )
         return results
 
@@ -230,11 +354,16 @@ class HybridSearchService:
         results: list[HybridSearchResult],
         *,
         fetch_k: int,
+        channel_plan: dict[str, object] | None = None,
     ) -> None:
         cache = get_configured_layered_cache("retrieval")
         if cache is None:
             return
+        channel_counts = channel_candidate_counts(results)
         payload = {
+            "enabled_channels": list(channel_plan.get("enabled_channels", [])) if channel_plan else [],
+            "eligible_channels": list(channel_plan.get("eligible_channels", [])) if channel_plan else [],
+            "channel_counts": channel_counts,
             "rows": [
                 {
                     "chunk_id": result.chunk_id,
@@ -243,11 +372,197 @@ class HybridSearchService:
                     "vector_score": round(float(result.vector_score), 8),
                     "chunk_type": result.chunk_type,
                     "source_type": result.source_type,
+                    "channels": list(result.channels),
                 }
                 for result in results
             ]
         }
-        cache.store(self._retrieval_cache_identity(query, fetch_k=fetch_k), payload)
+        cache.store(
+            self._retrieval_cache_identity(query, fetch_k=fetch_k, channel_plan=channel_plan),
+            payload,
+        )
+
+    def _channel_plan(self, query: str) -> dict[str, object]:
+        enabled = ["keyword", "vector"]
+        if self.settings.hybrid_graph_channel_enabled:
+            enabled.append("graph")
+        if self.settings.hybrid_table_text_channel_enabled:
+            enabled.append("table_text")
+        if self.settings.hybrid_figure_caption_channel_enabled:
+            enabled.append("figure_caption")
+        eligible = ["keyword", "vector"]
+        if "graph" in enabled and query_matches_terms(query, GRAPH_QUERY_TERMS):
+            eligible.append("graph")
+        if "table_text" in enabled and query_matches_terms(query, TABLE_QUERY_TERMS):
+            eligible.append("table_text")
+        if "figure_caption" in enabled and query_matches_terms(query, FIGURE_CAPTION_QUERY_TERMS):
+            eligible.append("figure_caption")
+        return {
+            "multichannel_enabled": bool(self.settings.hybrid_multichannel_enabled),
+            "enabled_channels": tuple(enabled),
+            "eligible_channels": tuple(eligible),
+        }
+
+    def _optional_channel_results(
+        self,
+        query: str,
+        fetch_k: int,
+        channel_plan: dict[str, object],
+    ) -> dict[str, list[HybridSearchResult]]:
+        results: dict[str, list[HybridSearchResult]] = {}
+        eligible = set(channel_plan["eligible_channels"])
+        if "graph" in eligible:
+            results["graph"] = self._graph_channel_results(query)
+        if "table_text" in eligible:
+            results["table_text"] = self._chunk_type_channel_results(
+                query,
+                chunk_type="table",
+                top_k=fetch_k,
+            )
+        if "figure_caption" in eligible:
+            results["figure_caption"] = self._chunk_type_channel_results(
+                query,
+                chunk_type="image_description",
+                top_k=fetch_k,
+            )
+        trace_channel_counts(
+            enabled=channel_plan["enabled_channels"],
+            eligible=channel_plan["eligible_channels"],
+            counts={channel: len(rows) for channel, rows in results.items()},
+        )
+        return results
+
+    def _graph_channel_results(self, query: str) -> list[HybridSearchResult]:
+        try:
+            from app.services.graphrag.graph_search import (
+                cap_graph_matches,
+                graph_results_from_matches,
+                graph_search_matches,
+                matched_query_node_ids,
+                record_graph_summary,
+            )
+            from app.services.graphrag.graph_search import GraphSearchSummary
+            from app.services.graphrag.graph_store import load_graph
+
+            with latency_timer("graph_search_latency_ms"):
+                graph = load_graph(Path(self.settings.graphrag_graph_path))
+                matches = graph_search_matches(graph, query, max_hops=2)
+                summary = GraphSearchSummary(
+                    available=True,
+                    fallback=False,
+                    matched_entity_count=len(matched_query_node_ids(graph, query)),
+                    candidate_chunk_count=len(matches),
+                    hop_count=2,
+                )
+            record_graph_summary(summary)
+            capped = cap_graph_matches(matches, int(self.settings.hybrid_graph_max_matches))
+            return graph_results_from_matches(self.db, capped)
+        except (OSError, ValueError, RuntimeError):
+            from app.services.graphrag.graph_search import GraphSearchSummary, record_graph_summary
+
+            record_graph_summary(
+                GraphSearchSummary(
+                    available=False,
+                    fallback=True,
+                    error="graph_channel_unavailable",
+                    hop_count=2,
+                )
+            )
+            return []
+
+    def _chunk_type_channel_results(
+        self,
+        query: str,
+        *,
+        chunk_type: str,
+        top_k: int,
+    ) -> list[HybridSearchResult]:
+        terms = query_channel_terms(query)
+        if not terms:
+            return []
+        conditions = [Chunk.content.ilike(f"%{term}%") for term in terms[:8]]
+        if chunk_type == "image_description":
+            conditions.extend(Chunk.caption.ilike(f"%{term}%") for term in terms[:8])
+        statement = (
+            select(Chunk, Document)
+            .join(Document, Document.id == Chunk.document_id)
+            .where(Chunk.chunk_type == chunk_type)
+            .where(or_(*conditions))
+            .order_by(Chunk.id.asc())
+            .limit(max(top_k * 4, top_k))
+        )
+        rows = self.db.execute(statement).all()
+        scored: list[HybridSearchResult] = []
+        for chunk, document in rows:
+            score = chunk_text_match_score(" ".join([chunk.content or "", chunk.caption or ""]), terms)
+            if score <= 0:
+                continue
+            scored.append(
+                HybridSearchResult(
+                    document_id=document.id,
+                    document_title=document.title,
+                    source_type=document.source_type,
+                    source_path=document.source_path,
+                    file_name=document.file_name,
+                    chunk_id=chunk.id,
+                    chunk_index=chunk.chunk_index,
+                    content=chunk.content,
+                    heading_path=chunk.heading_path,
+                    score=float(score),
+                    keyword_score=0.0,
+                    vector_score=0.0,
+                    chunk_type=chunk.chunk_type,
+                    source_image_path=chunk.source_image_path,
+                    caption=chunk.caption,
+                    page_number=chunk.page_number,
+                )
+            )
+        return sorted(scored, key=lambda item: (-item.score, item.document_id, item.chunk_index))[:top_k]
+
+    def _fuse_multichannel_results(
+        self,
+        channel_results: dict[str, list[KeywordSearchResult] | list[VectorSearchResult] | list[HybridSearchResult]],
+    ) -> list[HybridSearchResult]:
+        fused: dict[int, _HybridCandidate] = {}
+        weights = {
+            "keyword": self.keyword_weight,
+            "vector": self.vector_weight,
+            "graph": self.settings.hybrid_graph_channel_weight,
+            "table_text": self.settings.hybrid_table_text_channel_weight,
+            "figure_caption": self.settings.hybrid_figure_caption_channel_weight,
+        }
+        rank_constant = max(1, int(self.settings.hybrid_channel_rank_constant))
+        counts: dict[str, int] = {}
+        for channel, results in channel_results.items():
+            counts[channel] = len(results)
+            for rank, result in enumerate(results, start=1):
+                candidate = fused.setdefault(result.chunk_id, _HybridCandidate(result=result))
+                if candidate.channel_scores is None:
+                    candidate.channel_scores = {}
+                if candidate.channel_ranks is None:
+                    candidate.channel_ranks = {}
+                rrf_score = float(weights.get(channel, 1.0)) / float(rank_constant + rank)
+                candidate.channel_scores[channel] = max(candidate.channel_scores.get(channel, 0.0), rrf_score)
+                candidate.channel_ranks[channel] = min(candidate.channel_ranks.get(channel, rank), rank)
+                if channel == "keyword":
+                    candidate.keyword_score = max(candidate.keyword_score, normalize_score(result.score, max_result_score(results)))
+                if channel == "vector":
+                    candidate.vector_score = max(candidate.vector_score, normalize_score(result.score, max_result_score(results)))
+        results = [candidate_to_result(candidate, self) for candidate in fused.values()]
+        trace_channel_counts(
+            enabled=list(channel_results),
+            eligible=list(channel_results),
+            counts=counts,
+        )
+        return sorted(
+            results,
+            key=lambda item: (
+                -item.score,
+                source_type_rank(item.source_type),
+                item.document_id,
+                item.chunk_index,
+            ),
+        )
 
     def _search_serial(
         self,
@@ -649,6 +964,7 @@ def trace_retrieval_candidates(
                 "score": round(float(result.score), 6),
                 "keyword_score": round(float(result.keyword_score), 6),
                 "vector_score": round(float(result.vector_score), 6),
+                "channels": list(result.channels),
                 "title": result.document_title[:80],
             }
             for result in results[:8]
@@ -682,10 +998,15 @@ def trace_selected_results(
                 "chunk_id": result.chunk_id,
                 "source_type": result.source_type,
                 "score": round(float(result.score), 6),
+                "channels": list(result.channels),
                 "title": result.document_title[:80],
             }
             for result in selected[:12]
         ],
+    )
+    trace.set_value(
+        "retrieval_selected_channels",
+        sorted({channel for result in selected for channel in result.channels}),
     )
     if reranked is not None:
         score_by_index = {item.index: float(item.score) for item in reranked}
@@ -729,11 +1050,24 @@ def add_results(
 
 def candidate_to_result(candidate: _HybridCandidate, service: HybridSearchService) -> HybridSearchResult:
     bonus = service.both_match_bonus if candidate.keyword_score > 0 and candidate.vector_score > 0 else 0.0
-    combined_score = (
-        candidate.keyword_score * service.keyword_weight
-        + candidate.vector_score * service.vector_weight
-        + bonus
-    )
+    channel_scores = candidate.channel_scores or {}
+    if channel_scores:
+        combined_score = sum(channel_scores.values())
+        channels = tuple(sorted(channel_scores))
+    else:
+        combined_score = (
+            candidate.keyword_score * service.keyword_weight
+            + candidate.vector_score * service.vector_weight
+            + bonus
+        )
+        channels = tuple(
+            channel
+            for channel, score in (
+                ("keyword", candidate.keyword_score),
+                ("vector", candidate.vector_score),
+            )
+            if score > 0
+        )
     result = candidate.result
     return HybridSearchResult(
         document_id=result.document_id,
@@ -752,10 +1086,13 @@ def candidate_to_result(candidate: _HybridCandidate, service: HybridSearchServic
         source_image_path=result.source_image_path,
         caption=getattr(result, "caption", None),
         page_number=getattr(result, "page_number", None),
+        channels=channels,
     )
 
 
-def max_result_score(results: list[KeywordSearchResult] | list[VectorSearchResult]) -> float:
+def max_result_score(
+    results: list[KeywordSearchResult] | list[VectorSearchResult] | list[HybridSearchResult],
+) -> float:
     return max((result.score for result in results), default=0.0)
 
 
@@ -763,3 +1100,73 @@ def normalize_score(score: float, max_score: float) -> float:
     if score <= 0 or max_score <= 0:
         return 0.0
     return min(1.0, score / max_score)
+
+
+def query_matches_terms(query: str, terms: tuple[str, ...]) -> bool:
+    normalized = query.casefold()
+    compact = normalized.replace(" ", "")
+    for term in terms:
+        lowered = term.casefold()
+        if lowered in normalized or lowered.replace(" ", "") in compact:
+            return True
+    return False
+
+
+def query_channel_terms(query: str) -> list[str]:
+    normalized = query.strip()
+    if not normalized:
+        return []
+    ascii_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9./+-]*", normalized)
+    chinese_terms = re.findall(r"[\u4e00-\u9fff]{2,}", normalized)
+    terms = [term.casefold() for term in ascii_terms if len(term) >= 2]
+    terms.extend(chinese_terms)
+    return list(dict.fromkeys(terms))
+
+
+def chunk_text_match_score(text: str, terms: list[str]) -> float:
+    normalized = text.casefold()
+    score = 0.0
+    for term in terms:
+        if term.casefold() in normalized:
+            score += 1.0
+    return score
+
+
+def channel_candidate_counts(results: list[HybridSearchResult]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for result in results:
+        for channel in result.channels:
+            counts[channel] = counts.get(channel, 0) + 1
+    return counts
+
+
+def trace_channel_counts(
+    *,
+    enabled: object,
+    eligible: object,
+    counts: object,
+) -> None:
+    trace = get_current_latency_trace()
+    if trace is None:
+        return
+    trace.set_value("retrieval_enabled_channels", safe_str_list(enabled))
+    trace.set_value("retrieval_eligible_channels", safe_str_list(eligible))
+    trace.set_value("retrieval_channel_candidate_counts", safe_count_dict(counts))
+
+
+def safe_str_list(value: object) -> list[str]:
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    return [str(item) for item in value]
+
+
+def safe_count_dict(value: object) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    counts: dict[str, int] = {}
+    for key, item in value.items():
+        try:
+            counts[str(key)] = int(item)
+        except (TypeError, ValueError):
+            continue
+    return counts

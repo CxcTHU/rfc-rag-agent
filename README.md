@@ -1,5 +1,31 @@
 # RFC-RAG-Agent
 
+## Phase 57 Multi-Channel Hybrid Retrieval
+
+Current branch: `codex/phase-57-multichannel-hybrid-retrieval`.
+
+Phase 57 keeps the default `tool_calling_agent` tool surface stable and upgrades the retrieval workflow behind `hybrid_search_knowledge`. The new multi-channel path is default-off and can add gated `graph`, `table_text`, and `figure_caption` candidate channels to the existing keyword/vector backbone before dedupe, rank fusion, reranking, dynamic K, and cited answer generation.
+
+New default-off switches:
+
+```text
+HYBRID_MULTICHANNEL_ENABLED=false
+HYBRID_GRAPH_CHANNEL_ENABLED=false
+HYBRID_TABLE_TEXT_CHANNEL_ENABLED=false
+HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=false
+```
+
+`search_tables` remains the explicit raw-table tool and `search_figures` remains the explicit image/figure asset tool. The figure-caption channel only contributes text evidence. Phase 57 also adds `scripts/evaluate_phase57_default_chain.py`, a sanitized 30-case default-chain evaluator that is dry-run by default and calls real `/agent/query` only with `--execute`.
+
+Latest local Phase 57 real-chain evidence:
+
+```text
+python scripts/evaluate_phase57_default_chain.py --execute --base-url http://127.0.0.1:8001 --out data/evaluation/phase57_default_chain_eval.csv --top-k 8 --max-tool-calls 5 --timeout-seconds 240 --limit 30 --config-label multichannel
+-> cases=30 rows=30 completed=30 errors=0 channel_rows=22 median_elapsed_ms=28734.723
+```
+
+The completed set covers 6 ordinary, 6 graph-intent, 6 table-intent, 6 visual-adjacent, and 6 boundary cases. It stores safe metadata only and does not store full answers, full chunks, provider raw responses, secrets, hidden reasoning, restricted full text, or private logs. See `docs/phase_reviews/phase-57.md`.
+
 ## Phase 56 Layered Agent Cache
 
 Current branch: `codex/phase-56-layered-agent-cache`.

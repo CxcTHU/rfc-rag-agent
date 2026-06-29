@@ -1,3 +1,69 @@
+# 阶段 57 多通道混合检索与默认链路真实评测最新交班状态（2026-06-29，用户人工核验 PASS 后提交中）
+
+当前分支：`codex/phase-57-multichannel-hybrid-retrieval`。
+
+阶段 57 已完成人工核验 PASS，用户已授权提交阶段 57 整体开发、创建 `phase-57-complete` tag、推送 GitHub 并合并。阶段 57 保持默认 `tool_calling_agent` 工具面稳定，没有把 `search_graph_knowledge` 暴露给默认 tool-calling 模型；核心改动是把 `hybrid_search_knowledge` 升级为默认关闭的多通道 workflow kernel。
+
+关键新增：
+
+```text
+app/core/config.py -> HYBRID_MULTICHANNEL_* 默认关闭开关
+app/services/retrieval/hybrid_search.py -> keyword/vector + gated graph/table_text/figure_caption channels
+app/services/observability/latency_trace.py -> channel diagnostics defaults
+tests/test_hybrid_search.py -> Phase 57 channel gate/fusion diagnostics tests
+scripts/evaluate_phase57_default_chain.py -> 30-case 默认链路真实评测器
+data/evaluation/phase57_default_chain_eval.csv -> 脱敏真实评测元数据
+docs/stage57_multichannel_hybrid_retrieval_design.md
+docs/phase_reviews/phase-57.md
+```
+
+默认开关保持保守：
+
+```text
+HYBRID_MULTICHANNEL_ENABLED=false
+HYBRID_GRAPH_CHANNEL_ENABLED=false
+HYBRID_TABLE_TEXT_CHANNEL_ENABLED=false
+HYBRID_FIGURE_CAPTION_CHANNEL_ENABLED=false
+```
+
+人工核验时使用 8000 端口启用了 Phase 57 多通道、Phase 56 分层 cache 和 dynamic K；核验 PASS 后未保留 8000 监听服务。
+
+当前验证：
+
+```text
+python -m py_compile app/services/retrieval/hybrid_search.py app/services/graphrag/graph_search.py app/core/config.py app/services/observability/latency_trace.py -> passed
+python -m py_compile scripts/evaluate_phase57_default_chain.py -> passed
+python -m pytest tests/test_hybrid_search.py tests/test_agent_tools.py tests/test_tool_calling_agent_service.py tests/test_phase53_graph_enhanced_search.py tests/test_phase56_layered_cache.py -q -> 65 passed
+python scripts/evaluate_phase57_default_chain.py --execute --base-url http://127.0.0.1:8001 --out data/evaluation/phase57_default_chain_eval.csv --top-k 8 --max-tool-calls 5 --timeout-seconds 240 --limit 30 --config-label multichannel -> cases=30 rows=30 completed=30 errors=0 channel_rows=22 median_elapsed_ms=28734.723
+python -m pytest tests/test_hybrid_search.py tests/test_agent_tools.py tests/test_tool_calling_agent_service.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_phase53_graph_enhanced_search.py tests/test_phase56_layered_cache.py tests/test_reranking.py -q -> 123 passed
+python -m pytest -q -> 1285 passed, 1 skipped
+python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+git diff --check -> no whitespace errors; CRLF warnings only
+targeted sensitive scan -> only .env.example placeholders and safety-policy mentions matched; no real secrets or Phase 57 payload leaks
+```
+
+30-case 真实默认链路评测结论：
+
+```text
+cases=30 rows=30 completed=30 errors=0
+ordinary=6 graph_intent=6 table_intent=6 visual_adjacent=6 boundary=6
+hybrid_search_knowledge rows=23
+search_tables rows=8
+refused=true rows=3
+```
+
+人工核验发现但不在阶段 57 临时修复的问题：追问式图片请求「我需要图片支撑」会加载 conversation history，但默认 `tool_calling_agent` 目前缺少成熟 Agent Runtime 的 tool-argument contextualization 层，导致 `search_figures(query="我需要图片支撑")` 没有继承上一轮「大坝裂缝成因」主题，图检索返回 `visual_intent=false` 后触发 `evidence_insufficient`。用户明确决定不在 57 阶段补临时 grounding，而是把整体成熟 Runtime 放到阶段 58。
+
+阶段 58 建议方向：
+
+```text
+Phase 58: Mature Agent Runtime Layer
+Agent shell -> Agent Runtime -> Workflow Kernel
+Runtime 负责 context assembly、task contextualization、tool argument grounding、guardrails/dedupe/iteration control、evidence state manager、final answer controller 和 diagnostics。
+```
+
+提交收口仍必须遵守：不得把 `.env`、`.env.prod`、数据库密码、JWT secret、Redis 密码、API key、Bearer token、provider raw response、raw answer text、`raw_response`、`reasoning_content`、hidden thought、完整 chunk、受限全文、私有服务日志或长期用户画像写入 Git/CSV/文档/测试/Obsidian。
+
 # 阶段 56 分层语义缓存与 Agent 延迟优化最新交班状态（2026-06-28，用户人工核验 PASS 后提交中）
 
 当前分支：`codex/phase-56-layered-agent-cache`。

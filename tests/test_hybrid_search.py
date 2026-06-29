@@ -1,13 +1,16 @@
 import time
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
-from app.db.models import Base
+from app.db.models import Base, Chunk
 from app.db.repositories import ChunkCreate
 from app.db.repositories import DocumentCreate
 from app.db.repositories import DocumentRepository
 from app.db.session import create_sqlite_engine
+from app.services.graphrag.graph_store import build_knowledge_graph, save_graph
+from app.services.graphrag.schema import GraphEntity, GraphExtractionResult, GraphRelation
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.hybrid_search import normalize_score
@@ -75,6 +78,79 @@ def seed_hybrid_documents(db: Session) -> None:
     )
 
 
+def seed_multichannel_documents(db: Session) -> dict[str, int]:
+    repository = DocumentRepository(db)
+    repository.create_with_chunks(
+        DocumentCreate(
+            title="RFC Standard Relationship",
+            source_type="standard_document",
+            source_path="standard.pdf",
+            file_name="standard.pdf",
+            file_extension=".pdf",
+            content_hash="phase57-standard-hash",
+            raw_path="data/raw/standard.pdf",
+        ),
+        [
+            ChunkCreate(
+                chunk_index=0,
+                content="NB/T 10077 defines compressive strength requirements for rock-filled concrete.",
+                char_count=78,
+                heading_path="Standard",
+                start_char=0,
+                end_char=78,
+            )
+        ],
+    )
+    repository.create_with_chunks(
+        DocumentCreate(
+            title="RFC Mix Ratio Table",
+            source_type="local_file",
+            source_path="table.md",
+            file_name="table.md",
+            file_extension=".md",
+            content_hash="phase57-table-hash",
+            raw_path="data/raw/table.md",
+        ),
+        [
+            ChunkCreate(
+                chunk_index=0,
+                content="| parameter | value |\n| water binder ratio | 0.32 |\n| aggregate ratio | 0.58 |",
+                char_count=78,
+                heading_path="Table",
+                start_char=0,
+                end_char=78,
+                chunk_type="table",
+            )
+        ],
+    )
+    repository.create_with_chunks(
+        DocumentCreate(
+            title="RFC Failure Figure",
+            source_type="local_file",
+            source_path="figure.pdf",
+            file_name="figure.pdf",
+            file_extension=".pdf",
+            content_hash="phase57-figure-hash",
+            raw_path="data/raw/figure.pdf",
+        ),
+        [
+            ChunkCreate(
+                chunk_index=0,
+                content="compression failure morphology image showing cracks in rock-filled concrete",
+                char_count=72,
+                heading_path="Figure",
+                start_char=0,
+                end_char=72,
+                chunk_type="image_description",
+                source_image_path="data/images/1/page1_img1.png",
+                caption="Failure morphology curve and crack photo",
+            )
+        ],
+    )
+    rows = db.execute(select(Chunk)).scalars().all()
+    return {chunk.chunk_type: chunk.id for chunk in rows}
+
+
 def test_hybrid_search_uses_keyword_evidence_to_rank_expected_match(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -104,6 +180,99 @@ def test_hybrid_search_returns_keyword_results_when_vector_index_is_missing(tmp_
     assert results[0].keyword_score > 0
     assert results[0].vector_score == 0
     assert "Filling Capacity" in results[0].document_title
+
+
+def test_hybrid_multichannel_graph_channel_enters_default_hybrid_kernel(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    graph_path = tmp_path / "domain_graph.json"
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        chunk_ids = seed_multichannel_documents(db)
+        graph = build_knowledge_graph(
+            [
+                GraphExtractionResult(
+                    chunk_id=chunk_ids["text"],
+                    document_id=1,
+                    document_title="RFC Standard Relationship",
+                    entities=(
+                        GraphEntity(name="NB/T 10077", type="Standard"),
+                        GraphEntity(name="compressive strength", type="Parameter"),
+                    ),
+                    relations=(
+                        GraphRelation(
+                            subject="NB/T 10077",
+                            predicate="standard_defines",
+                            object="compressive strength",
+                            source_chunk_id=chunk_ids["text"],
+                        ),
+                    ),
+                )
+            ]
+        )
+        save_graph(graph, graph_path)
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            service = HybridSearchService(db, provider, parallel=False, reranking_enabled=False)
+            original = (
+                service.settings.hybrid_multichannel_enabled,
+                service.settings.hybrid_graph_channel_enabled,
+                service.settings.graphrag_graph_path,
+            )
+            try:
+                service.settings.hybrid_multichannel_enabled = True
+                service.settings.hybrid_graph_channel_enabled = True
+                service.settings.graphrag_graph_path = str(graph_path)
+                results = service.search("Which standard defines compressive strength?", top_k=3)
+            finally:
+                (
+                    service.settings.hybrid_multichannel_enabled,
+                    service.settings.hybrid_graph_channel_enabled,
+                    service.settings.graphrag_graph_path,
+                ) = original
+        finally:
+            reset_current_latency_trace(token)
+
+    assert any("graph" in result.channels for result in results)
+    assert trace.values["retrieval_eligible_channels"] == ["keyword", "vector", "graph"]
+    assert trace.values["graph_search_available"] is True
+    assert trace.values["retrieval_channel_candidate_counts"]["graph"] >= 1
+
+
+def test_hybrid_multichannel_table_and_figure_caption_channels_are_gated(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_multichannel_documents(db)
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            service = HybridSearchService(db, provider, parallel=False, reranking_enabled=False)
+            original = (
+                service.settings.hybrid_multichannel_enabled,
+                service.settings.hybrid_table_text_channel_enabled,
+                service.settings.hybrid_figure_caption_channel_enabled,
+            )
+            try:
+                service.settings.hybrid_multichannel_enabled = True
+                service.settings.hybrid_table_text_channel_enabled = True
+                service.settings.hybrid_figure_caption_channel_enabled = True
+                table_results = service.search("Which table parameter gives water binder ratio?", top_k=3)
+                figure_results = service.search("Show figure caption for failure morphology cracks", top_k=3)
+            finally:
+                (
+                    service.settings.hybrid_multichannel_enabled,
+                    service.settings.hybrid_table_text_channel_enabled,
+                    service.settings.hybrid_figure_caption_channel_enabled,
+                ) = original
+        finally:
+            reset_current_latency_trace(token)
+
+    assert any("table_text" in result.channels for result in table_results)
+    assert any("figure_caption" in result.channels for result in figure_results)
+    assert trace.values["retrieval_channel_candidate_counts"]["figure_caption"] >= 1
 
 
 def test_hybrid_parallel_results_match_serial_results(tmp_path) -> None:
