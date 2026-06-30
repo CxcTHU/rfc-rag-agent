@@ -1,5 +1,59 @@
 # 数据来源登记
 
+## Phase 58H Runtime Checkpoint And Cache Evaluation Data
+
+Phase 58H adds derived runtime data only. It does not add an external corpus, crawler, PDF download, model weight, embedding rebuild, or user-profile source.
+
+New runtime table:
+
+```text
+agent_runtime_runs
+```
+
+Allowed contents are bounded runtime metadata: run id, conversation id, status, node labels, timestamps, workflow step summaries, selected source summaries, chunk ids, evidence identity labels, and diagnostics.
+
+Forbidden contents include API keys, bearer tokens, JWT secrets, Redis passwords, database passwords, provider raw responses, hidden reasoning, full chunks, restricted full text, raw uploaded image bytes, and private service logs.
+
+New evaluation files:
+
+```text
+data/evaluation/phase58h_runtime_resume_cases.yaml
+data/evaluation/phase58h_cache_canonicalization_cases.yaml
+data/evaluation/phase58h_runtime_resume_eval.csv
+data/evaluation/phase58h_cache_hit_eval.csv
+```
+
+These artifacts store case ids, categories, expected/actual booleans, node labels, entity/intent labels, safe reasons, and short hashes only.
+
+## Phase 58 Mature Agent Runtime Data Boundary
+
+Phase 58 adds no external corpus, crawler, PDF download, source registry entry, model weight, embedding rebuild, or user-profile data.
+
+It adds runtime metadata only:
+
+```text
+runtime context labels
+follow-up type
+inherited topic summary
+standalone task summary
+tool argument rewrite summaries
+evidence attempt counts
+evidence type counts
+loop stop reason
+final decision label
+```
+
+These diagnostics are bounded and safe for UI/evaluation metadata. They must not store API keys, bearer tokens, JWT/Redis/database passwords, provider raw responses, `raw_response`, `reasoning_content`, hidden reasoning, full answers, full chunk text, restricted full text, private service logs, long-term user profiles, or raw uploaded images.
+
+New Phase 58 artifacts:
+
+```text
+app/services/agent/runtime.py
+docs/stage58_mature_agent_runtime_goal_prompt.md
+docs/stage58_mature_agent_runtime_design.md
+docs/phase_reviews/phase-58.md
+```
+
 ## Phase 57 Multi-Channel Retrieval Data Boundary
 
 Phase 57 adds no external corpus, crawler, PDF download, source registry entry, model weight, embedding rebuild, or user-profile data. It reuses existing PostgreSQL chunks, existing GraphRAG derived graph data, table chunks, and image-description chunks as retrieval candidate channels.

@@ -181,6 +181,20 @@ def test_create_reranking_provider_supports_paratera_with_subpath() -> None:
     assert provider._endpoint_url() == "https://llmapi.paratera.com/v1/p002/rerank"
 
 
+def test_create_reranking_provider_uses_embedding_key_for_paratera(monkeypatch) -> None:
+    monkeypatch.delenv("RERANKING_FALLBACK_API_KEY", raising=False)
+    monkeypatch.setenv("EMBEDDING_API_KEY", "embedding-route-key")
+    provider = create_reranking_provider(
+        "paratera",
+        model_name="GLM-Rerank",
+        api_key="",
+        base_url="https://llmapi.paratera.com/v1/p002",
+    )
+
+    assert isinstance(provider, OpenAICompatibleReRankingProvider)
+    assert provider.api_key == "embedding-route-key"
+
+
 def test_openai_compatible_reranker_allows_private_service_without_api_key(monkeypatch) -> None:
     seen = {}
 

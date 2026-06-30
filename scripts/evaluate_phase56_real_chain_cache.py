@@ -250,7 +250,6 @@ def response_row(
         "citation_count": len(response.get("citations", []) if isinstance(response.get("citations"), list) else []),
         "top_source_types": safe_join(source_types),
         "top_source_titles": safe_join(source_titles, limit=5),
-        "semantic_cache_hit": trace.get("semantic_cache_hit", ""),
         "retrieval_cache_hit": trace.get("retrieval_cache_hit", ""),
         "rerank_cache_hit": trace.get("rerank_cache_hit", ""),
         "tool_result_cache_hit": trace.get("tool_result_cache_hit", ""),
@@ -377,7 +376,6 @@ def main() -> None:
             row["retrieval_cache_hit"] is True
             or row["rerank_cache_hit"] is True
             or row["tool_result_cache_hit"] is True
-            or row["semantic_cache_hit"] is True
         )
     )
     diagnostic_rows = sum(
@@ -386,7 +384,6 @@ def main() -> None:
         if row["retrieval_query_present"]
         or row["retrieval_candidate_ids_present"]
         or row["retrieval_selected_ids_present"]
-        or row["semantic_cache_hit"] is True
     )
     cold_elapsed = completed_elapsed_by_run(rows, "cold")
     warm_elapsed = completed_elapsed_by_run(rows, "warm")

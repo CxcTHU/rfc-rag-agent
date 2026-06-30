@@ -1,0 +1,8 @@
+case_id,category,status,expected_same_identity,actual_same_identity,q1_entity_key,q1_intent_key,q2_entity_key,q2_intent_key,q1_safe,q2_safe,q1_reason,q2_reason,canonical_query_hash
+rfc_advantage_synonym,same_identity,pass,True,True,rock-filled concrete,advantages,rock-filled concrete,advantages,True,True,canonicalized,canonicalized,5fb998986323
+rfc_benefit_cross_language,same_identity,pass,True,True,rock-filled concrete,advantages,rock-filled concrete,advantages,True,True,canonicalized,canonicalized,5fb998986323
+rfc_cause_not_advantage,different_intent,pass,False,False,rock-filled concrete,advantages,rock-filled concrete,causes,True,True,canonicalized,canonicalized,
+different_entity_no_reuse,different_entity,pass,False,False,rock-filled concrete,advantages,self-compacting concrete,advantages,True,True,canonicalized,canonicalized,
+visual_followup_identity,followup_same_identity,pass,True,True,dam crack causes,visual_evidence,dam crack causes,visual_evidence,True,True,canonicalized,canonicalized,3c91b1ba9c44
+table_followup_identity,followup_same_identity,pass,True,True,rock-filled concrete,table_evidence,rock-filled concrete,table_evidence,True,True,canonicalized,canonicalized,2f04052ebf87
+comparison_constraint_blocks_simple_reuse,constraint_change,pass,False,False,rock-filled concrete,advantages,rock-filled concrete,comparison,True,True,canonicalized,canonicalized,

@@ -10,6 +10,8 @@ class AgentQueryRequest(BaseModel):
     mode: str | None = None
     conversation_id: int | None = Field(default=None, ge=1)
     image_path: str | None = None
+    resume_run_id: str | None = None
+    resume_policy: str = "auto"
 
     @field_validator("question")
     @classmethod
@@ -64,6 +66,22 @@ class AgentQueryRequest(BaseModel):
             return None
         if not normalized.startswith("data/user_uploads/"):
             raise ValueError("image_path must point to data/user_uploads/")
+        return normalized
+
+    @field_validator("resume_run_id")
+    @classmethod
+    def resume_run_id_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("resume_policy")
+    @classmethod
+    def resume_policy_must_be_supported(cls, value: str) -> str:
+        normalized = (value or "auto").strip().lower()
+        if normalized not in {"auto", "force", "never"}:
+            raise ValueError("resume_policy must be 'auto', 'force', or 'never'")
         return normalized
 
 

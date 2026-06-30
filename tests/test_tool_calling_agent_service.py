@@ -8,6 +8,7 @@ from app.services.agent.tools import (
     AgentSourceReference,
     AgentToolCallRecord,
     AgentToolResult,
+    AgentToolbox,
 )
 from app.services.agent.tool_calling_service import (
     ToolCallingAgentService,
@@ -18,6 +19,8 @@ from app.services.agent.tool_calling_service import (
     tool_calling_tool_definitions,
     tool_calling_messages,
 )
+from app.services.agent.runtime import AgentRuntime, assemble_runtime_context
+from app.core.config import get_settings
 from app.services.generation.chat_model import (
     ChatMessage,
     ChatModelResult,
@@ -27,6 +30,11 @@ from app.services.generation.chat_model import (
     ToolCallingChatModelResult,
 )
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
+from app.services.observability.latency_trace import (
+    LatencyTrace,
+    reset_current_latency_trace,
+    set_current_latency_trace,
+)
 from app.services.retrieval.vector_index import VectorIndexService
 
 
@@ -35,6 +43,30 @@ def make_session(tmp_path):
     engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
     Base.metadata.create_all(bind=engine)
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+class FakeRedis:
+    def __init__(self) -> None:
+        self.values: dict[str, bytes] = {}
+
+    def get(self, key: str) -> bytes | None:
+        return self.values.get(key)
+
+    def setex(self, key: str, ttl: int, value: str) -> None:
+        self.values[key] = value.encode("utf-8")
+
+
+def enable_tool_cache(monkeypatch, fake_redis: FakeRedis) -> None:
+    monkeypatch.setenv("REDIS_URL", "redis://phase58i-test")
+    monkeypatch.setenv("LAYERED_CACHE_NAMESPACE", "phase58i-test")
+    monkeypatch.setenv("TOOL_RESULT_CACHE_ENABLED", "true")
+    monkeypatch.setenv("RETRIEVAL_CANDIDATE_CACHE_ENABLED", "false")
+    monkeypatch.setenv("RERANK_ORDER_CACHE_ENABLED", "false")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        "app.services.cache.layered_cache.get_redis_client",
+        lambda settings=None: fake_redis,
+    )
 
 
 def seed_tool_calling_documents(db: Session) -> None:
@@ -106,6 +138,7 @@ def seed_tool_calling_figure_documents(db: Session) -> None:
 def make_service(
     db: Session,
     chat_provider: DeterministicChatModelProvider | None = None,
+    runtime_identity_provider=None,
 ) -> ToolCallingAgentService:
     provider = DeterministicEmbeddingProvider(dimension=32)
     VectorIndexService(db, provider).build_index()
@@ -113,6 +146,7 @@ def make_service(
         db=db,
         embedding_provider=provider,
         chat_model_provider=chat_provider or DeterministicChatModelProvider(),
+        runtime_identity_provider=runtime_identity_provider,
         log_answers=False,
     )
 
@@ -169,6 +203,250 @@ class CitationRepairChatProvider:
         )
 
 
+class VisualFollowupChatProvider:
+    provider_name = "visual-followup-test"
+    model_name = "visual-followup-test-v1"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        return ChatModelResult(
+            answer="The requested visual evidence is available [1].",
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+    def stream_generate(self, messages: list[ChatMessage]):
+        yield self.generate(messages).answer
+
+    def generate_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[ChatToolDefinition],
+    ) -> ToolCallingChatModelResult:
+        if not any(message.role == "tool" for message in messages):
+            return ToolCallingChatModelResult(
+                content="",
+                tool_calls=[
+                    ChatToolCall(
+                        id="call_figure",
+                        name="search_figures",
+                        arguments={"query": "我需要图片支撑", "top_k": 4},
+                    )
+                ],
+                provider=self.provider_name,
+                model_name=self.model_name,
+            )
+        return ToolCallingChatModelResult(
+            content="The requested visual evidence is available [1].",
+            tool_calls=[],
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+
+class RuntimeIdentityProvider:
+    provider_name = "runtime-identity-test"
+    model_name = "runtime-identity-test-v1"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        return ChatModelResult(
+            answer=(
+                '{"entity_key":"rock-filled concrete",'
+                '"intent_key":"crack_phenomena",'
+                '"canonical_query":"堆石混凝土 rock-filled concrete 裂缝 缝隙 裂纹 开裂",'
+                '"confidence":0.9,'
+                '"safe_for_cache_reuse":true}'
+            ),
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+    def stream_generate(self, messages: list[ChatMessage]):
+        yield self.generate(messages).answer
+
+    def generate_with_tools(self, messages, tools):  # pragma: no cover - not used.
+        raise AssertionError("runtime identity provider should not select tools")
+
+
+class IdentityAndHydeProvider(RuntimeIdentityProvider):
+    model_name = "identity-hyde-test-v1"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        latest = messages[-1].content if messages else ""
+        if "required_json_schema" in latest:
+            return super().generate(messages)
+        return ChatModelResult(
+            answer=(
+                "Rock-filled concrete crack phenomena may involve defects, "
+                "interfaces, aggregate voids, and damage characterization."
+            ),
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+
+class CachedEvidenceAnswerProvider(DeterministicChatModelProvider):
+    provider_name = "cached-answer-test"
+    model_name = "cached-answer-test-v1"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        return ChatModelResult(
+            answer="Fresh answer generated from cached evidence [1].",
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+    def generate_with_tools(self, messages, tools):  # pragma: no cover - should be skipped.
+        raise AssertionError("semantic evidence cache hit should skip tool selection")
+
+
+def test_agent_runtime_contextualizes_visual_followup() -> None:
+    context = assemble_runtime_context(
+        "我需要图片支撑",
+        history=("大坝的裂缝成因有哪些？请给我详细列出来",),
+    )
+
+    assert context.followup_type == "visual_evidence_request"
+    assert context.contextualized
+    assert context.inherited_topic == "大坝的裂缝成因有哪些？请给我详细列出来"
+    assert "大坝" in context.standalone_task
+    assert "图片" in context.standalone_task
+
+
+def test_agent_runtime_does_not_inherit_for_standalone_new_topic() -> None:
+    context = assemble_runtime_context(
+        "堆石混凝土的自密实性能如何评价？",
+        history=("大坝的裂缝成因有哪些？请给我详细列出来",),
+    )
+
+    assert context.followup_type == "standalone"
+    assert not context.contextualized
+    assert context.inherited_topic == ""
+    assert context.standalone_task == "堆石混凝土的自密实性能如何评价？"
+
+
+def test_agent_runtime_grounds_tool_arguments_by_tool() -> None:
+    runtime = AgentRuntime()
+    state = runtime.assemble(
+        "给我表格",
+        history=("堆石混凝土配合比设计参数有哪些？",),
+    )
+    grounded_call, grounding = runtime.ground_tool_call(
+        ChatToolCall(
+            id="call_table",
+            name="search_tables",
+            arguments={"query": "给我表格", "top_k": 3},
+        ),
+        state=state,
+        default_query="给我表格",
+    )
+
+    assert grounding.rewrite_applied
+    assert grounding.reason == "grounded_table_followup"
+    assert "配合比" in grounded_call.arguments["query"]
+    assert "表格" in grounded_call.arguments["query"]
+
+
+def test_tool_calling_agent_uses_llm_runtime_identity_for_open_synonyms(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        result = make_service(
+            db,
+            runtime_identity_provider=RuntimeIdentityProvider(),
+        ).query(
+            "堆石混凝土的裂纹问题",
+            top_k=2,
+            max_tool_calls=2,
+        )
+
+    trace = result.latency_trace
+    assert trace["evidence_cache_identity_source"] == "llm"
+    assert trace["evidence_cache_identity_model_name"] == "runtime-identity-test-v1"
+    assert trace["evidence_entity_key"] == "rock-filled concrete"
+    assert trace["evidence_intent_key"] == "crack_phenomena"
+    assert trace["evidence_cache_reuse_allowed"] is True
+    assert trace["runtime_contextualization_source"] == "llm"
+
+
+def test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    fake_redis = FakeRedis()
+    enable_tool_cache(monkeypatch, fake_redis)
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        VectorIndexService(db, provider).build_index()
+        toolbox = AgentToolbox(
+            db,
+            embedding_provider=provider,
+            chat_model_provider=DeterministicChatModelProvider(),
+            log_answers=False,
+        )
+        trace = LatencyTrace()
+        trace.set_value("evidence_cache_reuse_allowed", True)
+        trace.set_value("evidence_entity_key", "rock-filled concrete")
+        trace.set_value("evidence_intent_key", "crack_phenomena")
+        trace.set_value("evidence_canonical_query", "堆石混凝土 rock-filled concrete 裂缝 缝隙 裂纹 开裂")
+        token = set_current_latency_trace(trace)
+        try:
+            first = toolbox.hybrid_search_knowledge("filling capacity rock-filled concrete", top_k=1)
+        finally:
+            reset_current_latency_trace(token)
+        events = []
+        second = make_service(
+            db,
+            chat_provider=CachedEvidenceAnswerProvider(),
+            runtime_identity_provider=RuntimeIdentityProvider(),
+        ).query(
+            "堆石混凝土缝隙问题",
+            top_k=1,
+            max_tool_calls=2,
+            event_sink=events.append,
+        )
+
+    assert first.sources
+    assert second.answer == "Fresh answer generated from cached evidence [1]."
+    assert second.latency_trace["semantic_cache_hit"] is True
+    assert second.latency_trace["tool_result_cache_hit"] is True
+    assert second.latency_trace["hyde_generated"] is False
+    assert second.latency_trace["executed_tool_call_count"] == 0
+    assert [event.event for event in events] == ["tool_call_result"]
+    assert events[0].payload["tool_name"] == "hybrid_search_knowledge"
+    assert "cache hit" in events[0].payload["observation_summary"]
+
+
+def test_tool_calling_agent_generates_hyde_only_on_semantic_cache_miss(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    fake_redis = FakeRedis()
+    enable_tool_cache(monkeypatch, fake_redis)
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        result = make_service(
+            db,
+            runtime_identity_provider=IdentityAndHydeProvider(),
+        ).query(
+            "堆石混凝土裂纹问题",
+            top_k=2,
+            max_tool_calls=2,
+        )
+
+    assert result.sources
+    assert result.latency_trace["semantic_cache_hit"] is False
+    assert result.latency_trace["hyde_generated"] is True
+    assert result.latency_trace["hyde_used_for_vector"] is True
+    assert result.latency_trace["hyde_model"] == "runtime-identity-test/identity-hyde-test-v1"
+    assert all("Hypothetical evidence" not in (source.content or "") for source in result.sources)
+
+
 def test_tool_calling_agent_searches_then_returns_cited_answer(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -188,6 +466,46 @@ def test_tool_calling_agent_searches_then_returns_cited_answer(tmp_path) -> None
     assert result.latency_trace["llm_call_count"] == 2
     assert result.latency_trace["tool_call_count"] == 1
     assert "tool_calling_agent" in result.reasoning_summary
+
+
+def test_tool_calling_agent_stops_when_reranking_fails(tmp_path, monkeypatch) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    def fail_hybrid_search(self, query: str, top_k: int = 5, progress_callback=None) -> AgentToolResult:
+        message = "重排序失效：主 reranker 失败，GLM fallback reranker 也失败。"
+        return AgentToolResult(
+            tool_name="hybrid_search_knowledge",
+            call=AgentToolCallRecord(
+                tool_name="hybrid_search_knowledge",
+                input_summary=f"query={query}; top_k={top_k}",
+                output_summary=message,
+                succeeded=False,
+                error=message,
+            ),
+            refused=True,
+            refusal_reason=message,
+        )
+
+    monkeypatch.setattr(
+        "app.services.agent.tools.AgentToolbox.hybrid_search_knowledge",
+        fail_hybrid_search,
+    )
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        result = make_service(db).query(
+            "What affects filling capacity in rock-filled concrete?",
+            top_k=2,
+            max_tool_calls=3,
+        )
+
+    assert result.refused
+    assert "重排序失效" in result.answer
+    assert result.refusal_reason == result.answer
+    assert len(result.tool_calls) == 1
+    assert not result.tool_calls[0].succeeded
+    assert result.latency_trace["runtime_stop_reason"] == "reranking_failed"
+    assert result.latency_trace["runtime_final_decision"] == "refuse"
 
 
 def test_tool_calling_agent_adds_figures_for_visual_queries(tmp_path, monkeypatch) -> None:
@@ -273,6 +591,85 @@ def test_tool_calling_agent_adds_figures_for_visual_queries(tmp_path, monkeypatc
     assert image_sources[0].caption == "图3-4 堆石混凝土应力应变曲线"
     assert image_sources[0].page_number == 3
     assert image_sources[0].image_url == "/assets/images/tool_calling_fixture/page3_img1.png"
+
+
+def test_tool_calling_runtime_grounds_visual_followup_tool_query(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    executed_queries: list[str] = []
+
+    figure_item = AgentSearchItem(
+        document_id=2,
+        document_title="Dam crack cause figure",
+        source_type="local_file",
+        source_path="dam-crack.pdf",
+        file_name="dam-crack.pdf",
+        chunk_id=30,
+        chunk_index=1,
+        content="Dam crack morphology figure related to crack causes.",
+        heading_path="Figure",
+        score=0.88,
+        chunk_type="image_description",
+        source_image_path="data/images/tool_calling_fixture/page4_img1.png",
+        image_url="/assets/images/tool_calling_fixture/page4_img1.png",
+        caption="大坝裂缝形态图",
+        page_number=4,
+    )
+    figure_source = AgentSourceReference(
+        source_id="chunk:30",
+        title=figure_item.document_title,
+        source_type=figure_item.source_type,
+        document_id=figure_item.document_id,
+        chunk_id=figure_item.chunk_id,
+        chunk_index=figure_item.chunk_index,
+        content=figure_item.content,
+        score=figure_item.score,
+        chunk_type=figure_item.chunk_type,
+        source_image_path=figure_item.source_image_path,
+        image_url=figure_item.image_url,
+        caption=figure_item.caption,
+        page_number=figure_item.page_number,
+    )
+
+    def fake_search_figures(self, query: str, top_k: int = 4) -> AgentToolResult:
+        executed_queries.append(query)
+        return AgentToolResult(
+            tool_name="search_figures",
+            call=AgentToolCallRecord(
+                tool_name="search_figures",
+                input_summary=f"query={query}; top_k={top_k}",
+                output_summary="returned 1 figure results",
+                succeeded=True,
+            ),
+            search_results=[figure_item],
+            sources=[figure_source],
+        )
+
+    monkeypatch.setattr(
+        "app.services.agent.tools.AgentToolbox.search_figures",
+        fake_search_figures,
+    )
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        result = make_service(db, chat_provider=VisualFollowupChatProvider()).query(
+            "我需要图片支撑",
+            history=("大坝的裂缝成因有哪些？请给我详细列出来",),
+            top_k=4,
+            max_tool_calls=3,
+        )
+
+    assert not result.refused
+    assert executed_queries
+    assert executed_queries[0] != "我需要图片支撑"
+    assert "大坝" in executed_queries[0]
+    assert "裂缝" in executed_queries[0]
+    assert "图片" in executed_queries[0]
+    assert result.latency_trace["runtime_followup_type"] == "visual_evidence_request"
+    assert result.latency_trace["runtime_tool_arg_rewrite_count"] == 1
+    assert result.latency_trace["runtime_evidence_counts"]["figure"] == 1
 
 
 def test_tool_calling_agent_emits_safe_runtime_events(tmp_path) -> None:
@@ -536,10 +933,13 @@ def test_tool_calling_structured_final_answer_prompt_is_default() -> None:
     messages = tool_calling_messages("What affects RFC filling capacity?")
 
     assert "structured_final_answer" in messages[0].content
-    assert "citation-first compact structure" in messages[0].content
+    assert "citation-first balanced source-backed structure" in messages[0].content
     assert "direct answer in one or two cited sentences" in messages[0].content
     assert "every requested aspect" in messages[0].content
     assert "4 to 6 bullets" in messages[0].content
+    assert "advantages, causes, classifications, measures" in messages[0].content
+    assert "do not stop at bare labels" in messages[0].content
+    assert "Only use title-only bullets" in messages[0].content
     assert "quality control" in messages[0].content
     assert "Each factual sentence and each factual bullet" in messages[0].content
     assert "Do not omit a supported point" in messages[0].content

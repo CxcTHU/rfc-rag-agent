@@ -48,7 +48,7 @@ class QueryEmbeddingCache:
         self._evictions = 0
 
     def get_or_embed(self, provider: EmbeddingProvider, query: str) -> list[float]:
-        normalized_query = normalize_query_text(query)
+        normalized_query = cache_identity_query_text(query)
         key = QueryEmbeddingCacheKey(
             provider=provider.provider_name,
             model_name=provider.model_name,
@@ -105,6 +105,22 @@ class QueryEmbeddingCache:
 
 def normalize_query_text(query: str) -> str:
     return " ".join((query or "").strip().split())
+
+
+def cache_identity_query_text(query: str) -> str:
+    trace = get_current_latency_trace()
+    if trace is not None and trace.values.get("evidence_cache_reuse_allowed") is True:
+        entity_key = trace.values.get("evidence_entity_key")
+        intent_key = trace.values.get("evidence_intent_key")
+        if isinstance(entity_key, str) and isinstance(intent_key, str):
+            entity = normalize_query_text(entity_key)
+            intent = normalize_query_text(intent_key)
+            if entity and intent:
+                return f"entity={entity}|intent={intent}"
+        canonical = trace.values.get("evidence_canonical_query")
+        if isinstance(canonical, str) and canonical.strip():
+            return normalize_query_text(canonical)
+    return normalize_query_text(query)
 
 
 def record_query_embedding_cache_event(*, hit: bool, backend: str) -> None:

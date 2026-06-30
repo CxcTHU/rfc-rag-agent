@@ -46,6 +46,7 @@ const state = {
   currentConversationId: null,
   agentRequestInFlight: false,
   activeAgentAbortController: null,
+  activeAgentRunsByConversation: {},
   currentView: "ask",
   citationSets: {},
   nextCitationSetId: 1,
@@ -1597,6 +1598,12 @@ function appendAgentUserMessage(question) {
   return answerBox.lastElementChild;
 }
 
+function latestAgentUserQuestionText() {
+  const messages = Array.from(document.querySelectorAll("[data-agent-answer-box] .chat-message--user .answer-text"));
+  const latest = messages.at(-1);
+  return latest?.textContent?.trim() || "";
+}
+
 function appendAgentSummaryMessage(content) {
   const answerBox = document.querySelector("[data-agent-answer-box]");
   if (!answerBox) {
@@ -1617,7 +1624,7 @@ function appendAgentSummaryMessage(content) {
   scrollAgentChatToBottom();
 }
 
-function appendAgentThinkingMessage() {
+function appendAgentThinkingMessage(options = {}) {
   const answerBox = document.querySelector("[data-agent-answer-box]");
   if (!answerBox) {
     return null;
@@ -1641,7 +1648,7 @@ function appendAgentThinkingMessage() {
   );
   scrollAgentChatToBottom();
   const messageElement = answerBox.lastElementChild;
-  startAgentThinkingTimer(messageElement);
+  startAgentThinkingTimer(messageElement, { startedAt: options.startedAt });
   return messageElement;
 }
 
@@ -1686,11 +1693,11 @@ function updateAgentThinkingTimer(messageElement, { completed = false, elapsedMs
   return durationMs;
 }
 
-function startAgentThinkingTimer(messageElement) {
+function startAgentThinkingTimer(messageElement, { startedAt = null } = {}) {
   if (!messageElement) {
     return;
   }
-  messageElement.dataset.agentThinkingStartedAt = String(Date.now());
+  messageElement.dataset.agentThinkingStartedAt = String(startedAt || Date.now());
   updateAgentThinkingTimer(messageElement);
   messageElement._agentThinkingTimerId = window.setInterval(
     () => updateAgentThinkingTimer(messageElement),
@@ -1872,6 +1879,89 @@ function appendAgentLiveStep(messageElement, eventName, payload = {}) {
   scrollAgentChatToBottom();
 }
 
+function conversationRunKey(conversationId) {
+  return conversationId == null ? "" : String(conversationId);
+}
+
+function getActiveAgentRun(conversationId = state.currentConversationId) {
+  return state.activeAgentRunsByConversation[conversationRunKey(conversationId)] || null;
+}
+
+function setActiveAgentRun(run) {
+  if (!run?.conversationId) {
+    return;
+  }
+  state.activeAgentRunsByConversation[conversationRunKey(run.conversationId)] = run;
+}
+
+function clearActiveAgentRun(conversationId) {
+  delete state.activeAgentRunsByConversation[conversationRunKey(conversationId)];
+}
+
+function isCurrentConversation(conversationId) {
+  return String(conversationId || "") === String(state.currentConversationId || "");
+}
+
+function createActiveAgentRun({ conversationId, question, abortController, userMessageElement, messageElement }) {
+  const run = {
+    conversationId,
+    question,
+    abortController,
+    userMessageElement,
+    messageElement,
+    startedAt: Date.now(),
+    events: [],
+    streamedText: "",
+  };
+  setActiveAgentRun(run);
+  return run;
+}
+
+function currentLiveAgentMessage(run) {
+  if (!run || !isCurrentConversation(run.conversationId)) {
+    return null;
+  }
+  if (run.messageElement?.isConnected) {
+    return run.messageElement;
+  }
+  return attachLiveAgentRunToCurrentConversation(run);
+}
+
+function attachLiveAgentRunToCurrentConversation(run = getActiveAgentRun()) {
+  if (!run || !isCurrentConversation(run.conversationId)) {
+    return null;
+  }
+  if (!run.userMessageElement?.isConnected && latestAgentUserQuestionText() !== String(run.question || "").trim()) {
+    run.userMessageElement = appendAgentUserMessage(run.question);
+  }
+  const messageElement = appendAgentThinkingMessage({ startedAt: run.startedAt });
+  if (!messageElement) {
+    return null;
+  }
+  run.messageElement = messageElement;
+  messageElement._agentThoughtEvents = [];
+  if (run.streamedText) {
+    appendTokenToAgentMessage(messageElement, run.streamedText);
+  }
+  const liveSteps = messageElement.querySelector("[data-agent-live-steps]");
+  if (liveSteps) {
+    liveSteps.innerHTML = "";
+    liveSteps.hidden = true;
+  }
+  for (const event of run.events) {
+    appendAgentLiveStep(messageElement, event.eventName, event.payload);
+  }
+  return messageElement;
+}
+
+function appendLiveAgentRunEvent(run, eventName, payload = {}) {
+  if (!run) {
+    return;
+  }
+  run.events.push({ eventName, payload });
+  appendAgentLiveStep(currentLiveAgentMessage(run), eventName, payload);
+}
+
 function agentThoughtStepHtml(step, index) {
   const action = localizeAgentAction(step.name || step.tool_name || step.action);
   const skipped = isSkippedAgentStep(step);
@@ -1902,77 +1992,16 @@ function agentThoughtStepHtml(step, index) {
 function retrievalTraceStepFromResult(result = {}) {
   const trace = result.latency_trace || {};
   const hasRetrievalTrace = Array.isArray(trace.retrieval_selected_chunk_ids)
-    || Array.isArray(trace.retrieval_candidate_chunk_ids)
-    || trace.semantic_cache_hit === true;
+    || Array.isArray(trace.retrieval_candidate_chunk_ids);
   if (!hasRetrievalTrace) {
     return null;
   }
   const parts = [];
-  if (trace.semantic_cache_hit === true) {
-    parts.push(`semantic_cache_hit=true`);
-    if (trace.semantic_cache_similarity !== undefined && trace.semantic_cache_similarity !== null) {
-      parts.push(`similarity=${trace.semantic_cache_similarity}`);
-    }
-  }
-  if (trace.retrieval_query) {
-    parts.push(`query=${trace.retrieval_query}`);
-  }
-  const cacheParts = [];
-  if (trace.retrieval_cache_hit !== undefined) {
-    cacheParts.push(`retrieval_cache_hit=${trace.retrieval_cache_hit}`);
-  }
-  if (trace.rerank_cache_hit !== undefined) {
-    cacheParts.push(`rerank_cache_hit=${trace.rerank_cache_hit}`);
-  }
-  if (trace.tool_result_cache_hit !== undefined) {
-    cacheParts.push(`tool_result_cache_hit=${trace.tool_result_cache_hit}`);
-  }
-  if (cacheParts.length) {
-    parts.push(cacheParts.join(","));
-  }
-  if (trace.reranking_fallback !== undefined) {
-    parts.push(`rerank_fallback=${trace.reranking_fallback}`);
-  }
-  if (trace.reranking_fallback_used !== undefined) {
-    parts.push(`rerank_fallback_used=${trace.reranking_fallback_used}`);
-  }
-  if (trace.reranking_provider || trace.reranking_model) {
-    parts.push(`reranker=${[trace.reranking_provider, trace.reranking_model].filter(Boolean).join("/")}`);
-  }
-  if (trace.retrieval_candidate_count !== undefined) {
-    parts.push(`candidate_count=${trace.retrieval_candidate_count}`);
-  }
-  if (Array.isArray(trace.retrieval_candidate_chunk_ids)) {
-    parts.push(`candidate_chunk_ids=${trace.retrieval_candidate_chunk_ids.slice(0, 20).join(",")}`);
-  }
-  if (trace.retrieval_selected_count !== undefined) {
-    parts.push(`selected_count=${trace.retrieval_selected_count}`);
-  }
-  if (trace.retrieval_dynamic_top_k_enabled !== undefined) {
-    parts.push(`dynamic_top_k=${trace.retrieval_dynamic_top_k_enabled}`);
-  }
-  if (trace.retrieval_selection_reason) {
-    parts.push(`selection_reason=${trace.retrieval_selection_reason}`);
-  }
   if (Array.isArray(trace.retrieval_selected_chunk_ids)) {
     parts.push(`selected_chunk_ids=${trace.retrieval_selected_chunk_ids.slice(0, 12).join(",")}`);
   }
-  if (Array.isArray(trace.retrieval_selected_preview)) {
-    const selectedSources = trace.retrieval_selected_preview
-      .slice(0, 8)
-      .map((item) => {
-        if (!item || typeof item !== "object") {
-          return "";
-        }
-        const chunkId = item.chunk_id ?? "";
-        const sourceType = item.source_type || "";
-        const title = String(item.title || "").slice(0, 48);
-        return `${chunkId}:${sourceType}:${title}`;
-      })
-      .filter(Boolean);
-    if (selectedSources.length) {
-      parts.push(`selected_sources=${selectedSources.join(" | ")}`);
-    }
+  if (!parts.length && Array.isArray(trace.retrieval_candidate_chunk_ids)) {
+    parts.push(`candidate_chunk_ids=${trace.retrieval_candidate_chunk_ids.slice(0, 12).join(",")}`);
   }
   return {
     action: "retrieval_diagnostics",
@@ -2305,6 +2334,7 @@ function renderStoredConversationMessages(messages) {
         reasoning_summary: metadata.reasoning_summary || "",
         workflow_steps: metadata.workflow_steps || [],
         iteration_count: metadata.iteration_count || 0,
+        latency_trace: metadata.latency_trace || {},
         invalid_citations: metadata.invalid_citations || [],
         refusal_category: metadata.refusal_category || null,
       });
@@ -2312,6 +2342,7 @@ function renderStoredConversationMessages(messages) {
       appendAgentSummaryMessage(message.content);
     }
   }
+  attachLiveAgentRunToCurrentConversation();
 }
 
 function renderConversationList() {
@@ -2590,6 +2621,7 @@ async function submitAgent() {
   }
   let pendingUserMessage = null;
   let pendingThinkingMessage = null;
+  let activeRun = null;
   setAgentBusy(true);
   try {
     setApiStatus("Agent running...");
@@ -2621,9 +2653,20 @@ async function submitAgent() {
     let streamStarted = false;
     let result = null;
     const abortController = new AbortController();
+    activeRun = createActiveAgentRun({
+      conversationId: state.currentConversationId,
+      question,
+      abortController,
+      userMessageElement: pendingUserMessage,
+      messageElement: pendingThinkingMessage,
+    });
     const tokenScheduler = createAgentTokenFlushScheduler({
       onFlush: (text) => {
         streamStarted = true;
+        if (activeRun) {
+          activeRun.streamedText = `${activeRun.streamedText || ""}${text}`;
+        }
+        pendingThinkingMessage = currentLiveAgentMessage(activeRun);
         appendTokenToAgentMessage(pendingThinkingMessage, text);
       },
     });
@@ -2637,22 +2680,30 @@ async function submitAgent() {
         onMetadata: (metadata) => {
           tokenScheduler.flushNow();
           result = metadata;
-          finalizeAgentStreamingMessage(pendingThinkingMessage, metadata);
+          pendingThinkingMessage = currentLiveAgentMessage(activeRun);
+          if (pendingThinkingMessage) {
+            finalizeAgentStreamingMessage(pendingThinkingMessage, metadata);
+          }
           pendingThinkingMessage = null;
-          if ((metadata.workflow_steps || []).length) {
-            renderAgentWorkflowSteps(metadata.workflow_steps || []);
-          } else {
-            renderAgentToolCalls(metadata.tool_calls || []);
+          if (activeRun) {
+            clearActiveAgentRun(activeRun.conversationId);
+          }
+          if (isCurrentConversation(body.conversation_id)) {
+            if ((metadata.workflow_steps || []).length) {
+              renderAgentWorkflowSteps(metadata.workflow_steps || []);
+            } else {
+              renderAgentToolCalls(metadata.tool_calls || []);
+            }
           }
         },
         onAgentStep: (payload) => {
-          appendAgentLiveStep(pendingThinkingMessage, "agent_step", payload);
+          appendLiveAgentRunEvent(activeRun, "agent_step", payload);
         },
         onToolCallStart: (payload) => {
-          appendAgentLiveStep(pendingThinkingMessage, "tool_call_start", payload);
+          appendLiveAgentRunEvent(activeRun, "tool_call_start", payload);
         },
         onToolCallResult: (payload) => {
-          appendAgentLiveStep(pendingThinkingMessage, "tool_call_result", payload);
+          appendLiveAgentRunEvent(activeRun, "tool_call_result", payload);
         },
         onDone: () => {
           tokenScheduler.flushNow();
@@ -2667,8 +2718,12 @@ async function submitAgent() {
     } catch (streamError) {
       if (isAgentAbortError(streamError)) {
         tokenScheduler.flushNow();
+        pendingThinkingMessage = currentLiveAgentMessage(activeRun);
         markAgentStreamingAborted(pendingThinkingMessage);
         pendingThinkingMessage = null;
+        if (activeRun) {
+          clearActiveAgentRun(activeRun.conversationId);
+        }
         result = { aborted: true, refused: false };
       } else if (streamStarted) {
         throw streamError;
@@ -2679,13 +2734,21 @@ async function submitAgent() {
           body: JSON.stringify(body),
           timeoutMs: 45000,
         });
-        pendingThinkingMessage?.remove();
+        pendingThinkingMessage = currentLiveAgentMessage(activeRun);
+        if (pendingThinkingMessage) {
+          pendingThinkingMessage.remove();
+        }
         pendingThinkingMessage = null;
-        renderAgentAnswer(result);
-        if ((result.workflow_steps || []).length) {
-          renderAgentWorkflowSteps(result.workflow_steps || []);
-        } else {
-          renderAgentToolCalls(result.tool_calls || []);
+        if (activeRun) {
+          clearActiveAgentRun(activeRun.conversationId);
+        }
+        if (isCurrentConversation(body.conversation_id)) {
+          renderAgentAnswer(result);
+          if ((result.workflow_steps || []).length) {
+            renderAgentWorkflowSteps(result.workflow_steps || []);
+          } else {
+            renderAgentToolCalls(result.tool_calls || []);
+          }
         }
       }
     }
@@ -2696,9 +2759,17 @@ async function submitAgent() {
     }
     await refreshConversationList();
   } catch (error) {
-    pendingThinkingMessage?.remove();
+    pendingThinkingMessage = currentLiveAgentMessage(activeRun) || pendingThinkingMessage;
+    if (pendingThinkingMessage?.isConnected) {
+      pendingThinkingMessage.remove();
+    }
+    if (activeRun) {
+      clearActiveAgentRun(activeRun.conversationId);
+    }
     setAgentPanelStatus("error");
-    appendAgentErrorMessage(userFriendlyErrorMessage(error));
+    if (!activeRun || isCurrentConversation(activeRun.conversationId)) {
+      appendAgentErrorMessage(userFriendlyErrorMessage(error));
+    }
     throw error;
   } finally {
     state.activeAgentAbortController = null;

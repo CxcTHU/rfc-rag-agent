@@ -1,5 +1,110 @@
 # 项目进度
 
+## Latest Status: 2026-06-30 Phase 58 Human Verification Passed And Final Runtime Fixes Completed
+
+Current branch: `codex/phase-58-mature-agent-runtime`.
+
+User human verification has passed for Phase 58. Final post-verification fixes are included before commit:
+
+```text
+Official Zhipu GLM rerank fallback is configured through provider=zhipu, model=rerank, base_url=https://open.bigmodel.cn/api/paas/v4.
+GLM saturated scores are diagnosed as degenerate_fusion_dynamic instead of being reported as fallback transport failure.
+Dynamic K remains enabled under saturated GLM fallback scores by using hybrid fusion scores for dynamic result selection.
+Tool-result cache identity includes dynamic-K quality/version parameters so stale 8-result cache entries cannot hide 12-result dynamic selections.
+Hybrid retrieval may still surface table and image-description chunks; the temporary frontend gating experiment was reverted after user clarification.
+Open semantic identities such as drawbacks/limitations and crack-phenomena synonyms require runtime identity LLM classification instead of deterministic polarity-style wordlists.
+```
+
+Latest validation:
+
+```text
+python -m py_compile app\services\agent\runtime.py app\services\agent\runtime_checkpoint.py app\services\agent\evidence_identity.py app\services\agent\tool_calling_service.py app\services\agent\tools.py app\services\retrieval\hybrid_search.py app\services\retrieval\reranking.py app\core\config.py app\api\agent.py -> passed
+python -m pytest tests/test_phase58h_runtime_checkpoint_cache.py tests/test_tool_calling_agent_service.py tests/test_agent_tools.py tests/test_hybrid_search.py tests/test_reranking.py tests/test_frontend_app.py -q -> 95 passed
+python scripts\score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+python scripts\evaluate_phase58h_cache_hits.py -> cases=7 passed=7 failed=0
+python scripts\evaluate_phase58h_runtime_resume.py -> cases=6 passed=6 failed=0
+python scripts\evaluate_phase58i_continuous_runtime.py -> dry-run metadata generated, turns=30
+python -m pytest -q -> 1304 passed, 1 skipped
+exact GLM API key scan across commit candidates -> 0 hits outside ignored .env
+git diff --check -> no whitespace errors; CRLF warnings only
+```
+
+No `git add`, commit, tag, push, or PR has been performed at this checkpoint.
+
+## Latest Status: 2026-06-29 Phase 58H Runtime Resume And Evidence Cache Identity Implemented
+
+Current branch: `codex/phase-58-mature-agent-runtime`.
+
+Phase 58H extends the default `tool_calling_agent` runtime with durable checkpoint/resume and evidence-cache canonicalization.
+
+Implemented:
+
+```text
+alembic/versions/20260629_0008_agent_runtime_runs.py
+app/db/models.py -> AgentRuntimeRun
+app/schemas/agent.py -> resume_run_id / resume_policy
+app/services/agent/evidence_identity.py
+app/services/agent/runtime_checkpoint.py
+app/services/agent/tool_calling_service.py -> resume path + checkpoint persistence + evidence identity diagnostics
+app/services/retrieval/query_embedding_cache.py -> canonical query cache identity when safe
+app/services/cache/embedding_cache.py -> Redis query embedding cache uses canonical evidence query when safe
+app/services/cache/layered_cache.py -> retrieval/rerank identities use canonical evidence query when safe
+app/services/agent/tools.py -> tool-result cache can use canonical evidence identity
+scripts/evaluate_phase58h_cache_hits.py
+scripts/evaluate_phase58h_runtime_resume.py
+tests/test_phase58h_runtime_checkpoint_cache.py
+data/evaluation/phase58h_runtime_resume_eval.csv
+data/evaluation/phase58h_cache_hit_eval.csv
+```
+
+Validation:
+
+```text
+python scripts\evaluate_phase58h_cache_hits.py -> cases=7 passed=7 failed=0
+python scripts\evaluate_phase58h_runtime_resume.py -> cases=6 passed=6 failed=0
+python -m pytest tests/test_phase58h_runtime_checkpoint_cache.py -q -> 9 passed
+python -m pytest tests/test_phase58h_runtime_checkpoint_cache.py tests/test_phase56_layered_cache.py tests/test_tool_calling_agent_service.py -q -> 35 passed
+python -m pytest tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_hybrid_search.py tests/test_agent_tools.py -q -> 85 passed
+python -m pytest tests/test_agent_api.py tests/test_agent_stream_api.py -q -> 47 passed
+python -m py_compile touched Phase 58H Python files -> passed
+git diff --check -> no whitespace errors; CRLF warnings only
+```
+
+No `git add`, commit, tag, push, or PR has been performed.
+
+## Latest Status: 2026-06-29 Phase 58 Mature Agent Runtime Layer In Progress
+
+Current branch: `codex/phase-58-mature-agent-runtime`.
+
+Phase 58 upgrades the default `tool_calling_agent` toward an explicit Agent Runtime control plane. This is not only query rewrite: the new runtime layer owns structured context assembly, follow-up detection, tool argument grounding, evidence attempt state, loop stop reason, final decision labels, and safe diagnostics.
+
+Implemented so far:
+
+```text
+app/services/agent/runtime.py -> RuntimeContext, AgentRuntimeState, EvidenceState, deterministic tool grounding
+app/services/agent/tool_calling_service.py -> runtime assembly and pre-execution tool argument grounding
+app/services/observability/latency_trace.py -> runtime diagnostics defaults
+tests/test_tool_calling_agent_service.py -> runtime context and visual/table follow-up grounding tests
+docs/stage58_mature_agent_runtime_goal_prompt.md
+docs/stage58_mature_agent_runtime_design.md
+docs/phase_reviews/phase-58.md
+```
+
+Validation:
+
+```text
+python -m py_compile app\services\agent\runtime.py app\services\agent\tool_calling_service.py app\services\observability\latency_trace.py -> passed
+python -m pytest tests/test_tool_calling_agent_service.py -q -> 21 passed
+python -m pytest tests/test_agent_api.py::test_agent_api_detail_followup_uses_agent_tool_decision tests/test_agent_api.py::test_agent_api_accepts_optional_history_for_contextual_answer tests/test_tool_calling_agent_service.py::test_tool_calling_runtime_grounds_visual_followup_tool_query -q -> 3 passed
+python -m pytest tests/test_tool_calling_agent_service.py tests/test_agent_tools.py tests/test_agent_api.py tests/test_agent_stream_api.py -q -> 81 passed
+python scripts\score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
+git diff --check -> no whitespace errors; CRLF warnings only
+```
+
+No `git add`, commit, tag, push, or PR has been performed.
+
+Post-review fix: explicit `search_tables` and `search_figures` no longer call `get_vector_index_cache()` directly. They now use `VectorSearchService`, so PostgreSQL/pgvector HNSW is preferred and FAISS is only fallback. A scan of `app/services` shows direct vector-cache calls only inside `VectorSearchService` fallback and `vector_cache.py`.
+
 ## Latest Status: 2026-06-29 Phase 57 Multi-Channel Hybrid Retrieval Passed Human Verification
 
 Current branch: `codex/phase-57-multichannel-hybrid-retrieval`.
@@ -53,13 +158,12 @@ Manual verification found one Phase 58 input: follow-up image requests load conv
 
 Current branch: `codex/phase-56-layered-agent-cache`.
 
-Phase 56 adds layered Redis caches for repeated standalone Agent evidence work without downgrading providers, disabling tool calling, or enabling broad answer-level Semantic Cache. These switches were introduced default-off; after Phase 57 human verification, the evidence-path caches are enabled by default while broad answer-level Semantic Cache remains off:
+Phase 56 adds layered Redis caches for repeated standalone Agent evidence work without downgrading providers, disabling tool calling, or caching final answers. These switches were introduced default-off; after Phase 57 human verification, the evidence-path caches are enabled by default:
 
 ```text
 RETRIEVAL_CANDIDATE_CACHE_ENABLED=true
 RERANK_ORDER_CACHE_ENABLED=true
 TOOL_RESULT_CACHE_ENABLED=true
-SEMANTIC_CACHE_ENABLED=false
 ```
 
 Implemented:
@@ -107,7 +211,7 @@ dynamic_top_k_rerank_threshold -> retrieval_dynamic_top_k_enabled=true retrieval
 real_chain_cache_eval -> cases=30 rows=60 completed=60 warm_cache_hit_rows=30 warm_speedup_rows=27 diagnostic_rows=31 median_cold_ms=31029.751 median_warm_ms=18677.037
 ```
 
-User-facing diagnostics now show the executed retrieval query, retrieval candidate chunk ids, selected chunk ids, selected source title/source_type preview, rerank fallback/cache state, tool-result cache state, and answer-level `semantic_cache_hit` when applicable. Dynamic rerank-K is configurable and off by default: baseline `RERANKING_DYNAMIC_MIN_RESULTS=4`, cap `RERANKING_DYNAMIC_MAX_RESULTS=12`, relative threshold `RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65`, candidate pool `RERANKING_RECALL_K=75`.
+User-facing diagnostics now show the executed retrieval query, retrieval candidate chunk ids, selected chunk ids, selected source title/source_type preview, rerank fallback/cache state, and tool-result cache state. Dynamic rerank-K is configurable and enabled by default after Phase 57 verification: baseline `RERANKING_DYNAMIC_MIN_RESULTS=4`, cap `RERANKING_DYNAMIC_MAX_RESULTS=12`, relative threshold `RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65`, candidate pool `RERANKING_RECALL_K=75`.
 
 The real-chain evaluator now uses 30 real local-corpus questions and 60 Agent API requests. A first expanded run exposed that exact planner-query cache keys produced `warm_cache_hit_rows=0` because the tool-calling planner can rewrite the same user question into different retrieval queries. Phase 56 now binds a hashed stable user-question cache key into `latency_trace` and uses it for tool-result cache identity while keeping retrieval/rerank lower-layer identities exact and provider/corpus bounded. After this fix, the 30-case run produced `warm_cache_hit_rows=30` and `warm_speedup_rows=27`. The final answer LLM still runs live, so warm latency remains seconds-level rather than fixture-level milliseconds.
 
@@ -384,7 +488,7 @@ Validation:
 ```text
 python -m pytest tests/test_agent_memory_context.py tests/test_phase52_memory_eval.py tests/test_phase50_langgraph_nodes.py tests/test_phase50_langgraph_builder.py tests/test_phase50_langgraph_planner.py tests/test_session_memory.py -q -> 58 passed
 python scripts/evaluate_phase52_memory.py -> cases=20 pass=20 fail=0 pass_rate=1.0000
-python -m pytest tests/test_agent_memory_context.py tests/test_phase52_memory_eval.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_phase50_semantic_cache.py tests/test_phase50_langgraph_nodes.py tests/test_phase50_langgraph_builder.py tests/test_phase50_langgraph_planner.py tests/test_session_memory.py -q -> 114 passed
+python -m pytest tests/test_agent_memory_context.py tests/test_phase52_memory_eval.py tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_phase50_langgraph_nodes.py tests/test_phase50_langgraph_builder.py tests/test_phase50_langgraph_planner.py tests/test_session_memory.py -q -> 114 passed
 python -m pytest -q -> 1148 passed, 1 skipped
 python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass
 ```
@@ -403,7 +507,7 @@ Validation:
 python -m pytest -q -> 1128 passed, 1 skipped
 Phase 51 dry-run -> rows=56 summary=7
 Phase 51 real-provider evaluation -> rows=56 summary=7
-Semantic Cache hit -> 8/8, avg=1.000ms
+The former Semantic Cache hit scenario has been retired in the current runtime.
 Stage 30 -> 91.52 / A / pass
 ```
 
@@ -4162,7 +4266,7 @@ Boundary: user uploads stay under `data/user_uploads/` and are gitignored. Phase
 
 Current branch: `codex/phase-50-langgraph-redis`.
 
-Phase 50 Phase 10-14 is complete before user human verification. The update upgrades Redis to `redis/redis-stack-server:latest`, verifies real RedisSaver checkpoint persistence, adds optional Semantic Cache, adds optional Redis ZSET Rate Limiting, and preserves existing `tool_calling_agent`, `react_agent`, and `default` behavior.
+Phase 50 Phase 10-14 is complete before user human verification. The update upgrades Redis to `redis/redis-stack-server:latest`, verifies real RedisSaver checkpoint persistence, adds optional Redis ZSET Rate Limiting, and preserves existing `tool_calling_agent`, `react_agent`, and `default` behavior. The old answer-level Semantic Cache experiment is removed in the current runtime.
 
 Verification:
 
@@ -4175,7 +4279,7 @@ docker compose -f docker-compose.dev.yml config --quiet -> passed
 docker compose -f docker-compose.prod.yml config --quiet -> passed with temporary local placeholders
 ```
 
-Boundary: Semantic Cache and Rate Limiting are disabled by default. Redis failure paths remain graceful: memory embedding cache, `MemorySaver`, Semantic Cache skip, and Rate Limiting fail-open. No `git add`, commit, tag, push, or PR has been performed.
+Boundary: Rate Limiting is disabled by default. Redis failure paths remain graceful: memory embedding cache, `MemorySaver`, evidence-path cache fail-open, and Rate Limiting fail-open. No `git add`, commit, tag, push, or PR has been performed.
 ## Phase 50 Phase 14-15 Update: pgvector HNSW Migration
 
 Status: complete before user human verification. No `git add`, commit, tag, push, or PR has been performed.
@@ -4344,3 +4448,122 @@ runtime readiness with --check-reranker -> ok=21 warn=0 error=0 manual=0
 ```
 
 This is not a downgrade. The same provider/model choices are preserved; only the current cloud network route changed.
+
+## Latest Status: 2026-06-29 Phase 58I Semantic Evidence Cache And HyDE Runtime Flow
+
+Phase 58I adds the follow-up mature Agent Runtime flow requested by the user:
+
+```text
+context assembly
+query rewrite / semantic evidence identity
+semantic evidence/tool-result cache lookup
+HyDE on cache miss only
+hybrid retrieval
+BGE/GLM rerank control remains runtime-owned
+evidence state/cache write
+fresh final answer generation from evidence
+```
+
+Key behavior:
+
+```text
+semantic cache hit reuses evidence/tool results, not old answer text
+HyDE is generated only after semantic evidence cache miss
+HyDE is used only for vector retrieval augmentation and cannot become cited evidence
+trace now exposes semantic_cache_hit, semantic_cache_reason, canonical_task, hyde_generated, hyde_used_for_vector, hyde_reason, and hyde_model
+```
+
+Validation:
+
+```text
+python -m pytest tests/test_tool_calling_agent_service.py::test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection tests/test_tool_calling_agent_service.py::test_tool_calling_agent_generates_hyde_only_on_semantic_cache_miss -q -> 2 passed
+python -m pytest tests/test_tool_calling_agent_service.py tests/test_phase56_layered_cache.py tests/test_phase58h_runtime_checkpoint_cache.py -q -> 40 passed
+python -m pytest tests/test_hybrid_search.py::test_hybrid_parallel_results_match_serial_results tests/test_hybrid_search.py::test_hybrid_search_limits_merged_candidates_before_reranking tests/test_agent_tools.py -q with retrieval/rerank/tool caches disabled -> 19 passed
+python -m py_compile app\services\agent\tool_calling_service.py app\services\retrieval\hybrid_search.py app\services\retrieval\query_embedding_cache.py app\services\agent\tools.py app\services\observability\latency_trace.py -> passed
+```
+
+No `git add`, commit, tag, push, or PR has been performed.
+
+## Latest Status: 2026-06-29 Phase 58I Continuous Runtime Evaluation
+
+Added and executed a 30-turn continuous user-style runtime evaluation:
+
+```text
+data/evaluation/phase58i_continuous_runtime_cases.yaml
+scripts/evaluate_phase58i_continuous_runtime.py
+data/evaluation/phase58i_continuous_runtime_eval.csv
+```
+
+Local 8000 result:
+
+```text
+turns=30 completed=30
+cache_expectations=30 cache_passed=16
+contextual_expectations=7 contextual_passed=7
+semantic_hits=8
+median_elapsed_ms miss=44530.7 hit=19157.6
+```
+
+Main conclusions:
+
+```text
+semantic evidence cache hits reduce latency materially
+contextual follow-up rewrite passed all 7 checks
+semantic identity / cache-key stability is still insufficient for broad synonym coverage
+visual/table follow-ups are contextualized but not yet reusing figure/table tool-result evidence through the semantic cache path
+comparison constraint-change guard needs tightening because one comparison follow-up reused cached evidence
+```
+
+The generated CSV is sanitized and does not include full answers, source text,
+provider payloads, secrets, or HyDE passages.
+## Latest Status: 2026-06-29 Phase 58I Follow-up Fixes And Continuous Eval Rerun
+
+Implemented the three requested follow-up areas:
+
+```text
+1. Semantic identity stability
+   Rebuilt app/services/agent/evidence_identity.py after discovering its Chinese alias strings were corrupted.
+   Restored generic Chinese aliases for advantages/drawbacks/filling/cracks/tables/figures/flowability.
+   Added history filtering so assistant answer text is not treated as the next user topic.
+
+2. Multi-tool evidence cache
+   Semantic evidence cache now chooses hybrid_search_knowledge, search_figures, or search_tables from the evidence identity.
+   Tool cache identity uses entity+intent+modifiers instead of raw follow-up query text.
+   hybrid_search_knowledge now reads/writes tool cache even when progress callbacks are enabled.
+   Cached table/figure results can be reused when stored_top_k covers the request even if fewer than top_k evidence items exist.
+
+3. Constraint-change guard
+   Comparison targets are carried as identity modifiers.
+   Different comparison targets no longer collapse into the same cache identity.
+```
+
+Validation:
+
+```text
+python -m py_compile app\services\agent\evidence_identity.py app\services\agent\tool_calling_service.py app\services\agent\tools.py scripts\evaluate_phase58i_continuous_runtime.py -> passed
+python -m pytest tests/test_tool_calling_agent_service.py::test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection tests/test_tool_calling_agent_service.py::test_tool_calling_agent_generates_hyde_only_on_semantic_cache_miss tests/test_tool_calling_agent_service.py::test_tool_calling_runtime_grounds_visual_followup_tool_query -q -> 3 passed
+```
+
+Continuous eval reruns on local 8000:
+
+```text
+After UTF-8 identity restore + partial-result cache reuse:
+turns=30 completed=30 cache_passed=24/30 contextual_passed=7/7 semantic_hits=14
+median_elapsed_ms miss=38162.0 hit=15316.3
+
+After progress-callback cache write + assistant-history filtering:
+turns=30 completed=29 cache_passed=23/29 contextual_passed=7/7 semantic_hits=13
+median_elapsed_ms miss=37455.2 hit=14257.7
+one failed turn: rfc_crack_variants turn 3, HTTP 503 chat model provider unavailable/timed out
+```
+
+Residual notes:
+
+```text
+The latest run is not a clean final benchmark because one provider 503 made it incomplete.
+The best complete rerun after this fix set is currently 24/30 cache expectations, with hit median about 15.3s vs miss median about 38.2s.
+CSV identity columns now expose remaining misses directly.
+Known remaining issues: one stable advantages follow-up still misses; LLM identity failure can still override/downgrade visual/table deterministic identities; one cross-sequence global cache hit conflicts with the current eval expectation.
+```
+
+No `git add`, commit, tag, push, or PR has been performed.

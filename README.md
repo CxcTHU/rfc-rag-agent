@@ -1,5 +1,43 @@
 # RFC-RAG-Agent
 
+## Phase 58H Runtime Resume And Evidence Cache Identity
+
+Current branch: `codex/phase-58-mature-agent-runtime`.
+
+Phase 58H extends the default `tool_calling_agent` runtime with durable checkpoint/resume and evidence query identity canonicalization. A new `agent_runtime_runs` table stores safe completed-node snapshots so a stopped run can resume from saved evidence and skip completed tool execution. Similar evidence questions can share cache identity without reusing final answers.
+
+Example cache identity behavior:
+
+```text
+堆石混凝土的优势
+堆石混凝土有哪些优点
+-> entity=rock-filled concrete, intent=advantages
+```
+
+Final answers are still regenerated from current sources and citations. The old broad answer-level Semantic Cache runtime has been removed from the current default Agent path.
+
+Validation:
+
+```text
+python scripts\evaluate_phase58h_cache_hits.py -> cases=7 passed=7 failed=0
+python scripts\evaluate_phase58h_runtime_resume.py -> cases=6 passed=6 failed=0
+python -m pytest tests/test_phase58h_runtime_checkpoint_cache.py -q -> 9 passed
+python -m pytest tests/test_phase58h_runtime_checkpoint_cache.py tests/test_phase56_layered_cache.py tests/test_tool_calling_agent_service.py -q -> 35 passed
+python -m pytest tests/test_agent_api.py tests/test_agent_stream_api.py tests/test_hybrid_search.py tests/test_agent_tools.py -q -> 85 passed
+python -m pytest tests/test_agent_api.py tests/test_agent_stream_api.py -q -> 47 passed
+git diff --check -> no whitespace errors; CRLF warnings only
+```
+
+## Phase 58 Mature Agent Runtime Layer
+
+Current branch: `codex/phase-58-mature-agent-runtime`.
+
+Phase 58 begins the default Agent Runtime control plane for `tool_calling_agent`. The default tool surface remains stable, but tool execution now has explicit runtime state for context assembly, follow-up contextualization, tool argument grounding, evidence attempts, loop stop reasons, final decisions, and safe diagnostics.
+
+The motivating manual-verification case was a two-turn request where "我需要图片支撑" selected `search_figures` but passed the short follow-up as the raw tool query. Runtime grounding now repairs that kind of tool argument before execution by inheriting the recent topic and adding tool-appropriate visual/table/detail terms. This is implemented as runtime control, not as a `search_figures` special case.
+
+LLMs remain proposal/synthesis components. Runtime keeps authority over guardrails, allowed tools, argument validation, loop control, evidence state, diagnostics, and refusal decisions.
+
 ## Phase 57 Multi-Channel Hybrid Retrieval
 
 Current branch: `codex/phase-57-multichannel-hybrid-retrieval`.
@@ -30,7 +68,7 @@ The completed set covers 6 ordinary, 6 graph-intent, 6 table-intent, 6 visual-ad
 
 Current branch: `codex/phase-56-layered-agent-cache`.
 
-Phase 56 adds Redis-backed layered caching for the production `tool_calling_agent` evidence path without changing provider/model choices and without enabling broad answer-level Semantic Cache. The new layers cache derived ids/order/scores only and hydrate source content from PostgreSQL at request time:
+Phase 56 adds Redis-backed layered caching for the production `tool_calling_agent` evidence path without changing provider/model choices and without caching final answers. The new layers cache derived ids/order/scores only and hydrate source content from PostgreSQL at request time:
 
 ```text
 retrieval candidate cache -> merged chunk ids and safe scores
@@ -49,20 +87,19 @@ tests/test_hybrid_search.py
 docs/phase_reviews/phase-56.md
 ```
 
-After human verification, the evidence-path defaults are enabled while broad answer-level semantic cache remains off:
+After human verification, the evidence-path defaults are enabled:
 
 ```text
 RETRIEVAL_CANDIDATE_CACHE_ENABLED=true
 RERANK_ORDER_CACHE_ENABLED=true
 TOOL_RESULT_CACHE_ENABLED=true
-SEMANTIC_CACHE_ENABLED=false
 RERANKING_DYNAMIC_TOP_K_ENABLED=true
 RERANKING_DYNAMIC_MIN_RESULTS=4
 RERANKING_DYNAMIC_MAX_RESULTS=12
 RERANKING_DYNAMIC_RELATIVE_SCORE_THRESHOLD=0.65
 ```
 
-Local deterministic cold/warm evidence and the 30-case real-chain evaluator show warm repeated runs hitting retrieval/rerank/tool cache layers and skipping expensive work. The Agent thinking panel now includes safe retrieval diagnostics: actual retrieval query, candidate chunk ids, selected chunk ids, selected source title/source_type preview, rerank fallback/cache state, tool-result cache state, and `semantic_cache_hit`. Dynamic rerank K is score-driven and does not hard-code standards or other domain entities. Redis unavailable remains fail-open. No final answers, full chunks, provider raw responses, secrets, or restricted full text are written to evaluation CSVs or docs.
+Local deterministic cold/warm evidence and the 30-case real-chain evaluator show warm repeated runs hitting retrieval/rerank/tool cache layers and skipping expensive work. The Agent thinking panel now includes safe retrieval diagnostics: actual retrieval query, candidate chunk ids, selected chunk ids, selected source title/source_type preview, rerank fallback/cache state, and tool-result cache state. Dynamic rerank K is score-driven and does not hard-code standards or other domain entities. Redis unavailable remains fail-open. No final answers, full chunks, provider raw responses, secrets, or restricted full text are written to evaluation CSVs or docs.
 
 ## Phase 55 Production Readiness Closure
 
@@ -121,9 +158,9 @@ Final validation: API/SSE/LangGraph focused `124 passed`; Phase 52 memory regres
 
 Current branch: `codex/phase-51-performance-evaluation`.
 
-Phase 51 completed the LangGraph planning-node rename (`planner_node`), added the Phase 51 performance evaluation script, ran dry-run and real-provider comparisons across Brain baseline, ReAct, Tool Calling, LangGraph deterministic, LangGraph + planner, FAISS fallback, and Semantic Cache hit scenarios, expanded the external architecture evolution comparison table, and closed two LangGraph follow-ups: avoiding redundant retrieval in `generate_answer_node` and restoring cross-turn prior evidence for planner decisions.
+Phase 51 completed the LangGraph planning-node rename (`planner_node`), added the Phase 51 performance evaluation script, ran dry-run and real-provider comparisons across Brain baseline, ReAct, Tool Calling, LangGraph deterministic, LangGraph + planner, and FAISS fallback scenarios, expanded the external architecture evolution comparison table, and closed two LangGraph follow-ups: avoiding redundant retrieval in `generate_answer_node` and restoring cross-turn prior evidence for planner decisions. The former Semantic Cache hit scenario is retired in the current runtime.
 
-Validation: focused Phase 0 regression `21 passed`; final full `python -m pytest -q -> 1128 passed, 1 skipped`; Phase 51 dry-run `rows=56 summary=7`; real-provider evaluation `rows=56 summary=7`; Semantic Cache hit scenario `8/8`, avg `1.000ms`; Stage 30 remains `91.52 / A / pass`. User authorized submission, `phase-51-complete` tagging, GitHub push, PR creation, and merge on 2026-06-22.
+Validation at the time: focused Phase 0 regression `21 passed`; final full `python -m pytest -q -> 1128 passed, 1 skipped`; Phase 51 dry-run `rows=56 summary=7`; real-provider evaluation `rows=56 summary=7`; Stage 30 remains `91.52 / A / pass`. User authorized submission, `phase-51-complete` tagging, GitHub push, PR creation, and merge on 2026-06-22.
 
 ## Phase 50 Planner Fast Model Closeout Update
 
@@ -139,13 +176,13 @@ Verification: focused Phase 16 regression -> `69 passed`; full `python -m pytest
 
 Current branch: `codex/phase-50-langgraph-redis`.
 
-Phase 50 Phase 10-14 extends the earlier LangGraph Agent work with Redis Stack, answer-level Semantic Cache, and Redis-backed API rate limiting. The phase still keeps `tool_calling_agent` as the default mode; `langgraph_agent` remains an explicit opt-in mode, and `react_agent` remains available as the rollback/comparison path.
+Phase 50 Phase 10-14 extended the earlier LangGraph Agent work with Redis Stack and Redis-backed API rate limiting. The phase still keeps `tool_calling_agent` as the default mode; `langgraph_agent` remains an explicit opt-in mode, and `react_agent` remains available as the rollback/comparison path. The old answer-level Semantic Cache experiment from that period is removed in the current runtime.
 
-Main additions after Phase 0-9: `docker-compose.dev.yml` and `docker-compose.prod.yml` now use `redis/redis-stack-server:latest`; LangGraph checkpoint state is JSON-serializable and RedisSaver writes to real Redis Stack; `app/services/cache/semantic_cache.py` adds optional RediSearch KNN answer caching; `app/middleware/rate_limit.py` adds optional Redis ZSET sliding-window limiting for `/agent/query` and `/agent/query/stream`.
+Main additions after Phase 0-9: `docker-compose.dev.yml` and `docker-compose.prod.yml` now use `redis/redis-stack-server:latest`; LangGraph checkpoint state is JSON-serializable and RedisSaver writes to real Redis Stack; `app/middleware/rate_limit.py` adds optional Redis ZSET sliding-window limiting for `/agent/query` and `/agent/query/stream`.
 
 Verification: `python -m pytest -q -> 1093 passed, 1 skipped`; `python scripts/score_stage30_quality.py -> overall=91.52 grade=A release_decision=pass`; `python scripts/evaluate_phase50_langgraph_vs_react.py -> langgraph_agent errors=0, same_refusal=6/6, same_top_source=5/6, decision=parallel_candidate`; Redis capability focused tests -> `19 passed`; dev/prod compose config passed with temporary local placeholders.
 
-Boundary: Semantic Cache and Rate Limiting default to disabled. Redis remains optional: embedding cache falls back to memory, checkpointer falls back to `MemorySaver`, Semantic Cache skips, and Rate Limiting fail-opens when Redis is unavailable. No `git add`, commit, tag, push, or PR has been performed; this branch is waiting for user human verification.
+Boundary: Rate Limiting defaults to disabled. Redis remains optional: embedding cache falls back to memory, checkpointer falls back to `MemorySaver`, and Rate Limiting fail-opens when Redis is unavailable. No `git add`, commit, tag, push, or PR has been performed; this branch is waiting for user human verification.
 
 ## Phase 50 LangGraph Agent And Redis Cache Layer Update
 

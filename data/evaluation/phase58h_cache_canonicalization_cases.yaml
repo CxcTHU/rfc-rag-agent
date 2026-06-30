@@ -1,0 +1,91 @@
+# Phase 58H evidence cache canonicalization evaluation cases.
+# Safe artifact: expected identity labels only; no answers/chunks/secrets.
+
+cases:
+  - id: rfc_advantage_synonym
+    category: same_identity
+    q1: "堆石混凝土的优势"
+    q2: "堆石混凝土有哪些优点"
+    expected_same_identity: true
+    expected_entity: "rock-filled concrete"
+    expected_intent: "advantages"
+    expected_cache_layers:
+      - "query_embedding"
+      - "retrieval_candidate"
+      - "rerank_order"
+      - "tool_result"
+
+  - id: rfc_benefit_cross_language
+    category: same_identity
+    q1: "RFC的优势"
+    q2: "rock-filled concrete 有什么好处"
+    expected_same_identity: true
+    expected_entity: "rock-filled concrete"
+    expected_intent: "advantages"
+    expected_cache_layers:
+      - "query_embedding"
+      - "retrieval_candidate"
+      - "rerank_order"
+      - "tool_result"
+
+  - id: rfc_cause_not_advantage
+    category: different_intent
+    q1: "堆石混凝土的优势"
+    q2: "堆石混凝土裂缝成因"
+    expected_same_identity: false
+    expected_entity: "rock-filled concrete"
+    expected_intent_q1: "advantages"
+    expected_intent_q2: "causes"
+    expected_block_reason: "different_intent"
+
+  - id: different_entity_no_reuse
+    category: different_entity
+    q1: "堆石混凝土的优势"
+    q2: "自密实混凝土的优势"
+    expected_same_identity: false
+    expected_entity_q1: "rock-filled concrete"
+    expected_entity_q2: "self-compacting concrete"
+    expected_intent: "advantages"
+    expected_block_reason: "different_entity"
+
+  - id: visual_followup_identity
+    category: followup_same_identity
+    history:
+      - role: "user"
+        content: "大坝裂缝成因有哪些？请详细列出"
+    q1: "我需要图片支撑"
+    q2: "给我相关图示"
+    expected_same_identity: true
+    expected_entity: "dam crack causes"
+    expected_intent: "visual_evidence"
+    expected_cache_layers:
+      - "query_embedding"
+      - "retrieval_candidate"
+      - "rerank_order"
+      - "tool_result"
+
+  - id: table_followup_identity
+    category: followup_same_identity
+    history:
+      - role: "user"
+        content: "堆石混凝土材料参数有哪些？"
+    q1: "给我表格"
+    q2: "有参数表吗"
+    expected_same_identity: true
+    expected_entity: "rock-filled concrete"
+    expected_intent: "table_evidence"
+    expected_cache_layers:
+      - "query_embedding"
+      - "retrieval_candidate"
+      - "rerank_order"
+      - "tool_result"
+
+  - id: comparison_constraint_blocks_simple_reuse
+    category: constraint_change
+    q1: "堆石混凝土的优势"
+    q2: "堆石混凝土和普通混凝土相比有哪些优势"
+    expected_same_identity: false
+    expected_entity: "rock-filled concrete"
+    expected_intent_q1: "advantages"
+    expected_intent_q2: "comparison"
+    expected_block_reason: "constraint_change"

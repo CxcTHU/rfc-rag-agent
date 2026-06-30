@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
-from app.db.models import Base
+from app.db.models import Base, Chunk
 from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository
 from app.db.session import create_sqlite_engine
 from app.services.agent.tools import AgentToolbox
@@ -14,7 +15,7 @@ from app.services.observability.latency_trace import (
     set_current_latency_trace,
 )
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
-from app.services.retrieval.hybrid_search import HybridSearchService
+from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.reranking import ReRankResult
 from app.services.retrieval.vector_index import VectorIndexService
 
@@ -217,6 +218,144 @@ def test_phase56_tool_result_cache_bypasses_second_tool_execution(monkeypatch, t
     assert first.sources[0].chunk_id == second.sources[0].chunk_id
     assert second.call.output_summary.startswith("cache hit")
     assert trace.values["tool_result_cache_hit"] is True
+
+
+def test_phase56_tool_result_cache_preserves_dynamic_hybrid_result_count(monkeypatch, tmp_path) -> None:
+    fake_redis = FakeRedis()
+    enable_layered_cache(monkeypatch, fake_redis, "tool")
+    monkeypatch.setenv("RERANKING_DYNAMIC_TOP_K_ENABLED", "true")
+    get_settings.cache_clear()
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        document = DocumentRepository(db).create_with_chunks(
+            DocumentCreate(
+                title="Dynamic hybrid evidence",
+                source_type="local_file",
+                source_path="dynamic.md",
+                file_name="dynamic.md",
+                file_extension=".md",
+                content_hash="phase56-dynamic-hybrid",
+                raw_path="data/raw/dynamic.md",
+            ),
+            [
+                ChunkCreate(
+                    chunk_index=index,
+                    content=f"Dynamic hybrid evidence chunk {index}",
+                    char_count=31,
+                    heading_path="Dynamic",
+                    start_char=index * 31,
+                    end_char=(index + 1) * 31,
+                )
+                for index in range(12)
+            ],
+        )
+        chunks = list(db.execute(select(Chunk).where(Chunk.document_id == document.id).order_by(Chunk.id)).scalars())
+        calls = {"count": 0}
+
+        def fake_search(self, query: str, top_k: int = 5):
+            calls["count"] += 1
+            return [
+                HybridSearchResult(
+                    document_id=document.id,
+                    document_title=document.title,
+                    source_type=document.source_type,
+                    source_path=document.source_path,
+                    file_name=document.file_name,
+                    chunk_id=chunk.id,
+                    chunk_index=chunk.chunk_index,
+                    content=chunk.content,
+                    heading_path=chunk.heading_path,
+                    score=1.0 - index * 0.01,
+                    keyword_score=1.0,
+                    vector_score=1.0,
+                    channels=("hybrid",),
+                )
+                for index, chunk in enumerate(chunks)
+            ]
+
+        monkeypatch.setattr(
+            "app.services.agent.tools.HybridSearchService.search",
+            fake_search,
+        )
+        toolbox = AgentToolbox(
+            db=db,
+            embedding_provider=DeterministicEmbeddingProvider(dimension=32),
+            chat_model_provider=DeterministicChatModelProvider(),
+            log_answers=False,
+        )
+        first = toolbox.hybrid_search_knowledge("dynamic evidence", top_k=8)
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            second = toolbox.hybrid_search_knowledge("dynamic evidence", top_k=8)
+        finally:
+            reset_current_latency_trace(token)
+
+    assert calls["count"] == 1
+    assert len(first.search_results) == 12
+    assert len(second.search_results) == 12
+    assert second.call.output_summary == "cache hit; returned 12 hybrid_search_knowledge results"
+    assert trace.values["tool_result_cache_hit"] is True
+    assert trace.values["retrieval_selected_count"] == 12
+
+
+def test_phase56_tool_result_cache_uses_structured_identity_over_llm_canonical_text(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    fake_redis = FakeRedis()
+    enable_layered_cache(monkeypatch, fake_redis, "tool")
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_documents(db)
+        VectorIndexService(db, provider).build_index()
+        calls = {"count": 0}
+        real_search = HybridSearchService.search
+
+        def counted_search(self, query: str, top_k: int = 5):
+            calls["count"] += 1
+            return real_search(self, query=query, top_k=top_k)
+
+        monkeypatch.setattr(
+            "app.services.agent.tools.HybridSearchService.search",
+            counted_search,
+        )
+        toolbox = AgentToolbox(
+            db=db,
+            embedding_provider=provider,
+            chat_model_provider=DeterministicChatModelProvider(),
+            log_answers=False,
+        )
+        first_trace = LatencyTrace()
+        first_trace.set_value("evidence_cache_reuse_allowed", True)
+        first_trace.set_value("evidence_canonical_query", "drawbacks of rock-filled concrete")
+        first_trace.set_value("evidence_entity_key", "rock-filled concrete")
+        first_trace.set_value("evidence_intent_key", "drawbacks_or_limitations")
+        first_token = set_current_latency_trace(first_trace)
+        try:
+            first = toolbox.hybrid_search_knowledge("filling capacity", top_k=1)
+        finally:
+            reset_current_latency_trace(first_token)
+
+        second_trace = LatencyTrace()
+        second_trace.set_value("evidence_cache_reuse_allowed", True)
+        second_trace.set_value("evidence_canonical_query", "堆石混凝土 缺点 劣势 不足")
+        second_trace.set_value("evidence_entity_key", "rock-filled concrete")
+        second_trace.set_value("evidence_intent_key", "drawbacks_or_limitations")
+        second_token = set_current_latency_trace(second_trace)
+        try:
+            second = toolbox.hybrid_search_knowledge("another wording", top_k=1)
+        finally:
+            reset_current_latency_trace(second_token)
+
+    assert calls["count"] == 1
+    assert first.search_results
+    assert second.search_results
+    assert second.call.output_summary.startswith("cache hit")
+    assert second_trace.values["tool_result_cache_hit"] is True
 
 
 def test_phase56_layered_cache_fail_open_when_redis_unavailable(monkeypatch, tmp_path) -> None:
