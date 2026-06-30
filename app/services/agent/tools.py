@@ -39,7 +39,7 @@ except ImportError:  # pragma: no cover - Pillow is available in normal runtime/
         pass
 
 
-MIN_IMAGE_RELEVANCE_SCORE = 0.50
+MIN_IMAGE_RELEVANCE_SCORE = 0.35
 FIGURE_DESCRIPTION_SNIPPET_CHARS = 100
 FIGURE_VECTOR_CANDIDATE_MULTIPLIER = 50
 FIGURE_VECTOR_MIN_CANDIDATES = 200
@@ -515,19 +515,23 @@ class AgentToolbox:
             return failed_tool_result(tool_name, query, ValueError("query must not be empty"))
         if top_k <= 0:
             return failed_tool_result(tool_name, query, ValueError("top_k must be greater than 0"))
-        if not query_requests_figure(normalized_query):
+        if any(term in normalized_query.casefold() for term in FIGURE_NEGATIVE_INTENT_TERMS):
             return AgentToolResult(
                 tool_name=tool_name,
                 call=AgentToolCallRecord(
                     tool_name=tool_name,
                     input_summary=summarize_input(normalized_query, top_k),
-                    output_summary="returned 0 figure results; visual_intent=false",
+                    output_summary="returned 0 figure results; visual_intent=negative",
                     succeeded=True,
                 ),
                 refused=True,
-                refusal_reason="The query does not request figure evidence.",
+                refusal_reason="The query explicitly asks not to return figure evidence.",
             )
-        cached = self._lookup_tool_result_cache(tool_name, normalized_query, top_k)
+        search_query = normalized_query
+        if not query_requests_figure(search_query):
+            search_query = f"{normalized_query} \u56fe\u7247 \u56fe\u793a \u89c6\u89c9\u8bc1\u636e figure image"
+
+        cached = self._lookup_tool_result_cache(tool_name, search_query, top_k)
         if cached is not None:
             return cached
 
@@ -539,7 +543,7 @@ class AgentToolbox:
             matches = VectorSearchService(
                 self.db,
                 self.embedding_provider,
-            ).search(normalized_query, top_k=candidate_count)
+            ).search(search_query, top_k=candidate_count)
         except (RuntimeError, ValueError) as exc:
             return failed_tool_result(tool_name, query, exc)
 
@@ -559,9 +563,9 @@ class AgentToolbox:
             image_url = image_url_from_source_image_path(entry.source_image_path)
             if not image_url or image_url in seen_image_urls:
                 continue
-            specific_match_count = figure_specific_match_count(normalized_query, entry)
+            specific_match_count = figure_specific_match_count(search_query, entry)
             if not figure_specific_requirement_satisfied(
-                normalized_query,
+                search_query,
                 entry,
                 specific_match_count=specific_match_count,
             ):
@@ -629,7 +633,7 @@ class AgentToolbox:
             tool_name=tool_name,
             call=AgentToolCallRecord(
                 tool_name=tool_name,
-                input_summary=summarize_input(normalized_query, top_k),
+                input_summary=summarize_input(search_query, top_k),
                 output_summary=output_summary,
                 succeeded=True,
             ),
@@ -639,7 +643,7 @@ class AgentToolbox:
             refused=not bool(figure_results),
             refusal_reason=None if figure_results else "No relevant figure results were found.",
         )
-        self._store_tool_result_cache(tool_name, normalized_query, top_k, tool_result)
+        self._store_tool_result_cache(tool_name, search_query, top_k, tool_result)
         return tool_result
 
     def analyze_user_image(

@@ -494,6 +494,20 @@ def test_agent_toolbox_search_figures_suppresses_text_only_query(tmp_path) -> No
     assert result.figure_results == []
 
 
+def test_agent_toolbox_search_figures_trusts_explicit_tool_call(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        result = make_toolbox(db).search_figures(
+            "\u5806\u77f3\u6df7\u51dd\u571f\u65bd\u5de5\u73b0\u573a\u6216\u6d47\u7b51\u6d41\u7a0b",
+        )
+
+    assert result.tool_name == "search_figures"
+    assert result.call.succeeded
+    assert result.call.output_summary != "returned 0 figure results; visual_intent=false"
+    assert result.refusal_reason != "The query does not request figure evidence."
+
+
 def test_agent_toolbox_answer_with_citations_reuses_answer_service(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
