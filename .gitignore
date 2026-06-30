@@ -17,6 +17,7 @@ env/
 !.env.example
 
 # Runtime data
+local_backups/
 data/raw/
 data/processed/
 data/faiss/
@@ -54,6 +55,12 @@ data/evaluation/phase48_user_images/
 
 # Logs
 *.log
+
+# Local agent planning/handoff scratch files
+/task_plan*.md
+/findings*.md
+/progress*.md
+/subagent_*_goal.md
 
 # Chainlit local runtime cache
 .chainlit/translations/
