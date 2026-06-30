@@ -1,3 +1,5 @@
+import inspect
+
 from sqlalchemy.orm import Session, sessionmaker
 from PIL import Image
 
@@ -12,9 +14,11 @@ from app.db.repositories import (
 from app.db.session import create_sqlite_engine
 from app.services.agent.tools import AgentToolbox
 from app.services.agent.tools import figure_specific_requirement_satisfied
+from app.services.agent.tools import hybrid_tool_output_summary
 from app.services.agent.tools import query_requests_figure
 from app.services.agent.tools import search_item_from_result, sources_from_search_results
 from app.services.generation.chat_model import DeterministicChatModelProvider
+from app.services.observability.latency_trace import LatencyTrace, reset_current_latency_trace, set_current_latency_trace
 from app.services.retrieval.keyword_search import KeywordSearchResult
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from app.services.retrieval.vector_cache import VectorIndexEntry
@@ -196,6 +200,31 @@ def seed_agent_tool_image_documents(db: Session) -> None:
     )
 
 
+def seed_agent_tool_table_documents(db: Session) -> None:
+    DocumentRepository(db).create_with_chunks(
+        DocumentCreate(
+            title="RFC Mix Ratio Table Source",
+            source_type="local_file",
+            source_path="table.pdf",
+            file_name="table.pdf",
+            file_extension=".pdf",
+            content_hash="agent-tools-table-hash",
+            raw_path="data/raw/table.pdf",
+        ),
+        [
+            ChunkCreate(
+                chunk_index=0,
+                content="Table 2 mix ratio parameters include cement, fly ash, water, and aggregate dosage.",
+                char_count=86,
+                heading_path="Mix ratio table",
+                start_char=None,
+                end_char=None,
+                chunk_type="table",
+            )
+        ],
+    )
+
+
 def write_test_image(path, *, size=(80, 80)) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", size, color=(120, 120, 120)).save(path)
@@ -223,6 +252,30 @@ def test_agent_toolbox_hybrid_search_uses_hybrid_tool_name_and_results(tmp_path)
     assert result.sources[0].score is not None
 
 
+def test_hybrid_tool_output_summary_only_exposes_selected_chunk_ids() -> None:
+    trace = LatencyTrace()
+    trace.set_value("retrieval_selected_chunk_ids", [22261, 22221, 18748])
+    trace.set_value("retrieval_candidate_count", 150)
+    trace.set_value(
+        "retrieval_selected_preview",
+        [{"chunk_id": 22261, "source_type": "metadata_record", "title": "Seismic analysis"}],
+    )
+    token = set_current_latency_trace(trace)
+    try:
+        summary = hybrid_tool_output_summary(
+            query="堆石混凝土的优势",
+            requested_top_k=8,
+            result_count=3,
+        )
+    finally:
+        reset_current_latency_trace(token)
+
+    assert summary == "returned 3 hybrid results; selected_chunk_ids=22261,22221,18748"
+    assert "candidate_count=" not in summary
+    assert "selected_sources=" not in summary
+    assert "query=" not in summary
+
+
 def test_agent_toolbox_hybrid_search_reports_provider_failures(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -241,6 +294,68 @@ def test_agent_toolbox_hybrid_search_reports_provider_failures(tmp_path) -> None
     assert not result.call.succeeded
     assert result.call.error == "Embedding provider unavailable"
     assert result.refused
+
+
+def test_agent_toolbox_hybrid_search_surfaces_reranking_failure(tmp_path, monkeypatch) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    def fail_search(self, query, top_k=5):
+        raise RuntimeError("重排序失效：主 reranker 失败，GLM fallback reranker 也失败。")
+
+    monkeypatch.setattr(
+        "app.services.agent.tools.HybridSearchService.search",
+        fail_search,
+    )
+
+    with TestingSessionLocal() as db:
+        toolbox = AgentToolbox(
+            db=db,
+            embedding_provider=DeterministicEmbeddingProvider(dimension=32),
+            chat_model_provider=DeterministicChatModelProvider(),
+            log_answers=False,
+        )
+
+        result = toolbox.hybrid_search_knowledge("filling capacity", top_k=3)
+
+    assert result.tool_name == "hybrid_search_knowledge"
+    assert not result.call.succeeded
+    assert "重排序失效" in result.call.output_summary
+    assert "GLM fallback reranker" in result.call.error
+    assert result.refused
+    assert result.refusal_reason == result.call.error
+
+
+def test_agent_toolbox_table_and_figure_tools_use_vector_search_service() -> None:
+    table_source = inspect.getsource(AgentToolbox.search_tables)
+    figure_source = inspect.getsource(AgentToolbox.search_figures)
+
+    assert "VectorSearchService" in table_source
+    assert "VectorSearchService" in figure_source
+    assert "get_vector_index_cache" not in table_source
+    assert "get_vector_index_cache" not in figure_source
+
+
+def test_agent_toolbox_search_tables_reports_vector_backend(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_agent_tool_table_documents(db)
+        VectorIndexService(db, provider).build_index()
+        toolbox = AgentToolbox(
+            db=db,
+            embedding_provider=provider,
+            chat_model_provider=DeterministicChatModelProvider(),
+            log_answers=False,
+        )
+
+        result = toolbox.search_tables("mix ratio table parameters", top_k=3)
+
+    assert result.tool_name == "search_tables"
+    assert result.call.succeeded
+    assert result.search_results
+    assert result.search_results[0].chunk_type == "table"
+    assert "vector_backend=" in result.call.output_summary
 
 
 def test_agent_toolbox_search_figures_returns_quality_checked_image_results(tmp_path, monkeypatch) -> None:

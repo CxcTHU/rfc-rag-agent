@@ -1,5 +1,7 @@
 import time
 
+import pytest
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
@@ -200,7 +202,6 @@ def test_hybrid_search_verified_defaults_are_enabled() -> None:
     assert settings.retrieval_candidate_cache_enabled is True
     assert settings.rerank_order_cache_enabled is True
     assert settings.tool_result_cache_enabled is True
-    assert settings.semantic_cache_enabled is False
 
 
 def test_hybrid_multichannel_graph_channel_enters_default_hybrid_kernel(tmp_path) -> None:
@@ -579,6 +580,40 @@ def test_hybrid_search_dynamic_top_k_keeps_minimum_then_filters_tail(tmp_path) -
     assert trace.values["retrieval_selected_count"] == 4
 
 
+def test_hybrid_search_fails_when_reranker_fails_without_fallback(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class FailingReRankingProvider:
+        provider_name = "test"
+        model_name = "failing"
+
+        def rerank(self, query, candidates, top_k=5):
+            raise RuntimeError("reranker unavailable")
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            service = HybridSearchService(
+                db,
+                provider,
+                reranking_provider=FailingReRankingProvider(),
+                reranking_enabled=True,
+            )
+            service.reranking_fallback_provider = None
+            with pytest.raises(RuntimeError, match="GLM fallback reranker"):
+                service.search("concrete", top_k=1)
+        finally:
+            reset_current_latency_trace(token)
+
+    assert trace.values["reranking_fallback"] is True
+    assert trace.values["reranking_fallback_used"] is False
+    assert trace.values["reranking_fallback_error"] == "not_configured"
+
+
 def test_hybrid_search_quality_default_fetches_75_candidates(monkeypatch, tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
     observed_top_k: list[int] = []
@@ -624,6 +659,86 @@ def test_hybrid_search_quality_default_fetches_75_candidates(monkeypatch, tmp_pa
     assert observed_top_k == [75, 75]
 
 
+def test_hybrid_search_limits_merged_candidates_before_reranking(monkeypatch, tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    observed_rerank_candidate_counts: list[int] = []
+
+    class RecordingReRankingProvider:
+        provider_name = "test"
+        model_name = "recording"
+
+        def rerank(self, query, candidates, top_k=5):
+            observed_rerank_candidate_counts.append(len(candidates))
+            return [
+                ReRankResult(index=index, score=float(len(candidates) - index), content=candidates[index])
+                for index in range(min(top_k, len(candidates)))
+            ]
+
+    def fake_keyword_search(self, query, top_k=5):
+        return [
+            KeywordSearchResult(
+                document_id=index + 1,
+                document_title=f"Keyword Doc {index + 1}",
+                source_type="local_file",
+                source_path=f"keyword-{index + 1}.md",
+                file_name=f"keyword-{index + 1}.md",
+                chunk_id=index + 1,
+                chunk_index=0,
+                content=f"keyword concrete candidate {index + 1}",
+                heading_path="Candidate",
+                score=float(top_k - index),
+            )
+            for index in range(top_k)
+        ]
+
+    def fake_vector_search(self, query, top_k=5):
+        return [
+            VectorSearchResult(
+                document_id=1000 + index,
+                document_title=f"Vector Doc {index + 1}",
+                source_type="local_file",
+                source_path=f"vector-{index + 1}.md",
+                file_name=f"vector-{index + 1}.md",
+                chunk_id=1000 + index,
+                chunk_index=0,
+                content=f"vector concrete candidate {index + 1}",
+                heading_path="Candidate",
+                score=1.0 - (index / max(top_k, 1)),
+                chunk_type="text",
+            )
+            for index in range(top_k)
+        ]
+
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.KeywordSearchService.search",
+        fake_keyword_search,
+    )
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.VectorSearchService.search",
+        fake_vector_search,
+    )
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            HybridSearchService(
+                db,
+                provider,
+                reranking_provider=RecordingReRankingProvider(),
+                reranking_enabled=True,
+                reranking_recall_k=75,
+                parallel=False,
+            ).search("filling capacity", top_k=8)
+        finally:
+            reset_current_latency_trace(token)
+
+    assert observed_rerank_candidate_counts == [75]
+    assert trace.values["retrieval_candidate_count"] == 150
+    assert trace.values["reranking_candidate_count"] == 75
+
+
 def test_hybrid_search_falls_open_when_default_reranker_factory_fails(monkeypatch, tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -647,7 +762,7 @@ def test_hybrid_search_falls_open_when_default_reranker_factory_fails(monkeypatc
     assert len(results) == 1
 
 
-def test_hybrid_search_falls_back_when_reranker_fails(tmp_path) -> None:
+def test_hybrid_search_surfaces_reranker_failure_without_fallback(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
     class FailingReRankingProvider:
@@ -662,15 +777,16 @@ def test_hybrid_search_falls_back_when_reranker_fails(tmp_path) -> None:
         seed_hybrid_documents(db)
         VectorIndexService(db, provider).build_index()
 
-        results = HybridSearchService(
+        service = HybridSearchService(
             db,
             provider,
             reranking_provider=FailingReRankingProvider(),
             reranking_enabled=True,
-        ).search("filling capacity", top_k=1)
+        )
+        service.reranking_fallback_provider = None
+        with pytest.raises(RuntimeError, match="GLM fallback reranker"):
+            service.search("filling capacity", top_k=1)
 
-    # A transient reranker failure must degrade to the fusion order, not crash.
-    assert len(results) == 1
 
 
 def test_hybrid_search_uses_secondary_reranker_when_primary_fails(tmp_path) -> None:
@@ -725,7 +841,7 @@ def test_hybrid_search_uses_secondary_reranker_when_primary_fails(tmp_path) -> N
     assert trace.values["reranking_fallback_error"] == ""
 
 
-def test_hybrid_search_falls_back_to_fusion_when_secondary_reranker_fails(tmp_path) -> None:
+def test_hybrid_search_fails_when_secondary_reranker_fails(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
     class FailingReRankingProvider:
@@ -742,21 +858,70 @@ def test_hybrid_search_falls_back_to_fusion_when_secondary_reranker_fails(tmp_pa
         trace = LatencyTrace()
         token = set_current_latency_trace(trace)
         try:
+            with pytest.raises(RuntimeError, match="GLM fallback reranker 也失败"):
+                HybridSearchService(
+                    db,
+                    provider,
+                    reranking_provider=FailingReRankingProvider(),
+                    reranking_fallback_provider=FailingReRankingProvider(),
+                    reranking_enabled=True,
+                ).search("filling capacity", top_k=1)
+        finally:
+            reset_current_latency_trace(token)
+
+    assert trace.values["reranking_fallback"] is True
+    assert trace.values["reranking_fallback_used"] is False
+    assert trace.values["reranking_fallback_error"] == "runtime_error"
+
+
+def test_hybrid_search_uses_fusion_dynamic_k_when_secondary_scores_are_degenerate(
+    tmp_path,
+) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    class FailingReRankingProvider:
+        provider_name = "remote-bge-lora"
+        model_name = "rfc-domain-bge-lora"
+
+        def rerank(self, query, candidates, top_k=5):
+            raise RuntimeError("primary reranker unavailable")
+
+    class DegenerateSecondaryReRankingProvider:
+        provider_name = "paratera"
+        model_name = "GLM-Rerank"
+
+        def rerank(self, query, candidates, top_k=5):
+            ordered_indexes = list(reversed(range(min(top_k, len(candidates)))))
+            return [
+                ReRankResult(index=index, score=1.0, content=candidates[index])
+                for index in ordered_indexes
+            ]
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
             results = HybridSearchService(
                 db,
                 provider,
                 reranking_provider=FailingReRankingProvider(),
-                reranking_fallback_provider=FailingReRankingProvider(),
+                reranking_fallback_provider=DegenerateSecondaryReRankingProvider(),
                 reranking_enabled=True,
-            ).search("filling capacity", top_k=1)
+            ).search("concrete", top_k=2)
         finally:
             reset_current_latency_trace(token)
 
-    assert len(results) == 1
-    assert results[0].document_title == "Filling Capacity Evaluation of Self-Compacting Concrete"
+    assert len(results) == 2
     assert trace.values["reranking_fallback"] is True
-    assert trace.values["reranking_fallback_used"] is False
-    assert trace.values["reranking_fallback_error"] == "runtime_error"
+    assert trace.values["reranking_fallback_used"] is True
+    assert trace.values["reranking_fallback_error"] == ""
+    assert trace.values["reranking_fallback_score_quality"] == "degenerate_fusion_dynamic"
+    assert trace.values["reranking_fallback_degenerate_scores"] is True
+    assert trace.values["retrieval_selection_reason"] == "rerank_fallback_degenerate_fusion_dynamic"
+    assert trace.values["retrieval_dynamic_top_k_enabled"] is True
 
 
 def test_hybrid_search_records_reranker_trace_and_fallback(tmp_path) -> None:
@@ -776,16 +941,18 @@ def test_hybrid_search_records_reranker_trace_and_fallback(tmp_path) -> None:
         trace = LatencyTrace()
         token = set_current_latency_trace(trace)
         try:
-            results = HybridSearchService(
+            service = HybridSearchService(
                 db,
                 provider,
                 reranking_provider=FailingReRankingProvider(),
                 reranking_enabled=True,
-            ).search("filling capacity", top_k=1)
+            )
+            service.reranking_fallback_provider = None
+            with pytest.raises(RuntimeError, match="GLM fallback reranker"):
+                service.search("filling capacity", top_k=1)
         finally:
             reset_current_latency_trace(token)
 
-    assert len(results) == 1
     assert trace.values["reranking_provider"] == "remote-bge-lora"
     assert trace.values["reranking_model"] == "bge-reranker-base-rfc-lora"
     assert trace.values["reranking_fallback"] is True

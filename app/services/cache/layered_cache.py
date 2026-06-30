@@ -13,7 +13,7 @@ from app.core.config import Settings, get_settings
 from app.db.models import Chunk, ChunkEmbedding, Document
 from app.services.cache.redis_client import get_redis_client
 from app.services.observability.latency_trace import get_current_latency_trace
-from app.services.retrieval.query_embedding_cache import normalize_query_text
+from app.services.retrieval.query_embedding_cache import cache_identity_query_text, normalize_query_text
 
 
 CacheLayer = Literal["retrieval", "rerank", "tool"]
@@ -169,7 +169,7 @@ def corpus_fingerprint(db: Session) -> str:
 
 
 def normalized_query_identity(query: str) -> str:
-    return normalize_query_text(query)
+    return cache_identity_query_text(query)
 
 
 def candidate_chunk_hash(chunk_ids: list[int]) -> str:

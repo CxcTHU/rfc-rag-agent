@@ -334,7 +334,7 @@ python scripts/score_stage30_quality.py
 ```text
 overall=91.52 grade=A release_decision=pass
 ```
-## Phase 50 Redis Stack, Semantic Cache, And Rate Limiting
+## Phase 50 Redis Stack And Rate Limiting
 
 Phase 50 now expects Redis Stack for full Redis-backed behavior:
 
@@ -350,15 +350,12 @@ REDIS_PASSWORD=<strong redis password>
 REDIS_URL=redis://:<url-encoded redis password>@redis:6379/0
 LANGGRAPH_CHECKPOINT_TTL_MINUTES=60
 LANGGRAPH_CHECKPOINT_REFRESH_ON_READ=true
-SEMANTIC_CACHE_ENABLED=false
-SEMANTIC_CACHE_SIMILARITY_THRESHOLD=0.92
-SEMANTIC_CACHE_TTL_SECONDS=3600
 RATE_LIMIT_ENABLED=false
 RATE_LIMIT_REQUESTS_PER_MINUTE=30
 RATE_LIMIT_WINDOW_SECONDS=60
 ```
 
-Redis failure behavior is intentionally graceful: embedding cache falls back to memory, LangGraph checkpoint falls back to `MemorySaver`, Semantic Cache skips, and Rate Limiting fail-opens. Keep Semantic Cache and Rate Limiting disabled until Redis Stack health and production traffic expectations are verified.
+The current runtime no longer exposes answer-level Semantic Cache settings. Redis failure behavior is intentionally graceful: embedding cache falls back to memory, LangGraph checkpoint falls back to `MemorySaver`, evidence-path cache layers fail open, and Rate Limiting fail-opens. Keep Rate Limiting disabled until Redis Stack health and production traffic expectations are verified.
 ## Phase 50 pgvector HNSW Deployment Note
 
 Phase 50 dev/prod Compose files now use `pgvector/pgvector:pg16` for PostgreSQL. Run Alembic after pulling the image so PostgreSQL can create the `vector` extension, `chunk_embeddings.embedding_vector Vector(2048)`, and the HNSW cosine index.

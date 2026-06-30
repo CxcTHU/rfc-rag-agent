@@ -124,7 +124,6 @@ def response_row(
         "retrieval_cache_hit": trace.get("retrieval_cache_hit", ""),
         "rerank_cache_hit": trace.get("rerank_cache_hit", ""),
         "tool_result_cache_hit": trace.get("tool_result_cache_hit", ""),
-        "semantic_cache_hit": trace.get("semantic_cache_hit", ""),
         "reranking_provider": trace.get("reranking_provider", ""),
         "reranking_model": trace.get("reranking_model", ""),
         "reranking_fallback": trace.get("reranking_fallback", ""),

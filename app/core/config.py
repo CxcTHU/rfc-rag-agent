@@ -16,9 +16,6 @@ class Settings(BaseSettings):
     redis_socket_timeout_seconds: float = 1.0
     langgraph_checkpoint_ttl_minutes: int = 60
     langgraph_checkpoint_refresh_on_read: bool = True
-    semantic_cache_enabled: bool = False
-    semantic_cache_similarity_threshold: float = 0.92
-    semantic_cache_ttl_seconds: int = 3600
     layered_cache_namespace: str = "phase56-v1"
     retrieval_candidate_cache_enabled: bool = True
     retrieval_candidate_cache_ttl_seconds: int = 900
@@ -57,6 +54,12 @@ class Settings(BaseSettings):
     planner_chat_model_base_url: str = ""
     planner_chat_model_temperature: float = 0.0
     planner_chat_model_timeout_seconds: float = 30.0
+    runtime_identity_model_provider: str = ""
+    runtime_identity_model_name: str = ""
+    runtime_identity_model_api_key: str = ""
+    runtime_identity_model_base_url: str = ""
+    runtime_identity_model_temperature: float = 0.0
+    runtime_identity_model_timeout_seconds: float = 10.0
 
     judge_model_provider: str = ""
     judge_model_name: str = ""
@@ -87,11 +90,11 @@ class Settings(BaseSettings):
     reranking_dynamic_min_results: int = 4
     reranking_dynamic_max_results: int = 12
     reranking_dynamic_relative_score_threshold: float = 0.65
-    reranking_fallback_enabled: bool = False
-    reranking_fallback_provider: str = ""
-    reranking_fallback_model_name: str = ""
+    reranking_fallback_enabled: bool = True
+    reranking_fallback_provider: str = "paratera"
+    reranking_fallback_model_name: str = "GLM-Rerank"
     reranking_fallback_api_key: str = ""
-    reranking_fallback_base_url: str = ""
+    reranking_fallback_base_url: str = "https://llmapi.paratera.com/v1/p002"
     reranking_fallback_timeout_seconds: float = 30.0
     hybrid_multichannel_enabled: bool = True
     hybrid_graph_channel_enabled: bool = True
@@ -133,6 +136,12 @@ class Settings(BaseSettings):
             self.judge_model_base_url = self.stage34_judge_base_url
         if self.judge_model_provider.strip().casefold() in {"deepseek", "paratera", "glm", "zhipu"}:
             self.judge_model_provider = "openai-compatible"
+        if (
+            not self.reranking_fallback_api_key
+            and self.reranking_fallback_provider.strip().casefold() == "paratera"
+            and self.embedding_api_key
+        ):
+            self.reranking_fallback_api_key = self.embedding_api_key
 
 
 @lru_cache

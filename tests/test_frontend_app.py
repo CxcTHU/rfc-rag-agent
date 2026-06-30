@@ -31,8 +31,8 @@ def test_frontend_index_is_served() -> None:
     assert "data-auth-logout" in response.text
     assert "data-auth-status" in response.text
     assert "data-auth-username" in response.text
-    assert "/static/app.js?v=phase51-followup-toolcalling-fix1" in response.text
-    assert "/static/styles.css?v=phase51-followup-toolcalling-fix1" in response.text
+    assert "/static/app.js?v=phase58-live-run-restore1" in response.text
+    assert "/static/styles.css?v=phase58-live-run-restore1" in response.text
     assert 'class="hero-layout"' in response.text
     assert "hero-kicker" not in response.text
     assert 'class="demo-panel agent-workspace-panel"' in response.text
@@ -127,16 +127,22 @@ def test_frontend_static_assets_are_served() -> None:
     assert "appendAgentSummaryMessage" in response.text
     assert "appendAgentThinkingMessage" in response.text
     assert "appendAgentLiveStep" in response.text
+    assert "activeAgentRunsByConversation" in response.text
+    assert "attachLiveAgentRunToCurrentConversation" in response.text
+    assert "currentLiveAgentMessage" in response.text
+    assert "latestAgentUserQuestionText" in response.text
+    assert "userMessageElement" in response.text
     assert "liveAgentEventView" in response.text
     assert "agentThoughtHtml" in response.text
     assert "retrievalTraceStepFromResult" in response.text
     assert "retrieval_selected_chunk_ids" in response.text
+    assert "latency_trace: metadata.latency_trace || {}" in response.text
+    assert "candidate_count=" not in response.text
     assert "candidate_chunk_ids=" in response.text
-    assert "selected_sources=" in response.text
-    assert "rerank_cache_hit=" in response.text
-    assert "rerank_fallback=" in response.text
-    assert "dynamic_top_k=" in response.text
-    assert "semantic_cache_hit=true" in response.text
+    assert "selected_sources=" not in response.text
+    assert "rerank_cache_hit=" not in response.text
+    assert "rerank_fallback=" not in response.text
+    assert "dynamic_top_k=" not in response.text
     assert "agent-thinking-status" in response.text
     assert "agent-thinking-timer" in response.text
     assert "startAgentThinkingTimer" in response.text
@@ -160,7 +166,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "onToolCallResult" in response.text
     assert "appendAgentErrorMessage" in response.text
     assert "正在思考..." in response.text
-    assert "pendingThinkingMessage?.remove()" in response.text
+    assert "pendingThinkingMessage?.isConnected" in response.text
     assert "Agent failed" in response.text
     assert "setConversationListPlaceholder" in response.text
     assert "Load failed" in response.text

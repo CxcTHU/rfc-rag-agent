@@ -5,7 +5,7 @@ import logging
 import re
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 from sqlalchemy.orm import Session
@@ -20,6 +20,18 @@ from app.services.agent.tools import (
     truncate_text,
 )
 from app.services.agent.react_actions import should_search_figures
+from app.services.agent.runtime import AgentRuntime, AgentRuntimeState
+from app.services.agent.evidence_identity import (
+    build_evidence_query_identity,
+    refine_evidence_query_identity_with_llm,
+)
+from app.core.config import get_settings
+from app.services.agent.runtime_checkpoint import (
+    AgentRuntimeRunRepository,
+    decide_resume,
+    load_runtime_state,
+    runtime_resume_diagnostics,
+)
 from app.core.structured_logging import log_event, safe_text_summary
 from app.services.brain.workflow import (
     RESPONSIBILITY_REFUSAL_ANSWER,
@@ -33,6 +45,7 @@ from app.services.generation.chat_model import (
     ChatToolCall,
     ChatToolDefinition,
     ChatToolFunction,
+    create_chat_model_provider,
 )
 from app.services.observability.latency_trace import (
     LatencyTrace,
@@ -41,6 +54,10 @@ from app.services.observability.latency_trace import (
     set_current_latency_trace,
 )
 from app.services.retrieval.embedding import EmbeddingProvider
+from app.services.retrieval.hybrid_search import (
+    reset_current_hyde_vector_query,
+    set_current_hyde_vector_query,
+)
 
 
 TOOL_CALLING_DEFAULT_MAX_ITERATIONS = 3
@@ -48,8 +65,8 @@ TOOL_CALLING_HARD_MAX_ITERATIONS = 3
 ALLOWED_TOOL_NAMES = frozenset(
     {"search_knowledge", "hybrid_search_knowledge", "search_figures", "search_tables"}
 )
-TOOL_RESULT_SNIPPET_LIMIT = 180
-TOOL_RESULT_MAX_SOURCES = 5
+TOOL_RESULT_SNIPPET_LIMIT = 900
+TOOL_RESULT_MAX_SOURCES = 8
 TOOL_CALLING_MAX_EXECUTED_TOOLS_PER_ITERATION = 1
 TOOL_CALLING_NEAR_DUPLICATE_THRESHOLD = 0.65
 TOOL_CALLING_PREFERRED_TOOL_ORDER = {
@@ -74,6 +91,95 @@ class ToolCallingRuntimeEvent:
 ToolCallingEventSink = Callable[[ToolCallingRuntimeEvent], None]
 
 
+def create_runtime_identity_provider() -> ChatModelProvider | None:
+    settings = get_settings()
+    provider_name = (
+        settings.runtime_identity_model_provider
+        or settings.planner_chat_model_provider
+    )
+    model_name = (
+        settings.runtime_identity_model_name
+        or settings.planner_chat_model_name
+    )
+    if not provider_name.strip() or not model_name.strip():
+        return None
+    try:
+        return create_chat_model_provider(
+            provider_name=provider_name,
+            model_name=model_name,
+            api_key=(
+                settings.runtime_identity_model_api_key
+                or settings.planner_chat_model_api_key
+            ),
+            base_url=(
+                settings.runtime_identity_model_base_url
+                or settings.planner_chat_model_base_url
+            ),
+            temperature=settings.runtime_identity_model_temperature,
+            timeout_seconds=settings.runtime_identity_model_timeout_seconds,
+            max_attempts=1,
+        )
+    except ValueError:
+        return None
+
+
+def generate_hyde_vector_query(
+    *,
+    canonical_task: str,
+    provider: ChatModelProvider | None,
+    latency_trace: LatencyTrace,
+) -> str:
+    task = " ".join((canonical_task or "").split())
+    if not task:
+        latency_trace.set_value("hyde_generated", False)
+        latency_trace.set_value("hyde_used_for_vector", False)
+        latency_trace.set_value("hyde_reason", "empty_task")
+        return ""
+    if provider is None:
+        latency_trace.set_value("hyde_generated", False)
+        latency_trace.set_value("hyde_used_for_vector", False)
+        latency_trace.set_value("hyde_reason", "provider_unavailable")
+        return ""
+    if str(getattr(provider, "provider_name", "")).casefold() in {"", "deterministic", "fake", "local"}:
+        latency_trace.set_value("hyde_generated", False)
+        latency_trace.set_value("hyde_used_for_vector", False)
+        latency_trace.set_value("hyde_reason", "provider_unavailable")
+        return ""
+    try:
+        started = time.perf_counter()
+        result = provider.generate(
+            [
+                ChatMessage(
+                    role="system",
+                    content=(
+                        "Generate a concise hypothetical evidence passage for retrieval only. "
+                        "Do not include citations. Do not claim it is real evidence. "
+                        "Use technical terms likely to appear in source documents. "
+                        "Return plain text only, under 120 words."
+                    ),
+                ),
+                ChatMessage(role="user", content=task),
+            ]
+        )
+        latency_trace.add_duration("planner_latency_ms", (time.perf_counter() - started) * 1000.0)
+    except Exception:
+        latency_trace.set_value("hyde_generated", False)
+        latency_trace.set_value("hyde_used_for_vector", False)
+        latency_trace.set_value("hyde_reason", "provider_error")
+        return ""
+    passage = " ".join((result.answer or "").split())
+    if not passage:
+        latency_trace.set_value("hyde_generated", False)
+        latency_trace.set_value("hyde_used_for_vector", False)
+        latency_trace.set_value("hyde_reason", "empty")
+        return ""
+    latency_trace.set_value("hyde_generated", True)
+    latency_trace.set_value("hyde_used_for_vector", True)
+    latency_trace.set_value("hyde_reason", "generated")
+    latency_trace.set_value("hyde_model", f"{result.provider}/{result.model_name}")
+    return f"{task}\n\nHypothetical evidence for vector retrieval only:\n{passage[:1200]}"
+
+
 class ToolCallingAgentService:
     def __init__(
         self,
@@ -84,11 +190,19 @@ class ToolCallingAgentService:
         final_answer_strategy: ToolCallingFinalAnswerStrategy = (
             TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY
         ),
+        runtime_identity_provider: ChatModelProvider | None = None,
     ) -> None:
         if final_answer_strategy not in {"baseline", "structured_final_answer"}:
             raise ValueError("unsupported tool-calling final answer strategy")
         self.final_answer_strategy = final_answer_strategy
         self.chat_model_provider = chat_model_provider
+        self.db = db
+        if runtime_identity_provider is not None:
+            self.runtime_identity_provider = runtime_identity_provider
+        elif str(chat_model_provider.provider_name).casefold() in {"deterministic", "fake", "local"}:
+            self.runtime_identity_provider = None
+        else:
+            self.runtime_identity_provider = create_runtime_identity_provider()
         self.toolbox = AgentToolbox(
             db=db,
             embedding_provider=embedding_provider,
@@ -103,6 +217,9 @@ class ToolCallingAgentService:
         max_tool_calls: int = TOOL_CALLING_DEFAULT_MAX_ITERATIONS,
         history: Sequence[str] | None = None,
         event_sink: ToolCallingEventSink | None = None,
+        conversation_id: int | None = None,
+        resume_policy: str = "auto",
+        resume_run_id: str | None = None,
     ) -> AgentQueryResult:
         normalized_question = question.strip()
         if not normalized_question:
@@ -120,6 +237,35 @@ class ToolCallingAgentService:
             max_tool_calls=max_tool_calls,
             final_answer_strategy=self.final_answer_strategy,
             question_summary=safe_text_summary(normalized_question, limit=80),
+        )
+
+        runtime = AgentRuntime()
+        runtime_state = runtime.assemble(normalized_question, history=history)
+        evidence_identity = build_evidence_query_identity(
+            runtime_state.context.standalone_task or normalized_question,
+            history=history,
+        )
+        evidence_identity = refine_evidence_query_identity_with_llm(
+            runtime_state.context.standalone_task or normalized_question,
+            base_identity=evidence_identity,
+            provider=self.runtime_identity_provider,
+            history=history,
+        )
+        if evidence_identity.safe_for_cache_reuse and evidence_identity.canonical_query:
+            runtime_state.context = replace(
+                runtime_state.context,
+                standalone_task=evidence_identity.canonical_query,
+                contextualized=True,
+                contextualization_source=evidence_identity.source,
+            )
+        runtime_repository = AgentRuntimeRunRepository(self.db)
+        resume_decision = decide_resume(
+            repository=runtime_repository,
+            conversation_id=conversation_id,
+            question=normalized_question,
+            history=tuple(history or ()),
+            resume_policy=resume_policy,
+            resume_run_id=resume_run_id,
         )
 
         responsibility_gate = evaluate_responsibility_gate(normalized_question)
@@ -152,8 +298,13 @@ class ToolCallingAgentService:
                 iteration_count=1,
             )
 
-        topic_gate_query = " ".join([normalized_question, *(history or [])])
-        if not has_topic_anchor(topic_gate_query):
+        topic_gate_query = " ".join(
+            [
+                runtime_state.context.standalone_task or normalized_question,
+                *runtime_state.context.history,
+            ]
+        )
+        if not resume_decision.should_resume and not has_topic_anchor(topic_gate_query):
             log_event(
                 agent_logger,
                 "refusal_triggered",
@@ -204,9 +355,116 @@ class ToolCallingAgentService:
         llm_call_count = 0
         latency_trace = LatencyTrace()
         bind_user_question_cache_key(latency_trace, normalized_question)
+        apply_evidence_identity_diagnostics(latency_trace, evidence_identity)
+        latency_trace.set_value(
+            "canonical_task",
+            evidence_identity.canonical_query
+            or runtime_state.context.standalone_task
+            or normalized_question,
+        )
+        for key, value in runtime_resume_diagnostics(resume_decision).items():
+            latency_trace.set_value(key, value)
+        apply_runtime_diagnostics(latency_trace, runtime_state)
         latency_token = set_current_latency_trace(latency_trace)
+        hyde_token = None
 
         try:
+            if resume_decision.should_resume and resume_decision.run is not None:
+                resumed = result_from_runtime_checkpoint(
+                    question=normalized_question,
+                    run_state=load_runtime_state(resume_decision.run),
+                    chat_model_provider=self.chat_model_provider,
+                    history=history,
+                    final_answer_strategy=self.final_answer_strategy,
+                    runtime_state=runtime_state,
+                    latency_trace=latency_trace,
+                )
+                runtime_repository.persist_node(
+                    resume_decision.run,
+                    node="final_answer_completed",
+                    state={
+                        **load_runtime_state(resume_decision.run),
+                        "resume_completed": True,
+                    },
+                    status="completed",
+                )
+                return resumed
+
+            semantic_cached = None
+            if evidence_identity.safe_for_cache_reuse:
+                semantic_cache_tool_name = semantic_cache_tool_for_identity(evidence_identity)
+                latency_trace.set_value("semantic_cache_tool_name", semantic_cache_tool_name)
+                semantic_cached = self.toolbox.lookup_semantic_evidence_cache(
+                    evidence_identity.canonical_query
+                    or runtime_state.context.standalone_task
+                    or normalized_question,
+                    top_k=top_k,
+                    tool_name=semantic_cache_tool_name,
+                )
+            if semantic_cached is not None and semantic_cached.search_results:
+                latency_trace.set_value("semantic_cache_hit", True)
+                latency_trace.set_value("semantic_cache_reason", "tool_result_cache_hit")
+                latency_trace.set_value("hyde_generated", False)
+                latency_trace.set_value("hyde_used_for_vector", False)
+                latency_trace.set_value("hyde_reason", "semantic_cache_hit")
+                workflow_steps.append(semantic_cached.call)
+                tool_calls.append(semantic_cached.call)
+                search_results = list(semantic_cached.search_results)
+                sources = list(semantic_cached.sources)
+                runtime_state.evidence.add(
+                    tool_name=semantic_cached.tool_name,
+                    query=evidence_identity.canonical_query
+                    or runtime_state.context.standalone_task
+                    or normalized_question,
+                    result_count=len(semantic_cached.search_results),
+                    succeeded=semantic_cached.call.succeeded,
+                )
+                runtime_state.stop_reason = "semantic_evidence_cache_hit"
+                runtime_state.final_decision = "answer"
+                apply_runtime_diagnostics(latency_trace, runtime_state)
+                self._emit_tool_result(event_sink, semantic_cached.call, iteration=1)
+                return result_from_cached_evidence(
+                    question=normalized_question,
+                    search_results=search_results,
+                    sources=sources,
+                    tool_calls=tool_calls,
+                    workflow_steps=workflow_steps,
+                    chat_model_provider=self.chat_model_provider,
+                    history=history,
+                    final_answer_strategy=self.final_answer_strategy,
+                    runtime_state=runtime_state,
+                    latency_trace=latency_trace,
+                )
+            latency_trace.set_value("semantic_cache_hit", False)
+            latency_trace.set_value(
+                "semantic_cache_reason",
+                "miss" if evidence_identity.safe_for_cache_reuse else "identity_not_reusable",
+            )
+            hyde_query = generate_hyde_vector_query(
+                canonical_task=evidence_identity.canonical_query
+                or runtime_state.context.standalone_task
+                or normalized_question,
+                provider=self.runtime_identity_provider,
+                latency_trace=latency_trace,
+            )
+            if hyde_query:
+                hyde_token = set_current_hyde_vector_query(hyde_query)
+
+            active_run = None
+            if conversation_id is not None:
+                active_run = runtime_repository.create_run(
+                    conversation_id=conversation_id,
+                    question=normalized_question,
+                    canonical_task=evidence_identity.canonical_query
+                    or runtime_state.context.standalone_task
+                    or normalized_question,
+                    state={
+                        "runtime_context": runtime_state.diagnostics(),
+                        "evidence_identity": evidence_identity.diagnostics(),
+                    },
+                )
+                latency_trace.set_value("runtime_run_id", active_run.run_id)
+
             for iteration in range(1, max_iterations + 1):
                 self._emit(
                     event_sink,
@@ -235,14 +493,23 @@ class ToolCallingAgentService:
                             assistant_tool_calls=tuple(model_result.tool_calls),
                         )
                     )
+                    grounded_tool_calls = [
+                        runtime.ground_tool_call(
+                            tool_call,
+                            state=runtime_state,
+                            default_query=normalized_question,
+                        )[0]
+                        for tool_call in model_result.tool_calls
+                    ]
+                    apply_runtime_diagnostics(latency_trace, runtime_state)
                     iteration_executed_tool_count = 0
                     iteration_skipped_tool_count = 0
                     tool_calls_to_execute = executable_tool_call_ids(
-                        model_result.tool_calls,
+                        grounded_tool_calls,
                         previous_tool_queries=previous_tool_queries,
                         sources_available=bool(sources),
                     )
-                    for tool_call in model_result.tool_calls:
+                    for tool_call in grounded_tool_calls:
                         query = tool_query_from_call(tool_call, default_query=normalized_question)
                         normalized_tool_query = normalize_tool_query(query)
                         if is_near_duplicate_tool_query(
@@ -324,6 +591,13 @@ class ToolCallingAgentService:
                         iteration_executed_tool_count += 1
                         tool_calls.append(tool_result.call)
                         workflow_steps.append(tool_result.call)
+                        runtime_state.evidence.add(
+                            tool_name=tool_result.tool_name,
+                            query=query,
+                            result_count=len(tool_result.search_results),
+                            succeeded=tool_result.call.succeeded,
+                        )
+                        apply_runtime_diagnostics(latency_trace, runtime_state)
                         search_results = merge_search_results(
                             search_results,
                             tool_result.search_results,
@@ -340,6 +614,56 @@ class ToolCallingAgentService:
                             tool_result.call,
                             iteration=iteration,
                         )
+                        runtime_repository.persist_node(
+                            active_run,
+                            node="tool_execution_completed",
+                            state=runtime_checkpoint_state(
+                                runtime_state=runtime_state,
+                                workflow_steps=workflow_steps,
+                                tool_calls=tool_calls,
+                                sources=sources,
+                                latency_trace=latency_trace.values,
+                            ),
+                        )
+                        if is_reranking_failure(tool_result.call):
+                            refusal_reason = tool_result.call.error or tool_result.call.output_summary
+                            runtime_state.stop_reason = "reranking_failed"
+                            runtime_state.final_decision = "refuse"
+                            apply_runtime_diagnostics(latency_trace, runtime_state)
+                            runtime_repository.persist_node(
+                                active_run,
+                                node="reranking_failed",
+                                state=runtime_checkpoint_state(
+                                    runtime_state=runtime_state,
+                                    workflow_steps=workflow_steps,
+                                    tool_calls=tool_calls,
+                                    sources=sources,
+                                    latency_trace=latency_trace.values,
+                                ),
+                                status="failed",
+                            )
+                            return result_from_tool_calling_loop(
+                                question=normalized_question,
+                                answer=refusal_reason,
+                                tool_calls=tool_calls,
+                                workflow_steps=workflow_steps,
+                                search_results=search_results,
+                                sources=sources,
+                                citations=[],
+                                refused=True,
+                                refusal_reason=refusal_reason,
+                                llm_call_count=llm_call_count,
+                                repeated_query_count=repeated_query_count,
+                                near_duplicate_query_count=near_duplicate_query_count,
+                                skipped_tool_call_count=skipped_tool_call_count,
+                                executed_tool_call_count=executed_tool_call_count,
+                                citation_repair_count=citation_repair_count,
+                                runtime_state=runtime_state,
+                                latency_trace=latency_trace.finalize(
+                                    iteration_count=len(workflow_steps),
+                                    tool_call_count=len(tool_calls),
+                                ),
+                            )
                         previous_tool_queries.append(normalized_tool_query)
                         if tool_result.tool_name == "search_figures":
                             figure_search_executed = True
@@ -350,8 +674,9 @@ class ToolCallingAgentService:
                             and not figure_search_executed
                             and not any(source.image_url for source in sources)
                         ):
+                            figure_query = runtime_state.context.standalone_task or normalized_question
                             figure_result = self.toolbox.search_figures(
-                                normalized_question,
+                                figure_query,
                                 top_k=min(4, top_k),
                             )
                             figure_search_executed = True
@@ -359,6 +684,13 @@ class ToolCallingAgentService:
                             iteration_executed_tool_count += 1
                             tool_calls.append(figure_result.call)
                             workflow_steps.append(figure_result.call)
+                            runtime_state.evidence.add(
+                                tool_name=figure_result.tool_name,
+                                query=figure_query,
+                                result_count=len(figure_result.search_results),
+                                succeeded=figure_result.call.succeeded,
+                            )
+                            apply_runtime_diagnostics(latency_trace, runtime_state)
                             search_results = merge_search_results(
                                 search_results,
                                 figure_result.search_results,
@@ -421,6 +753,21 @@ class ToolCallingAgentService:
                                 answer_content = repair_result.answer
                                 citations = repair_citations
                         if citations:
+                            runtime_state.stop_reason = "evidence_convergence"
+                            runtime_state.final_decision = "answer"
+                            apply_runtime_diagnostics(latency_trace, runtime_state)
+                            runtime_repository.persist_node(
+                                active_run,
+                                node="final_answer_completed",
+                                state=runtime_checkpoint_state(
+                                    runtime_state=runtime_state,
+                                    workflow_steps=workflow_steps,
+                                    tool_calls=tool_calls,
+                                    sources=sources,
+                                    latency_trace=latency_trace.values,
+                                ),
+                                status="completed",
+                            )
                             workflow_steps.append(
                                 AgentToolCallRecord(
                                     tool_name="final_answer",
@@ -445,6 +792,7 @@ class ToolCallingAgentService:
                                 skipped_tool_call_count=skipped_tool_call_count,
                                 executed_tool_call_count=executed_tool_call_count,
                                 citation_repair_count=citation_repair_count,
+                                runtime_state=runtime_state,
                                 latency_trace=latency_trace.finalize(
                                     iteration_count=len(workflow_steps),
                                     tool_call_count=len(tool_calls),
@@ -498,6 +846,21 @@ class ToolCallingAgentService:
                                 error=refusal_reason,
                             )
                         )
+                        runtime_state.stop_reason = "final_content_without_citations"
+                        runtime_state.final_decision = "refuse"
+                        apply_runtime_diagnostics(latency_trace, runtime_state)
+                        runtime_repository.persist_node(
+                            active_run,
+                            node="final_answer_failed",
+                            state=runtime_checkpoint_state(
+                                runtime_state=runtime_state,
+                                workflow_steps=workflow_steps,
+                                tool_calls=tool_calls,
+                                sources=sources,
+                                latency_trace=latency_trace.values,
+                            ),
+                            status="failed",
+                        )
                         return result_from_tool_calling_loop(
                             question=normalized_question,
                             answer=refusal_reason,
@@ -514,12 +877,28 @@ class ToolCallingAgentService:
                             skipped_tool_call_count=skipped_tool_call_count,
                             executed_tool_call_count=executed_tool_call_count,
                             citation_repair_count=citation_repair_count,
+                            runtime_state=runtime_state,
                             latency_trace=latency_trace.finalize(
                                 iteration_count=len(workflow_steps),
                                 tool_call_count=len(tool_calls),
                             ),
                         )
 
+                    runtime_state.stop_reason = "model_final_answer"
+                    runtime_state.final_decision = "answer"
+                    apply_runtime_diagnostics(latency_trace, runtime_state)
+                    runtime_repository.persist_node(
+                        active_run,
+                        node="final_answer_completed",
+                        state=runtime_checkpoint_state(
+                            runtime_state=runtime_state,
+                            workflow_steps=workflow_steps,
+                            tool_calls=tool_calls,
+                            sources=sources,
+                            latency_trace=latency_trace.values,
+                        ),
+                        status="completed",
+                    )
                     workflow_steps.append(
                         AgentToolCallRecord(
                             tool_name="final_answer",
@@ -544,6 +923,7 @@ class ToolCallingAgentService:
                         skipped_tool_call_count=skipped_tool_call_count,
                         executed_tool_call_count=executed_tool_call_count,
                         citation_repair_count=citation_repair_count,
+                        runtime_state=runtime_state,
                         latency_trace=latency_trace.finalize(
                             iteration_count=len(workflow_steps),
                             tool_call_count=len(tool_calls),
@@ -551,6 +931,21 @@ class ToolCallingAgentService:
                     )
 
             refusal_reason = "Tool-calling iteration limit reached."
+            runtime_state.stop_reason = "iteration_limit"
+            runtime_state.final_decision = "refuse"
+            apply_runtime_diagnostics(latency_trace, runtime_state)
+            runtime_repository.persist_node(
+                active_run,
+                node="iteration_limit",
+                state=runtime_checkpoint_state(
+                    runtime_state=runtime_state,
+                    workflow_steps=workflow_steps,
+                    tool_calls=tool_calls,
+                    sources=sources,
+                    latency_trace=latency_trace.values,
+                ),
+                status="failed",
+            )
             return result_from_tool_calling_loop(
                 question=normalized_question,
                 answer=refusal_reason,
@@ -567,12 +962,15 @@ class ToolCallingAgentService:
                 skipped_tool_call_count=skipped_tool_call_count,
                 executed_tool_call_count=executed_tool_call_count,
                 citation_repair_count=citation_repair_count,
+                runtime_state=runtime_state,
                 latency_trace=latency_trace.finalize(
                     iteration_count=len(workflow_steps),
                     tool_call_count=len(tool_calls),
                 ),
             )
         finally:
+            if hyde_token is not None:
+                reset_current_hyde_vector_query(hyde_token)
             reset_current_latency_trace(latency_token)
 
     def _execute_tool_call(
@@ -794,11 +1192,16 @@ def final_answer_strategy_instruction(
     if final_answer_strategy == "structured_final_answer":
         return (
             "Final answer strategy: structured_final_answer. Use a citation-first "
-            "compact structure. Start with a direct answer in one or two cited "
+            "balanced source-backed structure. Start with a direct answer in one or two cited "
             "sentences. Then add short factual bullets for every requested aspect "
             "that is supported by the retrieved evidence; use 4 to 6 bullets when "
             "the question asks for comparison, multiple dimensions, monitoring, "
-            "quality control, or imported-corpus literature coverage. "
+            "quality control, advantages, causes, classifications, measures, "
+            "or imported-corpus literature coverage. For ordinary domain list or "
+            "explanation questions, do not stop at bare labels; give each bullet "
+            "one explanatory clause or sentence grounded in the cited source. "
+            "Only use title-only bullets when the user explicitly asks for an "
+            "outline, very brief answer, keywords, or short labels. "
             "Each factual sentence and each factual bullet must include the closest "
             "[N] citation from retrieved sources. Keep each bullet to one supported "
             "idea; do not combine unsupported mechanisms, numeric values, advantages, "
@@ -918,6 +1321,17 @@ def safe_tool_result_payload(
         "summary": tool_result.call.output_summary,
         "sources": safe_sources,
     }
+
+
+def is_reranking_failure(call: AgentToolCallRecord) -> bool:
+    if call.succeeded:
+        return False
+    text = " ".join(
+        part
+        for part in [call.error, call.output_summary]
+        if isinstance(part, str) and part
+    )
+    return "重排序失效" in text or "reranking failed" in text.casefold()
 
 
 def skipped_tool_result_payload(
@@ -1100,9 +1514,12 @@ def result_from_tool_calling_loop(
     skipped_tool_call_count: int,
     executed_tool_call_count: int,
     citation_repair_count: int,
+    runtime_state: AgentRuntimeState | None = None,
     latency_trace: dict[str, object],
 ) -> AgentQueryResult:
     latency_trace = dict(latency_trace)
+    if runtime_state is not None:
+        latency_trace.update(runtime_state.diagnostics())
     latency_trace["llm_call_count"] = llm_call_count
     latency_trace["repeated_query_count"] = repeated_query_count
     latency_trace["near_duplicate_query_count"] = near_duplicate_query_count
@@ -1173,3 +1590,345 @@ def merge_sources(
         seen.add(item.source_id)
         merged.append(item)
     return merged
+
+
+def apply_runtime_diagnostics(
+    latency_trace: LatencyTrace,
+    runtime_state: AgentRuntimeState,
+) -> None:
+    for key, value in runtime_state.diagnostics().items():
+        latency_trace.set_value(key, value)
+
+
+def apply_evidence_identity_diagnostics(
+    latency_trace: LatencyTrace,
+    evidence_identity: Any,
+) -> None:
+    diagnostics = evidence_identity.diagnostics()
+    for key, value in diagnostics.items():
+        latency_trace.set_value(key, value)
+
+
+def semantic_cache_tool_for_identity(evidence_identity: Any) -> str:
+    intent_key = str(getattr(evidence_identity, "intent_key", "") or "")
+    if intent_key == "visual_evidence":
+        return "search_figures"
+    if intent_key == "table_evidence":
+        return "search_tables"
+    return "hybrid_search_knowledge"
+
+
+def runtime_checkpoint_state(
+    *,
+    runtime_state: AgentRuntimeState,
+    workflow_steps: list[AgentToolCallRecord],
+    tool_calls: list[AgentToolCallRecord],
+    sources: list[AgentSourceReference],
+    latency_trace: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "runtime_context": runtime_state.diagnostics(),
+        "workflow_steps": [tool_call_record_to_dict(item) for item in workflow_steps[:20]],
+        "tool_calls": [tool_call_record_to_dict(item) for item in tool_calls[:20]],
+        "sources": [source_reference_to_dict(item) for item in sources[:12]],
+        "source_chunk_ids": [
+            int(source.chunk_id)
+            for source in sources[:50]
+            if isinstance(source.chunk_id, int)
+        ],
+        "latency_trace": {
+            key: value
+            for key, value in latency_trace.items()
+            if key
+            in {
+                "evidence_canonical_query",
+                "evidence_entity_key",
+                "evidence_intent_key",
+                "evidence_cache_reuse_allowed",
+                "retrieval_cache_hit",
+                "rerank_cache_hit",
+                "tool_result_cache_hit",
+                "runtime_run_id",
+            }
+        },
+    }
+
+
+def tool_call_record_to_dict(record: AgentToolCallRecord) -> dict[str, object]:
+    return {
+        "tool_name": record.tool_name,
+        "input_summary": truncate_text(record.input_summary, 160),
+        "output_summary": truncate_text(record.output_summary, 180),
+        "succeeded": record.succeeded,
+        "error": truncate_text(record.error or "", 180) or None,
+    }
+
+
+def source_reference_to_dict(source: AgentSourceReference) -> dict[str, object]:
+    return {
+        "source_id": source.source_id,
+        "title": truncate_text(source.title, 160),
+        "source_type": source.source_type,
+        "status": source.status,
+        "trust_level": source.trust_level,
+        "fulltext_permission": source.fulltext_permission,
+        "document_id": source.document_id,
+        "chunk_id": source.chunk_id,
+        "chunk_index": source.chunk_index,
+        "url": source.url,
+        "doi": source.doi,
+        "content": truncate_text(source.content or "", TOOL_RESULT_SNIPPET_LIMIT),
+        "score": source.score,
+        "chunk_type": source.chunk_type,
+        "source_image_path": source.source_image_path,
+        "image_url": source.image_url,
+        "caption": truncate_text(source.caption or "", 120) or None,
+        "page_number": source.page_number,
+        "table_content": truncate_text(source.table_content or "", 200) or None,
+    }
+
+
+def source_reference_from_dict(values: dict[str, object]) -> AgentSourceReference:
+    return AgentSourceReference(
+        source_id=str(values.get("source_id") or ""),
+        title=str(values.get("title") or ""),
+        source_type=str(values.get("source_type") or "unknown"),
+        status=optional_str(values.get("status")),
+        trust_level=optional_str(values.get("trust_level")),
+        fulltext_permission=optional_str(values.get("fulltext_permission")),
+        document_id=optional_int(values.get("document_id")),
+        chunk_id=optional_int(values.get("chunk_id")),
+        chunk_index=optional_int(values.get("chunk_index")),
+        url=optional_str(values.get("url")),
+        doi=optional_str(values.get("doi")),
+        content=optional_str(values.get("content")),
+        score=optional_float(values.get("score")),
+        chunk_type=str(values.get("chunk_type") or "text"),
+        source_image_path=optional_str(values.get("source_image_path")),
+        image_url=optional_str(values.get("image_url")),
+        caption=optional_str(values.get("caption")),
+        page_number=optional_int(values.get("page_number")),
+        table_content=optional_str(values.get("table_content")),
+    )
+
+
+def result_from_cached_evidence(
+    *,
+    question: str,
+    search_results: list[AgentSearchItem],
+    sources: list[AgentSourceReference],
+    tool_calls: list[AgentToolCallRecord],
+    workflow_steps: list[AgentToolCallRecord],
+    chat_model_provider: ChatModelProvider,
+    history: Sequence[str] | None,
+    final_answer_strategy: ToolCallingFinalAnswerStrategy,
+    runtime_state: AgentRuntimeState,
+    latency_trace: LatencyTrace,
+) -> AgentQueryResult:
+    llm_started = time.perf_counter()
+    evidence_result = chat_model_provider.generate(
+        evidence_answer_messages(
+            question,
+            sources=sources,
+            history=history,
+            final_answer_strategy=final_answer_strategy,
+        )
+    )
+    latency_trace.add_duration("answer_latency_ms", (time.perf_counter() - llm_started) * 1000.0)
+    allowed_source_ids = list(range(1, len(sources) + 1))
+    citations = extract_citations(evidence_result.answer, allowed_source_ids)
+    answer_content = evidence_result.answer
+    llm_call_count = 1
+    citation_repair_count = 0
+    if not citations:
+        repair_started = time.perf_counter()
+        repair_result = chat_model_provider.generate(
+            citation_repair_messages(
+                question,
+                draft_answer=evidence_result.answer,
+                sources=sources,
+                history=history,
+                final_answer_strategy=final_answer_strategy,
+            )
+        )
+        citation_repair_count = 1
+        llm_call_count += 1
+        latency_trace.add_duration("answer_latency_ms", (time.perf_counter() - repair_started) * 1000.0)
+        repair_citations = extract_citations(repair_result.answer, allowed_source_ids)
+        if repair_citations:
+            answer_content = repair_result.answer
+            citations = repair_citations
+    if citations:
+        runtime_state.final_decision = "answer"
+        runtime_state.stop_reason = "semantic_evidence_cache_hit"
+        refused = False
+        refusal_reason = None
+    else:
+        runtime_state.final_decision = "refuse"
+        runtime_state.stop_reason = "cached_evidence_without_citations"
+        refused = True
+        refusal_reason = "Cached evidence answer did not include valid citations."
+    apply_runtime_diagnostics(latency_trace, runtime_state)
+    return result_from_tool_calling_loop(
+        question=question,
+        answer=answer_content,
+        tool_calls=tool_calls,
+        workflow_steps=workflow_steps,
+        search_results=search_results,
+        sources=sources,
+        citations=citations,
+        refused=refused,
+        refusal_reason=refusal_reason,
+        llm_call_count=llm_call_count,
+        repeated_query_count=0,
+        near_duplicate_query_count=0,
+        skipped_tool_call_count=0,
+        executed_tool_call_count=0,
+        citation_repair_count=citation_repair_count,
+        runtime_state=runtime_state,
+        latency_trace=latency_trace.finalize(
+            iteration_count=len(workflow_steps),
+            tool_call_count=len(tool_calls),
+        ),
+    )
+
+
+def result_from_runtime_checkpoint(
+    *,
+    question: str,
+    run_state: dict[str, object],
+    chat_model_provider: ChatModelProvider,
+    history: Sequence[str] | None,
+    final_answer_strategy: ToolCallingFinalAnswerStrategy,
+    runtime_state: AgentRuntimeState,
+    latency_trace: LatencyTrace,
+) -> AgentQueryResult:
+    raw_sources = run_state.get("sources", [])
+    if not isinstance(raw_sources, list):
+        raw_sources = []
+    sources = [
+        source_reference_from_dict(item)
+        for item in raw_sources
+        if isinstance(item, dict)
+    ]
+    raw_steps = run_state.get("workflow_steps", [])
+    workflow_steps = [
+        AgentToolCallRecord(
+            tool_name=str(item.get("tool_name") or "checkpoint"),
+            input_summary=str(item.get("input_summary") or ""),
+            output_summary=str(item.get("output_summary") or ""),
+            succeeded=bool(item.get("succeeded")),
+            error=optional_str(item.get("error")),
+        )
+        for item in raw_steps
+        if isinstance(item, dict)
+    ]
+    workflow_steps.append(
+        AgentToolCallRecord(
+            tool_name="runtime_resume",
+            input_summary="checkpoint",
+            output_summary="resumed from completed evidence node",
+            succeeded=True,
+        )
+    )
+    latency_trace.set_value("runtime_resumed", True)
+    latency_trace.set_value("runtime_skipped_completed_nodes", ["tool_execution"])
+    latency_trace.set_value("executed_tool_call_count", 0)
+    if not sources:
+        runtime_state.stop_reason = "resume_checkpoint_without_sources"
+        runtime_state.final_decision = "refuse"
+        apply_runtime_diagnostics(latency_trace, runtime_state)
+        return result_from_tool_calling_loop(
+            question=question,
+            answer="Runtime checkpoint did not contain reusable source evidence.",
+            tool_calls=[],
+            workflow_steps=workflow_steps,
+            search_results=[],
+            sources=[],
+            citations=[],
+            refused=True,
+            refusal_reason="Runtime checkpoint did not contain reusable source evidence.",
+            llm_call_count=0,
+            repeated_query_count=0,
+            near_duplicate_query_count=0,
+            skipped_tool_call_count=0,
+            executed_tool_call_count=0,
+            citation_repair_count=0,
+            runtime_state=runtime_state,
+            latency_trace=latency_trace.finalize(
+                iteration_count=len(workflow_steps),
+                tool_call_count=0,
+            ),
+        )
+
+    llm_started = time.perf_counter()
+    evidence_result = chat_model_provider.generate(
+        evidence_answer_messages(
+            question,
+            sources=sources,
+            history=history,
+            final_answer_strategy=final_answer_strategy,
+        )
+    )
+    latency_trace.add_duration("answer_latency_ms", (time.perf_counter() - llm_started) * 1000.0)
+    allowed_source_ids = list(range(1, len(sources) + 1))
+    citations = extract_citations(evidence_result.answer, allowed_source_ids)
+    runtime_state.stop_reason = "runtime_resume_completed"
+    runtime_state.final_decision = "answer" if citations else "refuse"
+    apply_runtime_diagnostics(latency_trace, runtime_state)
+    workflow_steps.append(
+        AgentToolCallRecord(
+            tool_name="final_answer",
+            input_summary="runtime resume",
+            output_summary=truncate_text(evidence_result.answer),
+            succeeded=bool(citations),
+            error=None if citations else "checkpoint answer missing citations",
+        )
+    )
+    return result_from_tool_calling_loop(
+        question=question,
+        answer=evidence_result.answer if citations else "Runtime checkpoint evidence could not produce cited answer.",
+        tool_calls=[],
+        workflow_steps=workflow_steps,
+        search_results=[],
+        sources=sources,
+        citations=citations,
+        refused=not bool(citations),
+        refusal_reason=None if citations else "Runtime checkpoint evidence could not produce cited answer.",
+        llm_call_count=1,
+        repeated_query_count=0,
+        near_duplicate_query_count=0,
+        skipped_tool_call_count=0,
+        executed_tool_call_count=0,
+        citation_repair_count=0,
+        runtime_state=runtime_state,
+        latency_trace=latency_trace.finalize(
+            iteration_count=len(workflow_steps),
+            tool_call_count=0,
+        ),
+    )
+
+
+def optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text or None
+
+
+def optional_int(value: object) -> int | None:
+    try:
+        if value is None:
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def optional_float(value: object) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None

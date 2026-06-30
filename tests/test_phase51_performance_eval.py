@@ -18,17 +18,15 @@ def test_phase51_eval_configs_cover_required_matrix() -> None:
         "langgraph_deterministic",
         "langgraph_flash_planner",
         "langgraph_faiss_fallback",
-        "semantic_cache_hit",
     ]
 
 
 def test_phase51_performance_dry_run_writes_safe_csv(tmp_path) -> None:
     rows, summary = run_evaluation(output_dir=tmp_path, limit=2)
 
-    assert len(rows) == 14
+    assert len(rows) == 12
     assert len(summary) == len(EVAL_CONFIGS)
     assert {row["config_id"] for row in rows} == {config.config_id for config in EVAL_CONFIGS}
-    assert any(row["semantic_cache_hit"] == "true" for row in rows)
     assert all("raw_response" not in row["error_summary"] for row in rows)
 
     results_path = tmp_path / "phase51_performance_results.csv"

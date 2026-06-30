@@ -11,6 +11,7 @@ from app.services.retrieval.query_embedding_cache import (
     QueryEmbeddingCache,
     QueryEmbeddingCacheKey,
     QueryEmbeddingCacheStats,
+    cache_identity_query_text,
     normalize_query_text,
     record_query_embedding_cache_event,
 )
@@ -43,7 +44,7 @@ class RedisQueryEmbeddingCache:
         return self._redis_errors
 
     def get_or_embed(self, provider: EmbeddingProvider, query: str) -> list[float]:
-        normalized_query = normalize_query_text(query)
+        normalized_query = cache_identity_query_text(query)
         key = QueryEmbeddingCacheKey(
             provider=provider.provider_name,
             model_name=provider.model_name,

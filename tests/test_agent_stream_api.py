@@ -40,7 +40,6 @@ def parse_sse_events(body: str) -> list[tuple[str, dict]]:
 
 def disable_external_stream_caches(monkeypatch) -> None:
     monkeypatch.setenv("REDIS_URL", "")
-    monkeypatch.setenv("SEMANTIC_CACHE_ENABLED", "false")
     get_settings.cache_clear()
     clear_query_embedding_cache()
 

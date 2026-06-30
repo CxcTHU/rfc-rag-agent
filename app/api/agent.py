@@ -2,9 +2,8 @@ import json
 import logging
 import re
 import time
-import hashlib
 from collections.abc import Iterator, Sequence
-from queue import Empty, Queue
+from queue import Queue
 from threading import Thread
 from typing import Any
 
@@ -38,6 +37,7 @@ from app.services.agent.tools import image_url_from_source_image_path, page_numb
 from app.services.agent.graph_builder import LangGraphAgentService
 from app.services.agent.react_service import ReActAgentService
 from app.services.agent.tool_calling_service import ToolCallingAgentService
+from app.services.agent.runtime_checkpoint import AgentRuntimeRunRepository
 from app.services.agent.routing import classify_query_complexity
 from app.services.agentic.graph import run_agentic_rag
 from app.services.agentic.state import AgenticResult
@@ -55,11 +55,6 @@ from app.services.generation.chat_model import (
     split_streaming_text,
 )
 from app.services.retrieval.embedding import EmbeddingProvider, create_embedding_provider
-from app.services.cache.semantic_cache import (
-    SemanticCacheLookup,
-    get_configured_semantic_cache,
-    semantic_cache_request_is_eligible,
-)
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -206,32 +201,6 @@ def query_agent(
     if effective_mode is None:
         effective_mode = "tool_calling_agent"
     log_agent_query_received(request, effective_mode=effective_mode)
-    semantic_cache = get_configured_semantic_cache()
-    semantic_cache_context_value = semantic_cache_context(db)
-    semantic_cache_eligible = semantic_cache_request_is_eligible(
-        conversation_id=request.conversation_id,
-        history=conversation_history or request.history,
-        source_id=request.source_id,
-        image_path=request.image_path,
-        query=request.question,
-        conversation_messages=conversation_messages,
-    )
-    if semantic_cache is not None and semantic_cache_eligible:
-        semantic_lookup = semantic_cache.lookup(
-            query=request.question,
-            mode=effective_mode,
-            embedding_provider=embedding_provider,
-            cache_context=semantic_cache_context_value,
-        )
-        if semantic_lookup.response is not None:
-            persist_agent_conversation_messages(
-                repository=conversation_repository,
-                conversation_id=request.conversation_id,
-                question=request.question,
-                response=semantic_lookup.response,
-                chat_model_provider=chat_model_provider,
-            )
-            return semantic_lookup.response
 
     response: AgentQueryResponse
     if effective_mode == "agentic":
@@ -258,15 +227,6 @@ def query_agent(
             question=request.question,
             response=agent_response_from_agentic_result(agentic_result),
             effective_mode=effective_mode,
-        )
-        maybe_store_semantic_cache_response(
-            semantic_cache=semantic_cache,
-            eligible=semantic_cache_eligible,
-            query=request.question,
-            mode=effective_mode,
-            embedding_provider=embedding_provider,
-            response=response,
-            cache_context=semantic_cache_context_value,
         )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
@@ -307,15 +267,6 @@ def query_agent(
             question=request.question,
             response=agent_response_from_result(result),
             effective_mode=effective_mode,
-        )
-        maybe_store_semantic_cache_response(
-            semantic_cache=semantic_cache,
-            eligible=semantic_cache_eligible,
-            query=request.question,
-            mode=effective_mode,
-            embedding_provider=embedding_provider,
-            response=response,
-            cache_context=semantic_cache_context_value,
         )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
@@ -363,15 +314,6 @@ def query_agent(
             response=agent_response_from_result(result),
             effective_mode=effective_mode,
         )
-        maybe_store_semantic_cache_response(
-            semantic_cache=semantic_cache,
-            eligible=semantic_cache_eligible,
-            query=request.question,
-            mode=effective_mode,
-            embedding_provider=embedding_provider,
-            response=response,
-            cache_context=semantic_cache_context_value,
-        )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
             repository=conversation_repository,
@@ -393,6 +335,9 @@ def query_agent(
                 top_k=request.top_k,
                 max_tool_calls=request.max_tool_calls,
                 history=conversation_history or request.history,
+                conversation_id=request.conversation_id,
+                resume_policy=request.resume_policy,
+                resume_run_id=request.resume_run_id,
             )
         except ValueError as exc:
             raise HTTPException(
@@ -409,15 +354,6 @@ def query_agent(
             question=request.question,
             response=agent_response_from_result(result),
             effective_mode=effective_mode,
-        )
-        maybe_store_semantic_cache_response(
-            semantic_cache=semantic_cache,
-            eligible=semantic_cache_eligible,
-            query=request.question,
-            mode=effective_mode,
-            embedding_provider=embedding_provider,
-            response=response,
-            cache_context=semantic_cache_context_value,
         )
         log_agent_response_event(response)
         persist_agent_conversation_messages(
@@ -457,15 +393,6 @@ def query_agent(
         question=request.question,
         response=agent_response_from_result(result),
         effective_mode=effective_mode,
-    )
-    maybe_store_semantic_cache_response(
-        semantic_cache=semantic_cache,
-        eligible=semantic_cache_eligible,
-        query=request.question,
-        mode=effective_mode,
-        embedding_provider=embedding_provider,
-        response=response,
-        cache_context=semantic_cache_context_value,
     )
     log_agent_response_event(response)
     persist_agent_conversation_messages(
@@ -577,47 +504,15 @@ def stream_agent_query_events(
                     summarize = False
                 else:
                     effective_mode = request.mode or "tool_calling_agent"
-                    semantic_cache = get_configured_semantic_cache()
-                    semantic_cache_context_value = semantic_cache_context(db)
-                    semantic_cache_eligible = semantic_cache_request_is_eligible(
-                        conversation_id=request.conversation_id,
-                        history=conversation_history or request.history,
-                        source_id=request.source_id,
-                        image_path=request.image_path,
-                        query=request.question,
-                        conversation_messages=conversation_messages or [],
+                    response, streamed_token_count = yield from stream_non_chitchat_agent_response(
+                        request=request,
+                        db=db,
+                        conversation_history=conversation_history,
+                        chat_model_provider=chat_model_provider,
+                        embedding_provider=embedding_provider,
+                        planner_chat_provider=planner_chat_provider,
                     )
-                    semantic_cache_hit = False
-                    if semantic_cache is not None and semantic_cache_eligible:
-                        semantic_lookup = stream_semantic_cache_lookup(
-                            semantic_cache=semantic_cache,
-                            query=request.question,
-                            mode=effective_mode,
-                            embedding_provider=embedding_provider,
-                            cache_context=semantic_cache_context_value,
-                        )
-                        if semantic_lookup.response is not None:
-                            response = semantic_lookup.response
-                            semantic_cache_hit = True
-                    if not semantic_cache_hit:
-                        response, streamed_token_count = yield from stream_non_chitchat_agent_response(
-                            request=request,
-                            db=db,
-                            conversation_history=conversation_history,
-                            chat_model_provider=chat_model_provider,
-                            embedding_provider=embedding_provider,
-                            planner_chat_provider=planner_chat_provider,
-                        )
-                        maybe_store_semantic_cache_response(
-                            semantic_cache=semantic_cache,
-                            eligible=semantic_cache_eligible,
-                            query=request.question,
-                            mode=effective_mode,
-                            embedding_provider=embedding_provider,
-                            response=response,
-                            cache_context=semantic_cache_context_value,
-                        )
-                    if semantic_cache_hit or streamed_token_count == 0:
+                    if streamed_token_count == 0:
                         for token in split_streaming_text(response.answer):
                             mark_response_first_token(response, stream_started)
                             yield sse_event("token", {"text": token})
@@ -648,6 +543,12 @@ def stream_agent_query_events(
             "error",
             {"detail": "model or retrieval provider is unavailable or timed out"},
         )
+    except GeneratorExit:
+        AgentRuntimeRunRepository(db).mark_latest_running_stopped(
+            request.conversation_id,
+            reason="client_stream_aborted",
+        )
+        raise
     except Exception:
         yield sse_event("error", {"detail": "agent stream failed"})
 
@@ -711,66 +612,6 @@ def stream_non_chitchat_agent_response(
 
         producer.join()
         raise RuntimeError("unknown stream event")
-
-
-def stream_semantic_cache_lookup(
-    *,
-    semantic_cache: Any,
-    query: str,
-    mode: str,
-    embedding_provider: EmbeddingProvider,
-    cache_context: str,
-    timeout_seconds: float = 0.05,
-) -> SemanticCacheLookup:
-    result_queue: Queue[SemanticCacheLookup] = Queue(maxsize=1)
-
-    def lookup() -> None:
-        result_queue.put(
-            semantic_cache.lookup(
-                query=query,
-                mode=mode,
-                embedding_provider=embedding_provider,
-                cache_context=cache_context,
-            )
-        )
-
-    Thread(target=lookup, daemon=True).start()
-    try:
-        return result_queue.get(timeout=timeout_seconds)
-    except Empty:
-        return SemanticCacheLookup(None, False, reason="stream_lookup_timeout")
-
-
-def maybe_store_semantic_cache_response(
-    *,
-    semantic_cache: Any | None,
-    eligible: bool,
-    query: str,
-    mode: str,
-    embedding_provider: EmbeddingProvider,
-    response: AgentQueryResponse,
-    cache_context: str = "default",
-) -> None:
-    if semantic_cache is None or not eligible:
-        return
-    response.latency_trace.setdefault("semantic_cache_hit", False)
-    response.latency_trace.setdefault("semantic_cache_similarity", None)
-    semantic_cache.store(
-        query=query,
-        mode=mode,
-        embedding_provider=embedding_provider,
-        response=response,
-        cache_context=cache_context,
-    )
-
-
-def semantic_cache_context(db: Session) -> str:
-    try:
-        safe_url = db.get_bind().url.render_as_string(hide_password=True)
-    except Exception:
-        safe_url = "unknown"
-    digest = hashlib.sha256(safe_url.encode("utf-8")).hexdigest()
-    return f"db:{digest}"
 
 
 FOLLOWUP_TRANSFORM_TRIGGERS = (
@@ -1376,6 +1217,9 @@ def build_agent_query_response(
             max_tool_calls=request.max_tool_calls,
             history=conversation_history or request.history,
             event_sink=event_sink,
+            conversation_id=request.conversation_id,
+            resume_policy=request.resume_policy,
+            resume_run_id=request.resume_run_id,
         )
         response = maybe_enrich_agent_response_with_figure_evidence(
             db=db,

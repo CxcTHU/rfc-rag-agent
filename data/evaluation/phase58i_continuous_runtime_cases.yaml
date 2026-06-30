@@ -1,0 +1,111 @@
+# Phase 58I continuous runtime evaluation cases.
+# Safe artifact: user-style questions and expected cache behavior only.
+# The evaluator must not persist full answers, chunks, source text, or provider payloads.
+
+sequences:
+  - id: rfc_filling_performance_variants
+    category: same_identity_typo_synonym
+    description: 'Filling and filling-capacity wording variants with one typo-like phrasing.'
+    turns:
+      - q: '堆石混凝土填充性能'
+        expected_cache_hit: false
+      - q: '堆石混凝土充填的能性'
+        expected_cache_hit: true
+      - q: '堆石混凝土的填充能力怎么样'
+        expected_cache_hit: true
+      - q: 'RFC灌填性能有哪些影响因素'
+        expected_cache_hit: true
+
+  - id: rfc_advantage_variants
+    category: same_identity_synonym
+    description: 'Advantage wording variants like the user manual checks.'
+    turns:
+      - q: '堆石混凝土的优势'
+        expected_cache_hit: false
+      - q: '堆石混凝土有哪些优势'
+        expected_cache_hit: true
+      - q: '堆石混凝土的优势在于'
+        expected_cache_hit: true
+      - q: '堆石混凝土的优越之处有哪些'
+        expected_cache_hit: true
+
+  - id: rfc_drawback_variants
+    category: same_identity_semantic_llm
+    description: 'Drawback and limitation variants should be handled by semantic identity, not hardcoded polarity.'
+    turns:
+      - q: '堆石混凝土的劣势呢'
+        expected_cache_hit: false
+      - q: '堆石混凝土的缺点有哪些啊'
+        expected_cache_hit: true
+      - q: '这种材料有哪些不足'
+        expected_cache_hit: true
+      - q: 'RFC应用上的局限性说一下'
+        expected_cache_hit: true
+
+  - id: rfc_crack_variants
+    category: same_identity_semantic_llm
+    description: 'Crack and fissure wording variants should share evidence identity when entity and intent match.'
+    turns:
+      - q: '堆石混凝土裂缝问题'
+        expected_cache_hit: false
+      - q: '堆石混凝土的裂纹表现有哪些'
+        expected_cache_hit: true
+      - q: '这种材料出现缝隙的原因是什么'
+        expected_cache_hit: true
+      - q: 'RFC开裂现象怎么解释'
+        expected_cache_hit: true
+
+  - id: dam_crack_visual_followups
+    category: contextual_followup_visual
+    description: 'The original failure pattern where a short visual follow-up must inherit the prior topic.'
+    turns:
+      - q: '大坝的裂缝成因有哪些 请给我详细列出来'
+        expected_cache_hit: false
+      - q: '我需要图片支撑'
+        expected_cache_hit: false
+        expected_contextualized: true
+      - q: '给我相关图示'
+        expected_cache_hit: true
+        expected_contextualized: true
+      - q: '有没有裂缝形态的图片'
+        expected_cache_hit: true
+        expected_contextualized: true
+
+  - id: rfc_table_followups
+    category: contextual_followup_table
+    description: 'Short table follow-ups should inherit material-parameter topic.'
+    turns:
+      - q: '堆石混凝土材料参数有哪些'
+        expected_cache_hit: false
+      - q: '给我表格'
+        expected_cache_hit: false
+        expected_contextualized: true
+      - q: '有没有参数表'
+        expected_cache_hit: true
+        expected_contextualized: true
+      - q: '把相关表格证据列出来'
+        expected_cache_hit: true
+        expected_contextualized: true
+
+  - id: rfc_comparison_constraint_change
+    category: constraint_change
+    description: 'Comparison constraints should not blindly reuse simple advantage evidence identity.'
+    turns:
+      - q: '堆石混凝土的优势'
+        expected_cache_hit: false
+      - q: '堆石混凝土和普通混凝土相比有哪些优势'
+        expected_cache_hit: false
+      - q: '跟碾压混凝土相比呢'
+        expected_cache_hit: false
+        expected_contextualized: true
+
+  - id: scc_flowability_variants
+    category: different_entity_same_style
+    description: 'Similar style on SCC should build a separate identity and then hit within that identity.'
+    turns:
+      - q: '自密实混凝土流动性能怎么评价'
+        expected_cache_hit: false
+      - q: 'SCC流动性指标有哪些'
+        expected_cache_hit: true
+      - q: '这种混凝土的工作性能怎么看'
+        expected_cache_hit: true

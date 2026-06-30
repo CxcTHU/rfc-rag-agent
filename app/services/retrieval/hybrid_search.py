@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
+from contextvars import ContextVar, Token
+import hashlib
 from pathlib import Path
 import re
 
@@ -30,6 +32,11 @@ from app.services.retrieval.keyword_search import source_type_rank
 from app.services.retrieval.reranking import ReRankResult, ReRankingProvider, create_reranking_provider
 from app.services.retrieval.vector_search import VectorSearchResult
 from app.services.retrieval.vector_search import VectorSearchService
+
+_CURRENT_HYDE_VECTOR_QUERY: ContextVar[str] = ContextVar(
+    "current_hyde_vector_query",
+    default="",
+)
 
 
 GRAPH_QUERY_TERMS = (
@@ -282,6 +289,7 @@ class HybridSearchService:
                 "embedding_model": self.embedding_provider.model_name,
                 "embedding_dimension": self.embedding_provider.dimension,
                 "pgvector_enabled": get_settings().pgvector_search_enabled,
+                "hyde_vector_query_hash": hyde_vector_query_hash(),
             }
         )
         return identity
@@ -570,8 +578,9 @@ class HybridSearchService:
         fetch_k: int,
     ) -> tuple[list[KeywordSearchResult], list[VectorSearchResult]]:
         keyword_results = KeywordSearchService(self.db).search(query, top_k=fetch_k)
+        vector_query = current_hyde_vector_query() or query
         vector_results = self._vector_search_service(self.db).search(
-            query,
+            vector_query,
             top_k=fetch_k,
         )
         return keyword_results, vector_results
@@ -589,13 +598,14 @@ class HybridSearchService:
                 return KeywordSearchService(db).search(query, top_k=fetch_k)
 
         trace = get_current_latency_trace()
+        vector_query = current_hyde_vector_query() or query
 
         def run_vector() -> list[VectorSearchResult]:
             token = set_current_latency_trace(trace)
             with ThreadSessionLocal() as db:
                 try:
                     return self._vector_search_service(db).search(
-                        query,
+                        vector_query,
                         top_k=fetch_k,
                     )
                 finally:
@@ -624,15 +634,17 @@ class HybridSearchService:
                 reason="reranking_disabled",
             )
             return selected
+        rerank_candidates = results[: max(1, min(len(results), self.reranking_recall_k))]
         trace = get_current_latency_trace()
         if trace is not None:
             trace.set_value("reranking_provider", self.reranking_provider.provider_name)
             trace.set_value("reranking_model", self.reranking_provider.model_name)
             trace.set_value("reranking_fallback", False)
             trace.set_value("reranking_error", "")
+            trace.set_value("reranking_candidate_count", len(rerank_candidates))
         cached_results = self._lookup_rerank_cache(
             query,
-            results,
+            rerank_candidates,
             top_k=top_k,
             provider_name=self.reranking_provider.provider_name,
             model_name=self.reranking_provider.model_name,
@@ -653,37 +665,32 @@ class HybridSearchService:
             with latency_timer("rerank_latency_ms"):
                 reranked = self.reranking_provider.rerank(
                     query=query,
-                    candidates=[result.content for result in results],
-                    top_k=rerank_request_top_k(results, top_k, self.settings),
+                    candidates=[result.content for result in rerank_candidates],
+                    top_k=rerank_request_top_k(rerank_candidates, top_k, self.settings),
                 )
+            if rerank_scores_are_degenerate(reranked):
+                raise RuntimeError("reranker returned degenerate scores")
         except Exception:
-            # Reranking is a quality enhancement, not a hard requirement. If the
-            # primary reranker has a transient failure, try the configured
-            # secondary reranker before falling back to the fusion order.
+            # Reranking is required for the default hybrid path. If the primary
+            # reranker fails, only a configured fallback reranker may recover it.
             if trace is not None:
                 trace.set_value("reranking_fallback", True)
                 fallback_count = int(trace.values.get("reranking_fallback_count", 0)) + 1
                 trace.set_value("reranking_fallback_count", fallback_count)
                 trace.set_value("reranking_error", "runtime_error")
+            fallback_configured = self.reranking_fallback_provider is not None
             fallback_reranked = self._rerank_with_fallback_provider(
                 query,
-                results,
+                rerank_candidates,
                 top_k=top_k,
             )
             if fallback_reranked is not None:
                 return fallback_reranked
-            selected = results[:top_k]
-            trace_selected_results(
-                query=query,
-                candidates=results,
-                selected=selected,
-                requested_top_k=top_k,
-                dynamic=False,
-                reason="rerank_failed_fusion_order",
-            )
-            return selected
+            if fallback_configured:
+                raise RuntimeError("重排序失效：主 reranker 失败，GLM fallback reranker 也失败。") from None
+            raise RuntimeError("重排序失效：主 reranker 失败，未配置 GLM fallback reranker。") from None
         reranked_results = select_reranked_results(
-            results,
+            rerank_candidates,
             reranked,
             requested_top_k=top_k,
             settings=self.settings,
@@ -699,7 +706,7 @@ class HybridSearchService:
         )
         self._store_rerank_cache(
             query,
-            results,
+            rerank_candidates,
             reranked_results,
             top_k=top_k,
             provider_name=self.reranking_provider.provider_name,
@@ -716,6 +723,10 @@ class HybridSearchService:
         top_k: int,
     ) -> list[HybridSearchResult] | None:
         if self.reranking_fallback_provider is None:
+            trace = get_current_latency_trace()
+            if trace is not None:
+                trace.set_value("reranking_fallback_used", False)
+                trace.set_value("reranking_fallback_error", "not_configured")
             return None
         trace = get_current_latency_trace()
         if trace is not None:
@@ -760,6 +771,30 @@ class HybridSearchService:
             if trace is not None:
                 trace.set_value("reranking_fallback_error", "runtime_error")
             return None
+        if rerank_scores_are_degenerate(reranked):
+            if trace is not None:
+                trace.set_value("reranking_fallback_used", True)
+                trace.set_value("reranking_fallback_error", "")
+                trace.set_value("reranking_fallback_score_quality", "degenerate_fusion_dynamic")
+                trace.set_value("reranking_fallback_degenerate_scores", True)
+                trace.set_value(
+                    "reranking_fallback_score_preview",
+                    [round(float(item.score), 6) for item in reranked[:12]],
+                )
+            reranked_results = select_fusion_results(
+                results,
+                requested_top_k=top_k,
+                settings=self.settings,
+            )
+            trace_selected_results(
+                query=query,
+                candidates=results,
+                selected=reranked_results,
+                requested_top_k=top_k,
+                dynamic=self.settings.reranking_dynamic_top_k_enabled,
+                reason="rerank_fallback_degenerate_fusion_dynamic",
+            )
+            return reranked_results
         if trace is not None:
             trace.set_value("reranking_fallback_used", True)
         reranked_results = select_reranked_results(
@@ -817,6 +852,7 @@ class HybridSearchService:
                 "fallback": fallback,
                 "candidate_hash": candidate_chunk_hash(candidate_ids),
                 "candidate_count": len(candidate_ids),
+                "quality_gate": "nondegenerate-scores-v1",
             }
         )
         return identity
@@ -911,6 +947,13 @@ def rerank_request_top_k(
     return min(max(1, request_count), len(results))
 
 
+def rerank_scores_are_degenerate(reranked: list[ReRankResult]) -> bool:
+    if len(reranked) <= 1:
+        return False
+    scores = [float(item.score) for item in reranked]
+    return max(scores) - min(scores) <= 1e-9
+
+
 def select_reranked_results(
     results: list[HybridSearchResult],
     reranked: list[ReRankResult],
@@ -939,6 +982,33 @@ def select_reranked_results(
             continue
         if position < min_results or float(item.score) >= threshold:
             selected.append(results[item.index])
+    return selected
+
+
+def select_fusion_results(
+    results: list[HybridSearchResult],
+    *,
+    requested_top_k: int,
+    settings: object,
+) -> list[HybridSearchResult]:
+    if not results:
+        return []
+    if not getattr(settings, "reranking_dynamic_top_k_enabled", False):
+        return results[:requested_top_k]
+
+    max_results = max(1, int(getattr(settings, "reranking_dynamic_max_results", requested_top_k)))
+    max_results = min(max_results, len(results))
+    min_results = max(1, int(getattr(settings, "reranking_dynamic_min_results", 1)))
+    min_results = min(min_results, max_results)
+    threshold_ratio = float(getattr(settings, "reranking_dynamic_relative_score_threshold", 0.0))
+    threshold_ratio = min(max(threshold_ratio, 0.0), 1.0)
+    best_score = max((float(result.score) for result in results), default=0.0)
+    threshold = best_score * threshold_ratio
+
+    selected: list[HybridSearchResult] = []
+    for position, result in enumerate(results[:max_results]):
+        if position < min_results or float(result.score) >= threshold:
+            selected.append(result)
     return selected
 
 
@@ -1138,6 +1208,25 @@ def channel_candidate_counts(results: list[HybridSearchResult]) -> dict[str, int
         for channel in result.channels:
             counts[channel] = counts.get(channel, 0) + 1
     return counts
+
+
+def set_current_hyde_vector_query(query: str) -> Token[str]:
+    return _CURRENT_HYDE_VECTOR_QUERY.set(query)
+
+
+def reset_current_hyde_vector_query(token: Token[str]) -> None:
+    _CURRENT_HYDE_VECTOR_QUERY.reset(token)
+
+
+def current_hyde_vector_query() -> str:
+    return _CURRENT_HYDE_VECTOR_QUERY.get()
+
+
+def hyde_vector_query_hash() -> str:
+    query = current_hyde_vector_query()
+    if not query:
+        return ""
+    return hashlib.sha256(" ".join(query.split()).encode("utf-8")).hexdigest()
 
 
 def trace_channel_counts(

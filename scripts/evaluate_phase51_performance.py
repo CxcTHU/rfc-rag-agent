@@ -79,8 +79,6 @@ RESULT_FIELDS = [
     "top_source_id",
     "same_refusal_as_react",
     "same_top_source_as_react",
-    "semantic_cache_hit",
-    "semantic_cache_similarity",
     "error_summary",
 ]
 
@@ -96,7 +94,6 @@ SUMMARY_FIELDS = [
     "avg_time_to_final_ms",
     "avg_planner_latency_ms",
     "avg_search_latency_ms",
-    "semantic_cache_hits",
     "same_refusal_as_react",
     "same_top_source_as_react",
     "primary_vector_backend",
@@ -120,7 +117,6 @@ class EvalConfig:
     use_langgraph: bool = False
     use_planner: bool = False
     force_faiss: bool = False
-    cache_second_pass: bool = False
 
 
 @dataclass
@@ -223,14 +219,6 @@ EVAL_CONFIGS: tuple[EvalConfig, ...] = (
         "langgraph_agent",
         use_langgraph=True,
         force_faiss=True,
-    ),
-    EvalConfig(
-        "semantic_cache_hit",
-        "/agent/query",
-        "langgraph_agent",
-        use_langgraph=True,
-        use_planner=True,
-        cache_second_pass=True,
     ),
 )
 
@@ -384,11 +372,7 @@ def run_dry_run_cases(
     with session_factory() as db:
         seed_fixture(db)
         for case in cases:
-            first_pass: AgentQueryResponse | None = None
             for config in configs:
-                if config.cache_second_pass:
-                    outcomes.append(cache_hit_outcome(case, config, first_pass))
-                    continue
                 outcome = evaluate_config(
                     db=db,
                     case=case,
@@ -398,10 +382,6 @@ def run_dry_run_cases(
                     planner_provider=planner_provider if config.use_planner else None,
                 )
                 outcomes.append(outcome)
-                if config.config_id == "langgraph_flash_planner" and isinstance(
-                    outcome.response, AgentQueryResponse
-                ):
-                    first_pass = outcome.response
     return outcomes
 
 
@@ -464,7 +444,6 @@ def run_real_provider_cases(
     outcomes: list[NormalizedOutcome] = []
     with SessionLocal() as db:
         for case in cases:
-            first_pass: AgentQueryResponse | None = None
             for config in configs:
                 if completed and (case.query_id, config.config_id) in completed:
                     continue
@@ -480,12 +459,6 @@ def run_real_provider_cases(
                     if on_outcome is not None:
                         on_outcome(outcome)
                     continue
-                if config.cache_second_pass:
-                    outcome = cache_hit_outcome(case, config, first_pass)
-                    outcomes.append(outcome)
-                    if on_outcome is not None:
-                        on_outcome(outcome)
-                    continue
                 outcome = evaluate_config(
                     db=db,
                     case=case,
@@ -497,10 +470,6 @@ def run_real_provider_cases(
                 outcomes.append(outcome)
                 if on_outcome is not None:
                     on_outcome(outcome)
-                if config.config_id == "langgraph_flash_planner" and isinstance(
-                    outcome.response, AgentQueryResponse
-                ):
-                    first_pass = outcome.response
     return outcomes
 
 
@@ -646,32 +615,6 @@ def evaluate_brain(
         model_provider=result.model_provider,
         model_name=result.model_name,
     )
-
-
-def cache_hit_outcome(
-    case: EvalCase,
-    config: EvalConfig,
-    first_pass: AgentQueryResponse | None,
-) -> NormalizedOutcome:
-    if first_pass is None:
-        return NormalizedOutcome(
-            case=case,
-            config=config,
-            status="skipped",
-            time_to_final_ms=0.0,
-            error="cache_seed_response_missing",
-        )
-    cached = first_pass.model_copy(
-        update={
-            "latency_trace": {
-                **(first_pass.latency_trace or {}),
-                "semantic_cache_hit": True,
-                "semantic_cache_similarity": 1.0,
-                "time_to_final_ms": 1.0,
-            }
-        }
-    )
-    return NormalizedOutcome(case=case, config=config, status="ok", time_to_final_ms=1.0, response=cached)
 
 
 @contextmanager
@@ -870,8 +813,6 @@ def outcome_to_row(
         "top_source_id": top_source_id(response),
         "same_refusal_as_react": bool_text(same_refusal),
         "same_top_source_as_react": bool_text(same_source),
-        "semantic_cache_hit": bool_text(bool(trace.get("semantic_cache_hit"))),
-        "semantic_cache_similarity": metric(trace, "semantic_cache_similarity"),
         "error_summary": outcome.error,
     }
 
@@ -886,7 +827,6 @@ def summarize_rows(rows: list[dict[str, str]], *, run_type: str) -> list[dict[st
         errors = sum(1 for row in config_rows if row["status"] == "error")
         same_refusal = sum(1 for row in config_rows if row["same_refusal_as_react"] == "true")
         same_source = sum(1 for row in config_rows if row["same_top_source_as_react"] == "true")
-        cache_hits = sum(1 for row in config_rows if row["semantic_cache_hit"] == "true")
         decision = "review"
         if errors == 0 and skipped == 0 and same_refusal >= max(total - 1, 0):
             decision = "complete"
@@ -907,7 +847,6 @@ def summarize_rows(rows: list[dict[str, str]], *, run_type: str) -> list[dict[st
                 "avg_time_to_final_ms": avg_field(config_rows, "time_to_final_ms"),
                 "avg_planner_latency_ms": avg_field(config_rows, "planner_latency_ms"),
                 "avg_search_latency_ms": avg_field(config_rows, "search_latency_ms"),
-                "semantic_cache_hits": str(cache_hits),
                 "same_refusal_as_react": f"{same_refusal}/{total}",
                 "same_top_source_as_react": f"{same_source}/{total}",
                 "primary_vector_backend": most_common(config_rows, "vector_search_backend"),

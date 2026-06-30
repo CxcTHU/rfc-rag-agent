@@ -1,5 +1,88 @@
 # 架构说明
 
+## Phase 58H Runtime Checkpoint And Evidence Cache Identity
+
+The default `tool_calling_agent` runtime now has a narrow durable checkpoint layer and an evidence-query identity layer.
+
+Checkpoint path:
+
+```text
+ToolCallingAgentService
+-> AgentRuntimeRunRepository
+-> agent_runtime_runs
+-> completed runtime node snapshots
+-> resume final answer from saved evidence
+```
+
+Evidence identity path:
+
+```text
+raw user query
+-> runtime standalone task
+-> EvidenceQueryIdentity(entity_key, intent_key, canonical_query)
+-> query embedding cache
+-> retrieval candidate cache
+-> rerank order cache
+-> tool-result cache
+-> fresh final answer
+```
+
+Diagnostics include `runtime_run_id`, `runtime_resumed`, `runtime_resume_reason`, `runtime_resume_from_node`, `evidence_canonical_query`, `evidence_entity_key`, `evidence_intent_key`, and `evidence_cache_reuse_allowed`. These fields are bounded safe metadata and must not include full answers, full chunks, raw provider responses, hidden reasoning, credentials, or restricted full text.
+
+## Phase 58 Architecture Delta: Mature Agent Runtime Layer
+
+Phase 58 introduces an explicit runtime control layer around the default `tool_calling_agent` path:
+
+```text
+ToolCallingAgentService
+-> AgentRuntime
+   -> RuntimeContext / AgentRuntimeState / EvidenceState
+   -> tool argument grounding before execution
+   -> safe runtime diagnostics
+-> AgentToolbox
+-> hybrid/table/figure workflow kernels
+```
+
+The default tool surface is unchanged:
+
+```text
+hybrid_search_knowledge
+search_knowledge
+search_figures
+search_tables
+```
+
+LLMs may propose semantic intent, high-level tool calls, tool-specific query rewrites, and final cited answers. Runtime remains the authority for guardrails, allowed tools, argument validation, duplicate suppression, max iterations, evidence state, stop reasons, diagnostics, and final refusal decisions.
+
+The first implementation is deterministic and provider-free for tests. It fixes short follow-up tool arguments such as `search_figures(query="我需要图片支撑")` by grounding the query with the inherited topic before execution. It does not add a new corpus, write tools, or a default LangGraph switch.
+
+Post-review substrate fix: explicit table and figure tools now use the same HNSW-first vector substrate as the default retrieval chain:
+
+```text
+search_tables / search_figures
+-> VectorSearchService
+-> PgVectorSearchService when available
+-> FAISS/numpy only as fallback
+```
+
+This removes the historical direct `get_vector_index_cache()` calls from production agent tools.
+
+Runtime diagnostics are bounded metadata only:
+
+```text
+runtime_followup_type
+runtime_inherited_topic
+runtime_standalone_task
+runtime_tool_arg_rewrite_count
+runtime_tool_arg_rewrites
+runtime_evidence_attempts
+runtime_evidence_counts
+runtime_stop_reason
+runtime_final_decision
+```
+
+They must not include full chunks, full answers, raw provider responses, hidden reasoning, credentials, restricted full text, or private logs.
+
 ## Phase 57 Architecture Delta: Multi-Channel Hybrid Retrieval Kernel
 
 Phase 57 keeps the Agent shell stable:
@@ -62,7 +145,6 @@ retrieval_query
 retrieval_candidate_chunk_ids / candidate_count / candidate preview
 retrieval_selected_chunk_ids / selected_count / selected source title/source_type preview
 reranking_fallback / reranking_fallback_used / provider / model
-semantic_cache_hit
 ```
 
 The frontend thinking panel renders these as a `retrieval_diagnostics` step so a user can distinguish "tool skipped" from "tool executed with a different evidence set." The diagnostics are ids, short titles, source types, scores, and flags only; they do not include full chunks or full answers.
@@ -79,7 +161,7 @@ RERANKING_RECALL_K=75
 
 Rerank selection keeps a baseline of `min_results`, then includes additional evidence whose score is at least `best_score * relative_threshold`, capped by `max_results`.
 
-Redis remains optional. If Redis is disabled, unavailable, stale, malformed, or missing hydrated ids, every layer fails open to the normal retrieval/rerank/tool path. The broad answer-level Semantic Cache remains disabled by default and is not required for Phase 56 speedups.
+Redis remains optional. If Redis is disabled, unavailable, stale, malformed, or missing hydrated ids, every layer fails open to the normal retrieval/rerank/tool path. The old broad answer-level Semantic Cache is removed from the current Agent runtime; Phase 56 speedups come from evidence-path retrieval/rerank/tool-result caches.
 
 ## Phase 55 Architecture Delta: Production Readiness Closure
 
@@ -266,7 +348,7 @@ Phase 51 does not change the default runtime chain. It aligns LangGraph naming a
 
 `planner_node` is the renamed Phase 50 planning node. It keeps the same deterministic image/table rules, optional fast planner provider, and deterministic fallback behavior. The StateGraph node name is now `"planner"`.
 
-The new evaluation layer is `scripts/evaluate_phase51_performance.py`. It compares `/chat` Brain baseline, explicit Agent modes, pgvector HNSW vs FAISS fallback, and Semantic Cache hit behavior through script-local switches. It does not alter `app/core/config.py` defaults.
+The new evaluation layer is `scripts/evaluate_phase51_performance.py`. It compares `/chat` Brain baseline, explicit Agent modes, and pgvector HNSW vs FAISS fallback through script-local switches. It does not alter `app/core/config.py` defaults. The old answer-level Semantic Cache scenario is retired in the current runtime.
 
 ## Phase 50 Planner Fast Model Addendum
 
@@ -4609,20 +4691,17 @@ The new schema surface is:
 Table extraction uses PyMuPDF `page.find_tables()` and stores extracted Markdown as `chunk_type="table"`. User uploads are validated with Pillow and saved under `data/user_uploads/`; the ReAct path calls the configured vision provider through the existing provider abstraction, records `vision_provider` / `vision_model` in `image_analysis`, and refuses deterministic test vision as non-real image understanding. Citation location is best-effort: exact bbox, partial bbox, page-only, or none. Feedback export is local and sanitized before writing `data/evaluation/phase47_user_feedback_eval.csv`.
 
 The frontend remains a static FastAPI-served HTML/CSS/JS app. It does not introduce a Node build chain. New controls are thin API clients for upload, feedback, and evidence rendering.
-## Phase 50 Phase 10-14 Architecture Delta: Redis Stack, Semantic Cache, Rate Limiting
+## Phase 50 Phase 10-14 Architecture Delta: Redis Stack And Rate Limiting
 
-Redis now has four explicit roles:
+Redis now has three explicit roles:
 
 ```text
 1. Query embedding cache -> exact query embedding reuse, fallback to memory
 2. LangGraph checkpointer -> RedisSaver on Redis Stack, fallback to MemorySaver
-3. Semantic Cache -> RediSearch vector KNN answer cache, default disabled
-4. Rate Limiting -> Redis ZSET sliding window for Agent endpoints, default disabled
+3. Rate Limiting -> Redis ZSET sliding window for Agent endpoints, default disabled
 ```
 
-`docker-compose.dev.yml` and `docker-compose.prod.yml` use `redis/redis-stack-server:latest` so RedisJSON and RediSearch are available. LangGraph state stored in checkpoints is JSON-native dict/list data; runtime objects such as `AgentToolbox`, DB sessions, and SSE callbacks are not persisted.
-
-Semantic Cache is answer-level caching. `/agent/query` checks it before running the Agent only when the request has no conversation history, no uploaded image, and no `source_id` filter. A hit returns the cached answer/sources/citations/mode with `latency_trace.semantic_cache_hit=true`; a miss or Redis error falls through to normal Agent execution.
+`docker-compose.dev.yml` and `docker-compose.prod.yml` use `redis/redis-stack-server:latest` so RedisJSON and RediSearch are available. LangGraph state stored in checkpoints is JSON-native dict/list data; runtime objects such as `AgentToolbox`, DB sessions, and SSE callbacks are not persisted. The old answer-level Semantic Cache runtime has been removed; current cache reuse is evidence-path only.
 
 Rate Limiting is request-level protection. `RateLimitMiddleware` applies only to `/agent/query` and `/agent/query/stream`, stores timestamps in Redis ZSETs, returns `429` with `X-RateLimit-*` headers when enabled and exceeded, and fail-opens when Redis is unavailable.
 ## Phase 50 pgvector HNSW Architecture Addendum

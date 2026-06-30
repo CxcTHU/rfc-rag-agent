@@ -259,6 +259,36 @@ class Message(Base):
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
 
 
+class AgentRuntimeRun(Base):
+    __tablename__ = "agent_runtime_runs"
+    __table_args__ = (
+        UniqueConstraint("run_id", name="uq_agent_runtime_runs_run_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    conversation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    run_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="running", index=True)
+    current_node: Mapped[str] = mapped_column(String(80), nullable=False, default="context_assembled")
+    last_completed_node: Mapped[str] = mapped_column(String(80), nullable=False, default="context_assembled")
+    resume_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_question: Mapped[str] = mapped_column(Text, nullable=False)
+    canonical_task: Mapped[str] = mapped_column(Text, nullable=False)
+    state_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        index=True,
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+
 class QuestionAnswerLog(Base):
     __tablename__ = "qa_logs"
 

@@ -27,8 +27,8 @@ from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.citation_locator import CitationLocator
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.keyword_search import KeywordSearchResult, KeywordSearchService
-from app.services.retrieval.query_embedding_cache import get_query_embedding_cache
-from app.services.retrieval.vector_cache import VectorIndexEntry, get_vector_index_cache
+from app.services.retrieval.vector_cache import VectorIndexEntry
+from app.services.retrieval.vector_search import VectorSearchResult, VectorSearchService
 
 try:
     from PIL import Image, UnidentifiedImageError
@@ -309,10 +309,9 @@ class AgentToolbox:
         progress_callback: Callable[[str], None] | None = None,
     ) -> AgentToolResult:
         tool_name = "hybrid_search_knowledge"
-        if progress_callback is None:
-            cached = self._lookup_tool_result_cache(tool_name, query, top_k)
-            if cached is not None:
-                return cached
+        cached = self._lookup_tool_result_cache(tool_name, query, top_k)
+        if cached is not None:
+            return cached
         try:
             results = HybridSearchService(
                 self.db,
@@ -350,9 +349,18 @@ class AgentToolbox:
             refused=not bool(search_results),
             refusal_reason=None if search_results else "No hybrid results were found.",
         )
-        if progress_callback is None:
-            self._store_tool_result_cache(tool_name, query, top_k, tool_result)
+        self._store_tool_result_cache(tool_name, query, top_k, tool_result)
         return tool_result
+
+    def lookup_semantic_evidence_cache(
+        self,
+        query: str,
+        *,
+        top_k: int,
+        tool_name: str = "hybrid_search_knowledge",
+    ) -> AgentToolResult | None:
+        """Read a cached evidence/tool result without executing retrieval."""
+        return self._lookup_tool_result_cache(tool_name, query, top_k)
 
     def search_graph_knowledge(self, query: str, top_k: int = 5) -> AgentToolResult:
         tool_name = "search_graph_knowledge"
@@ -410,19 +418,17 @@ class AgentToolbox:
         vector_rows: list[tuple[Chunk, Document, float]] = []
         vector_error: str | None = None
         try:
-            query_embedding = get_query_embedding_cache().get_or_embed(
+            matches = VectorSearchService(
+                self.db,
                 self.embedding_provider,
-                normalized_query,
-            )
-            index_cache = get_vector_index_cache(self.db, self.embedding_provider)
-            matches = index_cache.search(query_embedding, top_k=max(top_k * 50, 200))
+            ).search(normalized_query, top_k=max(top_k * 50, 200))
             table_chunk_ids = [
-                match.entry.chunk_id for match in matches if match.entry.chunk_type == "table"
+                match.chunk_id for match in matches if match.chunk_type == "table"
             ]
             vector_scores = {
-                match.entry.chunk_id: match.score
+                match.chunk_id: match.score
                 for match in matches
-                if match.entry.chunk_type == "table"
+                if match.chunk_type == "table"
             }
             if table_chunk_ids:
                 vector_statement = (
@@ -488,7 +494,8 @@ class AgentToolbox:
                 output_summary=(
                     f"returned {len(search_results)} table results; "
                     f"vector_candidates={len(vector_rows)}; "
-                    f"keyword_candidates={len(keyword_rows)}"
+                    f"keyword_candidates={len(keyword_rows)}; "
+                    f"vector_backend={current_vector_search_backend()}"
                     + (f"; vector_error={vector_error[:80]}" if vector_error else "")
                 ),
                 succeeded=True,
@@ -525,16 +532,14 @@ class AgentToolbox:
             return cached
 
         try:
-            query_embedding = get_query_embedding_cache().get_or_embed(
-                self.embedding_provider,
-                normalized_query,
-            )
-            index_cache = get_vector_index_cache(self.db, self.embedding_provider)
             candidate_count = max(
                 FIGURE_VECTOR_MIN_CANDIDATES,
                 top_k * FIGURE_VECTOR_CANDIDATE_MULTIPLIER,
             )
-            matches = index_cache.search(query_embedding, top_k=candidate_count)
+            matches = VectorSearchService(
+                self.db,
+                self.embedding_provider,
+            ).search(normalized_query, top_k=candidate_count)
         except (RuntimeError, ValueError) as exc:
             return failed_tool_result(tool_name, query, exc)
 
@@ -545,7 +550,7 @@ class AgentToolbox:
         skipped_quality = 0
         skipped_specific_mismatch = 0
         for match in matches:
-            entry = match.entry
+            entry = vector_entry_from_vector_result(match)
             if entry.chunk_type != "image_description":
                 continue
             if match.score < MIN_IMAGE_RELEVANCE_SCORE:
@@ -610,6 +615,7 @@ class AgentToolbox:
         output_summary = (
             f"returned {len(figure_results)} figure results; "
             f"threshold={MIN_IMAGE_RELEVANCE_SCORE:.2f}; "
+            f"vector_backend={current_vector_search_backend()}; "
             f"skipped_low_score={skipped_low_score}; "
             f"skipped_quality={skipped_quality}; "
             f"skipped_specific_mismatch={skipped_specific_mismatch}"
@@ -784,15 +790,60 @@ class AgentToolbox:
         stable_question_key = ""
         if trace is not None and isinstance(trace.values.get("user_question_cache_key"), str):
             stable_question_key = str(trace.values["user_question_cache_key"])
+        evidence_query = normalized_query_identity(query)
+        if trace is not None and trace.values.get("evidence_cache_reuse_allowed") is True:
+            canonical = trace.values.get("evidence_canonical_query")
+            entity_key = trace.values.get("evidence_entity_key")
+            intent_key = trace.values.get("evidence_intent_key")
+            if isinstance(entity_key, str) and isinstance(intent_key, str):
+                normalized_entity = stable_cache_identity_part(entity_key)
+                normalized_intent = stable_cache_identity_part(intent_key)
+                if normalized_entity and normalized_intent:
+                    modifier_suffix = stable_cache_modifier_suffix(
+                        trace.values.get("evidence_modifiers")
+                    )
+                    evidence_query = (
+                        f"entity={normalized_entity}|intent={normalized_intent}"
+                        f"{modifier_suffix}"
+                    )
+                    stable_question_key = ""
+            elif isinstance(canonical, str) and canonical.strip():
+                evidence_query = normalized_query_identity(canonical)
+                stable_question_key = ""
         identity = base_cache_identity(self.db)
-        query_mode = "user_question" if stable_question_key else "tool_query"
+        query_mode = "user_question" if stable_question_key else "evidence_identity"
         identity.update(
             {
                 "layer": "tool",
                 "tool_name": tool_name,
                 "query_mode": query_mode,
-                "query": stable_question_key or normalized_query_identity(query),
+                "query": stable_question_key or evidence_query,
                 "top_k": "dynamic" if stable_question_key else top_k,
+                "dynamic_top_k_quality_gate": (
+                    "hybrid-dynamic-top-k-v2"
+                    if tool_name == "hybrid_search_knowledge"
+                    and getattr(get_settings(), "reranking_dynamic_top_k_enabled", False)
+                    else "static"
+                ),
+                "dynamic_top_k_enabled": bool(
+                    tool_name == "hybrid_search_knowledge"
+                    and getattr(get_settings(), "reranking_dynamic_top_k_enabled", False)
+                ),
+                "dynamic_min_results": (
+                    get_settings().reranking_dynamic_min_results
+                    if tool_name == "hybrid_search_knowledge"
+                    else 0
+                ),
+                "dynamic_max_results": (
+                    get_settings().reranking_dynamic_max_results
+                    if tool_name == "hybrid_search_knowledge"
+                    else 0
+                ),
+                "dynamic_relative_score_threshold": (
+                    round(float(get_settings().reranking_dynamic_relative_score_threshold), 6)
+                    if tool_name == "hybrid_search_knowledge"
+                    else 0.0
+                ),
                 "embedding_provider": self.embedding_provider.provider_name,
                 "embedding_model": self.embedding_provider.model_name,
                 "embedding_dimension": self.embedding_provider.dimension,
@@ -823,8 +874,19 @@ class AgentToolbox:
         if not isinstance(chunk_ids, list) or not all(isinstance(chunk_id, int) for chunk_id in chunk_ids):
             return None
         if len(chunk_ids) < top_k:
-            return None
-        chunk_ids = chunk_ids[:top_k]
+            stored_top_k = payload.get("stored_top_k")
+            try:
+                stored_top_k_value = int(stored_top_k)
+            except (TypeError, ValueError):
+                stored_top_k_value = 0
+            if stored_top_k_value < top_k:
+                return None
+        preserve_dynamic_count = (
+            tool_name == "hybrid_search_knowledge"
+            and bool(getattr(get_settings(), "reranking_dynamic_top_k_enabled", False))
+        )
+        if not preserve_dynamic_count:
+            chunk_ids = chunk_ids[:top_k]
         scores = payload.get("scores")
         score_by_chunk_id: dict[int, float] = {}
         if isinstance(scores, dict):
@@ -858,6 +920,7 @@ class AgentToolbox:
         ]
         refused = bool(payload.get("refused")) and not search_results
         refusal_reason = payload.get("refusal_reason") if isinstance(payload.get("refusal_reason"), str) else None
+        _trace_tool_cache_selected_results(tool_name, search_results)
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -891,6 +954,11 @@ class AgentToolbox:
             {
                 "chunk_ids": chunk_ids,
                 "stored_top_k": top_k,
+                "stored_result_count": len(chunk_ids),
+                "dynamic_top_k_enabled": bool(
+                    tool_name == "hybrid_search_knowledge"
+                    and getattr(get_settings(), "reranking_dynamic_top_k_enabled", False)
+                ),
                 "scores": {
                     str(item.chunk_id): round(float(item.score), 8)
                     for item in result.search_results
@@ -979,6 +1047,34 @@ def failed_tool_result(tool_name: str, user_input: str, error: Exception) -> Age
     )
 
 
+def _trace_tool_cache_selected_results(tool_name: str, search_results: list[AgentSearchItem]) -> None:
+    if tool_name != "hybrid_search_knowledge":
+        return
+    trace = get_current_latency_trace()
+    if trace is None:
+        return
+    trace.set_value("retrieval_selected_count", len(search_results))
+    trace.set_value("retrieval_selected_chunk_ids", [item.chunk_id for item in search_results])
+    trace.set_value("retrieval_selection_reason", "tool_result_cache_hit")
+
+
+def stable_cache_identity_part(value: str) -> str:
+    return " ".join((value or "").strip().split())
+
+
+def stable_cache_modifier_suffix(value: object) -> str:
+    if not isinstance(value, (list, tuple)):
+        return ""
+    modifiers = [
+        stable_cache_identity_part(str(item))
+        for item in value
+        if stable_cache_identity_part(str(item))
+    ]
+    if not modifiers:
+        return ""
+    return "|modifiers=" + ",".join(sorted(dict.fromkeys(modifiers)))
+
+
 def search_item_from_result(result: KeywordSearchResult | HybridSearchResult) -> AgentSearchItem:
     source_image_path = getattr(result, "source_image_path", None)
     return AgentSearchItem(
@@ -1042,6 +1138,24 @@ def search_item_from_table_chunk(
         chunk_type="table",
         page_number=chunk.page_number,
         table_content=chunk.content,
+    )
+
+
+def vector_entry_from_vector_result(result: VectorSearchResult) -> VectorIndexEntry:
+    return VectorIndexEntry(
+        document_id=result.document_id,
+        document_title=result.document_title,
+        source_type=result.source_type,
+        source_path=result.source_path,
+        file_name=result.file_name,
+        chunk_id=result.chunk_id,
+        chunk_index=result.chunk_index,
+        content=result.content,
+        heading_path=result.heading_path,
+        chunk_type=result.chunk_type,
+        source_image_path=result.source_image_path,
+        caption=result.caption,
+        page_number=result.page_number,
     )
 
 
@@ -1285,38 +1399,19 @@ def hybrid_tool_output_summary(
     if trace is None:
         return f"returned {result_count} hybrid results"
     selected_ids = trace.values.get("retrieval_selected_chunk_ids", [])
-    candidate_count = trace.values.get("retrieval_candidate_count", "")
-    dynamic_enabled = trace.values.get("retrieval_dynamic_top_k_enabled", False)
-    selection_reason = trace.values.get("retrieval_selection_reason", "")
-    source_types = []
-    selected_sources = []
-    selected_preview = trace.values.get("retrieval_selected_preview", [])
-    if isinstance(selected_preview, list):
-        for item in selected_preview:
-            if isinstance(item, dict):
-                source_type = item.get("source_type")
-                if isinstance(source_type, str) and source_type not in source_types:
-                    source_types.append(source_type)
-                chunk_id = item.get("chunk_id")
-                title = item.get("title")
-                if isinstance(chunk_id, int) and isinstance(title, str):
-                    selected_sources.append(
-                        f"{chunk_id}:{source_type or ''}:{truncate_text(title, 48)}"
-                    )
     selected_text = ",".join(str(chunk_id) for chunk_id in selected_ids[:12]) if isinstance(selected_ids, list) else ""
-    source_type_text = ",".join(source_types[:8])
-    selected_source_text = "|".join(selected_sources[:6])
     return (
         f"returned {result_count} hybrid results; "
-        f"query={truncate_text(query, 80)}; "
-        f"requested_top_k={requested_top_k}; "
-        f"candidate_count={candidate_count}; "
-        f"selected_chunk_ids={selected_text}; "
-        f"selected_source_types={source_type_text}; "
-        f"selected_sources={selected_source_text}; "
-        f"dynamic_top_k={str(bool(dynamic_enabled)).lower()}; "
-        f"selection_reason={selection_reason}"
+        f"selected_chunk_ids={selected_text}"
     )
+
+
+def current_vector_search_backend() -> str:
+    trace = get_current_latency_trace()
+    if trace is None:
+        return "unknown"
+    backend = trace.values.get("vector_search_backend")
+    return backend if isinstance(backend, str) and backend else "unknown"
 
 
 def truncate_text(text: str, limit: int = 120) -> str:

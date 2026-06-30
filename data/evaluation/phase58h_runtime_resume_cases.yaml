@@ -1,0 +1,72 @@
+# Phase 58H runtime checkpoint/resume evaluation cases.
+# Safe artifact: contains short prompts, node labels, expected booleans, and no answers/chunks/secrets.
+
+cases:
+  - id: resume_after_retrieval_exact_retry
+    category: exact_retry
+    first_query: "堆石混凝土的优势"
+    stop_after_node: "tool_execution_completed"
+    followup_query: "堆石混凝土的优势"
+    expected_resume: true
+    expected_resume_from_node: "tool_execution_completed"
+    expected_skipped_nodes:
+      - "tool_execution"
+    expected_block_reason: ""
+
+  - id: resume_after_explicit_continue
+    category: explicit_continue
+    first_query: "堆石混凝土的优势"
+    stop_after_node: "evidence_state_updated"
+    followup_query: "继续"
+    expected_resume: true
+    expected_resume_from_node: "evidence_state_updated"
+    expected_skipped_nodes:
+      - "tool_execution"
+      - "evidence_state_update"
+    expected_block_reason: ""
+
+  - id: resume_after_visual_tool_followup
+    category: visual_followup_continue
+    history:
+      - role: "user"
+        content: "大坝裂缝成因有哪些？请详细列出"
+    first_query: "我需要图片支撑"
+    stop_after_node: "tool_execution_completed"
+    followup_query: "继续上次"
+    expected_resume: true
+    expected_resume_from_node: "tool_execution_completed"
+    expected_skipped_nodes:
+      - "tool_execution"
+    expected_block_reason: ""
+
+  - id: new_topic_blocks_resume
+    category: stale_resume_block
+    first_query: "堆石混凝土的优势"
+    stop_after_node: "tool_execution_completed"
+    followup_query: "大坝裂缝成因有哪些？"
+    expected_resume: false
+    expected_resume_from_node: ""
+    expected_skipped_nodes: []
+    expected_block_reason: "new_topic"
+
+  - id: expired_checkpoint_blocks_resume
+    category: expired_checkpoint
+    first_query: "堆石混凝土的优势"
+    stop_after_node: "tool_execution_completed"
+    followup_query: "继续"
+    checkpoint_expired: true
+    expected_resume: false
+    expected_resume_from_node: ""
+    expected_skipped_nodes: []
+    expected_block_reason: "checkpoint_expired"
+
+  - id: corrupted_checkpoint_fails_safe
+    category: corrupted_checkpoint
+    first_query: "堆石混凝土的优势"
+    stop_after_node: "tool_execution_completed"
+    followup_query: "继续"
+    checkpoint_corrupted: true
+    expected_resume: false
+    expected_resume_from_node: ""
+    expected_skipped_nodes: []
+    expected_block_reason: "checkpoint_invalid"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import urllib.error
@@ -213,6 +214,9 @@ def create_reranking_provider(
         "cohere",
         "siliconflow",
         "paratera",
+        "zhipu",
+        "glm",
+        "bigmodel",
         "remote-bge-lora",
         "bge-lora",
         "rfc-bge-lora",
@@ -230,9 +234,25 @@ def create_reranking_provider(
             "rfc-bge-lora",
             "rfc-domain-bge-lora",
         } else ""
+        if provider in {"zhipu", "glm", "bigmodel"}:
+            default_base_url = "https://open.bigmodel.cn/api/paas/v4"
+        resolved_api_key = (api_key or "").strip()
+        if not resolved_api_key and provider == "paratera":
+            resolved_api_key = (
+                os.getenv("RERANKING_FALLBACK_API_KEY", "").strip()
+                or os.getenv("EMBEDDING_API_KEY", "").strip()
+                or os.getenv("PARATERA_API_KEY", "").strip()
+            )
+        if not resolved_api_key and provider in {"zhipu", "glm", "bigmodel"}:
+            resolved_api_key = (
+                os.getenv("RERANKING_FALLBACK_API_KEY", "").strip()
+                or os.getenv("ZHIPU_API_KEY", "").strip()
+                or os.getenv("GLM_API_KEY", "").strip()
+                or os.getenv("BIGMODEL_API_KEY", "").strip()
+            )
         return OpenAICompatibleReRankingProvider(
             model_name=(model_name or default_model).strip(),
-            api_key=(api_key or "").strip(),
+            api_key=resolved_api_key,
             base_url=(base_url or default_base_url).strip(),
             timeout_seconds=timeout_seconds,
             provider_name=provider,
