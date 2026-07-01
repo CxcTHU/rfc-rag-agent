@@ -336,7 +336,7 @@ class AgentToolbox:
             tool_name=tool_name,
             call=AgentToolCallRecord(
                 tool_name=tool_name,
-                input_summary=summarize_input(query, top_k),
+                input_summary=hybrid_input_summary(query, top_k),
                 output_summary=hybrid_tool_output_summary(
                     query=query,
                     requested_top_k=top_k,
@@ -1393,6 +1393,19 @@ def summarize_input(query: str, top_k: int) -> str:
     return f"query={truncate_text(query)}; top_k={top_k}"
 
 
+def hybrid_input_summary(query: str, requested_top_k: int) -> str:
+    settings = get_settings()
+    if not bool(getattr(settings, "reranking_dynamic_top_k_enabled", False)):
+        return summarize_input(query, requested_top_k)
+    return (
+        f"query={truncate_text(query)}; "
+        "selection=dynamic_rerank_score_gate; "
+        f"dynamic_min={settings.reranking_dynamic_min_results}; "
+        f"dynamic_max={settings.reranking_dynamic_max_results}; "
+        f"relative_score_threshold={settings.reranking_dynamic_relative_score_threshold:g}"
+    )
+
+
 def hybrid_tool_output_summary(
     *,
     query: str,
@@ -1404,8 +1417,17 @@ def hybrid_tool_output_summary(
         return f"returned {result_count} hybrid results"
     selected_ids = trace.values.get("retrieval_selected_chunk_ids", [])
     selected_text = ",".join(str(chunk_id) for chunk_id in selected_ids[:12]) if isinstance(selected_ids, list) else ""
+    dynamic_enabled = bool(trace.values.get("retrieval_dynamic_top_k_enabled", False))
+    dynamic_text = ""
+    if dynamic_enabled:
+        settings = get_settings()
+        dynamic_text = (
+            "; dynamic_top_k=true"
+            f"; relative_score_threshold={settings.reranking_dynamic_relative_score_threshold:g}"
+        )
     return (
-        f"returned {result_count} hybrid results; "
+        f"returned {result_count} hybrid results"
+        f"{dynamic_text}; "
         f"selected_chunk_ids={selected_text}"
     )
 

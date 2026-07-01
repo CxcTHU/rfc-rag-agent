@@ -14,6 +14,7 @@ from app.db.repositories import (
 from app.db.session import create_sqlite_engine
 from app.services.agent.tools import AgentToolbox
 from app.services.agent.tools import figure_specific_requirement_satisfied
+from app.services.agent.tools import hybrid_input_summary
 from app.services.agent.tools import hybrid_tool_output_summary
 from app.services.agent.tools import query_requests_figure
 from app.services.agent.tools import search_item_from_result, sources_from_search_results
@@ -254,6 +255,7 @@ def test_agent_toolbox_hybrid_search_uses_hybrid_tool_name_and_results(tmp_path)
 
 def test_hybrid_tool_output_summary_only_exposes_selected_chunk_ids() -> None:
     trace = LatencyTrace()
+    trace.set_value("retrieval_dynamic_top_k_enabled", True)
     trace.set_value("retrieval_selected_chunk_ids", [22261, 22221, 18748])
     trace.set_value("retrieval_candidate_count", 150)
     trace.set_value(
@@ -270,10 +272,24 @@ def test_hybrid_tool_output_summary_only_exposes_selected_chunk_ids() -> None:
     finally:
         reset_current_latency_trace(token)
 
-    assert summary == "returned 3 hybrid results; selected_chunk_ids=22261,22221,18748"
+    assert (
+        summary
+        == "returned 3 hybrid results; dynamic_top_k=true; "
+        "relative_score_threshold=0.65; selected_chunk_ids=22261,22221,18748"
+    )
     assert "candidate_count=" not in summary
     assert "selected_sources=" not in summary
     assert "query=" not in summary
+    assert "requested_top_k=" not in summary
+
+
+def test_hybrid_input_summary_describes_dynamic_score_gate() -> None:
+    summary = hybrid_input_summary("rock-filled concrete 优势", requested_top_k=8)
+
+    assert "selection=dynamic_rerank_score_gate" in summary
+    assert "dynamic_max=12" in summary
+    assert "relative_score_threshold=0.65" in summary
+    assert "top_k=8" not in summary
 
 
 def test_agent_toolbox_hybrid_search_reports_provider_failures(tmp_path) -> None:
