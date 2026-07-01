@@ -65,6 +65,58 @@ CORE_DOMAIN_TERMS = (
     "钢纤维", "steel fiber", "rock shear", "剪力键",
 )
 
+CHINESE_CORE_DOMAIN_TERMS = (
+    "堆石混凝土",
+    "堆石",
+    "混凝土",
+    "自密实",
+    "胶凝",
+    "砂浆",
+    "骨料",
+    "粒径",
+    "级配",
+    "碾压",
+    "填充",
+    "充填",
+    "流动",
+    "坍落",
+    "密实",
+    "空隙",
+    "孔隙",
+    "抗压",
+    "抗拉",
+    "强度",
+    "弹性模量",
+    "力学",
+    "徐变",
+    "耐久",
+    "抗冻",
+    "界面",
+    "过渡区",
+    "细观",
+    "本构",
+    "断裂",
+    "剪切",
+    "冷缝",
+    "层间",
+    "水化热",
+    "温升",
+    "温度",
+    "绝热",
+    "抗震",
+    "地震",
+    "大坝",
+    "筑坝",
+    "浇筑",
+    "振捣",
+    "施工",
+    "碳排放",
+    "渗透",
+    "钢纤维",
+    "剪力键",
+)
+
+
 RESPONSIBILITY_GATE_PATTERNS = tuple(
     re.compile(pattern)
     for pattern in (
@@ -247,7 +299,7 @@ def has_topic_anchor(query: str) -> bool:
     """
 
     normalized = (query or "").casefold()
-    return any(term in normalized for term in CORE_DOMAIN_TERMS)
+    return any(term in normalized for term in (*CORE_DOMAIN_TERMS, *CHINESE_CORE_DOMAIN_TERMS))
 
 
 def score_evidence_terms(
