@@ -21,14 +21,14 @@ RuntimeFollowupType = Literal[
 
 
 VISUAL_FOLLOWUP_TERMS = (
-    "图片",
-    "图",
-    "图示",
-    "配图",
-    "照片",
-    "曲线",
-    "示意图",
-    "形态",
+    "\u56fe\u7247",
+    "\u56fe",
+    "\u56fe\u793a",
+    "\u914d\u56fe",
+    "\u7167\u7247",
+    "\u66f2\u7ebf",
+    "\u793a\u610f\u56fe",
+    "\u5f62\u6001",
     "figure",
     "image",
     "photo",
@@ -36,36 +36,36 @@ VISUAL_FOLLOWUP_TERMS = (
     "curve",
 )
 TABLE_FOLLOWUP_TERMS = (
-    "表",
-    "表格",
-    "数据",
-    "参数",
-    "列表",
+    "\u8868",
+    "\u8868\u683c",
+    "\u6570\u636e",
+    "\u53c2\u6570",
+    "\u5217\u8868",
     "table",
     "tabulated",
     "data",
     "parameter",
 )
 DETAIL_FOLLOWUP_TERMS = (
-    "继续",
-    "展开",
-    "详细",
-    "补充",
-    "再说",
-    "解释",
-    "第二点",
-    "上一",
+    "\u7ee7\u7eed",
+    "\u5c55\u5f00",
+    "\u8be6\u7ec6",
+    "\u89e3\u91ca",
+    "\u8bf4\u660e",
+    "\u8865\u5145",
+    "\u7b2c\u4e8c\u70b9",
+    "\u4e0b\u4e00\u70b9",
     "continue",
     "detail",
     "expand",
 )
 GENERIC_FOLLOWUP_TERMS = (
-    "我需要",
-    "给我",
-    "需要",
-    "支撑",
-    "依据",
-    "证据",
+    "\u6211\u9700\u8981",
+    "\u8fd8\u6709",
+    "\u9700\u8981",
+    "\u652f\u6491",
+    "\u76f8\u5173",
+    "\u8bc1\u636e",
     "please",
     "show",
     "give me",
@@ -300,21 +300,18 @@ def extract_recent_topic(history: Sequence[str]) -> str:
 
 def strip_history_role_prefix(text: str) -> str:
     return re.sub(
-        r"^\s*(user|assistant|human|ai|用户|助手)\s*[:：]\s*",
+        r"^\s*(user|assistant|human|ai|\u7528\u6237|\u52a9\u624b)\s*[:\uff1a]\s*",
         "",
         text,
         flags=re.IGNORECASE,
     ).strip()
 
-
 def looks_like_history_answer(text: str) -> bool:
     lowered = text.casefold()
-    return lowered.startswith(("answer:", "assistant:", "回答：", "答："))
-
+    return lowered.startswith(("answer:", "assistant:", "\u56de\u7b54\uff1a", "\u7b54\uff1a"))
 
 def trim_question_suffix(text: str) -> str:
-    return text.strip().rstrip(" ?？。.!！")
-
+    return text.strip().rstrip(" ?\uff1f!\uff01\u3002")
 
 def build_standalone_task(
     query: str,
@@ -323,13 +320,15 @@ def build_standalone_task(
     followup_type: RuntimeFollowupType,
 ) -> str:
     if followup_type == "visual_evidence_request":
-        return f"{inherited_topic} 图片 图示 曲线 照片 视觉证据"
+        visual_terms = "\u56fe\u7247 \u56fe\u793a \u7167\u7247 \u89c6\u89c9\u8bc1\u636e figure image"
+        if contains_any(query, ("\u66f2\u7ebf", "curve", "plot")):
+            visual_terms = f"{visual_terms} \u66f2\u7ebf curve plot"
+        return f"{inherited_topic} {visual_terms}"
     if followup_type == "table_evidence_request":
-        return f"{inherited_topic} 表格 数据 参数 对比"
+        return f"{inherited_topic} \u8868\u683c \u6570\u636e \u53c2\u6570 \u5bf9\u6bd4"
     if followup_type == "detail_expansion":
-        return f"{inherited_topic} 详细解释 补充说明"
+        return f"{inherited_topic} \u8be6\u7ec6\u89e3\u91ca \u8865\u5145\u8bf4\u660e"
     return query
-
 
 def grounded_query_for_tool(
     *,

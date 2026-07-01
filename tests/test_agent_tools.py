@@ -16,6 +16,7 @@ from app.services.agent.tools import AgentToolbox
 from app.services.agent.tools import figure_specific_requirement_satisfied
 from app.services.agent.tools import hybrid_input_summary
 from app.services.agent.tools import hybrid_tool_output_summary
+from app.services.agent.tools import query_allows_generic_figure_fallback
 from app.services.agent.tools import query_requests_figure
 from app.services.agent.tools import search_item_from_result, sources_from_search_results
 from app.services.generation.chat_model import DeterministicChatModelProvider
@@ -24,6 +25,7 @@ from app.services.retrieval.keyword_search import KeywordSearchResult
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from app.services.retrieval.vector_cache import VectorIndexEntry
 from app.services.retrieval.vector_index import VectorIndexService
+from app.services.retrieval.vector_search import VectorSearchResult
 
 
 def make_session(tmp_path):
@@ -407,6 +409,58 @@ def test_agent_toolbox_search_figures_returns_quality_checked_image_results(tmp_
     assert result.sources[0].page_number == 12
 
 
+def test_search_figures_relaxes_specific_filter_for_contextual_visual_followup(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    write_test_image(tmp_path / "data" / "images" / "42" / "page4_img2.png")
+    TestingSessionLocal = make_session(tmp_path)
+
+    class FakeVectorSearchService:
+        def __init__(self, db, embedding_provider) -> None:
+            pass
+
+        def search(self, query: str, top_k: int) -> list[VectorSearchResult]:
+            return [
+                VectorSearchResult(
+                    document_id=42,
+                    document_title="RFC Visual Evidence",
+                    source_type="local_file",
+                    source_path="visual.pdf",
+                    file_name="visual.pdf",
+                    chunk_id=420,
+                    chunk_index=0,
+                    content="failure mode photograph of rock-filled concrete specimen",
+                    heading_path="Figures",
+                    score=0.91,
+                    chunk_type="image_description",
+                    source_image_path="data/images/42/page4_img2.png",
+                    caption="Fig. 4 Typical failure mode",
+                    page_number=4,
+                )
+            ]
+
+    monkeypatch.setattr(
+        "app.services.agent.tools.VectorSearchService",
+        FakeVectorSearchService,
+    )
+
+    with TestingSessionLocal() as db:
+        toolbox = make_toolbox(db)
+        result = toolbox.search_figures(
+            "\u5806\u77f3\u6df7\u51dd\u571f\u7684\u88c2\u7f1d\u6210\u56e0 "
+            "\u56fe\u7247 \u56fe\u793a \u89c6\u89c9\u8bc1\u636e figure image",
+            top_k=2,
+        )
+
+    assert result.tool_name == "search_figures"
+    assert result.call.succeeded
+    assert not result.refused
+    assert result.figure_results
+    assert "specific_filter_relaxed=true" in result.call.output_summary
+
+
 def test_search_figures_rejects_generic_curve_for_stress_strain_query() -> None:
     generic_curve = VectorIndexEntry(
         chunk_id=1,
@@ -489,6 +543,18 @@ def test_search_figures_uses_specific_terms_beyond_single_case() -> None:
     assert not figure_specific_requirement_satisfied("show hydration heat curve", microstructure_image)
     assert figure_specific_requirement_satisfied("show interface microstructure", microstructure_image)
     assert not figure_specific_requirement_satisfied("show interface microstructure", thermal_curve)
+
+
+def test_generic_figure_fallback_only_allows_broad_visual_followups() -> None:
+    assert query_allows_generic_figure_fallback(
+        "\u5806\u77f3\u6df7\u51dd\u571f\u7684\u88c2\u7f1d\u6210\u56e0 "
+        "\u56fe\u7247 \u56fe\u793a \u89c6\u89c9\u8bc1\u636e figure image"
+    )
+    assert not query_allows_generic_figure_fallback(
+        "\u5806\u77f3\u6df7\u51dd\u571f\u6c34\u5316\u70ed\u66f2\u7ebf "
+        "\u56fe\u7247 \u89c6\u89c9\u8bc1\u636e figure image"
+    )
+    assert not query_allows_generic_figure_fallback("show hydration heat curve")
 
 
 def test_search_figures_detects_visual_intent_and_text_only_negation() -> None:

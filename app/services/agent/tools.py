@@ -170,6 +170,26 @@ FIGURE_NEGATIVE_INTENT_TERMS = (
     "without image",
     "text only",
 )
+GENERIC_VISUAL_EVIDENCE_MARKERS = (
+    "\u89c6\u89c9\u8bc1\u636e",
+    "visual evidence",
+    "figure image",
+)
+STRICT_FIGURE_FALLBACK_BLOCKERS = (
+    "\u66f2\u7ebf",
+    "\u56fe\u8868",
+    "\u5e94\u529b\u5e94\u53d8",
+    "\u6c34\u5316\u70ed",
+    "\u7edd\u70ed\u6e29\u5347",
+    "curve",
+    "plot",
+    "chart",
+    "graph",
+    "stress strain",
+    "stress-strain",
+    "hydration heat",
+    "adiabatic temperature rise",
+)
 
 
 @dataclass(frozen=True)
@@ -548,11 +568,13 @@ class AgentToolbox:
             return failed_tool_result(tool_name, query, exc)
 
         candidate_items: list[tuple[float, VectorIndexEntry, int | None, str]] = []
+        fallback_candidate_items: list[tuple[float, VectorIndexEntry, int | None, str]] = []
         seen_document_pages: set[tuple[int, int | None]] = set()
         seen_image_urls: set[str] = set()
         skipped_low_score = 0
         skipped_quality = 0
         skipped_specific_mismatch = 0
+        generic_visual_fallback_allowed = query_allows_generic_figure_fallback(search_query)
         for match in matches:
             entry = vector_entry_from_vector_result(match)
             if entry.chunk_type != "image_description":
@@ -563,6 +585,10 @@ class AgentToolbox:
             image_url = image_url_from_source_image_path(entry.source_image_path)
             if not image_url or image_url in seen_image_urls:
                 continue
+            if not image_file_is_usable(entry.source_image_path):
+                skipped_quality += 1
+                continue
+            page_number = entry.page_number or page_number_from_source_image_path(entry.source_image_path)
             specific_match_count = figure_specific_match_count(search_query, entry)
             if not figure_specific_requirement_satisfied(
                 search_query,
@@ -570,16 +596,19 @@ class AgentToolbox:
                 specific_match_count=specific_match_count,
             ):
                 skipped_specific_mismatch += 1
+                if generic_visual_fallback_allowed:
+                    fallback_candidate_items.append((match.score, entry, page_number, image_url))
                 continue
-            if not image_file_is_usable(entry.source_image_path):
-                skipped_quality += 1
-                continue
-            page_number = entry.page_number or page_number_from_source_image_path(entry.source_image_path)
             adjusted_score = adjusted_figure_relevance_score(
                 match.score,
                 specific_match_count=specific_match_count,
             )
             candidate_items.append((adjusted_score, entry, page_number, image_url))
+
+        specific_filter_relaxed = False
+        if not candidate_items and fallback_candidate_items:
+            candidate_items = fallback_candidate_items
+            specific_filter_relaxed = True
 
         search_results: list[AgentSearchItem] = []
         figure_results: list[FigureSearchResult] = []
@@ -622,7 +651,8 @@ class AgentToolbox:
             f"vector_backend={current_vector_search_backend()}; "
             f"skipped_low_score={skipped_low_score}; "
             f"skipped_quality={skipped_quality}; "
-            f"skipped_specific_mismatch={skipped_specific_mismatch}"
+            f"skipped_specific_mismatch={skipped_specific_mismatch}; "
+            f"specific_filter_relaxed={str(specific_filter_relaxed).lower()}"
         )
         search_results = _enrich_results_with_citation_location(search_results, self.db)
         sources = _enrich_sources_with_citation_location(
@@ -1303,6 +1333,17 @@ def query_requests_figure(query: str) -> bool:
     ):
         return True
     return False
+
+
+def query_allows_generic_figure_fallback(query: str) -> bool:
+    normalized = query.casefold()
+    if not query_requests_figure(normalized):
+        return False
+    if not any(marker in normalized for marker in GENERIC_VISUAL_EVIDENCE_MARKERS):
+        return False
+    if any(term in normalized for term in STRICT_FIGURE_FALLBACK_BLOCKERS):
+        return False
+    return True
 
 
 def figure_specific_requirement_satisfied(
