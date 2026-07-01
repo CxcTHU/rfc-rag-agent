@@ -200,7 +200,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "switchView" in response.text
     assert "[data-view-target]" in response.text
     assert "[data-view]" in response.text
-    assert "timeoutMs: 45000" in response.text
+    assert "timeoutMs: 180000" in response.text
     fallback_agent_block = response.text.split("result = await fetchJson(apiEndpoints.agent", 1)[1].split("});", 1)[0]
     assert "headers: authHeaders()" in fallback_agent_block
     assert "Request timed out" in response.text
@@ -303,6 +303,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "citation-popover" in response.text
     assert "loading-spinner" in response.text
     assert "Request failed. Please retry later or check service logs." in response.text
+    assert "Streaming connection closed before the final answer" in response.text
 
     styles = client.get("/static/styles.css")
     assert styles.status_code == 200

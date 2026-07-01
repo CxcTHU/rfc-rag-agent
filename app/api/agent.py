@@ -3,7 +3,7 @@ import logging
 import re
 import time
 from collections.abc import Iterator, Sequence
-from queue import Queue
+from queue import Empty, Queue
 from threading import Thread
 from typing import Any
 
@@ -59,6 +59,7 @@ from app.services.retrieval.embedding import EmbeddingProvider, create_embedding
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 FIGURE_EVIDENCE_LIMIT = 4
+AGENT_STREAM_HEARTBEAT_SECONDS = 10.0
 agent_logger = logging.getLogger("rfc_rag_agent.agent")
 
 
@@ -594,8 +595,16 @@ def stream_non_chitchat_agent_response(
     producer.start()
 
     streamed_token_count = 0
+    wait_started = time.perf_counter()
     while True:
-        event_type, payload = queue.get()
+        try:
+            event_type, payload = queue.get(timeout=AGENT_STREAM_HEARTBEAT_SECONDS)
+        except Empty:
+            yield sse_event(
+                "heartbeat",
+                {"elapsed_ms": int((time.perf_counter() - wait_started) * 1000)},
+            )
+            continue
         if event_type == "token":
             streamed_token_count += 1
             yield sse_event("token", {"text": payload})

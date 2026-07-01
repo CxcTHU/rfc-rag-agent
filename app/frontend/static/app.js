@@ -479,7 +479,7 @@ function userFriendlyErrorMessage(error) {
     return authRequiredMessage();
   }
   if (message.includes("Request timed out") || message.includes("timeout") || error?.name === "AbortError") {
-    return "Request timed out. Please retry after checking the model or retrieval service.";
+    return "Request timed out. The model may still be working; retry with streaming or check service health.";
   }
   if (message.includes("chat model provider") || message.includes("provider")) {
     return "Model service is temporarily unavailable. Please check local configuration and retry.";
@@ -487,8 +487,13 @@ function userFriendlyErrorMessage(error) {
   if (message.includes("HTTP 503")) {
     return "Backend service is temporarily unavailable. Please retry later.";
   }
-  if (message.includes("Failed to fetch") || message.includes("NetworkError")) {
-    return "Network connection failed. Please confirm the backend service is running.";
+  if (
+    message.includes("Failed to fetch") ||
+    message.includes("NetworkError") ||
+    message.includes("connection was closed") ||
+    message.includes("Stream ended without metadata")
+  ) {
+    return "Streaming connection closed before the final answer. Please retry; service health may still be normal.";
   }
   return "Request failed. Please retry later or check service logs.";
 }
@@ -2732,7 +2737,7 @@ async function submitAgent() {
           method: "POST",
           headers: authHeaders(),
           body: JSON.stringify(body),
-          timeoutMs: 45000,
+          timeoutMs: 180000,
         });
         pendingThinkingMessage = currentLiveAgentMessage(activeRun);
         if (pendingThinkingMessage) {

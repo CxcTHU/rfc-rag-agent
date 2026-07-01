@@ -240,6 +240,22 @@ class SlowStreamingChatModelProvider:
         yield "capacity depends on SCC flowability [1]."
 
 
+class SlowFirstTokenStreamingChatModelProvider:
+    provider_name = "slow-first-token-stream"
+    model_name = "slow-first-token-stream-model"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        return ChatModelResult(
+            answer="".join(self.stream_generate(messages)),
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+    def stream_generate(self, messages: list[ChatMessage]):
+        time.sleep(0.12)
+        yield "Filling capacity depends on SCC flowability [1]."
+
+
 class SlowToolCallingStreamingChatModelProvider:
     provider_name = "slow-tool-stream"
     model_name = "slow-tool-stream-model"
@@ -326,6 +342,45 @@ def test_agent_stream_yields_first_token_before_model_finishes(tmp_path, monkeyp
     assert elapsed < 0.25
     assert first_event.startswith("event: token\n")
     assert '"Filling "' in first_event
+    assert any("event: metadata" in event for event in remaining_events)
+
+
+def test_agent_stream_emits_heartbeat_before_slow_first_token(tmp_path, monkeypatch) -> None:
+    disable_external_stream_caches(monkeypatch)
+    monkeypatch.setattr("app.api.agent.AGENT_STREAM_HEARTBEAT_SECONDS", 0.05)
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.create_reranking_provider",
+        lambda **_kwargs: None,
+    )
+    database_path = tmp_path / "agent_stream_heartbeat.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    embedding_provider = DeterministicEmbeddingProvider(dimension=32)
+
+    with TestingSessionLocal() as db:
+        seed_agent_api_document(db)
+        SourceRepository(db).create_source(source_record())
+
+        with TestingSessionLocal() as db:
+            event_stream = stream_agent_query_events(
+                request=AgentQueryRequest(
+                    question="What affects filling capacity?",
+                    top_k=2,
+                    mode="default",
+                ),
+                db=db,
+                conversation_repository=ConversationRepository(db),
+                conversation_history=[],
+                chat_model_provider=SlowFirstTokenStreamingChatModelProvider(),
+                embedding_provider=embedding_provider,
+            )
+
+            first_event = next(event_stream)
+            remaining_events = list(event_stream)
+
+    assert first_event.startswith("event: heartbeat\n")
+    assert any(event.startswith("event: token\n") for event in remaining_events)
     assert any("event: metadata" in event for event in remaining_events)
 
 
