@@ -487,6 +487,24 @@ def test_agent_api_handles_chitchat_without_refusal_or_tools(tmp_path) -> None:
         assert "闲聊短路" in payload["reasoning_summary"]
 
 
+def test_agent_api_handles_compound_help_greeting_without_refusal(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={"question": "你好，先简单介绍一下你能帮我做什么。"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refused"] is False
+    assert payload["tool_calls"] == []
+    assert payload["sources"] == []
+    assert payload["citations"] == []
+    assert payload["mode"] == "default"
+    assert "堆石混凝土" in payload["answer"]
+    assert "闲聊短路" in payload["reasoning_summary"]
+
+
 def test_agent_api_short_circuits_chitchat_before_complexity_routing(tmp_path, monkeypatch) -> None:
     def fail_routing(question: str):
         raise AssertionError("routing should not be called for chitchat")

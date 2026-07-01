@@ -21,6 +21,15 @@ def test_detect_chitchat_supports_social_intents() -> None:
 def test_detect_chitchat_ignores_domain_questions() -> None:
     assert detect_chitchat("What affects filling capacity?") is None
     assert detect_chitchat("检索 堆石混凝土 温控 相关资料") is None
+    assert detect_chitchat("你好，堆石混凝土有哪些优点？") is None
+
+
+def test_detect_chitchat_handles_compound_help_greeting() -> None:
+    result = detect_chitchat("你好，先简单介绍一下你能帮我做什么。")
+
+    assert result is not None
+    assert result.intent == "help"
+    assert "堆石混凝土" in result.answer
 
 
 def test_normalize_chitchat_text_compacts_case_and_punctuation() -> None:
