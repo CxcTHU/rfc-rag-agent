@@ -672,6 +672,58 @@ def test_tool_calling_runtime_grounds_visual_followup_tool_query(
     assert result.latency_trace["runtime_evidence_counts"]["figure"] == 1
 
 
+def test_tool_calling_visual_followup_empty_figures_stops_with_clear_reason(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    executed_queries: list[str] = []
+
+    def fake_search_figures(self, query: str, top_k: int = 4) -> AgentToolResult:
+        executed_queries.append(query)
+        return AgentToolResult(
+            tool_name="search_figures",
+            call=AgentToolCallRecord(
+                tool_name="search_figures",
+                input_summary=f"query={query}; top_k={top_k}",
+                output_summary=(
+                    "returned 0 figure results; threshold=0.35; "
+                    "vector_backend=pgvector_hnsw; skipped_specific_mismatch=3"
+                ),
+                succeeded=True,
+            ),
+            search_results=[],
+            sources=[],
+            refused=True,
+            refusal_reason="No relevant figure results were found.",
+        )
+
+    monkeypatch.setattr(
+        "app.services.agent.tools.AgentToolbox.search_figures",
+        fake_search_figures,
+    )
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        result = make_service(db, chat_provider=VisualFollowupChatProvider()).query(
+            "\u6211\u9700\u8981\u56fe\u7247\u652f\u6491",
+            history=(
+                "\u5927\u575d\u7684\u88c2\u7f1d\u6210\u56e0\u6709\u54ea\u4e9b\uff1f"
+                "\u8bf7\u7ed9\u6211\u8be6\u7ec6\u5217\u51fa\u6765",
+            ),
+            top_k=4,
+            max_tool_calls=3,
+        )
+
+    assert result.refused
+    assert result.refusal_reason == "No relevant figure results were found."
+    assert result.answer == "No relevant figure results were found."
+    assert len(executed_queries) == 1
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].tool_name == "search_figures"
+    assert result.latency_trace["runtime_stop_reason"] == "figure_evidence_not_found"
+
+
 def test_tool_calling_agent_emits_safe_runtime_events(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
     events: list[ToolCallingRuntimeEvent] = []

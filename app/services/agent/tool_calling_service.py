@@ -664,6 +664,53 @@ class ToolCallingAgentService:
                                     tool_call_count=len(tool_calls),
                                 ),
                             )
+                        if (
+                            tool_result.tool_name == "search_figures"
+                            and tool_result.refused
+                            and needs_figure_evidence
+                            and not sources
+                        ):
+                            refusal_reason = (
+                                tool_result.refusal_reason
+                                or "No relevant figure evidence was found for the current question."
+                            )
+                            runtime_state.stop_reason = "figure_evidence_not_found"
+                            runtime_state.final_decision = "refuse"
+                            apply_runtime_diagnostics(latency_trace, runtime_state)
+                            runtime_repository.persist_node(
+                                active_run,
+                                node="figure_evidence_not_found",
+                                state=runtime_checkpoint_state(
+                                    runtime_state=runtime_state,
+                                    workflow_steps=workflow_steps,
+                                    tool_calls=tool_calls,
+                                    sources=sources,
+                                    latency_trace=latency_trace.values,
+                                ),
+                                status="failed",
+                            )
+                            return result_from_tool_calling_loop(
+                                question=normalized_question,
+                                answer=refusal_reason,
+                                tool_calls=tool_calls,
+                                workflow_steps=workflow_steps,
+                                search_results=search_results,
+                                sources=sources,
+                                citations=[],
+                                refused=True,
+                                refusal_reason=refusal_reason,
+                                llm_call_count=llm_call_count,
+                                repeated_query_count=repeated_query_count,
+                                near_duplicate_query_count=near_duplicate_query_count,
+                                skipped_tool_call_count=skipped_tool_call_count,
+                                executed_tool_call_count=executed_tool_call_count,
+                                citation_repair_count=citation_repair_count,
+                                runtime_state=runtime_state,
+                                latency_trace=latency_trace.finalize(
+                                    iteration_count=len(workflow_steps),
+                                    tool_call_count=len(tool_calls),
+                                ),
+                            )
                         previous_tool_queries.append(normalized_tool_query)
                         if tool_result.tool_name == "search_figures":
                             figure_search_executed = True
