@@ -27,6 +27,7 @@ COPY --from=builder /wheels /wheels
 RUN python -m pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
 
 COPY app ./app
+COPY frontend/dist ./frontend/dist
 COPY scripts ./scripts
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
