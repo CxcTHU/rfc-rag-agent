@@ -14,10 +14,21 @@ LATENCY_FIELDS = (
     "faiss_search_latency_ms",
     "numpy_search_latency_ms",
     "rerank_latency_ms",
+    "rerank_fallback_latency_ms",
     "planner_latency_ms",
+    "hyde_latency_ms",
     "answer_latency_ms",
+    "citation_repair_latency_ms",
     "tool_latency_ms",
     "graph_search_latency_ms",
+    "keyword_search_latency_ms",
+    "table_channel_latency_ms",
+    "figure_channel_latency_ms",
+    "provider_http_latency_ms",
+    "reranking_primary_health_latency_ms",
+    "retrieval_cache_lookup_latency_ms",
+    "retrieval_cache_hydrate_latency_ms",
+    "rerank_cache_lookup_latency_ms",
 )
 
 
@@ -36,6 +47,18 @@ class LatencyTrace:
         self.values.setdefault("query_embedding_cache_hits", 0)
         self.values.setdefault("query_embedding_cache_misses", 0)
         self.values.setdefault("query_embedding_cache_backend", "memory")
+        self.values.setdefault("provider_http_request_count", 0)
+        self.values.setdefault("provider_http_attempt_count", 0)
+        self.values.setdefault("provider_http_reused_connection_count", 0)
+        self.values.setdefault("provider_http_retry_backoff_ms", 0.0)
+        self.values.setdefault("provider_http_last_status", None)
+        self.values.setdefault("provider_http_last_connection_reused", False)
+        self.values.setdefault("provider_http_last_pool_key_hash", "")
+        self.values.setdefault("provider_http_last_provider", "")
+        self.values.setdefault("provider_http_last_model", "")
+        self.values.setdefault("reranking_primary_health_status", "not_checked")
+        self.values.setdefault("reranking_primary_health_error", "")
+        self.values.setdefault("reranking_primary_health_cache_hit", False)
         self.values.setdefault("retrieval_cache_hit", False)
         self.values.setdefault("retrieval_cache_backend", "disabled")
         self.values.setdefault("retrieval_cache_reason", "not_checked")

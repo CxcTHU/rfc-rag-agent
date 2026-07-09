@@ -2,6 +2,8 @@ import io
 import json
 import urllib.error
 
+import pytest
+
 from app.services.retrieval.reranking import (
     DeterministicReRankingProvider,
     OpenAICompatibleReRankingProvider,
@@ -100,14 +102,15 @@ def test_parse_openai_compatible_rerank_response_supports_scores_array() -> None
 def test_reranker_retries_transient_ssl_error(monkeypatch) -> None:
     attempts = {"count": 0}
 
-    def flaky_urlopen(request, timeout):
+    def flaky_request_json(request, *, timeout, provider_name, model_name):
+        del request, timeout, provider_name, model_name
         attempts["count"] += 1
         if attempts["count"] == 1:
             raise urllib.error.URLError("[SSL: UNEXPECTED_EOF_WHILE_READING]")
-        return _RerankFakeResponse()
+        return {"results": [{"index": 0, "relevance_score": 0.7}]}
 
     monkeypatch.setattr(
-        "app.services.retrieval.reranking.urlopen_without_proxy", flaky_urlopen
+        "app.services.retrieval.reranking.request_json_without_proxy", flaky_request_json
     )
     provider = OpenAICompatibleReRankingProvider(
         model_name="BAAI/bge-reranker-v2-m3",
@@ -125,7 +128,8 @@ def test_reranker_retries_transient_ssl_error(monkeypatch) -> None:
 def test_reranker_does_not_retry_client_error(monkeypatch) -> None:
     attempts = {"count": 0}
 
-    def http_error_urlopen(request, timeout):
+    def http_error_request_json(request, *, timeout, provider_name, model_name):
+        del request, timeout, provider_name, model_name
         attempts["count"] += 1
         raise urllib.error.HTTPError(
             url="https://api.siliconflow.cn/v1/rerank",
@@ -136,7 +140,7 @@ def test_reranker_does_not_retry_client_error(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(
-        "app.services.retrieval.reranking.urlopen_without_proxy", http_error_urlopen
+        "app.services.retrieval.reranking.request_json_without_proxy", http_error_request_json
     )
     provider = OpenAICompatibleReRankingProvider(
         model_name="BAAI/bge-reranker-v2-m3",
@@ -198,13 +202,14 @@ def test_create_reranking_provider_uses_embedding_key_for_paratera(monkeypatch) 
 def test_openai_compatible_reranker_allows_private_service_without_api_key(monkeypatch) -> None:
     seen = {}
 
-    def fake_urlopen(request, timeout):
+    def fake_request_json(request, *, timeout, provider_name, model_name):
+        del timeout, provider_name, model_name
         seen["headers"] = dict(request.header_items())
         seen["body"] = json.loads(request.data.decode("utf-8"))
-        return _RerankFakeResponse()
+        return {"results": [{"index": 0, "relevance_score": 0.7}]}
 
     monkeypatch.setattr(
-        "app.services.retrieval.reranking.urlopen_without_proxy", fake_urlopen
+        "app.services.retrieval.reranking.request_json_without_proxy", fake_request_json
     )
     provider = OpenAICompatibleReRankingProvider(
         model_name="bge-reranker-base-rfc-lora",
@@ -219,6 +224,38 @@ def test_openai_compatible_reranker_allows_private_service_without_api_key(monke
     assert seen["body"]["documents"] == ["doc"]
     assert "Authorization" not in seen["headers"]
     assert "Api-key" not in seen["headers"]
+
+
+def test_remote_bge_health_failure_skips_rerank_request(monkeypatch) -> None:
+    calls = {"health": 0, "rerank": 0}
+
+    def failed_health(request, timeout):
+        del request, timeout
+        calls["health"] += 1
+        raise TimeoutError("health timeout")
+
+    def fake_request_json(request, *, timeout, provider_name, model_name):
+        del request, timeout, provider_name, model_name
+        calls["rerank"] += 1
+        return {"results": [{"index": 0, "relevance_score": 0.7}]}
+
+    monkeypatch.setattr("app.services.retrieval.reranking.urlopen_without_proxy", failed_health)
+    monkeypatch.setattr(
+        "app.services.retrieval.reranking.request_json_without_proxy", fake_request_json
+    )
+    provider = OpenAICompatibleReRankingProvider(
+        model_name="rfc-domain-bge-lora",
+        api_key="",
+        base_url="http://127.0.0.1:8091",
+        provider_name="remote-bge-lora",
+        health_check_enabled=True,
+        unavailable_ttl_seconds=0,
+    )
+
+    with pytest.raises(RuntimeError, match="health check failed"):
+        provider.rerank("query", ["doc"], top_k=1)
+
+    assert calls == {"health": 1, "rerank": 0}
 
 
 def test_create_reranking_provider_supports_remote_bge_lora_alias() -> None:

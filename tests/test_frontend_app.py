@@ -339,6 +339,9 @@ def test_frontend_static_assets_are_served() -> None:
     assert "renderAnswerWithCitationLinks" in response.text
     assert "renderMarkdownBlocks" in response.text
     assert "markdownTableHtml" in response.text
+    assert "normalizeMarkdownTableSyntax" in response.text
+    assert "\\uFF1A" in response.text
+    assert "\\u2010-\\u2015" in response.text
     assert "table-evidence-content" in response.text
     assert "messageElement._streamedAnswerText" in response.text
     assert "answerText.innerHTML = renderMarkdownBlocks" in response.text

@@ -99,6 +99,28 @@ Human verification:
 User manual verification passed on 2026-07-09. Phase 60 is authorized for local closeout, GitHub merge, and CPU-server sync.
 ```
 
+## Post-Acceptance Sync
+
+After manual verification, Phase 60 absorbed the follow-up fixes discovered while using the local and CPU Agent:
+
+```text
+frontend/src/App.tsx and app/frontend/static/app.js normalize malformed Markdown table rows before rendering.
+Markdown tables with loose pipe rows, fullwidth separators, Unicode dashes, or missing canonical separator lines are rendered as tables instead of raw text.
+frontend/src/index.css adds compact responsive Markdown table behavior for wide/long tables.
+The loading/auth refresh path avoids signed-out flicker and mojibake status labels.
+Agent latency diagnostics include provider HTTP reuse metadata; provider calls can reuse short-lived HTTP clients through app/services/generation/http_pool.py.
+scripts/evaluate_original_pdf_open.py records sanitized CPU-local original-PDF openability checks.
+scripts/evaluate_full_chain_latency.py records sanitized end-to-end latency component metrics without full answers or chunks.
+```
+
+CPU sync notes:
+
+```text
+Stable maintenance uses Tailscale SSH to the CPU node.
+The CPU application directory is a deployment copy, not a Git checkout.
+Sync must preserve .env.prod, data/, PostgreSQL/Redis Docker volumes, and any server-local PDF assets.
+```
+
 The new worktree does not contain `data/app.sqlite`, so DB-backed dry-run/eval is intentionally left for the user's local corpus database or a sanitized database copy. A temporary SQLite `alembic upgrade head` attempt is not a valid Phase 60 migration gate because the existing historical `20260618_0002` migration uses `ALTER COLUMN`, which SQLite rejects before reaching Phase 60.
 
 ## Merge Risk

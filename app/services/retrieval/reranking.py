@@ -3,12 +3,16 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
+
+from app.services.generation.http_pool import HTTP_JSON_CONNECTION_POOL
+from app.services.observability.latency_trace import get_current_latency_trace
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9]+|[\u4e00-\u9fff]")
@@ -48,6 +52,8 @@ ENGLISH_STOPWORDS = {
 # Transient HTTP statuses worth retrying. 4xx client errors (bad key, bad
 # request) are excluded because retrying them only wastes quota.
 RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
+_RERANKER_UNAVAILABLE_UNTIL: dict[str, float] = {}
+_RERANKER_UNAVAILABLE_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -103,6 +109,9 @@ class OpenAICompatibleReRankingProvider:
     provider_name: str = "openai-compatible"
     max_attempts: int = 3
     retry_backoff_seconds: float = 0.5
+    health_check_enabled: bool = False
+    health_check_timeout_seconds: float = 2.0
+    unavailable_ttl_seconds: float = 30.0
 
     def __post_init__(self) -> None:
         if not self.model_name.strip():
@@ -115,6 +124,10 @@ class OpenAICompatibleReRankingProvider:
             raise ValueError("max_attempts must be greater than 0")
         if self.retry_backoff_seconds < 0:
             raise ValueError("retry_backoff_seconds must be greater than or equal to 0")
+        if self.health_check_timeout_seconds <= 0:
+            raise ValueError("health_check_timeout_seconds must be greater than 0")
+        if self.unavailable_ttl_seconds < 0:
+            raise ValueError("unavailable_ttl_seconds must be greater than or equal to 0")
 
     def rerank(
         self,
@@ -123,6 +136,7 @@ class OpenAICompatibleReRankingProvider:
         top_k: int = 5,
     ) -> list[ReRankResult]:
         validate_rerank_inputs(query, candidates, top_k)
+        self._ensure_available_for_request()
         payload = {
             "model": self.model_name,
             "query": query.strip(),
@@ -159,9 +173,15 @@ class OpenAICompatibleReRankingProvider:
 
         for attempt in range(1, self.max_attempts + 1):
             is_last_attempt = attempt >= self.max_attempts
+            self._trace_attempt(attempt)
             try:
-                with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
-                    return json.loads(response.read().decode("utf-8"))
+                response_data = request_json_without_proxy(
+                    request,
+                    timeout=self.timeout_seconds,
+                    provider_name=self.provider_name,
+                    model_name=self.model_name,
+                )
+                return response_data
             except TimeoutError as exc:
                 if is_last_attempt:
                     raise RuntimeError("Reranking model request timed out") from exc
@@ -178,10 +198,85 @@ class OpenAICompatibleReRankingProvider:
         # Defensive: the loop either returns or raises on the last attempt.
         raise RuntimeError("Reranking model request failed after retries")
 
+    def _ensure_available_for_request(self) -> None:
+        if not self.health_check_enabled:
+            return
+        cache_key = self._availability_cache_key()
+        now = time.monotonic()
+        with _RERANKER_UNAVAILABLE_LOCK:
+            unavailable_until = _RERANKER_UNAVAILABLE_UNTIL.get(cache_key, 0.0)
+        trace = get_current_latency_trace()
+        if unavailable_until > now:
+            if trace is not None:
+                trace.set_value("reranking_primary_health_status", "cached_unavailable")
+                trace.set_value("reranking_primary_health_cache_hit", True)
+            raise RuntimeError("Reranking primary service unavailable: cached health check failure")
+        started = time.perf_counter()
+        if trace is not None:
+            trace.set_value("reranking_primary_health_cache_hit", False)
+            trace.set_value("reranking_primary_health_status", "checking")
+        try:
+            request = urllib.request.Request(
+                self._health_url(),
+                headers={"Accept": "application/json", "User-Agent": "rfc-rag-agent/reranking-health"},
+                method="GET",
+            )
+            with urlopen_without_proxy(request, timeout=self.health_check_timeout_seconds) as response:
+                status = getattr(response, "status", 200)
+                if status >= 400:
+                    raise RuntimeError(f"health endpoint returned HTTP {status}")
+                response.read(512)
+        except Exception as exc:
+            self._mark_unavailable(cache_key)
+            if trace is not None:
+                trace.set_value("reranking_primary_health_status", "unavailable")
+                trace.set_value("reranking_primary_health_error", type(exc).__name__)
+            raise RuntimeError("Reranking primary service unavailable: health check failed") from exc
+        finally:
+            if trace is not None:
+                trace.add_duration(
+                    "reranking_primary_health_latency_ms",
+                    (time.perf_counter() - started) * 1000.0,
+                )
+        if trace is not None:
+            trace.set_value("reranking_primary_health_status", "ok")
+            trace.set_value("reranking_primary_health_error", "")
+
+    def _mark_unavailable(self, cache_key: str) -> None:
+        if self.unavailable_ttl_seconds <= 0:
+            return
+        with _RERANKER_UNAVAILABLE_LOCK:
+            _RERANKER_UNAVAILABLE_UNTIL[cache_key] = time.monotonic() + self.unavailable_ttl_seconds
+
+    def _availability_cache_key(self) -> str:
+        return f"{self.provider_name}|{self.model_name}|{self._health_url()}"
+
+    def _health_url(self) -> str:
+        normalized_base_url = self.base_url.rstrip("/")
+        if normalized_base_url.endswith("/rerank"):
+            normalized_base_url = normalized_base_url[: -len("/rerank")]
+        if normalized_base_url.endswith("/v1"):
+            normalized_base_url = normalized_base_url[: -len("/v1")]
+        return f"{normalized_base_url}/health"
+
     def _sleep_before_retry(self, attempt: int) -> None:
         if self.retry_backoff_seconds <= 0:
             return
-        time.sleep(self.retry_backoff_seconds * attempt)
+        duration = self.retry_backoff_seconds * attempt
+        trace = get_current_latency_trace()
+        if trace is not None:
+            trace.add_duration("provider_http_retry_backoff_ms", duration * 1000.0)
+        time.sleep(duration)
+
+    def _trace_attempt(self, attempt: int) -> None:
+        trace = get_current_latency_trace()
+        if trace is None:
+            return
+        trace.set_value("provider_http_last_provider", self.provider_name)
+        trace.set_value("provider_http_last_model", self.model_name)
+        trace.set_value("provider_http_last_attempt", attempt)
+        count = int(trace.values.get("provider_http_attempt_count", 0)) + 1
+        trace.set_value("provider_http_attempt_count", count)
 
     def _endpoint_url(self) -> str:
         normalized_base_url = self.base_url.rstrip("/")
@@ -196,6 +291,9 @@ def create_reranking_provider(
     api_key: str | None = None,
     base_url: str | None = None,
     timeout_seconds: float = 30.0,
+    health_check_enabled: bool | None = None,
+    health_check_timeout_seconds: float = 2.0,
+    unavailable_ttl_seconds: float = 30.0,
 ) -> ReRankingProvider | None:
     provider = (provider_name or "deterministic").strip().casefold()
     if provider in {"none", "off", "disabled", "false"}:
@@ -234,6 +332,12 @@ def create_reranking_provider(
             "rfc-bge-lora",
             "rfc-domain-bge-lora",
         } else ""
+        is_remote_bge = provider in {
+            "remote-bge-lora",
+            "bge-lora",
+            "rfc-bge-lora",
+            "rfc-domain-bge-lora",
+        }
         if provider in {"zhipu", "glm", "bigmodel"}:
             default_base_url = "https://open.bigmodel.cn/api/paas/v4"
         resolved_api_key = (api_key or "").strip()
@@ -256,6 +360,9 @@ def create_reranking_provider(
             base_url=(base_url or default_base_url).strip(),
             timeout_seconds=timeout_seconds,
             provider_name=provider,
+            health_check_enabled=is_remote_bge if health_check_enabled is None else health_check_enabled,
+            health_check_timeout_seconds=health_check_timeout_seconds,
+            unavailable_ttl_seconds=unavailable_ttl_seconds,
         )
     raise ValueError(f"Unsupported reranking provider: {provider_name}")
 
@@ -324,6 +431,22 @@ def urlopen_without_proxy(
 ):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     return opener.open(request, timeout=timeout)
+
+
+def request_json_without_proxy(
+    request: urllib.request.Request,
+    *,
+    timeout: float,
+    provider_name: str,
+    model_name: str,
+) -> dict[str, Any]:
+    response = HTTP_JSON_CONNECTION_POOL.request_json(
+        request,
+        timeout=timeout,
+        provider_name=provider_name,
+        model_name=model_name,
+    )
+    return response.payload
 
 
 def parse_result_index(item: dict[str, Any]) -> int:

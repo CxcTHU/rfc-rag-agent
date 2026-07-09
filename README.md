@@ -1,5 +1,13 @@
 # RFC-RAG-Agent
 
+## Phase 60 Post-Acceptance Runtime Sync
+
+Current branch: `codex/phase60-post-acceptance-sync`.
+
+After Phase 60 passed human verification, the closeout branch folds in the follow-up runtime fixes found during manual Agent use: resilient Markdown table rendering, responsive wide-table display, loading/auth flicker cleanup, CPU original-PDF availability evaluation, and latency diagnostics/connection reuse work. These changes keep structured TableRAG as a sidecar and do not switch the default Agent table retrieval path.
+
+Operationally, the CPU server is maintained through stable Tailscale SSH. The CPU deployment copy preserves server-local `.env.prod`, `data/`, and Docker volumes; secrets and provider raw responses are never committed.
+
 ## Phase 60 Structured TableRAG Ingestion Sidecar
 
 Current branch: `codex/phase-60-structured-table-rag`.

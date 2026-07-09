@@ -161,7 +161,9 @@ def generate_hyde_vector_query(
                 ChatMessage(role="user", content=task),
             ]
         )
-        latency_trace.add_duration("planner_latency_ms", (time.perf_counter() - started) * 1000.0)
+        hyde_duration_ms = (time.perf_counter() - started) * 1000.0
+        latency_trace.add_duration("planner_latency_ms", hyde_duration_ms)
+        latency_trace.add_duration("hyde_latency_ms", hyde_duration_ms)
     except Exception:
         latency_trace.set_value("hyde_generated", False)
         latency_trace.set_value("hyde_used_for_vector", False)
@@ -792,6 +794,10 @@ class ToolCallingAgentService:
                                 "answer_latency_ms",
                                 (time.perf_counter() - repair_started) * 1000.0,
                             )
+                            latency_trace.add_duration(
+                                "citation_repair_latency_ms",
+                                (time.perf_counter() - repair_started) * 1000.0,
+                            )
                             repair_citations = extract_citations(
                                 repair_result.answer,
                                 allowed_source_ids,
@@ -870,6 +876,10 @@ class ToolCallingAgentService:
                         llm_call_count += 1
                         latency_trace.add_duration(
                             "answer_latency_ms",
+                            (time.perf_counter() - repair_started) * 1000.0,
+                        )
+                        latency_trace.add_duration(
+                            "citation_repair_latency_ms",
                             (time.perf_counter() - repair_started) * 1000.0,
                         )
                         repair_citations = extract_citations(
@@ -1801,6 +1811,7 @@ def result_from_cached_evidence(
         citation_repair_count = 1
         llm_call_count += 1
         latency_trace.add_duration("answer_latency_ms", (time.perf_counter() - repair_started) * 1000.0)
+        latency_trace.add_duration("citation_repair_latency_ms", (time.perf_counter() - repair_started) * 1000.0)
         repair_citations = extract_citations(repair_result.answer, allowed_source_ids)
         if repair_citations:
             answer_content = repair_result.answer

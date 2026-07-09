@@ -1,5 +1,33 @@
 # 项目进度
 
+## Latest Status: 2026-07-10 Phase 60 Post-Acceptance Sync And CPU Runtime Fixes
+
+Current branch: `codex/phase60-post-acceptance-sync`.
+
+After Phase 60 human verification, the follow-up fixes were folded back into the Phase 60 closeout branch:
+
+```text
+Structured TableRAG remains a sidecar; default search_tables / hybrid_search / tool_calling_agent behavior is not switched by this follow-up.
+React and legacy Markdown table rendering now tolerate malformed separator rows and fullwidth/Unicode punctuation, so compact tables no longer fall back to raw pipe text.
+Wide/long Markdown tables use a compact responsive table treatment with horizontal scrolling and sticky reading affordances.
+The loading/auth refresh path avoids the signed-out flicker and removes mojibake loading/status text.
+Original-PDF opening was audited for CPU-local file availability with a sanitized evaluation set.
+CPU interaction latency was improved through frontend/conversation rendering fixes plus provider HTTP connection reuse diagnostics.
+Tailscale key-based SSH access is configured for stable CPU maintenance; secrets remain local only.
+```
+
+Validation recorded in this branch:
+
+```text
+npm --prefix frontend run build -> passed
+python -m py_compile touched backend/service/script files -> passed
+git diff --check / git diff --cached --check -> no whitespace errors; CRLF warnings only
+```
+
+The first focused pytest run with the user's local `.env` returned Agent API 401s because `AUTH_ENABLED=true` was inherited by the test client. Re-running with `AUTH_ENABLED=false` reduced the old-baseline suite to two pre-merge Agent-route expectation failures; after merging `origin/main`, final focused validation must be re-run before GitHub merge.
+
+CPU deployment target remains `/home/ubuntu/rfc-rag-agent-stage44-smoke`. The CPU repo copy is not a Git checkout, so synchronization should deploy a sanitized archive of the merged repository while preserving server-local `.env.prod`, `data/`, and Docker volumes.
+
 ## Latest Status: 2026-07-09 Phase 60 Structured TableRAG Sidecar Passed Human Verification
 
 Current branch: `codex/phase-60-structured-table-rag`.

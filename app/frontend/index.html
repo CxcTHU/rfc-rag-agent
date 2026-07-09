@@ -4,27 +4,55 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>RFC-RAG-Agent</title>
-    <link rel="stylesheet" href="/static/styles.css?v=phase58-live-run-restore1" />
+    <link rel="stylesheet" href="/static/styles.css?v=phase60-table-render1" />
   </head>
   <body>
-    <main class="app-shell" data-app-shell>
+    <main class="app-shell is-auth-checking" data-app-shell>
       <section class="auth-screen" data-auth-screen aria-labelledby="auth-title">
         <div class="auth-hero">
           <a class="brand-lockup auth-brand" href="#home" aria-label="RFC-RAG-Agent">
-            <span class="brand-mark">R</span>
+            <span class="brand-mark" aria-hidden="true">R</span>
             <span>
               <strong>RFC-RAG-Agent</strong>
-              <small>堆石混凝土知识库</small>
+              <small>工程知识 RAG 工作台</small>
             </span>
           </a>
+
           <div class="auth-copy">
-            <p class="auth-eyebrow">生产环境工作台</p>
-            <h1 id="auth-title">登录后继续</h1>
-            <p>使用个人账号登录后，对话记录会按用户隔离保存，适合在云端部署环境中多人使用。</p>
+            <p class="auth-eyebrow">本地知识库 · 可追溯问答 · 运行诊断</p>
+            <h1 id="auth-title">
+              <span class="auth-title-main">构建面向工程资料的</span>
+              <span class="auth-title-accent">AI Agent 上下文层</span>
+            </h1>
+            <p>
+              面向 RFC 与工程资料的中文 RAG Agent，统一完成知识检索、证据溯源、运行诊断与质量审阅。
+            </p>
+            <button class="command-button auth-start-button" type="button" data-auth-start aria-controls="auth-card">
+              Get Started
+            </button>
+          </div>
+
+          <div class="auth-capability-grid" aria-label="核心能力">
+            <article>
+              <strong>可追溯回答</strong>
+              <span>回答关联来源、片段与引用编号。</span>
+            </article>
+            <article>
+              <strong>混合检索</strong>
+              <span>关键词、向量与重排协同召回。</span>
+            </article>
+            <article>
+              <strong>运行诊断</strong>
+              <span>查看检索、生成和质量检查链路。</span>
+            </article>
           </div>
         </div>
 
-        <section class="auth-card" aria-label="账号访问">
+        <section class="auth-card" id="auth-card" aria-label="账号访问">
+          <div class="auth-card-heading">
+            <h2>登录后继续</h2>
+            <p>进入中文工程知识 RAG 工作台。</p>
+          </div>
           <div class="auth-tabs" role="tablist" aria-label="账号模式">
             <button type="button" class="auth-tab is-active" data-auth-mode="login" role="tab" aria-selected="true">登录</button>
             <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">创建账号</button>
@@ -70,15 +98,18 @@
       <section class="workspace-band" data-workspace-band hidden>
         <header class="top-nav" aria-label="主导航">
           <a class="brand-lockup" href="#home" data-home-link aria-label="RFC-RAG-Agent 首页">
-            <span class="brand-mark">R</span>
+            <span class="brand-mark" aria-hidden="true">R</span>
             <span>
               <strong>RFC-RAG-Agent</strong>
-              <small>堆石混凝土知识库</small>
+              <small>中文工程知识 RAG Agent</small>
             </span>
           </a>
-          <nav class="nav-links" aria-label="页面视图">
-            <a href="#ask-view" data-view-target="ask" aria-current="page">开始问答</a>
-            <a href="#library-view" data-view-target="library">资料库</a>
+          <nav class="nav-links" aria-label="工作台视图">
+            <a href="#ask-view" data-view-target="ask" aria-current="page">智能问答</a>
+            <a href="#library-view" data-view-target="library">知识库</a>
+            <a href="#evidence-view" data-view-target="evidence">证据溯源</a>
+            <a href="#trace-view" data-view-target="trace">运行诊断</a>
+            <a href="#quality-view" data-view-target="quality">质量审阅</a>
           </nav>
           <div class="header-actions">
             <div class="auth-panel" data-auth-panel>
@@ -95,229 +126,364 @@
           </div>
         </header>
 
-        <section class="view-section is-active" id="ask-view" data-view="ask" aria-labelledby="hero-title">
-        <section class="hero-layout" aria-labelledby="hero-title">
-          <div class="hero-copy">
-            <h1 id="hero-title">面向堆石混凝土的 RAG 智能检索系统</h1>
-            <p class="hero-lede">
-              基于混合检索、结构化分块和流式回答，把堆石混凝土资料转成可追溯的智能问答入口。
-            </p>
-            <div class="hero-actions">
-              <a class="command-button" href="#ask-view" data-view-target="ask">开始问答</a>
-              <a class="secondary-button" href="#library-view" data-view-target="library">查看资料库</a>
-            </div>
-
-            <div class="feature-tabs" aria-label="核心能力">
-              <article>
-                <strong>混合检索</strong>
-                <span>关键词与向量协同召回</span>
-              </article>
-              <article>
-                <strong>流式回答</strong>
-                <span>逐 token 输出结果</span>
-              </article>
-              <article>
-                <strong>结构化分块</strong>
-                <span>引用可追踪到片段</span>
-              </article>
-            </div>
-
-            <div class="capability-grid" aria-label="核心能力">
-              <article class="capability-card">
-                <span class="card-icon">H</span>
-                <h2>混合检索</h2>
-                <p>兼顾工程术语、题名关键词和语义相近问题。</p>
-              </article>
-              <article class="capability-card">
-                <span class="card-icon">S</span>
-                <h2>流式回答</h2>
-                <p>回答逐段生成，先看到内容，再回填引用和步骤。</p>
-              </article>
-              <article class="capability-card">
-                <span class="card-icon">C</span>
-                <h2>结构化分块</h2>
-                <p>资料按片段入库，引用能回到真实 chunk。</p>
-              </article>
-            </div>
-          </div>
-        </section>
-
-          <section class="demo-panel agent-workspace-panel" id="agent-panel" aria-labelledby="agent-title">
-            <div class="panel-heading demo-heading">
-              <div>
-                <h2 id="agent-title">Agent 问答</h2>
-                <p>输入问题后会流式输出，并回填引用与步骤。</p>
-              </div>
-              <span data-agent-status>idle</span>
-            </div>
-
-            <div class="agent-chat-layout">
-              <aside class="conversation-sidebar" aria-label="会话列表">
-                <div class="conversation-sidebar-head">
-                  <strong>会话</strong>
-                  <button class="secondary-button" type="button" data-new-conversation>新建</button>
-                </div>
-                <div class="conversation-list" data-conversation-list role="listbox" aria-label="会话列表">
-                  <div class="empty-state">加载中</div>
-                </div>
-                <button class="secondary-button conversation-refresh-button" type="button" data-refresh-conversations>刷新</button>
-                <input data-conversation-title type="text" maxlength="200" placeholder="新对话" hidden />
-              </aside>
-
-              <section class="conversation-main" aria-label="对话">
-                <div class="chat-messages" data-agent-answer-box data-agent-chat-list aria-live="polite">
-                  <div class="empty-state">在底部输入问题，点击运行。</div>
-                </div>
-
-                <form class="chat-form demo-form agent-composer" data-agent-form>
-                  <label class="question-field">
-                    <span>任务</span>
-                    <textarea
-                      data-agent-question
-                      rows="3"
-                      placeholder="例如：堆石混凝土的填充性能受哪些因素影响？"
-                      required
-                    ></textarea>
-                  </label>
-                  <div class="agent-controls">
-                    <input data-agent-image-input class="agent-image-input" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden />
-                    <button class="image-upload-button" type="button" data-agent-image-button title="添加图片">添加图片</button>
-                    <span class="upload-chip" data-agent-upload-status hidden></span>
-                    <button class="command-button" type="submit" data-agent-submit>运行</button>
+        <div class="workspace-layout">
+          <div class="workspace-main">
+            <section class="view-section is-active" id="ask-view" data-view="ask" aria-labelledby="agent-title">
+              <section class="hero-layout" aria-labelledby="hero-title">
+                <div class="hero-copy">
+                  <h1 id="hero-title">中文工程知识 RAG Agent</h1>
+                  <p class="hero-lede">
+                    输入问题后，系统会流式生成回答，并把引用、证据和运行步骤回填到工作台。
+                  </p>
+                  <div class="feature-tabs" aria-label="核心能力">
+                    <article>
+                      <strong>混合检索</strong>
+                      <span>关键词与向量协同召回</span>
+                    </article>
+                    <article>
+                      <strong>证据溯源</strong>
+                      <span>引用可追踪到来源片段</span>
+                    </article>
+                    <article>
+                      <strong>运行诊断</strong>
+                      <span>检查检索、重排与生成链路</span>
+                    </article>
                   </div>
-                </form>
+                </div>
               </section>
-            </div>
-          </section>
 
-        <aside class="data-panel tool-panel" aria-labelledby="agent-tools-title">
-          <div class="panel-heading">
-            <h2 id="agent-tools-title">运行步骤</h2>
-            <span data-agent-tools-count>0</span>
-          </div>
-          <div class="tool-call-list" data-agent-tools-list>
-            <div class="empty-state">暂无工具调用</div>
-          </div>
-        </aside>
-        </section>
+              <section class="demo-panel agent-workspace-panel" id="agent-panel" aria-labelledby="agent-title">
+                <div class="panel-heading demo-heading">
+                  <div>
+                    <h2 id="agent-title">智能问答工作台</h2>
+                    <p>输入问题后会流式输出，并回填引用与步骤。</p>
+                  </div>
+                  <span data-agent-status>待命</span>
+                </div>
 
-        <section class="view-section" id="library-view" data-view="library" aria-labelledby="library-title" hidden>
-        <section class="summary-grid" aria-label="资料库概览">
-          <div class="metric-tile">
-            <span class="metric-label">来源</span>
-            <strong data-metric="sourcesTotal">0</strong>
-          </div>
-          <div class="metric-tile">
-            <span class="metric-label">已收集</span>
-            <strong data-metric="sourcesCollected">0</strong>
-          </div>
-          <div class="metric-tile">
-            <span class="metric-label">已入库</span>
-            <strong data-metric="sourcesImported">0</strong>
-          </div>
-          <div class="metric-tile">
-            <span class="metric-label">资料</span>
-            <strong data-metric="documentsTotal">0</strong>
-          </div>
-          <div class="metric-tile">
-            <span class="metric-label">片段</span>
-            <strong data-metric="chunksTotal">0</strong>
-          </div>
-        </section>
+                <div class="agent-chat-layout">
+                  <aside class="conversation-sidebar" aria-label="会话列表">
+                    <div class="conversation-sidebar-head">
+                      <strong>会话</strong>
+                      <button class="secondary-button" type="button" data-new-conversation>新建</button>
+                    </div>
+                    <div class="conversation-list" data-conversation-list role="listbox" aria-label="会话列表">
+                      <div class="empty-state">加载中</div>
+                    </div>
+                    <button class="secondary-button conversation-refresh-button" type="button" data-refresh-conversations>刷新</button>
+                    <input data-conversation-title type="text" maxlength="200" placeholder="新对话" hidden />
+                  </aside>
 
-        <section class="library-section" id="library-panel" aria-labelledby="library-title">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Knowledge Operations</p>
-              <h2 id="library-title">资料库工作台</h2>
-            </div>
-            <button class="secondary-button" type="button" data-sync-sources>同步来源</button>
-          </div>
+                  <section class="conversation-main" aria-label="对话">
+                    <div class="chat-messages" data-agent-answer-box data-agent-chat-list aria-live="polite">
+                      <div class="empty-state">在底部输入问题，点击运行。</div>
+                    </div>
 
-          <section class="toolbar-band" aria-label="来源筛选">
-            <label>
-              <span>关键词</span>
-              <input type="search" data-source-filter placeholder="题名 / DOI / URL" />
-            </label>
-            <label>
-              <span>状态</span>
-              <select data-status-filter>
-                <option value="">全部</option>
-                <option value="candidate">candidate</option>
-                <option value="collected">collected</option>
-                <option value="imported">imported</option>
-                <option value="duplicate">duplicate</option>
-                <option value="rejected">rejected</option>
-              </select>
-            </label>
-            <label>
-              <span>全文权限</span>
-              <select data-permission-filter>
-                <option value="">全部</option>
-                <option value="open_access">open_access</option>
-                <option value="institutional_access">institutional_access</option>
-                <option value="metadata_only">metadata_only</option>
-                <option value="unknown">unknown</option>
-              </select>
-            </label>
-          </section>
+                    <form class="chat-form demo-form agent-composer" data-agent-form>
+                      <label class="question-field">
+                        <span>任务</span>
+                        <textarea
+                          data-agent-question
+                          rows="3"
+                          placeholder="例如：堆石混凝土的填充性能受哪些因素影响？"
+                          required
+                        ></textarea>
+                      </label>
+                      <div class="agent-controls">
+                        <input data-agent-image-input class="agent-image-input" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden />
+                        <button class="image-upload-button" type="button" data-agent-image-button title="添加图片">添加图片</button>
+                        <span class="upload-chip" data-agent-upload-status hidden></span>
+                        <button class="command-button" type="submit" data-agent-submit>运行</button>
+                      </div>
+                    </form>
+                  </section>
+                </div>
+              </section>
 
-          <div class="content-grid">
-            <section class="data-panel" aria-labelledby="sources-title">
-              <div class="panel-heading">
-                <h2 id="sources-title">来源</h2>
-                <span data-sources-count>0</span>
-              </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>题名</th>
-                      <th>状态</th>
-                      <th>可信度</th>
-                      <th>权限</th>
-                      <th>年份</th>
-                      <th>分类</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody data-sources-body>
-                    <tr>
-                      <td colspan="7" class="empty-cell">加载中</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+              <aside class="data-panel tool-panel" aria-labelledby="agent-tools-title">
+                <div class="panel-heading">
+                  <h2 id="agent-tools-title">运行步骤</h2>
+                  <span data-agent-tools-count>0</span>
+                </div>
+                <div class="tool-call-list" data-agent-tools-list>
+                  <div class="empty-state">暂无工具调用</div>
+                </div>
+              </aside>
             </section>
 
-            <section class="data-panel" aria-labelledby="documents-title">
-              <div class="panel-heading">
-                <h2 id="documents-title">资料</h2>
-                <span data-documents-count>0</span>
-              </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>题名</th>
-                      <th>类型</th>
-                      <th>文件</th>
-                      <th>状态</th>
-                      <th>片段</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody data-documents-body>
-                    <tr>
-                      <td colspan="6" class="empty-cell">加载中</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <section class="view-section" id="library-view" data-view="library" aria-labelledby="library-title" hidden>
+              <section class="summary-grid" aria-label="知识库概览">
+                <div class="metric-tile">
+                  <span class="metric-label">来源</span>
+                  <strong data-metric="sourcesTotal">0</strong>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-label">已收集</span>
+                  <strong data-metric="sourcesCollected">0</strong>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-label">已入库</span>
+                  <strong data-metric="sourcesImported">0</strong>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-label">资料</span>
+                  <strong data-metric="documentsTotal">0</strong>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-label">片段</span>
+                  <strong data-metric="chunksTotal">0</strong>
+                </div>
+              </section>
+
+              <section class="library-section" id="library-panel" aria-labelledby="library-title">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">Knowledge Operations</p>
+                    <h2 id="library-title">知识库工作台</h2>
+                  </div>
+                  <button class="secondary-button" type="button" data-sync-sources>同步来源</button>
+                </div>
+
+                <section class="toolbar-band" aria-label="来源筛选">
+                  <label>
+                    <span>关键词</span>
+                    <input type="search" data-source-filter placeholder="题名 / DOI / URL" />
+                  </label>
+                  <label>
+                    <span>状态</span>
+                    <select data-status-filter>
+                      <option value="">全部</option>
+                      <option value="candidate">candidate</option>
+                      <option value="collected">collected</option>
+                      <option value="imported">imported</option>
+                      <option value="duplicate">duplicate</option>
+                      <option value="rejected">rejected</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>全文权限</span>
+                    <select data-permission-filter>
+                      <option value="">全部</option>
+                      <option value="open_access">open_access</option>
+                      <option value="institutional_access">institutional_access</option>
+                      <option value="metadata_only">metadata_only</option>
+                      <option value="unknown">unknown</option>
+                    </select>
+                  </label>
+                </section>
+
+                <div class="content-grid">
+                  <section class="data-panel" aria-labelledby="sources-title">
+                    <div class="panel-heading">
+                      <h2 id="sources-title">来源</h2>
+                      <span data-sources-count>0</span>
+                    </div>
+                    <div class="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>题名</th>
+                            <th>状态</th>
+                            <th>可信度</th>
+                            <th>权限</th>
+                            <th>年份</th>
+                            <th>分类</th>
+                            <th>操作</th>
+                          </tr>
+                        </thead>
+                        <tbody data-sources-body>
+                          <tr>
+                            <td colspan="7" class="empty-cell">加载中</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  <section class="data-panel" aria-labelledby="documents-title">
+                    <div class="panel-heading">
+                      <h2 id="documents-title">资料</h2>
+                      <span data-documents-count>0</span>
+                    </div>
+                    <div class="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>题名</th>
+                            <th>类型</th>
+                            <th>文件</th>
+                            <th>状态</th>
+                            <th>片段</th>
+                            <th>操作</th>
+                          </tr>
+                        </thead>
+                        <tbody data-documents-body>
+                          <tr>
+                            <td colspan="6" class="empty-cell">加载中</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </div>
+              </section>
+            </section>
+
+            <section class="view-section" id="evidence-view" data-view="evidence" aria-labelledby="evidence-title" hidden>
+              <section class="data-panel feature-workbench-panel">
+                <div class="panel-heading">
+                  <div>
+                    <h2 id="evidence-title">证据溯源</h2>
+                    <p>一次问答产生的引用、来源卡片、图表证据会在这里集中检查。</p>
+                  </div>
+                  <span>证据</span>
+                </div>
+                <div class="feature-card-grid">
+                  <article>
+                    <strong>引用卡片</strong>
+                    <p>回答中的编号引用可以打开右侧来源抽屉，定位对应来源与片段。</p>
+                  </article>
+                  <article>
+                    <strong>多模态证据</strong>
+                    <p>上传图片、表格证据和图像分析会随回答一起展示。</p>
+                  </article>
+                  <article>
+                    <strong>片段核验</strong>
+                    <p>保留片段摘要、来源标题和证据状态，不暴露完整受限全文。</p>
+                  </article>
+                </div>
+              </section>
+            </section>
+
+            <section class="view-section" id="trace-view" data-view="trace" aria-labelledby="trace-title" hidden>
+              <section class="data-panel feature-workbench-panel diagnostics-panel">
+                <div class="panel-heading">
+                  <div>
+                    <h2 id="trace-title">运行诊断</h2>
+                    <p>用于排查一次问答从请求解析到引用校验的全链路状态，定位“没检到、检错了、生成慢、证据不足”等问题。</p>
+                  </div>
+                  <span>链路</span>
+                </div>
+                <div class="diagnostic-summary-grid" aria-label="运行摘要">
+                  <article>
+                    <span>当前阶段</span>
+                    <strong data-trace-stage>等待问题</strong>
+                    <small>提交后同步到下方节点</small>
+                  </article>
+                  <article>
+                    <span>检索候选</span>
+                    <strong data-trace-candidates>0</strong>
+                    <small>关键词 / 向量 / 图表</small>
+                  </article>
+                  <article>
+                    <span>引用状态</span>
+                    <strong data-trace-citations>未生成</strong>
+                    <small>回答完成后检查编号一致性</small>
+                  </article>
+                  <article>
+                    <span>质量告警</span>
+                    <strong data-trace-warnings>0</strong>
+                    <small>低证据、低覆盖、需复核</small>
+                  </article>
+                </div>
+                <div class="trace-canvas" aria-label="运行链路">
+                  <article class="trace-node trace-node--start">
+                    <span>01</span>
+                    <strong>请求解析</strong>
+                    <small data-trace-request-detail>问题、图片、会话上下文进入任务队列。</small>
+                  </article>
+                  <article class="trace-node">
+                    <span>02</span>
+                    <strong>混合检索</strong>
+                    <small data-trace-retrieval-detail>关键词召回、向量召回、表格/图片证据候选。</small>
+                  </article>
+                  <article class="trace-node">
+                    <span>03</span>
+                    <strong>重排筛选</strong>
+                    <small data-trace-rerank-detail>按相关性、来源可信度和片段覆盖度压缩上下文。</small>
+                  </article>
+                  <article class="trace-node">
+                    <span>04</span>
+                    <strong>生成回答</strong>
+                    <small data-trace-generation-detail>流式生成中文回答，并把引用编号嵌入段落。</small>
+                  </article>
+                  <article class="trace-node trace-node--review">
+                    <span>05</span>
+                    <strong>质量检查</strong>
+                    <small data-trace-quality-detail>检查忠实度、引用完整性和人工复核风险。</small>
+                  </article>
+                </div>
+                <div class="diagnostic-detail-grid">
+                  <article>
+                    <strong>排查线索</strong>
+                    <p>当回答不稳定时，优先查看检索候选是否过少、重排是否丢失关键片段、引用是否指向同一来源。</p>
+                  </article>
+                  <article>
+                    <strong>工程诊断能力</strong>
+                    <p>这里不是独立聊天功能，而是把智能问答的运行过程可视化，帮助判断问题出在知识库、检索策略还是生成阶段。</p>
+                  </article>
+                </div>
+              </section>
+            </section>
+
+            <section class="view-section" id="quality-view" data-view="quality" aria-labelledby="quality-title" hidden>
+              <section class="data-panel feature-workbench-panel quality-panel">
+                <div class="panel-heading">
+                  <div>
+                    <h2 id="quality-title">质量审阅</h2>
+                    <p>面向人工核验：把低证据、引用不完整或需要专家判断的回答集中到审阅视图。</p>
+                  </div>
+                  <button class="secondary-button judge-run-button" type="button" data-run-judge>运行 Judge</button>
+                </div>
+                <div class="quality-score-grid" aria-label="Judge 评分指标">
+                  <article>
+                    <strong>Faithfulness</strong>
+                    <span data-quality-faithfulness>待评估</span>
+                    <p data-quality-faithfulness-note>回答是否只基于检索证据，不引入无来源断言。</p>
+                  </article>
+                  <article>
+                    <strong>Citation Support</strong>
+                    <span data-quality-citations>待评估</span>
+                    <p data-quality-citations-note>引用是否能支撑对应句子，编号与来源是否匹配。</p>
+                  </article>
+                  <article>
+                    <strong>Answer Coverage</strong>
+                    <span data-quality-coverage>待评估</span>
+                    <p data-quality-coverage-note>是否覆盖问题里的对象、条件、指标和边界。</p>
+                  </article>
+                  <article>
+                    <strong>Safety / Refusal</strong>
+                    <span data-quality-safety>待评估</span>
+                    <p data-quality-safety-note>拒答是否正确，是否存在安全泄漏或越权内容。</p>
+                  </article>
+                </div>
+                <div class="review-board" aria-label="审阅队列">
+                  <article class="review-item">
+                    <div>
+                      <strong>待审阅回答</strong>
+                      <p data-review-queue-note>提交问答后，低证据段落、缺引用结论、来源冲突会进入此队列。</p>
+                    </div>
+                    <span data-review-queue-status>空队列</span>
+                  </article>
+                  <article class="review-item">
+                    <div>
+                      <strong>审阅建议</strong>
+                      <p>优先处理“引用缺失”和“多来源结论冲突”，再处理措辞、覆盖度和补充说明。</p>
+                    </div>
+                    <span>规则</span>
+                  </article>
+                  <article class="review-item">
+                    <div>
+                      <strong>保留原因</strong>
+                      <p>它是工程 RAG 的质检入口：让用户知道哪些回答可信、哪些回答必须人工复核。</p>
+                    </div>
+                    <span>定位</span>
+                  </article>
+                </div>
+              </section>
             </section>
           </div>
-        </section>
-        </section>
+        </div>
 
         <div class="operations-grid" hidden style="display: none">
           <section class="data-panel" aria-labelledby="search-title">
@@ -414,9 +580,9 @@
             </div>
           </aside>
         </div>
-
       </section>
     </main>
+
     <aside class="citation-drawer" data-citation-drawer hidden aria-label="引用详情">
       <div class="citation-drawer-header">
         <div>
@@ -433,6 +599,6 @@
       <button type="button" data-rename-conversation role="menuitem">重命名</button>
       <button type="button" class="danger-menu-item" data-delete-conversation role="menuitem">删除</button>
     </div>
-    <script src="/static/app.js?v=phase58-live-run-restore1" type="module"></script>
+    <script src="/static/app.js?v=phase60-table-render1" type="module"></script>
   </body>
 </html>

@@ -444,8 +444,12 @@ def test_hybrid_search_uses_reranking_provider_by_default(tmp_path) -> None:
     assert results[0].document_title == "Thermal control note"
 
 
-def test_hybrid_search_dynamic_top_k_uses_rerank_score_threshold(tmp_path) -> None:
+def test_hybrid_search_dynamic_top_k_uses_rerank_score_threshold(monkeypatch, tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.get_configured_layered_cache",
+        lambda _layer: None,
+    )
 
     class ScoredReRankingProvider:
         provider_name = "test"
@@ -617,6 +621,10 @@ def test_hybrid_search_fails_when_reranker_fails_without_fallback(tmp_path) -> N
 def test_hybrid_search_quality_default_fetches_75_candidates(monkeypatch, tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
     observed_top_k: list[int] = []
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.get_configured_layered_cache",
+        lambda _layer: None,
+    )
 
     class NoOpReRankingProvider:
         provider_name = "test"
@@ -662,6 +670,10 @@ def test_hybrid_search_quality_default_fetches_75_candidates(monkeypatch, tmp_pa
 def test_hybrid_search_limits_merged_candidates_before_reranking(monkeypatch, tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
     observed_rerank_candidate_counts: list[int] = []
+    monkeypatch.setattr(
+        "app.services.retrieval.hybrid_search.get_configured_layered_cache",
+        lambda _layer: None,
+    )
 
     class RecordingReRankingProvider:
         provider_name = "test"
@@ -730,7 +742,7 @@ def test_hybrid_search_limits_merged_candidates_before_reranking(monkeypatch, tm
                 reranking_enabled=True,
                 reranking_recall_k=75,
                 parallel=False,
-            ).search("filling capacity", top_k=8)
+                ).search("filling capacity", top_k=8)
         finally:
             reset_current_latency_trace(token)
 
@@ -924,6 +936,47 @@ def test_hybrid_search_uses_fusion_dynamic_k_when_secondary_scores_are_degenerat
     assert trace.values["retrieval_dynamic_top_k_enabled"] is True
 
 
+def test_hybrid_search_uses_fusion_dynamic_k_when_primary_glm_scores_are_degenerate(
+    monkeypatch, tmp_path,
+) -> None:
+    monkeypatch.setattr("app.services.retrieval.hybrid_search.get_configured_layered_cache", lambda _layer: None)
+    TestingSessionLocal = make_session(tmp_path)
+
+    class DegeneratePrimaryGlmReRankingProvider:
+        provider_name = "paratera"
+        model_name = "GLM-Rerank"
+
+        def rerank(self, query, candidates, top_k=5):
+            del query
+            return [
+                ReRankResult(index=index, score=1.0, content=candidates[index])
+                for index in range(min(top_k, len(candidates)))
+            ]
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        VectorIndexService(db, provider).build_index()
+        trace = LatencyTrace()
+        token = set_current_latency_trace(trace)
+        try:
+            results = HybridSearchService(
+                db,
+                provider,
+                reranking_provider=DegeneratePrimaryGlmReRankingProvider(),
+                reranking_fallback_provider=None,
+                reranking_enabled=True,
+            ).search("concrete", top_k=2)
+        finally:
+            reset_current_latency_trace(token)
+
+    assert len(results) == 2
+    assert trace.values["reranking_score_quality"] == "degenerate_fusion_dynamic"
+    assert trace.values["reranking_degenerate_scores"] is True
+    assert trace.values["retrieval_selection_reason"] == "rerank_degenerate_fusion_dynamic"
+    assert trace.values["retrieval_dynamic_top_k_enabled"] is True
+
+
 def test_hybrid_search_records_reranker_trace_and_fallback(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
@@ -983,6 +1036,68 @@ def test_hybrid_search_can_disable_reranking(tmp_path) -> None:
         ).search("filling capacity", top_k=1)
 
     assert results[0].document_title == "Filling Capacity Evaluation of Self-Compacting Concrete"
+
+
+def test_hybrid_optional_channels_parallel_matches_serial_baseline(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    graph_path = tmp_path / "domain_graph.json"
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        chunk_ids = seed_multichannel_documents(db)
+        graph = build_knowledge_graph(
+            [
+                GraphExtractionResult(
+                    chunk_id=chunk_ids["text"],
+                    document_id=1,
+                    document_title="RFC Standard Relationship",
+                    entities=(
+                        GraphEntity(name="NB/T 10077", type="Standard"),
+                        GraphEntity(name="rock-filled concrete", type="Parameter"),
+                    ),
+                    relations=(
+                        GraphRelation(
+                            subject="NB/T 10077",
+                            predicate="standard_defines",
+                            object="rock-filled concrete",
+                            source_chunk_id=chunk_ids["text"],
+                        ),
+                    ),
+                )
+            ]
+        )
+        save_graph(graph, graph_path)
+        VectorIndexService(db, provider).build_index()
+        service = HybridSearchService(db, provider, reranking_enabled=False)
+        original_graph_path = service.settings.graphrag_graph_path
+        try:
+            service.settings.graphrag_graph_path = str(graph_path)
+            query = "standard relationship table figure failure rock-filled concrete"
+            plan = service._channel_plan(query)
+            serial = {
+                "graph": service._graph_channel_results(query),
+                "table_text": service._chunk_type_channel_results(
+                    query,
+                    chunk_type="table",
+                    top_k=12,
+                ),
+                "figure_caption": service._chunk_type_channel_results(
+                    query,
+                    chunk_type="image_description",
+                    top_k=12,
+                ),
+            }
+            parallel = service._optional_channel_results(query, 12, plan)
+        finally:
+            service.settings.graphrag_graph_path = original_graph_path
+
+    assert {
+        channel: [result.chunk_id for result in rows]
+        for channel, rows in parallel.items()
+    } == {
+        channel: [result.chunk_id for result in rows]
+        for channel, rows in serial.items()
+    }
 
 
 def test_hybrid_search_rejects_invalid_parameters(tmp_path) -> None:

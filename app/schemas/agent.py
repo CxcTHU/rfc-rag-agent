@@ -158,6 +158,30 @@ class AgentWorkflowStepItem(BaseModel):
     error: str | None
 
 
+class AgentJudgeSourceItem(BaseModel):
+    title: str = ""
+    content: str | None = None
+    source_type: str | None = None
+    chunk_id: int | None = None
+
+
+class AgentJudgeRequest(BaseModel):
+    question: str = Field(min_length=1)
+    answer: str = Field(min_length=1)
+    sources: list[AgentJudgeSourceItem] = Field(default_factory=list, max_length=12)
+    citations: list[int] = Field(default_factory=list, max_length=50)
+    refused: bool = False
+    refusal_reason: str | None = None
+
+
+class AgentJudgeResponse(BaseModel):
+    judge_scores: dict[str, float | str]
+    judge_reasons: dict[str, str] = Field(default_factory=dict)
+    judge_provider: str
+    judge_model: str
+    judge_status: str = "completed"
+
+
 class AgentQueryResponse(BaseModel):
     question: str
     answer: str

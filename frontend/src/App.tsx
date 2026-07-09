@@ -1887,21 +1887,33 @@ function figureSourceLine(source: AgentQueryResponse['sources'][number], figureN
   return `图 ${figureNumber} - ${pagePart} - ${safeText(source.title, '未命名来源')}`
 }
 
+function normalizeMarkdownTableSyntax(line: string) {
+  return line
+    .replace(/\uFF5C/g, '|')
+    .replace(/[\uFF1A\uFE55]/g, ':')
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-')
+}
+
+function splitMarkdownTableRow(line: string) {
+  const trimmed = normalizeMarkdownTableSyntax(line).trim().replace(/^\|/, '').replace(/\|$/, '')
+  return trimmed.split('|').map((cell) => cell.trim())
+}
+
 function isMarkdownTableSeparator(line: string) {
-  const cells = line.trim().split('|').filter((cell) => cell.trim())
-  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()))
+  const cells = splitMarkdownTableRow(line).filter((cell) => cell)
+  return cells.length > 1 && cells.every((cell) => /^:?-{1,}:?$/.test(cell.replace(/\s+/g, '')))
 }
 
 function isMarkdownTableLine(line: string) {
-  return line.includes('|') && line.split('|').filter((cell) => cell.trim()).length > 1
+  return normalizeMarkdownTableSyntax(line).includes('|') && splitMarkdownTableRow(line).filter((cell) => cell).length > 1
 }
 
 function parseMarkdownTable(lines: string[]) {
-  if (lines.length < 2 || !isMarkdownTableSeparator(lines[1])) return null
-  return lines.map((line) => {
-    const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '')
-    return trimmed.split('|').map((cell) => cell.trim())
-  })
+  const rows = lines
+    .filter((line) => !isMarkdownTableSeparator(line))
+    .map(splitMarkdownTableRow)
+    .filter((cells) => cells.length > 1)
+  return rows.length >= 2 ? rows : null
 }
 
 function isNumericLikeTableCell(cell: string) {

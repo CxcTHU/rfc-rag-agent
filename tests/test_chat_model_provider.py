@@ -249,10 +249,12 @@ def test_openai_compatible_provider_keeps_boundary_configuration() -> None:
         model_name="qwen-test",
         api_key="test-key",
         base_url="https://example.test/v1",
+        max_attempts=1,
     )
 
     assert provider.provider_name == "openai-compatible"
     assert provider.model_name == "qwen-test"
+    assert provider.max_attempts == 1
 
 
 def test_openai_compatible_provider_requires_configuration() -> None:
@@ -277,26 +279,16 @@ def test_openai_compatible_provider_paratera_root_base_url_uses_v1_endpoint() ->
 def test_openai_compatible_provider_posts_chat_request_headers(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb) -> None:
-            return None
-
-        def read(self) -> bytes:
-            return json.dumps(
-                {"choices": [{"message": {"content": "Answer with [1]."}}]}
-            ).encode("utf-8")
-
-    def fake_urlopen(request, timeout):
+    def fake_request_json(request, *, timeout, provider_name, model_name):
         captured["url"] = request.full_url
         captured["timeout"] = timeout
+        captured["provider_name"] = provider_name
+        captured["model_name"] = model_name
         captured["headers"] = dict(request.header_items())
         captured["payload"] = json.loads(request.data.decode("utf-8"))
-        return FakeResponse()
+        return {"choices": [{"message": {"content": "Answer with [1]."}}]}
 
-    monkeypatch.setattr("app.services.generation.chat_model.urlopen_without_proxy", fake_urlopen)
+    monkeypatch.setattr("app.services.generation.chat_model.request_json_without_proxy", fake_request_json)
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
         api_key="test-key",
@@ -314,12 +306,38 @@ def test_openai_compatible_provider_posts_chat_request_headers(monkeypatch) -> N
     assert result.answer == "Answer with [1]."
     assert captured["url"] == "https://api.xiaomimimo.com/v1/chat/completions"
     assert captured["timeout"] == 9
+    assert captured["provider_name"] == "openai-compatible"
+    assert captured["model_name"] == "mimo-v2.5-pro"
     assert captured["headers"]["Authorization"] == "Bearer test-key"
     assert captured["headers"]["Api-key"] == "test-key"
     assert captured["headers"]["Accept"] == "application/json"
     assert captured["headers"]["User-agent"] == "rfc-rag-agent/chat-model-provider"
     assert captured["payload"]["model"] == "mimo-v2.5-pro"
     assert "stream" not in captured["payload"]
+
+
+def test_openai_compatible_provider_accepts_max_tokens_and_extra_body(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_request_json(request, *, timeout, provider_name, model_name):
+        del timeout, provider_name, model_name
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return {"choices": [{"message": {"content": "{\"ok\": true}"}}]}
+
+    monkeypatch.setattr("app.services.generation.chat_model.request_json_without_proxy", fake_request_json)
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="glm-test",
+        api_key="test-key",
+        base_url="https://llmapi.paratera.com",
+        max_tokens=512,
+        extra_body={"thinking": {"type": "disabled"}, "reasoning_effort": "none"},
+    )
+
+    provider.generate([ChatMessage(role="user", content="Return JSON.")])
+
+    assert captured["payload"]["max_tokens"] == 512
+    assert captured["payload"]["thinking"] == {"type": "disabled"}
+    assert captured["payload"]["reasoning_effort"] == "none"
 
 
 def test_openai_compatible_provider_streams_delta_content(monkeypatch) -> None:
@@ -375,41 +393,30 @@ def test_openai_compatible_provider_streams_delta_content(monkeypatch) -> None:
 def test_openai_compatible_provider_posts_tools_and_parses_tool_calls(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb) -> None:
-            return None
-
-        def read(self) -> bytes:
-            return json.dumps(
-                {
-                    "choices": [
-                        {
-                            "message": {
-                                "content": None,
-                                "tool_calls": [
-                                    {
-                                        "id": "call_1",
-                                        "type": "function",
-                                        "function": {
-                                            "name": "hybrid_search_knowledge",
-                                            "arguments": "{\"query\":\"RFC\",\"top_k\":3}",
-                                        },
-                                    }
-                                ],
-                            }
-                        }
-                    ]
-                }
-            ).encode("utf-8")
-
-    def fake_urlopen(request, timeout):
+    def fake_request_json(request, *, timeout, provider_name, model_name):
+        del timeout, provider_name, model_name
         captured["payload"] = json.loads(request.data.decode("utf-8"))
-        return FakeResponse()
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "hybrid_search_knowledge",
+                                    "arguments": "{\"query\":\"RFC\",\"top_k\":3}",
+                                },
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
 
-    monkeypatch.setattr("app.services.generation.chat_model.urlopen_without_proxy", fake_urlopen)
+    monkeypatch.setattr("app.services.generation.chat_model.request_json_without_proxy", fake_request_json)
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
         api_key="test-key",
@@ -443,23 +450,12 @@ def test_openai_compatible_provider_posts_tools_and_parses_tool_calls(monkeypatc
 def test_openai_compatible_provider_sends_tool_messages(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb) -> None:
-            return None
-
-        def read(self) -> bytes:
-            return json.dumps(
-                {"choices": [{"message": {"content": "Answer with [1]."}}]}
-            ).encode("utf-8")
-
-    def fake_urlopen(request, timeout):
+    def fake_request_json(request, *, timeout, provider_name, model_name):
+        del timeout, provider_name, model_name
         captured["payload"] = json.loads(request.data.decode("utf-8"))
-        return FakeResponse()
+        return {"choices": [{"message": {"content": "Answer with [1]."}}]}
 
-    monkeypatch.setattr("app.services.generation.chat_model.urlopen_without_proxy", fake_urlopen)
+    monkeypatch.setattr("app.services.generation.chat_model.request_json_without_proxy", fake_request_json)
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
         api_key="test-key",
@@ -549,16 +545,17 @@ def test_deepseek_request_falls_back_to_urlopen_when_curl_missing(monkeypatch) -
 def test_chat_provider_retries_transient_ssl_error(monkeypatch) -> None:
     attempts = {"count": 0}
 
-    def flaky_urlopen(request, timeout):
+    def flaky_request_json(request, *, timeout, provider_name, model_name):
+        del request, timeout, provider_name, model_name
         attempts["count"] += 1
         if attempts["count"] == 1:
             raise urllib.error.URLError(
                 "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol"
             )
-        return _ChatFakeResponse()
+        return {"choices": [{"message": {"content": "Answer with [1]."}}]}
 
     monkeypatch.setattr(
-        "app.services.generation.chat_model.urlopen_without_proxy", flaky_urlopen
+        "app.services.generation.chat_model.request_json_without_proxy", flaky_request_json
     )
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
@@ -581,12 +578,13 @@ def test_chat_provider_retries_transient_ssl_error(monkeypatch) -> None:
 def test_chat_provider_raises_after_exhausting_retries(monkeypatch) -> None:
     attempts = {"count": 0}
 
-    def always_failing_urlopen(request, timeout):
+    def always_failing_request_json(request, *, timeout, provider_name, model_name):
+        del request, timeout, provider_name, model_name
         attempts["count"] += 1
         raise urllib.error.URLError("[SSL: UNEXPECTED_EOF_WHILE_READING]")
 
     monkeypatch.setattr(
-        "app.services.generation.chat_model.urlopen_without_proxy", always_failing_urlopen
+        "app.services.generation.chat_model.request_json_without_proxy", always_failing_request_json
     )
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
@@ -609,7 +607,8 @@ def test_chat_provider_raises_after_exhausting_retries(monkeypatch) -> None:
 def test_chat_provider_does_not_retry_client_error(monkeypatch) -> None:
     attempts = {"count": 0}
 
-    def http_error_urlopen(request, timeout):
+    def http_error_request_json(request, *, timeout, provider_name, model_name):
+        del request, timeout, provider_name, model_name
         attempts["count"] += 1
         raise urllib.error.HTTPError(
             url="https://api.xiaomimimo.com/v1/chat/completions",
@@ -620,7 +619,7 @@ def test_chat_provider_does_not_retry_client_error(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(
-        "app.services.generation.chat_model.urlopen_without_proxy", http_error_urlopen
+        "app.services.generation.chat_model.request_json_without_proxy", http_error_request_json
     )
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
