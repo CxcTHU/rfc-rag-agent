@@ -50,6 +50,20 @@ textarea {
   padding: 20px 32px 36px;
 }
 
+.auth-boot-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  align-content: center;
+  gap: 18px;
+  color: var(--text-primary);
+  background: var(--page-bg);
+}
+
+.auth-boot-screen .brand-lockup {
+  pointer-events: none;
+}
+
 .top-nav {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto minmax(300px, 1fr);
