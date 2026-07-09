@@ -21,6 +21,7 @@ class TableChunk:
     header_text: str | None
     row_count: int
     col_count: int
+    rows: tuple[tuple[str, ...], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -128,6 +129,7 @@ def extract_tables_from_page(
                 header_text=find_header_text(page, bbox),
                 row_count=row_count,
                 col_count=col_count,
+                rows=tuple(tuple(cell for cell in row) for row in normalized_rows),
             )
         )
 

@@ -1,5 +1,53 @@
 # 数据来源登记
 
+## Phase 60 Structured TableRAG Data Boundary
+
+Phase 60 adds no external corpus, crawler, PDF download, model weight, source registry entry, or write-capable Agent tool. It derives structure from existing local PDFs and existing `chunks.chunk_type="table"` records.
+
+New runtime tables:
+
+```text
+table_extraction_runs
+document_tables
+document_table_columns
+document_table_rows
+document_table_cells
+table_retrieval_units
+table_retrieval_unit_embeddings
+```
+
+Allowed contents:
+
+```text
+document ids
+source table chunk ids
+page numbers
+bbox coordinates
+caption/header text
+headers
+raw/normalized table rows and cells derived from existing corpus evidence
+unit labels
+numeric values
+quality scores
+structure hashes
+retrieval unit text and bounded metadata
+safe extraction counts/errors
+```
+
+New scripts and docs:
+
+```text
+scripts/backfill_phase60_structured_tables.py
+scripts/generate_phase60_table_retrieval_units.py
+scripts/evaluate_phase60_table_rag.py
+scripts/evaluate_phase60_table_rag_quality.py
+docs/stage60_structured_table_rag_goal_prompt.md
+docs/stage60_structured_table_rag_design.md
+docs/phase_reviews/phase-60.md
+```
+
+Evaluation output is sanitized and should store ids, counts, scores, matched unit types, dimensions, and pages only. It must not store full answers, provider raw responses, API keys, bearer tokens, Authorization headers, `raw_response`, `reasoning_content`, hidden reasoning, restricted full text, private service logs, or long-term user profiles.
+
 ## Phase 58H Runtime Checkpoint And Cache Evaluation Data
 
 Phase 58H adds derived runtime data only. It does not add an external corpus, crawler, PDF download, model weight, embedding rebuild, or user-profile source.
