@@ -46,6 +46,12 @@ No provider raw responses, hidden reasoning, full answers, full chunks, restrict
 
 The local Obsidian knowledge base is updated for Phase 59, but remains local-only and must not be committed or pushed.
 
+## Post-Verification Login Polish
+
+After manual acceptance, the pre-auth React landing screen was folded into the Phase 59 UI scope: the old placeholder copy was removed, the login panel was visually integrated into the dark workbench background, and the three capability cards now highlight hybrid retrieval, GraphRAG, and multimodal evidence with lightweight in-browser motion.
+
+This is a frontend-only polish pass for `/` and `/app-v2`; it does not change backend APIs, retrieval semantics, provider configuration, authentication logic, or legacy `/legacy` fallback behavior.
+
 ## Follow-Up Notes
 
 Phase 60 structured TableRAG work is in a separate worktree and should be submitted independently after its own final merge path.
