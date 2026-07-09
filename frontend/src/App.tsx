@@ -5,7 +5,10 @@ import {
   Bot,
   Database,
   ExternalLink,
+  FileText,
   FileSearch,
+  GitBranch,
+  Image as ImageIcon,
   Loader2,
   LogOut,
   Maximize2,
@@ -700,33 +703,74 @@ function App() {
             </div>
           </div>
           <section className="auth-copy">
-            <p className="eyebrow">回答、引用、证据和运行步骤会回填到工作台。</p>
             <h1>
-              让工程知识问答进入可追溯的 <span>AI Agent 工作台</span>
+              可追溯的工程知识 <span>AI Agent</span>
             </h1>
+            <p>面向堆石混凝土工程资料的检索、引用、证据和审阅工作台。</p>
             <Button type="button" className="auth-start-button" onClick={revealAuth}>
-              Get Started
+              进入工作台
             </Button>
           </section>
           <div className="auth-capability-grid">
-            <article>
-              <strong>证据优先</strong>
-              <span>回答、引用和来源同步展示，便于核验。</span>
-            </article>
-            <article>
+            <article className="auth-capability-card hybrid">
+              <div className="capability-demo" aria-hidden="true">
+                <div className="hybrid-path top">
+                  <span>BM25</span>
+                  <i />
+                </div>
+                <div className="hybrid-path bottom">
+                  <span>Vector</span>
+                  <i />
+                </div>
+                <div className="hybrid-core">
+                  <Database size={18} />
+                  <b>K</b>
+                </div>
+                <div className="hybrid-rank">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
               <strong>混合检索</strong>
-              <span>保留动态 K、多通道召回和 rerank 诊断。</span>
+              <span>BM25 + 向量召回，动态 K 与 rerank 排序</span>
             </article>
-            <article>
-              <strong>质量审阅</strong>
-              <span>Judge 模块用于审阅最近一次有效 Agent 回答。</span>
+            <article className="auth-capability-card graph">
+              <div className="capability-demo" aria-hidden="true">
+                <div className="graph-links" />
+                <span className="graph-node node-a">实体</span>
+                <span className="graph-node node-b">关系</span>
+                <span className="graph-node node-c">机理</span>
+                <GitBranch className="graph-icon" size={18} />
+              </div>
+              <strong>GraphRAG</strong>
+              <span>结合实体关系，补全工程机理线索</span>
+            </article>
+            <article className="auth-capability-card multimodal">
+              <div className="capability-demo" aria-hidden="true">
+                <div className="modal-stack doc">
+                  <FileText size={15} />
+                  <span>PDF</span>
+                </div>
+                <div className="modal-stack image">
+                  <ImageIcon size={15} />
+                  <span>Image</span>
+                </div>
+                <div className="modal-stack table">
+                  <FileSearch size={15} />
+                  <span>Table</span>
+                </div>
+                <div className="modal-scan" />
+              </div>
+              <strong>多模态</strong>
+              <span>图表与图片证据入链，支持引用溯源</span>
             </article>
           </div>
         </div>
         <Panel className="auth-card">
-          <PanelHeader>
-            <h2>登录工作台</h2>
-            <p>登录后继续使用对话、语料库、证据溯源和 Judge。</p>
+          <PanelHeader className="auth-card-header">
+            <div className="auth-card-kicker">RFC-RAG-Agent</div>
+            <h2>{authMode === 'login' ? '登录工作台' : '创建账号'}</h2>
           </PanelHeader>
           <form className="auth-form" onSubmit={submitAuth}>
             <div className="auth-tabs">
@@ -739,15 +783,30 @@ function App() {
             </div>
             {authMode === 'register' && (
               <>
-                <Input value={registerName} onChange={(event) => setRegisterName(event.target.value)} placeholder="请输入" />
-                <Input value={registerEmail} onChange={(event) => setRegisterEmail(event.target.value)} placeholder="请输入" />
-                <Input value={registerPassword} onChange={(event) => setRegisterPassword(event.target.value)} type="password" placeholder="请输入" />
+                <label className="auth-field">
+                  <span>用户名</span>
+                  <Input value={registerName} onChange={(event) => setRegisterName(event.target.value)} placeholder="EthanCui" />
+                </label>
+                <label className="auth-field">
+                  <span>邮箱</span>
+                  <Input value={registerEmail} onChange={(event) => setRegisterEmail(event.target.value)} placeholder="name@example.com" />
+                </label>
+                <label className="auth-field">
+                  <span>密码</span>
+                  <Input value={registerPassword} onChange={(event) => setRegisterPassword(event.target.value)} type="password" placeholder="至少 8 位字符" />
+                </label>
               </>
             )}
             {authMode === 'login' && (
               <>
-                <Input ref={loginInputRef} value={loginIdentity} onChange={(event) => setLoginIdentity(event.target.value)} placeholder="请输入" />
-                <Input value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} type="password" placeholder="请输入" />
+                <label className="auth-field">
+                  <span>用户名或邮箱</span>
+                  <Input ref={loginInputRef} value={loginIdentity} onChange={(event) => setLoginIdentity(event.target.value)} placeholder="输入账号" />
+                </label>
+                <label className="auth-field">
+                  <span>密码</span>
+                  <Input value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} type="password" placeholder="输入密码" />
+                </label>
               </>
             )}
             <label className="remember-row">
@@ -996,7 +1055,7 @@ function AskView(props: {
             ))
           ) : (
             <div className="empty-state">
-              {props.isWorkspaceHydrating ? '正在恢复最近一次对话...' : '输入工程知识问题后，回答、引用、证据和运行步骤会回填到工作台。'}
+              {props.isWorkspaceHydrating ? '正在恢复最近一次对话...' : null}
             </div>
           )}
         </div>
@@ -1797,21 +1856,33 @@ function figureSourceLine(source: AgentQueryResponse['sources'][number], figureN
   return `图 ${figureNumber} - ${pagePart} - ${safeText(source.title, '未命名来源')}`
 }
 
+function normalizeMarkdownTableSyntax(line: string) {
+  return line
+    .replace(/\uFF5C/g, '|')
+    .replace(/[\uFF1A\uFE55]/g, ':')
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-')
+}
+
+function splitMarkdownTableRow(line: string) {
+  const trimmed = normalizeMarkdownTableSyntax(line).trim().replace(/^\|/, '').replace(/\|$/, '')
+  return trimmed.split('|').map((cell) => cell.trim())
+}
+
 function isMarkdownTableSeparator(line: string) {
-  const cells = line.trim().split('|').filter((cell) => cell.trim())
-  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()))
+  const cells = splitMarkdownTableRow(line).filter((cell) => cell)
+  return cells.length > 1 && cells.every((cell) => /^:?-{1,}:?$/.test(cell.replace(/\s+/g, '')))
 }
 
 function isMarkdownTableLine(line: string) {
-  return line.includes('|') && line.split('|').filter((cell) => cell.trim()).length > 1
+  return normalizeMarkdownTableSyntax(line).includes('|') && splitMarkdownTableRow(line).filter((cell) => cell).length > 1
 }
 
 function parseMarkdownTable(lines: string[]) {
-  if (lines.length < 2 || !isMarkdownTableSeparator(lines[1])) return null
-  return lines.map((line) => {
-    const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '')
-    return trimmed.split('|').map((cell) => cell.trim())
-  })
+  const rows = lines
+    .filter((line) => !isMarkdownTableSeparator(line))
+    .map(splitMarkdownTableRow)
+    .filter((cells) => cells.length > 1)
+  return rows.length >= 2 ? rows : null
 }
 
 function isNumericLikeTableCell(cell: string) {

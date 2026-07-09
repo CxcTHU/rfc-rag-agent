@@ -5,6 +5,7 @@ from contextvars import ContextVar, Token
 import hashlib
 from pathlib import Path
 import re
+import time
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -176,6 +177,18 @@ class HybridSearchService:
                     api_key=settings.reranking_api_key,
                     base_url=settings.reranking_base_url,
                     timeout_seconds=settings.reranking_timeout_seconds,
+                    health_check_enabled=(
+                        settings.reranking_health_check_enabled
+                        and settings.reranking_provider.strip().casefold()
+                        in {
+                            "remote-bge-lora",
+                            "bge-lora",
+                            "rfc-bge-lora",
+                            "rfc-domain-bge-lora",
+                        }
+                    ),
+                    health_check_timeout_seconds=settings.reranking_health_check_timeout_seconds,
+                    unavailable_ttl_seconds=settings.reranking_unavailable_ttl_seconds,
                 )
             except Exception:
                 self.reranking_provider = None
@@ -302,12 +315,23 @@ class HybridSearchService:
         channel_plan: dict[str, object] | None = None,
     ) -> list[HybridSearchResult] | None:
         cache = get_configured_layered_cache("retrieval")
+        trace = get_current_latency_trace()
         if cache is None:
+            if trace is not None:
+                trace.set_value("retrieval_cache_hit", False)
+                trace.set_value("retrieval_cache_backend", "disabled")
+                trace.set_value("retrieval_cache_reason", "disabled")
             return None
+        started = time.perf_counter()
         lookup = cache.lookup(
             self._retrieval_cache_identity(query, fetch_k=fetch_k, channel_plan=channel_plan)
         )
         if not lookup.hit or lookup.payload is None:
+            if trace is not None:
+                trace.set_value("retrieval_cache_hit", False)
+                trace.set_value("retrieval_cache_backend", lookup.backend)
+                trace.set_value("retrieval_cache_reason", lookup.reason)
+                trace.add_duration("retrieval_cache_lookup_latency_ms", (time.perf_counter() - started) * 1000.0)
             return None
         payload = lookup.payload.get("payload", {})
         rows = payload.get("rows")
@@ -321,8 +345,15 @@ class HybridSearchService:
             chunk_id = int(row["chunk_id"])
             row_by_chunk_id[chunk_id] = row
             chunk_ids.append(chunk_id)
+        hydrate_started = time.perf_counter()
         hydrated = hydrate_chunk_rows(self.db, chunk_ids)
+        hydrate_ms = (time.perf_counter() - hydrate_started) * 1000.0
         if len(hydrated) != len(chunk_ids):
+            if trace is not None:
+                trace.set_value("retrieval_cache_hit", False)
+                trace.set_value("retrieval_cache_backend", lookup.backend)
+                trace.set_value("retrieval_cache_reason", "hydrate_miss")
+                trace.add_duration("retrieval_cache_hydrate_latency_ms", hydrate_ms)
             return None
         results: list[HybridSearchResult] = []
         for chunk, document in hydrated:
@@ -354,6 +385,14 @@ class HybridSearchService:
                 eligible=payload.get("eligible_channels", []),
                 counts=payload.get("channel_counts", {}),
             )
+        if trace is not None:
+            elapsed_ms = (time.perf_counter() - started) * 1000.0
+            trace.set_value("retrieval_cache_hit", True)
+            trace.set_value("retrieval_cache_backend", lookup.backend)
+            trace.set_value("retrieval_cache_reason", lookup.reason)
+            trace.set_value("retrieval_cache_row_count", len(results))
+            trace.add_duration("retrieval_cache_lookup_latency_ms", elapsed_ms)
+            trace.add_duration("retrieval_cache_hydrate_latency_ms", hydrate_ms)
         return results
 
     def _store_retrieval_cache(
@@ -375,9 +414,9 @@ class HybridSearchService:
             "rows": [
                 {
                     "chunk_id": result.chunk_id,
-                    "score": round(float(result.score), 8),
-                    "keyword_score": round(float(result.keyword_score), 8),
-                    "vector_score": round(float(result.vector_score), 8),
+                    "score": float(result.score),
+                    "keyword_score": float(result.keyword_score),
+                    "vector_score": float(result.vector_score),
                     "chunk_type": result.chunk_type,
                     "source_type": result.source_type,
                     "channels": list(result.channels),
@@ -419,20 +458,50 @@ class HybridSearchService:
     ) -> dict[str, list[HybridSearchResult]]:
         results: dict[str, list[HybridSearchResult]] = {}
         eligible = set(channel_plan["eligible_channels"])
-        if "graph" in eligible:
-            results["graph"] = self._graph_channel_results(query)
-        if "table_text" in eligible:
-            results["table_text"] = self._chunk_type_channel_results(
-                query,
-                chunk_type="table",
-                top_k=fetch_k,
-            )
-        if "figure_caption" in eligible:
-            results["figure_caption"] = self._chunk_type_channel_results(
-                query,
-                chunk_type="image_description",
-                top_k=fetch_k,
-            )
+        channel_order = [
+            channel
+            for channel in ("graph", "table_text", "figure_caption")
+            if channel in eligible
+        ]
+        if channel_order:
+            bind = self.db.get_bind()
+            ThreadSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=bind)
+            trace = get_current_latency_trace()
+
+            def run_channel(channel: str) -> list[HybridSearchResult]:
+                token = set_current_latency_trace(trace)
+                with ThreadSessionLocal() as db:
+                    try:
+                        if channel == "graph":
+                            return self._graph_channel_results(query, db=db)
+                        if channel == "table_text":
+                            return self._chunk_type_channel_results(
+                                query,
+                                chunk_type="table",
+                                top_k=fetch_k,
+                                db=db,
+                            )
+                        if channel == "figure_caption":
+                            return self._chunk_type_channel_results(
+                                query,
+                                chunk_type="image_description",
+                                top_k=fetch_k,
+                                db=db,
+                            )
+                        return []
+                    finally:
+                        reset_current_latency_trace(token)
+
+            with ThreadPoolExecutor(
+                max_workers=len(channel_order),
+                thread_name_prefix="hybrid-channel",
+            ) as executor:
+                future_by_channel = {
+                    channel: executor.submit(run_channel, channel)
+                    for channel in channel_order
+                }
+                for channel in channel_order:
+                    results[channel] = future_by_channel[channel].result()
         trace_channel_counts(
             enabled=channel_plan["enabled_channels"],
             eligible=channel_plan["eligible_channels"],
@@ -440,7 +509,13 @@ class HybridSearchService:
         )
         return results
 
-    def _graph_channel_results(self, query: str) -> list[HybridSearchResult]:
+    def _graph_channel_results(
+        self,
+        query: str,
+        *,
+        db: Session | None = None,
+    ) -> list[HybridSearchResult]:
+        active_db = db or self.db
         try:
             from app.services.graphrag.graph_search import (
                 cap_graph_matches,
@@ -452,9 +527,10 @@ class HybridSearchService:
             from app.services.graphrag.graph_search import GraphSearchSummary
             from app.services.graphrag.graph_store import load_graph
 
-            with latency_timer("graph_search_latency_ms"):
+            with latency_timer("graph_channel_latency_ms"):
                 graph = load_graph(Path(self.settings.graphrag_graph_path))
-                matches = graph_search_matches(graph, query, max_hops=2)
+                with latency_timer("graph_search_latency_ms"):
+                    matches = graph_search_matches(graph, query, max_hops=2)
                 summary = GraphSearchSummary(
                     available=True,
                     fallback=False,
@@ -464,7 +540,7 @@ class HybridSearchService:
                 )
             record_graph_summary(summary)
             capped = cap_graph_matches(matches, int(self.settings.hybrid_graph_max_matches))
-            return graph_results_from_matches(self.db, capped)
+            return graph_results_from_matches(active_db, capped)
         except (OSError, ValueError, RuntimeError):
             from app.services.graphrag.graph_search import GraphSearchSummary, record_graph_summary
 
@@ -484,10 +560,17 @@ class HybridSearchService:
         *,
         chunk_type: str,
         top_k: int,
+        db: Session | None = None,
     ) -> list[HybridSearchResult]:
+        active_db = db or self.db
         terms = query_channel_terms(query)
         if not terms:
             return []
+        latency_field = (
+            "figure_channel_latency_ms"
+            if chunk_type == "image_description"
+            else "table_channel_latency_ms"
+        )
         conditions = [Chunk.content.ilike(f"%{term}%") for term in terms[:8]]
         if chunk_type == "image_description":
             conditions.extend(Chunk.caption.ilike(f"%{term}%") for term in terms[:8])
@@ -499,7 +582,8 @@ class HybridSearchService:
             .order_by(Chunk.id.asc())
             .limit(max(top_k * 4, top_k))
         )
-        rows = self.db.execute(statement).all()
+        with latency_timer(latency_field):
+            rows = active_db.execute(statement).all()
         scored: list[HybridSearchResult] = []
         for chunk, document in rows:
             score = chunk_text_match_score(" ".join([chunk.content or "", chunk.caption or ""]), terms)
@@ -577,7 +661,8 @@ class HybridSearchService:
         query: str,
         fetch_k: int,
     ) -> tuple[list[KeywordSearchResult], list[VectorSearchResult]]:
-        keyword_results = KeywordSearchService(self.db).search(query, top_k=fetch_k)
+        with latency_timer("keyword_search_latency_ms"):
+            keyword_results = KeywordSearchService(self.db).search(query, top_k=fetch_k)
         vector_query = current_hyde_vector_query() or query
         vector_results = self._vector_search_service(self.db).search(
             vector_query,
@@ -594,8 +679,13 @@ class HybridSearchService:
         ThreadSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=bind)
 
         def run_keyword() -> list[KeywordSearchResult]:
+            token = set_current_latency_trace(trace)
             with ThreadSessionLocal() as db:
-                return KeywordSearchService(db).search(query, top_k=fetch_k)
+                try:
+                    with latency_timer("keyword_search_latency_ms"):
+                        return KeywordSearchService(db).search(query, top_k=fetch_k)
+                finally:
+                    reset_current_latency_trace(token)
 
         trace = get_current_latency_trace()
         vector_query = current_hyde_vector_query() or query
@@ -669,8 +759,39 @@ class HybridSearchService:
                     top_k=rerank_request_top_k(rerank_candidates, top_k, self.settings),
                 )
             if rerank_scores_are_degenerate(reranked):
+                if reranker_allows_degenerate_fusion(self.reranking_provider):
+                    if trace is not None:
+                        trace.set_value("reranking_score_quality", "degenerate_fusion_dynamic")
+                        trace.set_value("reranking_degenerate_scores", True)
+                        trace.set_value(
+                            "rerank_score_preview",
+                            [round(float(item.score), 6) for item in reranked[:12]],
+                        )
+                    reranked_results = select_fusion_results(
+                        rerank_candidates,
+                        requested_top_k=top_k,
+                        settings=self.settings,
+                    )
+                    trace_selected_results(
+                        query=query,
+                        candidates=results,
+                        selected=reranked_results,
+                        requested_top_k=top_k,
+                        dynamic=self.settings.reranking_dynamic_top_k_enabled,
+                        reason="rerank_degenerate_fusion_dynamic",
+                    )
+                    self._store_rerank_cache(
+                        query,
+                        rerank_candidates,
+                        reranked_results,
+                        top_k=top_k,
+                        provider_name=self.reranking_provider.provider_name,
+                        model_name=self.reranking_provider.model_name,
+                        fallback=False,
+                    )
+                    return reranked_results
                 raise RuntimeError("reranker returned degenerate scores")
-        except Exception:
+        except Exception as exc:
             # Reranking is required for the default hybrid path. If the primary
             # reranker fails, only a configured fallback reranker may recover it.
             if trace is not None:
@@ -678,6 +799,8 @@ class HybridSearchService:
                 fallback_count = int(trace.values.get("reranking_fallback_count", 0)) + 1
                 trace.set_value("reranking_fallback_count", fallback_count)
                 trace.set_value("reranking_error", "runtime_error")
+                trace.set_value("reranking_error_type", type(exc).__name__)
+                trace.set_value("reranking_error_summary", str(exc)[:220])
             fallback_configured = self.reranking_fallback_provider is not None
             fallback_reranked = self._rerank_with_fallback_provider(
                 query,
@@ -868,8 +991,15 @@ class HybridSearchService:
         fallback: bool,
     ) -> list[HybridSearchResult] | None:
         cache = get_configured_layered_cache("rerank")
+        trace = get_current_latency_trace()
+        lane = "fallback" if fallback else "primary"
         if cache is None:
+            if trace is not None:
+                trace.set_value(f"rerank_cache_{lane}_hit", False)
+                trace.set_value(f"rerank_cache_{lane}_backend", "disabled")
+                trace.set_value(f"rerank_cache_{lane}_reason", "disabled")
             return None
+        started = time.perf_counter()
         lookup = cache.lookup(
             self._rerank_cache_identity(
                 query,
@@ -881,15 +1011,34 @@ class HybridSearchService:
             )
         )
         if not lookup.hit or lookup.payload is None:
+            if trace is not None:
+                trace.set_value(f"rerank_cache_{lane}_hit", False)
+                trace.set_value(f"rerank_cache_{lane}_backend", lookup.backend)
+                trace.set_value(f"rerank_cache_{lane}_reason", lookup.reason)
+                trace.add_duration("rerank_cache_lookup_latency_ms", (time.perf_counter() - started) * 1000.0)
             return None
         payload = lookup.payload.get("payload", {})
         chunk_ids = payload.get("chunk_ids")
         if not isinstance(chunk_ids, list) or not all(isinstance(chunk_id, int) for chunk_id in chunk_ids):
+            if trace is not None:
+                trace.set_value(f"rerank_cache_{lane}_hit", False)
+                trace.set_value(f"rerank_cache_{lane}_backend", lookup.backend)
+                trace.set_value(f"rerank_cache_{lane}_reason", "invalid_payload")
             return None
         by_chunk_id = {result.chunk_id: result for result in results}
         if any(chunk_id not in by_chunk_id for chunk_id in chunk_ids):
+            if trace is not None:
+                trace.set_value(f"rerank_cache_{lane}_hit", False)
+                trace.set_value(f"rerank_cache_{lane}_backend", lookup.backend)
+                trace.set_value(f"rerank_cache_{lane}_reason", "candidate_miss")
             return None
         selected = [by_chunk_id[chunk_id] for chunk_id in chunk_ids]
+        if trace is not None:
+            trace.set_value(f"rerank_cache_{lane}_hit", True)
+            trace.set_value(f"rerank_cache_{lane}_backend", lookup.backend)
+            trace.set_value(f"rerank_cache_{lane}_reason", lookup.reason)
+            trace.set_value(f"rerank_cache_{lane}_row_count", len(selected))
+            trace.add_duration("rerank_cache_lookup_latency_ms", (time.perf_counter() - started) * 1000.0)
         if not self.settings.reranking_dynamic_top_k_enabled:
             return selected[:top_k]
         return selected
@@ -952,6 +1101,12 @@ def rerank_scores_are_degenerate(reranked: list[ReRankResult]) -> bool:
         return False
     scores = [float(item.score) for item in reranked]
     return max(scores) - min(scores) <= 1e-9
+
+
+def reranker_allows_degenerate_fusion(provider: ReRankingProvider) -> bool:
+    provider_name = getattr(provider, "provider_name", "").strip().casefold()
+    model_name = getattr(provider, "model_name", "").strip().casefold()
+    return provider_name in {"paratera", "glm", "zhipu", "bigmodel"} or "glm" in model_name
 
 
 def select_reranked_results(

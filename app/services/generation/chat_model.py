@@ -11,6 +11,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Iterator, Literal, Protocol
 
+from app.services.generation.http_pool import HTTP_JSON_CONNECTION_POOL
+from app.services.observability.latency_trace import get_current_latency_trace
+
 
 ChatRole = Literal["system", "user", "assistant", "tool"]
 VALID_CHAT_ROLES = {"system", "user", "assistant", "tool"}
@@ -214,6 +217,8 @@ class OpenAICompatibleChatModelProvider:
     provider_name: str = "openai-compatible"
     max_attempts: int = 3
     retry_backoff_seconds: float = 0.5
+    max_tokens: int | None = None
+    extra_body: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.model_name.strip():
@@ -289,14 +294,20 @@ class OpenAICompatibleChatModelProvider:
 
         for attempt in range(1, self.max_attempts + 1):
             is_last_attempt = attempt >= self.max_attempts
+            self._trace_attempt(attempt)
             try:
                 if is_deepseek_endpoint(self.base_url):
                     return request_deepseek_with_curl(
                         request,
                         timeout_seconds=self.timeout_seconds,
                     )
-                with urlopen_without_proxy(request, timeout=self.timeout_seconds) as response:
-                    return json.loads(response.read().decode("utf-8"))
+                response_data = request_json_without_proxy(
+                    request,
+                    timeout=self.timeout_seconds,
+                    provider_name=self.provider_name,
+                    model_name=self.model_name,
+                )
+                return response_data
             except TimeoutError as exc:
                 if is_last_attempt:
                     raise RuntimeError("Chat model request timed out") from exc
@@ -319,6 +330,7 @@ class OpenAICompatibleChatModelProvider:
     def _open_stream_with_retry(self, request: urllib.request.Request):
         for attempt in range(1, self.max_attempts + 1):
             is_last_attempt = attempt >= self.max_attempts
+            self._trace_attempt(attempt)
             try:
                 return urlopen_without_proxy(request, timeout=self.timeout_seconds)
             except TimeoutError as exc:
@@ -340,7 +352,11 @@ class OpenAICompatibleChatModelProvider:
     def _sleep_before_retry(self, attempt: int) -> None:
         if self.retry_backoff_seconds <= 0:
             return
-        time.sleep(self.retry_backoff_seconds * attempt)
+        duration = self.retry_backoff_seconds * attempt
+        trace = get_current_latency_trace()
+        if trace is not None:
+            trace.add_duration("provider_http_retry_backoff_ms", duration * 1000.0)
+        time.sleep(duration)
 
     def _build_request(
         self,
@@ -354,6 +370,10 @@ class OpenAICompatibleChatModelProvider:
             "messages": [message_to_openai_payload(message) for message in messages],
             "temperature": self.temperature,
         }
+        if self.max_tokens is not None and self.max_tokens > 0:
+            payload["max_tokens"] = self.max_tokens
+        if self.extra_body:
+            payload.update(self.extra_body)
         if tools:
             payload["tools"] = [tool_definition_to_payload(tool) for tool in tools]
             payload["tool_choice"] = "auto"
@@ -382,6 +402,16 @@ class OpenAICompatibleChatModelProvider:
         ):
             return f"{normalized_base_url}/v1/chat/completions"
         return f"{normalized_base_url}/chat/completions"
+
+    def _trace_attempt(self, attempt: int) -> None:
+        trace = get_current_latency_trace()
+        if trace is None:
+            return
+        trace.set_value("provider_http_last_provider", self.provider_name)
+        trace.set_value("provider_http_last_model", self.model_name)
+        trace.set_value("provider_http_last_attempt", attempt)
+        count = int(trace.values.get("provider_http_attempt_count", 0)) + 1
+        trace.set_value("provider_http_attempt_count", count)
 
 
 def is_deepseek_endpoint(base_url: str) -> bool:
@@ -618,6 +648,22 @@ def urlopen_without_proxy(
     return opener.open(request, timeout=timeout)
 
 
+def request_json_without_proxy(
+    request: urllib.request.Request,
+    *,
+    timeout: float,
+    provider_name: str,
+    model_name: str,
+) -> dict[str, Any]:
+    response = HTTP_JSON_CONNECTION_POOL.request_json(
+        request,
+        timeout=timeout,
+        provider_name=provider_name,
+        model_name=model_name,
+    )
+    return response.payload
+
+
 def parse_openai_compatible_stream(response) -> Iterator[str]:
     for raw_line in response:
         line = decode_stream_line(raw_line)
@@ -680,6 +726,8 @@ def create_chat_model_provider(
     temperature: float = 0.2,
     timeout_seconds: float = 30.0,
     max_attempts: int = 3,
+    max_tokens: int | None = None,
+    extra_body: dict[str, Any] | None = None,
 ) -> ChatModelProvider:
     provider = (provider_name or "deterministic").strip().casefold()
     if provider in {"", "deterministic", "fake", "local"}:
@@ -695,5 +743,8 @@ def create_chat_model_provider(
             temperature=temperature,
             timeout_seconds=timeout_seconds,
             max_attempts=max_attempts,
+            max_tokens=max_tokens,
+            extra_body=extra_body or {},
         )
+
     raise ValueError(f"Unsupported chat model provider: {provider_name}")

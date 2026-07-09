@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     judge_model_base_url: str = ""
     judge_model_temperature: float = 0.0
     judge_model_timeout_seconds: float = 30.0
+    judge_model_max_attempts: int = 1
+    judge_model_max_tokens: int = 512
+    judge_model_disable_thinking: bool = False
     stage34_judge_provider: str = ""
     stage34_judge_model: str = ""
     stage34_judge_api_key: str = ""
@@ -80,17 +83,20 @@ class Settings(BaseSettings):
     embedding_timeout_seconds: float = 30.0
 
     reranking_enabled: bool = True
-    reranking_provider: str = "remote-bge-lora"
-    reranking_model_name: str = "rfc-domain-bge-lora"
+    reranking_provider: str = "paratera"
+    reranking_model_name: str = "GLM-Rerank"
     reranking_api_key: str = ""
-    reranking_base_url: str = "http://127.0.0.1:8091"
+    reranking_base_url: str = "https://llmapi.paratera.com/v1/p002"
     reranking_timeout_seconds: float = 30.0
+    reranking_health_check_enabled: bool = True
+    reranking_health_check_timeout_seconds: float = 2.0
+    reranking_unavailable_ttl_seconds: float = 30.0
     reranking_recall_k: int = 75
     reranking_dynamic_top_k_enabled: bool = True
     reranking_dynamic_min_results: int = 4
     reranking_dynamic_max_results: int = 12
     reranking_dynamic_relative_score_threshold: float = 0.65
-    reranking_fallback_enabled: bool = True
+    reranking_fallback_enabled: bool = False
     reranking_fallback_provider: str = "paratera"
     reranking_fallback_model_name: str = "GLM-Rerank"
     reranking_fallback_api_key: str = ""
@@ -142,6 +148,12 @@ class Settings(BaseSettings):
             and self.embedding_api_key
         ):
             self.reranking_fallback_api_key = self.embedding_api_key
+        if (
+            not self.reranking_api_key
+            and self.reranking_provider.strip().casefold() == "paratera"
+            and (self.reranking_fallback_api_key or self.embedding_api_key)
+        ):
+            self.reranking_api_key = self.reranking_fallback_api_key or self.embedding_api_key
 
 
 @lru_cache

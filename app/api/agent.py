@@ -22,6 +22,8 @@ from app.db.repositories import ConversationRepository, MessageCreate
 from app.db.repositories import deserialize_metadata
 from app.db.session import get_db
 from app.schemas.agent import (
+    AgentJudgeRequest,
+    AgentJudgeResponse,
     AgentQueryRequest,
     AgentQueryResponse,
     AgentSearchResultItem,
@@ -95,6 +97,37 @@ def get_agent_planner_chat_model_provider() -> ChatModelProvider | None:
     )
 
 
+def get_agent_judge_model_provider() -> ChatModelProvider:
+    settings = get_settings()
+    if not (
+        settings.judge_model_provider.strip()
+        and settings.judge_model_name.strip()
+        and settings.judge_model_api_key.strip()
+        and settings.judge_model_base_url.strip()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="judge model is not configured",
+        )
+    extra_body: dict[str, object] = {}
+    if settings.judge_model_disable_thinking:
+        extra_body = {
+            "thinking": {"type": "disabled"},
+            "reasoning_effort": "none",
+        }
+    return create_chat_model_provider(
+        provider_name=settings.judge_model_provider,
+        model_name=settings.judge_model_name,
+        api_key=settings.judge_model_api_key,
+        base_url=settings.judge_model_base_url,
+        temperature=settings.judge_model_temperature,
+        timeout_seconds=settings.judge_model_timeout_seconds,
+        max_attempts=settings.judge_model_max_attempts,
+        max_tokens=settings.judge_model_max_tokens,
+        extra_body=extra_body,
+    )
+
+
 def get_agent_embedding_provider() -> EmbeddingProvider:
     settings = get_settings()
     return create_embedding_provider(
@@ -104,6 +137,125 @@ def get_agent_embedding_provider() -> EmbeddingProvider:
         base_url=settings.embedding_base_url,
         dimension=settings.embedding_dimension or None,
         timeout_seconds=settings.embedding_timeout_seconds,
+    )
+
+
+def bounded_judge_source_text(source: Any, index: int) -> str:
+    title = safe_text_summary(getattr(source, "title", "") or "", limit=100) or f"source {index + 1}"
+    source_type = safe_text_summary(getattr(source, "source_type", "") or "", limit=40)
+    content = safe_text_summary(getattr(source, "content", "") or "", limit=220)
+    chunk_id = getattr(source, "chunk_id", None)
+    parts = [f"[{index + 1}] {title}"]
+    if source_type:
+        parts.append(f"type={source_type}")
+    if chunk_id is not None:
+        parts.append(f"chunk_id={chunk_id}")
+    if content:
+        parts.append(f"snippet={content}")
+    return " | ".join(parts)
+
+
+def build_agent_judge_messages(request: AgentJudgeRequest) -> list[ChatMessage]:
+    source_text = "\n".join(
+        bounded_judge_source_text(source, index)
+        for index, source in enumerate(request.sources[:4])
+    ) or "No sources were provided."
+    citations = ", ".join(str(item) for item in request.citations) or "none"
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You are a strict RAG answer judge. Return only valid JSON with these keys: "
+                "faithfulness, answer_coverage, citation_support, refusal_correctness, "
+                "safety_leak_check, conciseness, reasons. Scores must be numbers from 0 to 1. "
+                "reasons must be an object with very short Chinese explanations for each metric. "
+                "Do not include chain-of-thought or provider metadata."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"问题：{safe_text_summary(request.question, limit=700)}\n\n"
+                f"回答：{safe_text_summary(request.answer, limit=1400)}\n\n"
+                f"引用编号：{citations}\n"
+                f"是否拒答：{request.refused}\n"
+                f"拒答原因：{safe_text_summary(request.refusal_reason or '', limit=500)}\n\n"
+                f"证据来源：\n{source_text}\n\n"
+                "请只输出 JSON。"
+            ),
+        ),
+    ]
+
+
+def extract_json_object(text: str) -> dict[str, Any]:
+    content = (text or "").strip()
+    if content.startswith("```"):
+      content = re.sub(r"^```(?:json)?\s*", "", content)
+      content = re.sub(r"\s*```$", "", content)
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError:
+        match = re.search(r"\{[\s\S]*\}", content)
+        if not match:
+            raise ValueError("judge response did not contain JSON") from None
+        payload = json.loads(match.group(0))
+    if not isinstance(payload, dict):
+        raise ValueError("judge response JSON must be an object")
+    return payload
+
+
+def score_from_payload(payload: dict[str, Any], key: str) -> float | str:
+    value = payload.get(key)
+    if value is None:
+        return ""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return safe_text_summary(str(value), limit=80)
+    return max(0.0, min(1.0, numeric))
+
+
+def reasons_from_payload(payload: dict[str, Any]) -> dict[str, str]:
+    reasons = payload.get("reasons")
+    if not isinstance(reasons, dict):
+        return {}
+    return {
+        str(key): safe_text_summary(str(value), limit=240)
+        for key, value in reasons.items()
+        if value is not None
+    }
+
+
+@router.post("/judge", response_model=AgentJudgeResponse)
+def judge_agent_answer(
+    request: AgentJudgeRequest,
+    current_user: User | None = Depends(get_current_user),
+    judge_model_provider: ChatModelProvider = Depends(get_agent_judge_model_provider),
+) -> AgentJudgeResponse:
+    del current_user
+    try:
+        result = judge_model_provider.generate(build_agent_judge_messages(request))
+        payload = extract_json_object(result.answer)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"judge model request failed: {safe_text_summary(str(exc), limit=300)}",
+        ) from exc
+    keys = [
+        "faithfulness",
+        "answer_coverage",
+        "citation_support",
+        "refusal_correctness",
+        "safety_leak_check",
+        "conciseness",
+    ]
+    return AgentJudgeResponse(
+        judge_scores={key: score_from_payload(payload, key) for key in keys},
+        judge_reasons=reasons_from_payload(payload),
+        judge_provider=judge_model_provider.provider_name,
+        judge_model=judge_model_provider.model_name,
     )
 
 
@@ -1651,6 +1803,7 @@ def assistant_metadata_from_response(response: AgentQueryResponse) -> dict[str, 
     return {
         key: payload[key]
         for key in [
+            "question",
             "tool_calls",
             "search_results",
             "sources",

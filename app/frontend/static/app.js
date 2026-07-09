@@ -13,6 +13,7 @@ const apiEndpoints = {
   chat: "/chat",
   agent: "/agent/query",
   agentStream: "/agent/query/stream",
+  agentJudge: "/agent/judge",
   imageUpload: "/agent/upload-image",
   feedback: "/feedback",
   conversations: "/conversations",
@@ -36,6 +37,7 @@ const state = {
   sources: [],
   documents: [],
   authToken: storedAuthToken(),
+  authChecking: Boolean(storedAuthToken()),
   currentUser: null,
   sourceFilters: {
     keyword: "",
@@ -45,11 +47,13 @@ const state = {
   conversations: [],
   currentConversationId: null,
   agentRequestInFlight: false,
+  judgeRequestInFlight: false,
   activeAgentAbortController: null,
   activeAgentRunsByConversation: {},
   currentView: "ask",
   citationSets: {},
   nextCitationSetId: 1,
+  lastAgentResult: null,
   contextMenuConversationId: null,
   pendingUploadedImage: null,
   figureLightboxRotation: 0,
@@ -168,8 +172,11 @@ function authErrorMessage(error) {
   return message || "认证失败，请检查表单后重试。";
 }
 
-function setAuthMode(mode) {
+function setAuthMode(mode, options = {}) {
   const targetMode = mode === "register" ? "register" : "login";
+  if (options.reveal !== false) {
+    revealAuthCard();
+  }
   document.querySelectorAll("[data-auth-mode]").forEach((button) => {
     const isActive = button.dataset.authMode === targetMode;
     button.classList.toggle("is-active", isActive);
@@ -186,12 +193,22 @@ function setAuthMode(mode) {
   setAuthHelp(targetMode === "register" ? "用户名至少 3 位且不能有空格；密码需为 8 到 72 位字符。" : "可使用用户名或邮箱登录。");
 }
 
+function revealAuthCard({ focus = false } = {}) {
+  const authScreen = document.querySelector("[data-auth-screen]");
+  authScreen?.classList.add("is-login-visible");
+  if (focus) {
+    window.requestAnimationFrame(() => {
+      document.querySelector("[data-auth-login-identity], [data-auth-register-username]")?.focus();
+    });
+  }
+}
+
 function ensureAuthenticated() {
   if (state.authToken) {
     return true;
   }
   setApiStatus(authRequiredMessage());
-  setAgentPanelStatus("sign_in_required");
+  setAgentPanelStatus("需要登录");
   setConversationListPlaceholder("登录后加载会话");
   return false;
 }
@@ -204,13 +221,15 @@ function renderAuthState() {
   const workspace = document.querySelector("[data-workspace-band]");
   const appShell = document.querySelector("[data-app-shell]");
   const isSignedIn = Boolean(state.authToken && state.currentUser);
+  const isChecking = Boolean(state.authChecking);
+  appShell?.classList.toggle("is-auth-checking", isChecking);
   appShell?.classList.toggle("is-signed-in", isSignedIn);
-  appShell?.classList.toggle("is-signed-out", !isSignedIn);
+  appShell?.classList.toggle("is-signed-out", !isChecking && !isSignedIn);
   if (authScreen) {
-    authScreen.hidden = isSignedIn;
+    authScreen.hidden = isChecking || isSignedIn;
   }
   if (workspace) {
-    workspace.hidden = !isSignedIn;
+    workspace.hidden = isChecking || !isSignedIn;
   }
   if (statusNode) {
     statusNode.textContent = isSignedIn ? "已登录" : state.authToken ? "已保存登录状态" : "访客";
@@ -226,6 +245,7 @@ function renderAuthState() {
 function setAuthSession(token, user, { remember = true } = {}) {
   state.authToken = token || "";
   state.currentUser = user || null;
+  state.authChecking = false;
   if (state.authToken) {
     const storage = remember ? window.localStorage : window.sessionStorage;
     const fallbackStorage = remember ? window.sessionStorage : window.localStorage;
@@ -248,15 +268,19 @@ function clearAuthSession() {
 
 async function loadCurrentUserFromToken() {
   if (!state.authToken) {
+    state.authChecking = false;
     renderAuthState();
     return;
   }
+  state.authChecking = true;
+  renderAuthState();
   try {
     state.currentUser = await fetchJson(apiEndpoints.authMe);
   } catch (error) {
     clearAuthSession();
     setApiStatus(`需要重新登录：${error.message}`);
   }
+  state.authChecking = false;
   renderAuthState();
 }
 
@@ -325,16 +349,16 @@ async function submitAuthRegister() {
   }
 }
 
-// Legacy stop-generation contract markers: 停止生成 已停止生成 鍋滄鐢熸垚 宸插仠姝㈢敓鎴?
+// Legacy stop-generation contract markers: 停止生成 已停止生成
 function setAgentBusy(isBusy) {
   state.agentRequestInFlight = isBusy;
   const submitButton = document.querySelector("[data-agent-submit]");
   const questionInput = document.querySelector("[data-agent-question]");
   if (submitButton) {
     submitButton.disabled = false;
-    submitButton.textContent = isBusy ? "Stop" : "Run";
+    submitButton.textContent = isBusy ? "停止生成" : "运行";
     submitButton.classList.toggle("command-button--stop", isBusy);
-    submitButton.setAttribute("aria-label", isBusy ? "Stop generation" : "Run Agent");
+    submitButton.setAttribute("aria-label", isBusy ? "停止生成" : "运行 Agent");
   }
   if (questionInput) {
     questionInput.required = !isBusy;
@@ -346,7 +370,7 @@ function abortAgentStream() {
     return;
   }
   state.activeAgentAbortController.abort();
-  setAgentPanelStatus("stopping");
+  setAgentPanelStatus("正在停止");
   setApiStatus("Stopping generation");
 }
 
@@ -469,7 +493,7 @@ function compactText(value, fallback = "-") {
 }
 
 function conversationTitleFromQuestion(question) {
-  const normalized = compactText(question, "New conversation").replace(/\s+/g, " ");
+  const normalized = compactText(question, "新对话").replace(/\s+/g, " ");
   return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
 }
 
@@ -587,6 +611,242 @@ function normalizeCitationDisplay(result = {}) {
   };
 }
 
+function setText(selector, value) {
+  const node = document.querySelector(selector);
+  if (node) {
+    node.textContent = String(value);
+  }
+}
+
+function countList(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function latestResultStats(result = {}) {
+  const trace = result.latency_trace || {};
+  const citations = result.citations || [];
+  const invalidCitations = result.invalid_citations || [];
+  const candidateCount = countList(trace.retrieval_candidate_chunk_ids)
+    || countList(result.search_results)
+    || countList(result.sources)
+    || countList(result.tool_calls);
+  const selectedCount = countList(trace.retrieval_selected_chunk_ids) || countList(result.sources);
+  const toolCount = countList(result.workflow_steps) || countList(result.tool_calls);
+  const warningReasons = [];
+  if (result.refused) {
+    warningReasons.push("回答被拒绝，需要确认是否确实证据不足");
+  }
+  if (!citations.length && !result.refused && !result.aborted) {
+    warningReasons.push("回答没有可见引用");
+  }
+  if (invalidCitations.length) {
+    warningReasons.push(`${invalidCitations.length} 个引用编号未能匹配来源`);
+  }
+  if (!candidateCount && !result.aborted) {
+    warningReasons.push("未记录检索候选");
+  }
+  return {
+    candidateCount,
+    selectedCount,
+    toolCount,
+    citationCount: citations.length,
+    invalidCitationCount: invalidCitations.length,
+    warningReasons,
+    warningCount: warningReasons.length,
+  };
+}
+
+function firstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== "");
+}
+
+function normalizeScoreValue(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  if (typeof value === "object" && "score" in value) {
+    return normalizeScoreValue(value.score);
+  }
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    if (numeric <= 1) {
+      return numeric.toFixed(2);
+    }
+    return numeric % 1 === 0 ? String(numeric) : numeric.toFixed(2);
+  }
+  return String(value);
+}
+
+function judgeScoreMap(result = {}) {
+  return result.judge_scores
+    || result.quality_scores
+    || result.evaluation_scores
+    || result.evaluation
+    || result.judge
+    || {};
+}
+
+function judgeReason(result = {}, key = "") {
+  const reasons = result.judge_reasons || result.quality_reasons || {};
+  return reasons[key] ? String(reasons[key]) : "";
+}
+
+function judgeScore(result, aliases = []) {
+  const scores = judgeScoreMap(result);
+  for (const key of aliases) {
+    const value = firstDefined(scores[key], result[key]);
+    const normalized = normalizeScoreValue(value);
+    if (normalized !== null) {
+      return normalized;
+    }
+  }
+  return "待 Judge";
+}
+
+function hasJudgeScore(result, aliases = []) {
+  return judgeScore(result, aliases) !== "待 Judge";
+}
+
+function renderRunReviewPanels(result = null) {
+  state.lastAgentResult = result || state.lastAgentResult;
+  const current = state.lastAgentResult;
+  if (!current) {
+    return;
+  }
+  const stats = latestResultStats(current);
+  const stage = current.aborted ? "已停止" : current.refused ? "已拒答" : "已完成";
+  const citationLabel = stats.citationCount ? `${stats.citationCount} 条引用` : current.refused ? "拒答无引用" : "无引用";
+  const reviewCountLabel = `${stats.warningCount} 项`;
+  setText("[data-trace-stage]", stage);
+  setText("[data-trace-candidates]", stats.candidateCount);
+  setText("[data-trace-citations]", citationLabel);
+  setText("[data-trace-warnings]", stats.warningCount);
+  setText("[data-trace-request-detail]", current.aborted ? "本次请求已停止，保留已收到内容。" : "问题已进入会话，并触发 Agent 运行。");
+  setText("[data-trace-retrieval-detail]", stats.candidateCount
+    ? `记录到 ${stats.candidateCount} 个候选，最终展示 ${stats.selectedCount || stats.citationCount} 个来源/片段。`
+    : "本次 metadata 未返回检索候选，需要检查工具调用或后端链路。");
+  setText("[data-trace-rerank-detail]", stats.toolCount
+    ? `记录到 ${stats.toolCount} 个工作流/工具步骤，可在智能问答下方的运行步骤查看。`
+    : "未记录工作流步骤，可能走了直接回答或异常兜底。");
+  setText("[data-trace-generation-detail]", current.refused
+    ? "模型拒答或证据不足，未生成常规引用式回答。"
+    : current.aborted ? "生成已停止。" : "回答已生成，聊天区保留完整文本和引用入口。");
+  setText("[data-trace-quality-detail]", stats.warningCount
+    ? `发现 ${stats.warningCount} 个需复核信号：${stats.warningReasons.join("；")}。`
+    : "未发现明显引用缺失或拒答信号。");
+
+  setText("[data-quality-faithfulness]", judgeScore(current, ["faithfulness", "answer_faithfulness"]));
+  setText("[data-quality-faithfulness-note]", hasJudgeScore(current, ["faithfulness", "answer_faithfulness"])
+    ? judgeReason(current, "faithfulness") || judgeReason(current, "answer_faithfulness") || "来自 Judge metadata。"
+    : "后端暂未返回 faithfulness 分数；请在 Judge 任务完成后回填。");
+  setText("[data-quality-citations]", judgeScore(current, ["citation_support", "citation_accuracy", "citation_quality", "citations_valid"]));
+  setText("[data-quality-citations-note]", hasJudgeScore(current, ["citation_support", "citation_accuracy", "citation_quality", "citations_valid"])
+    ? judgeReason(current, "citation_support") || judgeReason(current, "citation_accuracy") || judgeReason(current, "citation_quality") || "来自 Judge metadata。"
+    : stats.invalidCitationCount ? `${stats.invalidCitationCount} 个引用编号未匹配来源，等待 Judge 评分。` : "等待 citation support / citation accuracy 分数。");
+  setText("[data-quality-coverage]", judgeScore(current, ["answer_coverage", "coverage", "completeness"]));
+  setText("[data-quality-coverage-note]", hasJudgeScore(current, ["answer_coverage", "coverage", "completeness"])
+    ? judgeReason(current, "answer_coverage") || judgeReason(current, "coverage") || judgeReason(current, "completeness") || "来自 Judge metadata。"
+    : stats.selectedCount ? `已关联 ${stats.selectedCount} 个来源/片段，但 coverage 仍需 Judge 评分。` : "等待 answer coverage / completeness 分数。");
+  setText("[data-quality-safety]", judgeScore(current, ["safety_leak_check", "refusal_correctness", "safety", "conciseness"]));
+  setText("[data-quality-safety-note]", hasJudgeScore(current, ["safety_leak_check", "refusal_correctness", "safety", "conciseness"])
+    ? judgeReason(current, "safety_leak_check") || judgeReason(current, "refusal_correctness") || judgeReason(current, "safety") || judgeReason(current, "conciseness") || "来自 Judge metadata。"
+    : "等待 safety_leak_check / refusal_correctness；如果是普通回答，也可补 conciseness。");
+  setText("[data-review-queue-status]", stats.warningCount ? reviewCountLabel : "空队列");
+  setText("[data-review-queue-note]", stats.warningCount
+    ? stats.warningReasons.join("；")
+    : "最近一次问答没有进入强制复核队列。");
+}
+
+function judgeSourcePayload(source = {}) {
+  return {
+    title: String(source.title || source.document_title || "").slice(0, 160),
+    content: String(source.content || source.snippet || "").slice(0, 900),
+    source_type: source.source_type || "",
+    chunk_id: source.chunk_id ?? null,
+  };
+}
+
+function latestJudgePayload() {
+  const result = state.lastAgentResult;
+  if (!result?.answer) {
+    return null;
+  }
+  return {
+    question: result.question || latestAgentUserQuestionText() || "最近一次问题",
+    answer: result.answer,
+    sources: (result.sources || []).slice(0, 12).map(judgeSourcePayload),
+    citations: result.citations || [],
+    refused: Boolean(result.refused),
+    refusal_reason: result.refusal_reason || "",
+  };
+}
+
+function setJudgeBusy(isBusy) {
+  state.judgeRequestInFlight = Boolean(isBusy);
+  const button = document.querySelector("[data-run-judge]");
+  if (button) {
+    button.disabled = Boolean(isBusy);
+    button.textContent = isBusy ? "Judge 评分中..." : "运行 Judge";
+  }
+}
+
+async function submitAnswerJudge() {
+  if (state.judgeRequestInFlight) {
+    return;
+  }
+  if (!ensureAuthenticated()) {
+    return;
+  }
+  const payload = latestJudgePayload();
+  if (!payload) {
+    return;
+  }
+  setJudgeBusy(true);
+  try {
+    const judged = await fetchJson(apiEndpoints.agentJudge, {
+      method: "POST",
+      body: JSON.stringify(payload),
+      timeoutMs: 120000,
+    });
+    state.lastAgentResult = {
+      ...state.lastAgentResult,
+      judge_scores: judged.judge_scores || {},
+      judge_reasons: judged.judge_reasons || {},
+      judge_provider: judged.judge_provider,
+      judge_model: judged.judge_model,
+      judge_status: judged.judge_status || "completed",
+    };
+    renderRunReviewPanels(state.lastAgentResult);
+  } catch (error) {
+    console.warn("Judge failed", error);
+  } finally {
+    setJudgeBusy(false);
+  }
+}
+
+function resetRunReviewPanels() {
+  state.lastAgentResult = null;
+  setText("[data-trace-stage]", "等待问题");
+  setText("[data-trace-candidates]", "0");
+  setText("[data-trace-citations]", "未生成");
+  setText("[data-trace-warnings]", "0");
+  setText("[data-trace-request-detail]", "问题、图片、会话上下文进入任务队列。");
+  setText("[data-trace-retrieval-detail]", "关键词召回、向量召回、表格/图片证据候选。");
+  setText("[data-trace-rerank-detail]", "按相关性、来源可信度和片段覆盖度压缩上下文。");
+  setText("[data-trace-generation-detail]", "流式生成中文回答，并把引用编号嵌入段落。");
+  setText("[data-trace-quality-detail]", "检查忠实度、引用完整性和人工复核风险。");
+  setText("[data-quality-faithfulness]", "待评估");
+  setText("[data-quality-faithfulness-note]", "回答是否只基于检索证据，不引入无来源断言。");
+  setText("[data-quality-citations]", "待评估");
+  setText("[data-quality-citations-note]", "引用是否能支撑对应句子，编号与来源是否匹配。");
+  setText("[data-quality-coverage]", "待评估");
+  setText("[data-quality-coverage-note]", "是否覆盖问题里的对象、条件、指标和边界。");
+  setText("[data-quality-safety]", "待评估");
+  setText("[data-quality-safety-note]", "拒答是否正确，是否存在安全泄漏或越权内容。");
+  setText("[data-review-queue-status]", "空队列");
+  setText("[data-review-queue-note]", "提交问答后，低证据段落、缺引用结论、来源冲突会进入此队列。");
+}
+
 function renderInlineMarkdown(text) {
   return String(text || "")
     .split(/(\*\*[^*\n][\s\S]*?[^*\n]\*\*)/g)
@@ -623,12 +883,19 @@ function renderAnswerWithCitationLinks(answer, sources = [], invalidCitations = 
 }
 
 function isMarkdownTableRow(line) {
-  const trimmed = String(line || "").trim();
-  return trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.slice(1, -1).includes("|");
+  const trimmed = normalizeMarkdownTableSyntax(line).trim();
+  return trimmed.includes("|") && splitMarkdownTableRow(trimmed).filter(Boolean).length > 1;
+}
+
+function normalizeMarkdownTableSyntax(line) {
+  return String(line || "")
+    .replace(/\uFF5C/g, "|")
+    .replace(/[\uFF1A\uFE55]/g, ":")
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-");
 }
 
 function splitMarkdownTableRow(line) {
-  return String(line || "")
+  return normalizeMarkdownTableSyntax(line)
     .trim()
     .replace(/^\|/, "")
     .replace(/\|$/, "")
@@ -640,7 +907,7 @@ function isMarkdownTableSeparator(line) {
   if (!isMarkdownTableRow(line)) {
     return false;
   }
-  return splitMarkdownTableRow(line).every((cell) => /^:?-{3,}:?$/.test(cell));
+  return splitMarkdownTableRow(line).every((cell) => /^:?-{1,}:?$/.test(cell.replace(/\s+/g, "")));
 }
 
 function markdownTableHtml(tableLines, inline) {
@@ -660,11 +927,25 @@ function markdownTableHtml(tableLines, inline) {
     return cells;
   });
   const [header, ...bodyRows] = normalizedRows;
+  const isWide = columnCount >= 6;
+  const isLarge = bodyRows.length >= 8 || columnCount >= 8;
+  const shellClass = ["markdown-table-shell", isWide ? "is-wide" : "", isLarge ? "is-large" : ""]
+    .filter(Boolean)
+    .join(" ");
+  const tableClass = ["markdown-table", "is-compact", isWide ? "is-wide" : "", isLarge ? "is-large" : ""]
+    .filter(Boolean)
+    .join(" ");
+  const toolbarHtml = [
+    `<span>表格 ${columnCount}列 x ${bodyRows.length}行</span>`,
+    isWide ? "<span>横向滚动查看</span>" : "",
+  ]
+    .filter(Boolean)
+    .join("");
   const headerHtml = `<thead><tr>${header.map((cell) => `<th>${inline(cell)}</th>`).join("")}</tr></thead>`;
   const bodyHtml = bodyRows.length
     ? `<tbody>${bodyRows.map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`).join("")}</tbody>`
     : "";
-  return `<div class="markdown-table-wrap"><table class="markdown-table">${headerHtml}${bodyHtml}</table></div>`;
+  return `<div class="${shellClass}"><div class="markdown-table-toolbar">${toolbarHtml}</div><div class="markdown-table-wrap"><table class="${tableClass}">${headerHtml}${bodyHtml}</table></div></div>`;
 }
 
 function renderMarkdownBlocks(answer, sources = [], invalidCitations = [], citationSourceMap = {}, citationSetId = "") {
@@ -1578,7 +1859,8 @@ function clearAgentChat() {
   if (!answerBox) {
     return;
   }
-  answerBox.innerHTML = '<div class="empty-state">Ask a question to start the conversation.</div>';
+  state.lastAgentResult = null;
+  answerBox.innerHTML = '<div class="empty-state">输入问题，开始新的工程问答。</div>';
   renderAgentToolCalls([]);
 }
 
@@ -2159,7 +2441,7 @@ function markAgentStreamingAborted(messageElement) {
       answerText.textContent = "";
     }
   }
-  setAgentThinkingStatusLabel(messageElement, "Generation stopped");
+  setAgentThinkingStatusLabel(messageElement, "已停止生成");
   const liveSteps = messageElement.querySelector("[data-agent-live-steps]");
   if (liveSteps && !liveSteps.children.length) {
     liveSteps.remove();
@@ -2168,7 +2450,7 @@ function markAgentStreamingAborted(messageElement) {
   if (bubble && !bubble.querySelector("[data-agent-abort-status]")) {
     bubble.insertAdjacentHTML(
       "beforeend",
-      sanitizeRenderedHtml('<p class="agent-stream-status" data-agent-abort-status>Generation stopped.</p>'),
+      sanitizeRenderedHtml('<p class="agent-stream-status" data-agent-abort-status>已停止生成。</p>'),
     );
   }
   scrollAgentChatToBottom();
@@ -2315,19 +2597,20 @@ function agentAnswerHtml(result) {
 function renderAgentAnswer(result) {
   const status = document.querySelector("[data-agent-status]");
   if (status) {
-    status.textContent = result.refused ? "refused" : "answered";
+    status.textContent = result.refused ? "已拒答" : "已回答";
   }
   appendAgentAssistantMessage(result);
 }
 
 function renderStoredConversationMessages(messages) {
   clearAgentChat();
+  let latestAssistantResult = null;
   for (const message of messages) {
     if (message.role === "user") {
       appendAgentUserMessage(message.content);
     } else if (message.role === "assistant") {
       const metadata = message.metadata || {};
-      appendAgentAssistantMessage({
+      latestAssistantResult = {
         answer: message.content,
         mode: message.mode || metadata.mode || "default",
         tool_calls: metadata.tool_calls || [],
@@ -2342,10 +2625,14 @@ function renderStoredConversationMessages(messages) {
         latency_trace: metadata.latency_trace || {},
         invalid_citations: metadata.invalid_citations || [],
         refusal_category: metadata.refusal_category || null,
-      });
+      };
+      appendAgentAssistantMessage(latestAssistantResult);
     } else if (message.role === "summary") {
       appendAgentSummaryMessage(message.content);
     }
+  }
+  if (latestAssistantResult) {
+    renderRunReviewPanels(latestAssistantResult);
   }
   attachLiveAgentRunToCurrentConversation();
 }
@@ -2357,7 +2644,7 @@ function renderConversationList() {
     return;
   }
   if (!state.conversations.length) {
-    list.innerHTML = '<div class="empty-state">No conversations</div>';
+    list.innerHTML = '<div class="empty-state">暂无会话</div>';
     if (titleInput) {
       titleInput.value = "";
     }
@@ -2432,12 +2719,12 @@ async function refreshConversationList() {
   } catch (error) {
     state.conversations = [];
     state.currentConversationId = null;
-    setConversationListPlaceholder("Failed to load conversations");
+    setConversationListPlaceholder("会话加载失败");
     throw error;
   }
 }
 
-async function createAgentConversation(title = "New conversation") {
+async function createAgentConversation(title = "新对话") {
   if (!ensureAuthenticated()) {
     throw new Error("authentication required");
   }
@@ -2457,7 +2744,7 @@ function startDraftConversation() {
   hideConversationMenu();
   clearAgentChat();
   renderConversationList();
-  setAgentPanelStatus("draft");
+  setAgentPanelStatus("待命");
 }
 
 async function loadConversationMessages(conversationId) {
@@ -2515,18 +2802,18 @@ async function renameCurrentConversation() {
     return;
   }
   const current = state.conversations.find((conversationItem) => String(conversationItem.id) === String(conversationId));
-  const title = window.prompt("重命名会话", current?.title || "New conversation");
+  const title = window.prompt("重命名会话", current?.title || "新对话");
   hideConversationMenu();
   if (title === null) {
     return;
   }
   const conversation = await fetchJson(apiEndpoints.conversation(conversationId), {
     method: "PATCH",
-    body: JSON.stringify({ title: title.trim() || "New conversation" }),
+    body: JSON.stringify({ title: title.trim() || "新对话" }),
   });
   state.currentConversationId = conversation.id;
   await refreshConversationList();
-  setAgentPanelStatus("conversation_renamed");
+  setAgentPanelStatus("已重命名");
 }
 
 async function submitChat() {
@@ -2550,7 +2837,7 @@ async function submitChat() {
   });
   renderAnswer(result);
   renderCitations(result.sources || []);
-  setApiStatus(result.refused ? "Refused" : "Answered");
+    setApiStatus(result.refused ? "已拒答" : "已回答");
 }
 
 function setUploadStatus(text, hidden = false) {
@@ -2621,7 +2908,7 @@ async function submitAgent() {
   const questionInput = document.querySelector("[data-agent-question]");
   const question = questionInput?.value.trim();
   if (!question) {
-    setApiStatus("Please enter an Agent task");
+    setApiStatus("请输入 Agent 任务");
     return;
   }
   let pendingUserMessage = null;
@@ -2629,8 +2916,8 @@ async function submitAgent() {
   let activeRun = null;
   setAgentBusy(true);
   try {
-    setApiStatus("Agent running...");
-    setAgentPanelStatus("running");
+    setApiStatus("Agent 运行中...");
+    setAgentPanelStatus("运行中");
     let imageWasSubmitted = false;
     const body = {
       question,
@@ -2699,6 +2986,7 @@ async function submitAgent() {
             } else {
               renderAgentToolCalls(metadata.tool_calls || []);
             }
+            renderRunReviewPanels(metadata);
           }
         },
         onAgentStep: (payload) => {
@@ -2754,11 +3042,12 @@ async function submitAgent() {
           } else {
             renderAgentToolCalls(result.tool_calls || []);
           }
+          renderRunReviewPanels(result);
         }
       }
     }
-    setApiStatus(result?.aborted ? "Agent stopped" : result?.refused ? "Agent refused" : "Agent completed");
-    setAgentPanelStatus(result?.aborted ? "aborted" : result?.refused ? "refused" : "answered");
+    setApiStatus(result?.aborted ? "Agent 已停止" : result?.refused ? "Agent 已拒答" : "Agent 已完成");
+    setAgentPanelStatus(result?.aborted ? "已停止" : result?.refused ? "已拒答" : "已回答");
     if (imageWasSubmitted && !result?.aborted) {
       clearPendingAgentImage();
     }
@@ -2771,7 +3060,7 @@ async function submitAgent() {
     if (activeRun) {
       clearActiveAgentRun(activeRun.conversationId);
     }
-    setAgentPanelStatus("error");
+    setAgentPanelStatus("错误");
     if (!activeRun || isCurrentConversation(activeRun.conversationId)) {
       appendAgentErrorMessage(userFriendlyErrorMessage(error));
     }
@@ -2923,7 +3212,7 @@ async function loadWorkspaceData() {
   state.sources = sourcesPayload.sources || [];
   state.documents = documentsPayload.documents || [];
   renderAll();
-  setApiStatus("Loaded");
+  setApiStatus("已连接");
 }
 
 function bindSourceFilters() {
@@ -2968,6 +3257,9 @@ function bindEnterToSubmit() {
 }
 
 function bindCommands() {
+  document.querySelector("[data-auth-start]")?.addEventListener("click", () => {
+    revealAuthCard({ focus: true });
+  });
   document.querySelector("[data-auth-login-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     submitAuthLogin().catch((error) => {
@@ -2992,7 +3284,7 @@ function bindCommands() {
   });
   document.querySelector("[data-refresh-all]")?.addEventListener("click", () => {
     loadWorkspaceData().catch((error) => {
-      setApiStatus(`Load failed: ${error.message}`);
+      setApiStatus(`加载失败：${error.message}`);
     });
   });
   document.querySelector("[data-chat-form]")?.addEventListener("submit", (event) => {
@@ -3010,8 +3302,11 @@ function bindCommands() {
   document.querySelector("[data-agent-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     submitAgent().catch((error) => {
-      setApiStatus(`Agent failed: ${error.message}`);
+      setApiStatus(`Agent 失败：${error.message}`);
     });
+  });
+  document.querySelector("[data-run-judge]")?.addEventListener("click", () => {
+    submitAnswerJudge();
   });
   document.querySelector("[data-agent-submit]")?.addEventListener("click", (event) => {
     if (!state.agentRequestInFlight) {
@@ -3025,17 +3320,17 @@ function bindCommands() {
   });
   document.querySelector("[data-refresh-conversations]")?.addEventListener("click", () => {
     loadAgentConversations().catch((error) => {
-      setApiStatus(`Refresh conversations failed: ${error.message}`);
+      setApiStatus(`刷新会话失败：${error.message}`);
     });
   });
   document.querySelector("[data-delete-conversation]")?.addEventListener("click", () => {
     deleteCurrentConversation().catch((error) => {
-      setApiStatus(`Delete conversation failed: ${error.message}`);
+      setApiStatus(`删除会话失败：${error.message}`);
     });
   });
   document.querySelector("[data-rename-conversation]")?.addEventListener("click", () => {
     renameCurrentConversation().catch((error) => {
-      setApiStatus(`Rename failed: ${error.message}`);
+      setApiStatus(`重命名失败：${error.message}`);
     });
   });
   document.querySelector("[data-close-citation-drawer]")?.addEventListener("click", () => {
@@ -3054,7 +3349,7 @@ function bindCommands() {
     }
     hideConversationMenu();
     loadConversationMessages(conversationButton.dataset.conversationItem).catch((error) => {
-      setApiStatus(`Switch conversation failed: ${error.message}`);
+      setApiStatus(`切换会话失败：${error.message}`);
     });
   });
   document.querySelector("[data-conversation-list]")?.addEventListener("contextmenu", (event) => {
@@ -3067,7 +3362,7 @@ function bindCommands() {
   });
   document.querySelector("[data-sync-sources]")?.addEventListener("click", () => {
     syncSources().catch((error) => {
-      setApiStatus(`Sync failed: ${error.message}`);
+      setApiStatus(`同步失败：${error.message}`);
     });
   });
   document.addEventListener("click", (event) => {
@@ -3139,7 +3434,8 @@ function bindCommands() {
 }
 
 function switchView(viewName) {
-  const targetView = viewName === "library" ? "library" : "ask";
+  const validViews = new Set(["ask", "library", "evidence", "trace", "quality"]);
+  const targetView = validViews.has(viewName) ? viewName : "ask";
   state.currentView = targetView;
   document.querySelectorAll("[data-view]").forEach((section) => {
     const isActive = section.dataset.view === targetView;
@@ -3163,7 +3459,8 @@ function setAppMode(isAppMode) {
 function enterApp(viewName, hashValue) {
   setAppMode(true);
   switchView(viewName);
-  window.history.replaceState(null, "", hashValue || (viewName === "library" ? "#library-view" : "#ask-view"));
+  const targetHash = hashValue || `#${state.currentView}-view`;
+  window.history.replaceState(null, "", targetHash);
   window.requestAnimationFrame(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
@@ -3189,10 +3486,17 @@ function bindViewNavigation() {
     event.preventDefault();
     showLanding();
   });
-  if (window.location.hash === "#library-view" || window.location.hash === "#library-panel") {
-    enterApp("library", "#library-view");
-  } else if (window.location.hash === "#ask-view" || window.location.hash === "#agent-panel") {
-    enterApp("ask", "#ask-view");
+  const hashViewMap = {
+    "#agent-panel": "ask",
+    "#ask-view": "ask",
+    "#library-panel": "library",
+    "#library-view": "library",
+    "#evidence-view": "evidence",
+    "#trace-view": "trace",
+    "#quality-view": "quality",
+  };
+  if (hashViewMap[window.location.hash]) {
+    enterApp(hashViewMap[window.location.hash], window.location.hash);
   } else {
     switchView("ask");
     setAppMode(false);
@@ -3247,11 +3551,11 @@ async function initializeShell() {
   bindSourceFilters();
   bindCommands();
   bindAgentImageInput();
-  setAuthMode("login");
+  setAuthMode("login", { reveal: false });
   renderAuthState();
   try {
-    await fetchJson("/health");
     await loadCurrentUserFromToken();
+    await fetchJson("/health");
     await loadWorkspaceData();
     if (state.authToken) {
       if (!window.location.hash || window.location.hash === "#home") {

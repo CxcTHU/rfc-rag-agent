@@ -1,3 +1,5 @@
+import app.api.agent as agent_api_module
+from app.main import app
 from tests.test_agent_api import make_test_client
 from tests.test_agent_stream_api import parse_sse_events
 
@@ -16,8 +18,13 @@ LATENCY_FIELDS = [
 ]
 
 
+def allow_test_user() -> None:
+    app.dependency_overrides[agent_api_module.get_current_user] = lambda: None
+
+
 def test_react_agent_response_includes_safe_latency_trace(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
+        allow_test_user()
         response = client.post(
             "/agent/query",
             json={
@@ -55,6 +62,7 @@ def test_react_agent_response_includes_safe_latency_trace(tmp_path) -> None:
 
 def test_default_agent_response_includes_safe_latency_trace(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
+        allow_test_user()
         response = client.post(
             "/agent/query",
             json={
@@ -90,6 +98,7 @@ def test_default_agent_response_includes_safe_latency_trace(tmp_path) -> None:
 
 def test_react_agent_stream_metadata_includes_time_to_first_token(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
+        allow_test_user()
         response = client.post(
             "/agent/query/stream",
             json={

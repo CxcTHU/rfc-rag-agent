@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.agent import (
     get_agent_chat_model_provider,
     get_agent_embedding_provider,
+    get_agent_judge_model_provider,
     get_agent_planner_chat_model_provider,
 )
 import app.api.agent as agent_api_module
@@ -25,7 +26,7 @@ from app.db.repositories import (
 )
 from app.db.session import create_sqlite_engine, get_db
 from app.main import app
-from app.schemas.agent import AgentQueryRequest
+from app.schemas.agent import AgentJudgeRequest, AgentQueryRequest
 from app.services.generation.chat_model import (
     ChatMessage,
     ChatModelResult,
@@ -107,6 +108,30 @@ def seed_agent_api_document(db: Session) -> None:
     )
 
 
+class FakeJudgeProvider:
+    provider_name = "fake-judge"
+    model_name = "fake-judge-v1"
+
+    def generate(self, messages):
+        assert messages
+        return ChatModelResult(
+            answer=(
+                '{"faithfulness":0.91,"answer_coverage":0.82,'
+                '"citation_support":0.88,"refusal_correctness":1.0,'
+                '"safety_leak_check":1.0,"conciseness":0.76,'
+                '"reasons":{"faithfulness":"证据支撑较充分","answer_coverage":"覆盖主要问题"}}'
+            ),
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+    def stream_generate(self, messages):
+        yield self.generate(messages).answer
+
+    def generate_with_tools(self, messages, tools):
+        raise NotImplementedError
+
+
 def source_record() -> SourceCreate:
     return SourceCreate(
         source_id="rfc_source_001",
@@ -136,6 +161,62 @@ def source_record() -> SourceCreate:
         notes="test source",
         document_id=None,
     )
+
+
+def test_agent_judge_scores_latest_answer(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        app.dependency_overrides[get_agent_judge_model_provider] = lambda: FakeJudgeProvider()
+        app.dependency_overrides[agent_api_module.get_current_user] = lambda: None
+        response = client.post(
+            "/agent/judge",
+            json={
+                "question": "堆石混凝土填充性能受哪些因素影响？",
+                "answer": "填充性能主要受自密实混凝土流动性影响[1]。",
+                "sources": [
+                    {
+                        "title": "Agent API filling source",
+                        "content": "Filling capacity depends on self-compacting concrete flowability.",
+                        "source_type": "text",
+                        "chunk_id": 1,
+                    }
+                ],
+                "citations": [1],
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["judge_scores"]["faithfulness"] == 0.91
+        assert payload["judge_scores"]["answer_coverage"] == 0.82
+        assert payload["judge_scores"]["citation_support"] == 0.88
+        assert payload["judge_scores"]["safety_leak_check"] == 1.0
+        assert payload["judge_reasons"]["faithfulness"] == "证据支撑较充分"
+        assert payload["judge_provider"] == "fake-judge"
+
+
+def test_agent_judge_prompt_uses_readable_labels() -> None:
+    request = AgentJudgeRequest(
+        question="堆石混凝土优势是什么？",
+        answer="堆石混凝土可降低水化热。[1]",
+        sources=[
+            {
+                "title": "RFC source",
+                "content": "水化热较低",
+                "source_type": "text",
+                "chunk_id": 1,
+            }
+        ],
+        citations=[1],
+    )
+
+    messages = agent_api_module.build_agent_judge_messages(request)
+    user_content = messages[1].content
+
+    assert "问题：" in user_content
+    assert "回答：" in user_content
+    assert "引用编号：" in user_content
+    assert "证据来源：" in user_content
+    assert "\ufffd" not in user_content
 
 
 class FailingChatModelProvider:
@@ -561,6 +642,7 @@ def test_agent_api_accepts_optional_history_for_contextual_answer(tmp_path) -> N
 
 def test_agent_api_persists_messages_when_conversation_id_is_provided(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
+        app.dependency_overrides[agent_api_module.get_current_user] = lambda: None
         conversation = client.post("/conversations", json={"title": "新对话"}).json()
         response = client.post(
             "/agent/query",
@@ -579,6 +661,7 @@ def test_agent_api_persists_messages_when_conversation_id_is_provided(tmp_path) 
     assert messages[0]["content"] == "What affects filling capacity?"
     assert messages[1]["mode"] == "tool_calling_agent"
     assert messages[1]["content"] == response.json()["answer"]
+    assert messages[1]["metadata"]["question"] == "What affects filling capacity?"
     assert messages[1]["metadata"]["citations"] == [1]
     assert messages[1]["metadata"]["mode"] == "tool_calling_agent"
     assert messages_response.json()["conversation"]["title"] == "What affects filling capacity?"
