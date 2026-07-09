@@ -189,6 +189,8 @@ function App() {
     async function loadInitialWorkspace() {
       setWorkspaceHydrating(true)
       setStatus('正在恢复会话...')
+      setStatus('正在恢复会话...')
+      setStatus('\u6b63\u5728\u6062\u590d\u4f1a\u8bdd...')
       try {
         const documentDataPromise = listDocuments(token as string).catch(() => [])
         const conversationData = await listConversations(token as string).catch(() => [])
@@ -457,6 +459,7 @@ function App() {
       setLastResult(null)
       setStatus('姝ｅ湪鍔犺浇浼氳瘽...')
     }
+    setStatus('\u6b63\u5728\u52a0\u8f7d\u4f1a\u8bdd...')
     const payload = await getConversationMessages(nextToken, conversationId)
     if (activeConversationIdRef.current !== conversationId) {
       return
