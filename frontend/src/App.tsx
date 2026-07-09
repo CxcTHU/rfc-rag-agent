@@ -189,6 +189,8 @@ function App() {
     async function loadInitialWorkspace() {
       setWorkspaceHydrating(true)
       setStatus('正在恢复会话...')
+      setStatus('正在恢复会话...')
+      setStatus('\u6b63\u5728\u6062\u590d\u4f1a\u8bdd...')
       try {
         const documentDataPromise = listDocuments(token as string).catch(() => [])
         const conversationData = await listConversations(token as string).catch(() => [])
@@ -436,18 +438,32 @@ function App() {
   async function loadConversationMessages(conversationId: number, nextToken = token) {
     if (!nextToken) return
     setLastError('')
-    const cachedMessages = messagesByConversationRef.current[conversationId]
-    if (cachedMessages?.some((message) => message.pending)) {
+    if (activeConversationIdRef.current !== conversationId) {
       setActiveConversationId(conversationId)
       activeConversationIdRef.current = conversationId
       persistActiveConversationId(conversationId)
+      setActiveCitation(null)
+    }
+    const cachedMessages = messagesByConversationRef.current[conversationId]
+    if (cachedMessages?.some((message) => message.pending)) {
       setMessages(cachedMessages)
       setLastResult(latestResultFromMessages(cachedMessages))
-      setActiveCitation(null)
       setStatus('Agent 运行中')
       return
     }
+    if (cachedMessages) {
+      setMessages(cachedMessages)
+      setLastResult(latestResultFromMessages(cachedMessages))
+    } else {
+      setMessages([])
+      setLastResult(null)
+      setStatus('姝ｅ湪鍔犺浇浼氳瘽...')
+    }
+    setStatus('\u6b63\u5728\u52a0\u8f7d\u4f1a\u8bdd...')
     const payload = await getConversationMessages(nextToken, conversationId)
+    if (activeConversationIdRef.current !== conversationId) {
+      return
+    }
     const hydrated = hydrateConversationMessages(payload.messages || [])
     const latest = latestResultFromMessages(hydrated)
     setActiveConversationId(payload.conversation.id)
@@ -691,7 +707,22 @@ function App() {
     }, 30)
   }
 
-  if (authChecking || !user || !token) {
+  if (authChecking) {
+    return (
+      <main className="auth-boot-screen" aria-live="polite" aria-busy="true">
+        <div className="brand-lockup">
+          <span className="brand-mark">R</span>
+          <div>
+            <strong>RFC-RAG-Agent</strong>
+            <small>Restoring workspace session</small>
+          </div>
+        </div>
+        <Loader2 className="spin" size={22} aria-hidden="true" />
+      </main>
+    )
+  }
+
+  if (!user || !token) {
     return (
       <main className={cn('auth-screen', authVisible && 'is-login-visible')}>
         <div className="auth-hero">

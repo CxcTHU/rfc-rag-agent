@@ -1,5 +1,40 @@
 # 架构说明
 
+## Phase 60 Architecture Delta: Structured TableRAG Sidecar
+
+Phase 60 adds a structured table substrate beside the existing chunk-based corpus. It does not switch the default Agent tool surface.
+
+```text
+existing chunks.chunk_type="table"
+existing PDFs
+-> PyMuPDF find_tables rows/page/bbox/header_text
+-> document_tables / columns / rows / cells
+-> table_retrieval_units
+-> StructuredTableSearchService
+-> hydrated table result with citation
+```
+
+Retrieval units are separate from ordinary chunks:
+
+```text
+table_summary
+table_schema
+row_pack
+column_pack
+cell_fact
+caption_context
+```
+
+`StructuredTableSearchService` performs query planning, unit scoring, exact header/cell matching, numeric/unit filtering, weighted fusion, and structured hydrate. Returned results include `table_id`, `summary`, `caption`, `headers`, `rows`, `matched_units`, and `citation`.
+
+Default runtime remains:
+
+```text
+tool_calling_agent -> Agent Runtime -> AgentToolbox -> existing hybrid/search/table/figure tools
+```
+
+`search_tables` and Phase 57 `table_text` still read Markdown table chunks unless a later merge phase explicitly switches them behind a default-off feature flag. Text-to-SQL is not part of Phase 60 runtime; it is allowed later only as a read-only optional layer after candidate `table_id` recall.
+
 ## Phase 58H Runtime Checkpoint And Evidence Cache Identity
 
 The default `tool_calling_agent` runtime now has a narrow durable checkpoint layer and an evidence-query identity layer.

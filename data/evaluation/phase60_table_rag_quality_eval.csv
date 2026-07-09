@@ -1,0 +1,401 @@
+case_id,category,expected_table_id,query_hash,query_preview,result_count,top_table_id,top_score,hit_top1,hit_top5,top_document_id,top_chunk_id,top_page,matched_types
+cell_933,cell,933,5280be719880c8bd,"表格 高自密实性能混凝土硬化性能检测结果 表 3 立方体抗压强度 检测结果 标准养护28d,18.4MPa",5,933,438.0145,true,true,1878,58737,4,caption_context|cell_fact|numeric_unit|row_pack|table_summary
+row_869,row,869,7bc385a5996b903c,表格 图 3.10 柔性网孔径和外加剂掺量对粗骨料通过能力的影响 行 SCC-AD1.0% ( 10-20mm),5,869,718.5412,true,true,1856,58673,46,caption_context|cell_fact|column_pack|exact_header|row_pack|table_schema|table_summary
+row_1597,row,1597,2b1fefebadd0603d,"表格 表 '""C""* o 水工混凝土试件开始测试时间的允许偏差 行 开始测试时间允许偏差／B #! #. #,",5,1597,749.9322,true,true,2298,60594,118,caption_context|cell_fact|column_pack|row_pack|table_summary
+row_387,row,387,c3923224d29cb5e3,表格 1.4.2 本文创新点 行 验；在力学性能的获取方面，初次尝试使用复合材料力学理论中的 Halpin-Tsai,5,387,734.8118,true,true,1576,58191,21,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+row_810,row,810,b94a1e4ce2dc6808,表格 表 4.2 堆石混凝土坝钻孔压水计算结果 行 米底河 水库 1# 1.13 1.336×10-5,5,810,489.2777,true,true,1819,58614,58,caption_context|table_summary
+schema_695,schema,695,861aae1bf7be8b00,表格 Table 3: Types of Outlet Works Structures 字段 Types Description,5,695,417.1487,true,true,1780,58499,4,caption_context|cell_fact|exact_cell|exact_header|row_pack|table_summary
+row_1370,row,1370,2e144a61d1cc880e,表格 表 8 流固耦合法坝体自振频率的反应谱值计算成果表 行 2. 2038 3. 3855 3. 9711 5. 2334 6. 1676 6. 4450 6. 4637 8. 2634 11. 486 12. 043 0. 4538...,5,1370,822.884,true,true,2240,59174,6,caption_context|cell_fact|row_pack|table_summary
+row_1334,row,1334,383f0192fa31225f,表格 表 4 坝址区岩石（体）力学性质参数值表 行 岩/岩 岩/岩,5,1334,421.7125,true,true,2202,59138,3,caption_context|table_summary
+row_1008,row,1008,68a9fbdccca99fbb,表格 行 砂率 8.532 35.736 0.038,5,913,50.9059,false,false,1866,58717,66,cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+row_106,row,106,c0e6a577d5c055e2,表格 表6 自密实混凝土配比 行 15-40L 15 5-180L 160-230L 260-330L,5,106,337.3885,true,true,1377,57910,3,caption_context|exact_cell|table_summary
+caption_228,caption,228,cab68ecaf7d9661a,表格 表 2 所列 。,5,228,185.9525,true,true,1485,58032,2,caption_context|table_summary
+row_551,row,551,3df8119316f1a8bd,表格 （a）P0.1-0.5D （b）P0.2-0.5D 行 P0.1-0. 375D-Mode,5,551,381.7775,true,true,1592,58355,87,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+caption_387,caption,387,0ec6d49f26e8b4a3,表格 1.4.2 本文创新点,5,387,274.4059,true,true,1576,58191,21,caption_context|exact_cell|table_summary
+caption_1150,caption,1150,535a25f596914f40,表格 表 4 各龄期工况中回归结果及砌筑砂浆试验值,5,1150,565.1525,true,true,1977,58954,4,caption_context|exact_header|table_summary
+row_118,row,118,d51261164772ad2a,表格 表 5 相对混凝土渗透数据 行 SCC 单元ＲFC C 25W6 28 0. 38 ＞W33,5,118,344.959,true,true,1388,57922,4,caption_context|exact_header|table_summary
+caption_726,caption,726,6dc90d201d93c96d,表格 Table 11-3: Inundation Map Development Guidelines,5,726,466.7015,true,true,1781,58530,111,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_32,cell,32,173731a5f88a4af1,"表格 g $! o Å ^ Ü 11 K iO a2U '#&""0",5,726,69.0744,false,false,1781,58530,111,caption_context|exact_header|numeric_unit|table_schema|table_summary
+schema_1199,schema,1199,caa10ab35e568330,表格 表 26 各个指标评价值域划分 字段 指 标 效应 完全适用 适 用,5,1199,471.5209,true,true,2030,59003,7,caption_context|cell_fact|row_pack|table_schema|table_summary
+row_464,row,464,d569b531b49b78f6,表格 指标的关系，主要结论如下： 行 小，其中 Voigt 算法结果误差最小，为 。堆石混凝土实测弹性模量基本在,5,464,491.8149,true,true,1576,58268,60,caption_context|cell_fact|column_pack|numeric_unit|row_pack|table_summary
+cell_316,cell,316,7836459a2290db97,表格 表 3 岩石 ( 堆石 体 ) 力学 指 标 单 位 : MPa 抗压强度 平均值 74. 8,5,1166,139.0139,false,false,2005,58970,3,caption_context|cell_fact|table_schema|table_summary
+caption_930,caption,930,51edb90ddf774ab2,表格 Table 1 Classification standard of the defects,5,343,377.4725,false,true,1560,58147,3,caption_context|table_summary
+caption_1700,caption,1700,bbdbe32e26cd6233,表格 表A.13 高自密实性能混凝土拌和物性能检验备查表,5,1700,598.1125,true,true,2299,60697,39,caption_context|table_summary
+schema_360,schema,360,f52fcc8bfc4259a4,表格 表 2. 3 堆石岩块样品抗压强度测试结果 字段 块体密度(g/cm3) 抗压强度(MPa),5,360,605.302,true,true,1575,58164,19,caption_context|numeric_unit|row_pack|table_schema|table_summary
+cell_1454,cell,1454,bdb110e302a31f7d,表格 表13 钢筋制作及安装施工质量标准 主 控 项 目 检验项目 钢筋的数量、规格尺寸、安装位置,5,1454,423.6391,true,true,2293,60451,16,caption_context|cell_fact|column_pack|row_pack|table_summary
+cell_1639,cell,1639,fcae38865d8188f3,表格 ００００８ ０１６６４５ ０１６６８６,5,1524,7.0,false,false,2296,60521,86,exact_cell
+schema_1551,schema,1551,ea7a4a1c58c992c5,表格 字段 气候分区 大坝混凝土分区或部位,5,1551,350.7644,true,true,2297,60548,17,cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_1622,schema,1622,8abfe63756799327,"表格 表 7""'""C 。 o 常 态 混凝土 初选 用水量表 单 位 ： OE ／ @ ／ 字段 混凝土 坍落度 ／@@ 天然粗骨料最大粒径／@@ 人工粗骨料最大粒径／@@",5,1622,737.1212,true,true,2298,60619,346,caption_context|cell_fact|row_pack|table_schema|table_summary
+row_122,row,122,41c4886e1071529f,表格 表 9 总体平均渗透系数差异 单位: cm/s 行 6. 079 × 10 －10 8. 899 × 10 －9,5,122,468.7198,true,true,1388,57926,5,caption_context|exact_cell|table_summary
+row_1649,row,1649,830273cbfe071610,表格 表 $ o 混凝土比 热 测定 记录 表 行 初温 终温 初读数 终读数,5,1649,270.9325,true,true,2298,60646,395,caption_context|table_summary
+cell_1565,cell,1565,a5cef0da105dcf67,表格 表 5.2.1 V 形漏斗通过均匀性指标部分试验数据 0.7 细骨料与粗骨料体积比 1.8,5,1565,553.723,true,true,2297,60562,61,caption_context|row_pack|table_schema|table_summary
+row_263,row,263,226befc75f17a790,表格 表 ３ 式 （ ３ ）、（ ５ ）、（ ７ ）、（ ８ ） 中涉及的各项参数 行 等级 Ｃ１５ 类型 灰岩,5,263,437.0114,true,true,1490,58067,4,caption_context|exact_cell|table_summary
+row_920,row,920,93520243581a06e9,表格 温度变化过程方程的系数矩阵 表 6 行 块石内部 -1.0×10-11 (5~6)×10-8 -(7~8)×10-5,5,920,532.7914,true,true,1867,58724,9,caption_context|cell_fact|column_pack|row_pack|table_summary
+row_363,row,363,3e40470fa2956608,"表格 贵州大学2021 届硕士研究生学位论文 基于某实际工程的堆石混凝土力学性能的试验研究 行 水利部,2014)、 2019 年国家能源局发布了《堆石混凝土筑坝技术导则》(中华人",5,363,741.6641,true,true,1576,58167,10,caption_context|cell_fact|column_pack|exact_header|row_pack|table_summary
+caption_59,caption,59,dda3369efe145474,表格 表 4 参数取值区间,5,59,273.3125,true,true,1343,57863,4,caption_context|table_summary
+schema_1573,schema,1573,cb80e4d6aaf4d878,表格 表 7.2.1 部分堆石混凝土拱坝坝顶宽度统计 字段 工程名称 坝高/m 坝顶宽度/m,5,1573,547.6961,true,true,2297,60570,72,caption_context|table_summary
+schema_668,schema,668,412882289ce22097,表格 Appendix G: Example Emergency Level – Potential Failure 字段 Condition Description of Condition Action to be Taken,5,668,560.5061,true,true,1773,58472,65,caption_context|cell_fact|exact_cell|exact_header|row_pack|table_schema|table_summary
+caption_903,caption,903,489e42786073cdf0,表格 W/P 编号 用水量（ kg/m³ ） SF （ mm ） VF （ s ）,5,903,367.9525,true,true,1866,58707,35,caption_context|table_summary
+cell_733,cell,733,4c71211c70afa909,"表格 Appendix B Glossary Dam size classification system Catastrophic type of failure characterized by the sudden, rapid,...",5,733,719.9736,true,true,1781,58537,142,cell_fact|table_schema
+cell_1527,cell,1527,acb149f55f62db51,表格 表 A . O. 4-4 检 测( 试验 )单位记录 样 表(四) 样品名称 工程名称及部位 样品数量,5,1527,304.0001,true,true,2296,60524,89,cell_fact|column_pack|row_pack|table_schema|table_summary
+row_832,row,832,4e2d242dfbdc78c8,表格 确定，分割出的子区域可以包含完整的目标为合适大小。 行 N+1 N+2 2N,5,832,626.7259,true,true,1831,58636,50,caption_context|exact_cell|table_summary
+caption_168,caption,168,41f7c6df055f6d78,表格 表1 堆石混凝土预算定额 Table 1 Budget quota of RFC,5,168,516.3525,true,true,1430,57972,2,caption_context|table_summary
+schema_678,schema,678,338ecdcad3d4a62c,表格 Table 2 – Phased Operational Approach 字段 Phase Status Key Activities Relevant Goals,5,678,456.6467,true,true,1778,58482,24,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_311,cell,311,b7074a69f8d91503,表格 表 3 C20 自密实堆石混凝土配合比设计微调成果 600 ～750 V 漏斗 坍 时间( s) ( 7 ～25 250,5,311,362.4014,true,true,1536,58115,2,caption_context|exact_header|table_summary
+caption_790,caption,790,52b2f200cc4e288c,表格 表 3.4 C15 自密实混凝土抗压强度结果,5,790,460.3525,true,true,1819,58594,36,caption_context|table_summary
+cell_617,cell,617,38f9f69a67b16a43,表格 上上堆上上上上上上应应上上上 018 2019 2020 121 2 3 4 5 6 7 8 9 10 11 121 2 3 4 5 6 2021 2022,5,616,276.9187,false,true,1598,58420,83,caption_context|exact_header|table_summary
+schema_593,schema,593,53400fb5226f3055,表格 表 4.7 试验仓 180 天龄期时超声回弹综合法试验结果 字段 强度等级 C15 C10,5,593,590.9259,true,true,1594,58397,76,caption_context|table_summary
+row_1600,row,1600,2e95ce956cf8809d,"表格 表 '""$(""。 o 最 小 观测总面积及最 小导线 总 长 度 行 ,"" $"""""""" ／""""""",5,1600,525.952,true,true,2298,60597,183,caption_context|cell_fact|row_pack|table_schema|table_summary
+cell_295,cell,295,b683c3dbcd082e8e,表格 表 1 MC-3 型核子湿度密度仪测试结果 坝高15.2 m、 桩号0+039.90 湿密度 （/ kg·m-3） 2 570,5,295,391.5542,true,true,1515,58099,1,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+row_1428,row,1428,beece16f6f5024f8,表格 表 2 堆石混凝土大试件试验内容及尺寸 行 堆石混凝土 大试件试验 立方体大试件抗压强度( 边长450mm，90d 龄期) 抗压弹性模量( 450mm × 450mm × 900mm 棱柱， 90d 龄期) 劈拉强度( 450mm...,5,1428,802.7904,true,true,2282,59232,2,caption_context|cell_fact|column_pack|row_pack|table_summary
+schema_969,schema,969,fddce3df2ea47465,表格 表2.11 掺50﹪粉煤灰水泥浆与KD 相容性试验数据 字段 号 屯河水泥 0 30 60 残存 min min min 率﹪ 天山水泥 青松水泥,5,969,782.367,true,true,1880,58773,27,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_1414,schema,1414,039571963ea0c9fb,表格 表 ２ 绿塘整体浇筑拱坝的典型浇筑时间节点与对应高程 字段 序 号 高程／ｍ 入仓温度／℃ 浇筑开始时间,5,1414,678.5832,true,true,2263,59218,4,caption_context|cell_fact|column_pack|exact_header|row_pack|table_schema|table_summary
+cell_1093,cell,1093,c3c7edda2d1c5cb9,表格 表 2 国内比较有代表性 CSG 坝汇总表 守口堡 地区 山西省,5,1093,218.369,true,true,1901,58897,2,caption_context|exact_cell|exact_header|table_summary
+row_1115,row,1115,67708eb965bd3100,表格 表 1 坝顶高程计算成果 行 正常运用条件1 1104. 00 0. 37 0. 09,5,1115,540.2203,true,true,1945,58919,5,caption_context|cell_fact|row_pack|table_summary
+schema_217,schema,217,7e0d79438ee59d4e,表格 表 5 堆石混凝土绝热温升相关参数计算结果 字段 1 V ρ C 1 + rock rock rock V ρ C scc scc scc 绝热温升 最大值θ /℃ 0,5,217,582.1722,true,true,1474,58021,2,caption_context|exact_header|numeric_unit|table_summary
+row_1481,row,1481,f623f63c99b711aa,表格 高自密实性能混凝土粗骨料质量评定表 行 分部工程名称 施工单位,5,1481,550.9792,true,true,2293,60478,46,caption_context|table_summary
+schema_236,schema,236,5214a3d7d203f4f6,表格 表 9 综合法试验数据 字段 参 数 工程项目 平均值 标准差,5,236,426.8957,true,true,1485,58040,7,caption_context|cell_fact|exact_cell|exact_header|row_pack|table_schema|table_summary
+cell_89,cell,89,fd5992ea9036099c,表格 表 2 自密实性能检测标准表 指标 坍落度 /mm 250 ～280,5,89,329.0316,true,true,1362,57893,2,caption_context|cell_fact|exact_cell|exact_header|row_pack|table_schema|table_summary
+schema_71,schema,71,41499db8e08e2663,表格 表 2 主要工种投入 字段 工种名称 数量/人 备 注,5,71,377.8404,true,true,1353,57875,4,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_1555,schema,1555,cbf2ea7ce8a2b5d7,表格 表 6.4.4 堆石混凝土基础容许温差（ ℃ ） 字段 距基础高度h 浇筑块长边长度l,5,1555,713.0663,true,true,2297,60552,21,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_226,caption,226,f5514e3dff650f88,表格 表 2 自密实混凝土和堆石各项热力学参数,5,226,514.1125,true,true,1475,58030,2,caption_context|table_summary
+caption_204,caption,204,0f58473773a0008b,表格 表 1 混凝土配合比 [6],5,204,307.2268,true,true,1469,58008,3,caption_context|exact_cell|exact_header|table_summary
+schema_506,schema,506,18566285a7026d58,表格 2 作为弹性模量预测值。其中，弹性模量上限 𝐸 𝑏 使用下述公式计算： 字段 表7-6 不同 显著水平 𝜶和相对误差𝜷下的最小切割件数目𝒏,5,506,700.1374,true,true,1582,58310,89,caption_context|column_pack|exact_header|table_schema|table_summary
+row_1149,row,1149,a62df42830c18a94,表格 表 3 抗剪强度试验值及回归计算值 行 0. 0072 0. 087 0. 086 0. 0013,5,1149,439.0725,true,true,1977,58953,3,caption_context|table_summary
+caption_956,caption,956,dca124d6638646de,表格 JX-5与50﹪水泥、50﹪粉煤灰适应性,5,955,519.1262,false,true,1880,58759,23,cell_fact|column_pack|exact_header|row_pack|table_schema|table_summary
+schema_1561,schema,1561,0055b5e3c9ca18fa,表格 续表 4.2.5 字段 省 份 应用 部位 设 计 龄 期/d 设计标号,5,1561,316.6804,true,true,2297,60558,55,caption_context|cell_fact|row_pack|table_schema|table_summary
+row_1550,row,1550,570883b70b3a481f,表格 表 5.1.5 高自密实性能混凝土的水泥用量 行 C 15 90 P.O 42.5,5,1550,494.6688,true,true,2297,60547,16,caption_context|table_summary
+row_1148,row,1148,318677a8eb2ec90a,表格 表 1 砌筑砂浆配合比 行 水泥 碎石,5,1148,304.6452,true,true,1977,58952,1,caption_context|exact_cell|exact_header|table_summary
+cell_1145,cell,1145,d2558688fc1b18cb,表格 表 ２ ＳＣＣ 拌和物工作性能 标 准 测试结果 坍落度 ／ｍｍ ２６０～２８０ ２６５,5,1145,273.6058,true,true,1971,58949,3,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_schema|table_summary
+caption_1525,caption,1525,7f5047f335fc5b5c,表格 表 A. O. 4-2 检测(试验)单位记录样表( 二 ),5,1525,390.9125,true,true,2296,60522,87,caption_context|table_summary
+caption_477,caption,477,4c1b18c883b8785b,表格 6.5 复合材料预测堆石混凝土宏观模量的有效性分析,5,477,678.3861,true,true,1576,58281,67,caption_context|column_pack|table_summary
+row_1021,row,1021,5c9f93aeb5a4e450,表格 外表面积、缺陷统计及孔隙率计算见表 4.7 、表 4.8 所示 行 S 6 S 11,5,1021,549.5144,true,true,1880,58825,65,caption_context|exact_header|table_summary
+caption_1013,caption,1013,18d425aaad24623a,表格 外加剂掺量 -490.345 1233.399 -0.040 -0.398 0.703 a.Dependent Variable: 28 天强度 表3.31 残差统计表,5,1013,734.7525,true,true,1880,58817,55,caption_context|table_summary
+row_1319,row,1319,729d2e0e15c90d73,表格 表 1 纤维增强面板堆石坝混凝土的配合比 行 0.35 0.35,5,1319,522.5436,true,true,2185,59123,2,caption_context|table_summary
+caption_195,caption,195,68b1be662f7f1fa3,表格 Tab. 1 Cement properties,5,195,290.6725,true,true,1458,57999,2,caption_context|table_summary
+cell_1450,cell,1450,f59d7e8c8671f638,表格 表10 基础面处理施工质量标准 主控项目 检验项目 基础面,5,1450,304.5291,true,true,2293,60447,15,caption_context|cell_fact|row_pack|table_summary
+schema_1630,schema,1630,ec67362808cc51b7,"表格 表 7""(""' o 碾 压混凝土砂率 初选 表 字段 骨料最大粒径 ／@@ 水o胶o比",5,1630,529.9834,true,true,2298,60627,353,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_1135,schema,1135,ef83d67eb9dc04d9,表格 表 3 仓面子区域堆石质量评价指标与方法 字段 指标 类型 检测项目 指标合格 要求 不合格,5,1135,666.9469,true,true,1969,58939,8,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_70,schema,70,7252558eca0d9d10,表格 表 2 两种方案的技术比较 字段 项目 堆 石 混 凝 土 胶 凝 砂 砾 石,5,70,356.3765,true,true,1352,57874,3,caption_context|exact_cell|exact_header|table_summary
+schema_1273,schema,1273,65879a50095e3fdd,表格 表 １ 原材料特性统计表 字段 原材料 规格／性能 厂家／产地／品牌,5,1273,336.4694,true,true,2140,59077,2,caption_context|exact_header|table_summary
+caption_787,caption,787,55d7e421f0cd3b9f,表格 表 3.1 堆石混凝土渗流试验内容,5,787,408.2725,true,true,1819,58591,31,caption_context|table_summary
+row_1488,row,1488,81fb098432ef81cd,表格 表3.5.3 标准自密实砂浆试验的性能指标要求 行 扩展度（mm） 250～300 ≥250， 且≥95%初始值 ≥250， 且≥90%初始值,5,1488,555.5125,true,true,2294,60485,12,caption_context|table_summary
+cell_321,cell,321,fbed0c8bf4ad5fae,表格 单 位 : MPa 样本数 －4 ≧4 9 2,5,453,68.9812,false,false,1576,58257,56,column_pack|exact_cell|exact_header|numeric_unit|table_summary
+schema_270,schema,270,5bd076ecbbbbc569,表格 表 6 专用测强曲线推定强度值与实测值对比 字段 序号 fc f0 cu. i cu. i 序号 fc f0 cu. i cu. i 序号 fc f0 cu. i cu. i 序号 fc f0 cu. i cu. i,5,270,578.891,true,true,1496,58074,5,caption_context|exact_cell|exact_header|table_summary
+row_683,row,683,47bdb52a619f4490,表格 Table 6 – Example Threat vs. Public Actions for Controlled Dam Releases 40 行 Level III: Releases exceed or are forec...,5,683,691.9335,true,true,1778,58487,27,caption_context|cell_fact|column_pack|row_pack|table_summary
+row_1213,row,1213,41cd9bd134af9478,表格 表 2 坝体材料调整情况 行 混凝土砌块 堆石混凝土 石筑坝方案 筑坝方案 混凝土砌块 堆石混凝土 差值 石筑坝方案 筑坝方案,5,1213,641.3824,true,true,2038,59017,5,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_1549,cell,1549,fc4638c22283b4bb,表格 表 4.2.7 标准自密实砂浆试验的性能指标要求 扩展度（mm） 出机口 250～300,5,1549,344.9508,true,true,2297,60546,15,caption_context|table_summary
+row_220,row,220,9ab409b4231177aa,表格 表 4 自密实混凝土及块石比热容计算成果 行 密度 ( kg/m3) 比热容 /( KJ· kg －1·℃－1) 岩性 密度/ ( kg/m3),5,220,533.7864,true,true,1474,58024,2,caption_context|exact_header|numeric_unit|table_summary
+cell_1531,cell,1531,7b8952a84ee8b801,表格 O. 037 0.0000 O. 66864,5,1531,101.837,true,true,2296,60528,103,cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_1251,caption,1251,b407daf78888240f,表格 而多元复合胶凝材料用量和CFB掺量影响较小。V漏斗排,5,1251,564.5125,true,true,2097,59055,5,caption_context|table_summary
+cell_117,cell,117,54d83e90b5e697e9,表格 表 3 渗透系数计算对比 1. 05 稳定渗流K /( m/s) 5. 74 × 10 －8,5,117,325.8955,true,true,1388,57921,3,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_1446,schema,1446,85927538c1992fcd,表格 表6 原材料计量允许偏差 字段 项目 水泥 骨料 掺合料,5,1446,358.0592,true,true,2293,60443,11,caption_context|table_summary
+schema_1366,schema,1366,8a778e2617fb201d,表格 表 4 工况及荷载组合表 字段 计算工况 上游水位 /m 下游水位 /m 荷载名称,5,1366,496.5855,true,true,2240,59170,3,caption_context|cell_fact|row_pack|table_schema|table_summary
+cell_48,cell,48,d9fc053c4b1c37a0,表格 表 10 堆石混凝土压水试验统计表 1# 透水率（Lu） 0.556,5,48,270.7462,true,true,1331,57852,4,caption_context|exact_cell|exact_header|table_summary
+row_1240,row,1240,3b02a8e4a241e52e,表格 表1 历年月平均气温要素统计表（℃） 行 多年平均气温 -16.4 -13.3 -3.5,5,1240,562.5933,true,true,2075,59044,1,caption_context|cell_fact|row_pack|table_summary
+caption_263,caption,263,678a2c7f363795dd,表格 表 ３ 式 （ ３ ）、（ ５ ）、（ ７ ）、（ ８ ） 中涉及的各项参数,5,263,433.4725,true,true,1490,58067,4,caption_context|table_summary
+cell_87,cell,87,f8d53a09ae3782e5,表格 of friction 1 2 3 4 5 减摩层结构 无减摩 一层聚四氟乙烯薄膜加两层二硫化钼 两层聚四氟乙烯薄膜加一层二硫化钼 两层聚四氟乙烯薄膜加两层二硫化钼 两层聚四氟乙烯薄膜加三层二硫化钼,5,87,513.2579,true,true,1360,57891,4,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+caption_1601,caption,1601,59cc42de0ed7fbf8,"表格 表 '""。C""。 o 不 同初 始 电流 对应的试验 持续 时间",5,1601,397.3376,true,true,2298,60598,200,caption_context|exact_header|row_pack|table_schema|table_summary
+cell_624,cell,624,8104ed28cde7b2b9,表格 防防防防防防防防堆堆上上上温温上上上 018 2019 2020 2 3 4 5 6 7 8 9 10 11 121 2 3 4 5 6 7 8 9 10 11 121 2 3 4 5 6 7 8 2021 2022 2023,5,624,357.0513,true,true,1598,58428,93,caption_context|exact_header|table_summary
+caption_174,caption,174,55c60aa47c0d5eec,表格 表 1 堆石混凝土芯样容重 、 抗压强度检测结果,5,174,535.9754,true,true,1435,57978,3,caption_context|exact_cell|exact_header|table_summary
+schema_554,schema,554,d1b690f7fd02b5dc,"表格 600 kN 之后，试件处于屈服段，刚度逐渐减小到 0 。接下来对每个试件的实验现象 字段 2.36 m m, 800 kN",5,554,716.4592,true,true,1592,58358,99,caption_context|exact_cell|exact_header|table_summary
+row_1111,row,1111,9c0b176c6e460f00,表格 Ｔａｂｌｅ １Ｓｅｌｆ － ｃｏｍｐａｃｔｉｎｇ ｍｏｒｔａｒ ｍｉｘ ｐｒｏｐｏｒｔｉｏｎ 行 水泥 粉煤灰 减水剂,5,1111,200.0809,true,true,1926,58915,2,exact_header|row_pack|table_summary
+caption_1223,caption,1223,931d8fb9ae6ae36e,表格 表 2 副坝自密实混凝土配合比,5,1223,393.7125,true,true,2061,59027,5,caption_context|table_summary
+cell_1411,cell,1411,55070eba155d2997,表格 表 1 组合式混凝土筑坝技术比较分析表 坝体构造设计 常态混凝土 筑坝技术 设横缝、纵缝(重力坝),5,927,506.0318,false,true,1870,58731,4,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_340,caption,340,152215c1e4394af4,表格 常用材料重力坝优缺点比较 表 1,5,340,429.1425,true,true,1557,58144,2,caption_context|exact_cell|exact_header|table_summary
+schema_696,schema,696,84db332ed098681e,表格 Table 4: Normal Dam Operation Activities 字段 Activity Description,5,696,415.5596,true,true,1780,58500,5,caption_context|cell_fact|exact_cell|exact_header|row_pack|table_schema|table_summary
+caption_1566,caption,1566,65462e96cbf656cc,表格 表 5.3.2 国内部分工程堆石混凝土容重,5,1566,472.6725,true,true,2297,60563,62,caption_context|table_summary
+caption_7,caption,7,de35cba1ccecbcbe,表格 TABLE II. 28-DAY COMPRESSIVE STRENGTH AND ELASTIC MODULUS OF CONCRETE,5,7,547.1364,true,true,1163,57811,4,caption_context|column_pack|exact_cell|numeric_unit|table_summary
+cell_1409,cell,1409,7e7500c7fd373c0b,表格 温度变化过程方程的系数矩阵 表 6 块石内部 α 1 -1.0×10-11,5,920,335.4475,false,true,1867,58724,9,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+schema_1015,schema,1015,e72d4dcfbc339b6d,表格 表4.2 砂性能检测数据 字段 表观密度 细度模数,5,1015,423.0824,true,true,1880,58819,58,caption_context|cell_fact|exact_header|row_pack|table_schema|table_summary
+cell_748,cell,748,5cd3972be2b12b6d,表格 表4-2 ZJ-400 型高速制浆机 水灰比 YJ-340 0.5:1,5,748,221.5665,true,true,1797,58552,28,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_47,schema,47,cd741ebe2f5c13ad,表格 表 9 堆石混凝土各月浇筑方量（其中11月份施工4天） 字段 年份 月份 RFC（方） SCC（方）,5,47,523.9301,true,true,1331,57851,4,caption_context|exact_cell|exact_header|table_summary
+row_1001,row,1001,51af5a7b0ad0e705,表格 粉煤灰掺量 53.333 67.454 0.090 0.791 0.473 a. Dependent Variable: 扩展度 表 3.22 残差统计表 行 预测值 566.666 712.6667 6.45,5,1001,746.5705,true,true,1880,58805,52,caption_context|exact_cell|table_summary
+schema_804,schema,804,a2f0dfbca549de3c,表格 表 3.18 扩大后的层间渗透系数分析数据 字段 粉状物 小石 0g 10g 15g,5,804,531.3647,true,true,1819,58608,48,caption_context|exact_cell|exact_header|table_summary
+caption_1355,caption,1355,33770bacf50c502f,表格 表 2 右岸岸坡 ① ～ ③ 坝段抗滑稳定计算结果表,5,1355,485.4211,true,true,2233,59159,3,caption_context|exact_cell|exact_header|table_summary
+cell_1025,cell,1025,088d22174c8ee28a,表格 表4.11 自密实混凝土强度基本数据统计 第一仓 成型日期 2008 年10 月 6 日,5,1025,309.8805,true,true,1880,58829,69,caption_context|table_summary
+caption_212,caption,212,25a5097f802de6d9,表格 表 1 堆石混凝土重力坝体型断面设计统计表,5,212,538.1925,true,true,1471,58016,1,caption_context|table_summary
+row_728,row,728,718b9cbf2f505099,表格 Table 11-5: Suggested Map Symbology for EAP Maps 行 Example Feature,5,728,475.2393,true,true,1781,58532,114,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+caption_885,caption,885,8952b83acc0bf755,表格 图 3.10 入射角为 0° 接触力和时间关系曲线 Fig.3.10 Relationship between contact force and time with the incident angle is 0 0,5,885,828.9395,true,true,1865,58689,33,caption_context|exact_header|table_summary
+schema_1029,schema,1029,9c7d5494160b260b,表格 字段 10.6 36.4 2 类 9X-8-1,5,1029,129.3328,true,true,1880,58833,72,cell_fact|row_pack|table_schema|table_summary
+row_699,row,699,3da6dd81bddd25f9,表格 Table 2-1: Availability of Dam Breach and Inundation Mapping Guidance from ICODS Agencies 行 ICODS Agencies Inundation,5,699,680.3941,true,true,1781,58503,17,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_1540,cell,1540,9c49023c6c72899a,表格 0.187 0. 0000 0. 01687,5,1540,73.8519,true,true,2296,60537,112,cell_fact|row_pack|table_summary
+cell_1514,cell,1514,0faaf3dda57df33d,表格 续表 B.6.1 2.75 3 4 5 10 20 30 00 τ=5d 5.75 6 7 8 10 20 30 00,5,1514,258.1349,true,true,2295,60511,38,cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_468,schema,468,22a87ccaf168d2f7,表格 骨料模型为基础进行。 字段 6.1 ABAQUS 有限元分析软件简介,5,468,637.341,true,true,1576,58272,61,caption_context|cell_fact|column_pack|exact_header|row_pack|table_schema|table_summary
+row_1469,row,1469,22e80a6feabaeee2,表格 堆石混凝土基础面处理工序施工质量验收评定表 行 分部工程名称 施工单位,5,1469,630.3703,true,true,2293,60466,33,caption_context|cell_fact|column_pack|row_pack|table_summary
+row_1041,row,1041,52eece2cd5aad3f4,表格 表 3-6 针入度侧定条件 Table 3-6 Penetration side given conditions 行 0 4 200 200 60 60 25 46.1,5,1041,579.114,true,true,1888,58845,28,caption_context|table_summary
+caption_816,caption,816,b976c4074902283c,表格 表 6.1 温度场与渗流场对比 [97],5,816,403.3525,true,true,1819,58620,76,caption_context|exact_cell|exact_header|table_summary
+schema_149,schema,149,48a8338646359087,表格 表 4 C10、C15 层间抗剪裂缝走势及倾斜角 字段 试验仓 裂缝 编号 裂缝 走向 裂缝横向 测距/ mm,5,141,646.6637,false,true,1400,57945,4,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+caption_411,caption,411,5a281aa0b3bae555,表格 表3.4 大试件超声、回弹值与立方体抗压强度对应关系,5,411,640.4534,true,true,1576,58215,37,caption_context|exact_header|table_schema|table_summary
+schema_1169,schema,1169,c13eef6d98269d22,表格 表 6 J2 钻孔压水试验成果表 字段 试验高程/m 试段长度/m 压力/MPa 试段流量 /( L/min),5,1169,578.7254,true,true,2005,58973,4,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_1383,caption,1383,de37f72c316f5ffe,表格 C25 208 366 882 509 219 10.9,5,1383,338.8325,true,true,2253,59187,5,caption_context|table_summary
+caption_621,caption,621,30cb5fd92661457f,表格 防防中中坝堆上上上上上上应应上上上,5,612,442.9925,false,true,1598,58416,67,caption_context|table_summary
+row_1484,row,1484,ec357b7a4563bd43,表格 实体质量抽样检测记录表 行 分部工程名称 施工日期 自 年 月 日 至 年 月 日,5,1484,510.6801,true,true,2293,60481,49,caption_context|cell_fact|column_pack|row_pack|table_summary
+schema_968,schema,968,f403dcb5541830e6,表格 字段 97% 108%,5,968,93.5502,true,true,1880,58772,27,cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+schema_569,schema,569,9c9ed7e5e7304027,表格 字段 试件 尺寸 试验 序号 450×450×450mm3 破坏荷载 抗压强度 /KN /MPa 300×300×300mm3 破坏荷载 抗压强度 /KN /MPa 150×150×150mm3 破坏荷载 抗压强度 /KN /MPa,5,568,402.0131,false,true,1594,58372,44,cell_fact|column_pack|row_pack|table_schema|table_summary
+row_1478,row,1478,14e3cb4505db0424,表格 分部工程施工质量评定表 行 分部工程名称 施工日期 年 月 日 -- 年 月 日,5,1478,501.6011,true,true,2293,60475,43,caption_context|cell_fact|column_pack|exact_header|row_pack|table_summary
+cell_302,cell,302,7e91c07215bf341e,表格 石料入仓工序质量标准表 1 2 3 4 检验项目 仓面强度,5,302,358.8477,true,true,1527,58106,4,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+schema_281,schema,281,46ad1216850f4b0a,表格 Ｔａｂｌｅ１ Ｍｉｘｐｒｏｐｏｒｔｉｏｎｏｆｓｅｌｆ⁃ｃｏｍｐａｃｔｉｎｇｃｏｎｃｒｅｔｅ 字段 水 泥 粉煤灰 石 子 外加剂,5,281,228.8235,true,true,1509,58085,3,exact_cell|exact_header|table_schema|table_summary
+row_353,row,353,189f52a90b166848,表格 Table 2 Test data of standard self-compacting mortar 行 V漏斗/s 5.25 7.19 7.25,5,353,467.4829,true,true,1567,58157,4,caption_context|cell_fact|exact_cell|row_pack|table_summary
+caption_756,caption,756,afc32ca65257f3bd,表格 具有很强的实用价值，目前在变量简化、相关性分析及数据意义的评估 [27] 。,5,756,685.4859,true,true,1800,58560,12,caption_context|exact_header|table_summary
+schema_181,schema,181,29ed68016fdbc5a6,表格 质量用量 / kg 186．5 223．8 344 902 523 5．5 字段 检测项目 标准要求 检测结果 结果判定,5,176,600.8704,false,true,1436,57980,2,caption_context|exact_cell|exact_header|row_pack|table_schema|table_summary
+caption_54,caption,54,bc2c742736a4988a,表格 表 1 石块重和自密实混凝土用量,5,54,453.8425,true,true,1342,57858,2,caption_context|exact_cell|exact_header|table_summary
+schema_1499,schema,1499,149cfbc144e4b0a5,表格 F.0.2 表 F.0.2 高自密实性能混凝土浇筑工序质量评定表 字段 单位工程名称 单元工程量,5,1499,646.2725,true,true,2294,60496,34,caption_context|table_summary
+cell_1310,cell,1310,8e2d21308907388c,表格 表 6 沿水平坝基面抗滑整体稳定计算成果表 基本荷载组合1 抗剪断安全系数K′ 3.03,5,1310,465.9608,true,true,2179,59114,5,caption_context|cell_fact|row_pack|table_summary
+row_251,row,251,9e980674d5e34687,表格 表5 左岸分层抗滑稳定安全系数计算成果表 Table 5 Calculation results of layered anti-sliding stability safety factor for left bank 行 472...,5,251,887.4525,true,true,1487,58055,6,caption_context|exact_cell|table_summary
+caption_697,caption,697,acb1c4993b07873c,表格 Table 5: Dam Failure Modes,5,691,327.506,false,true,1779,58495,8,caption_context|cell_fact|exact_cell|row_pack|table_schema|table_summary
+row_1513,row,1513,a89e4423dad654ab,"表格 表 B.6.1 混凝土的松弛系数 行 H(t ，τ) H (t, r) H(t ,r)",5,1513,350.0325,true,true,2295,60510,37,caption_context|table_summary
+caption_733,caption,733,d6cf589710faa225,表格 Appendix B Glossary,5,732,250.9125,false,true,1781,58536,141,caption_context|table_summary
+caption_1227,caption,1227,3207ed5740f23c28,表格 表2 仓内温度监测指标汇总 Table 2 Summary of temperature monitoring indicators inside the placement,5,1227,742.7068,true,true,2063,59031,3,caption_context|exact_header|table_summary
+row_571,row,571,f2fe8982aa9afe85,表格 行 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 2.26 1.91 2.24 2.55 1.80 2.17 2.29 2.55 1.96 1.77 2.53 2.62 1.89 1.74...,5,571,516.7943,true,true,1594,58375,51,cell_fact|column_pack|exact_header|row_pack
+cell_1578,cell,1578,9fba0f053e24ad65,"表格 表 。 ""$C""。 o 粗骨料表观密度及吸水率试验取样质量表 最少取样质量／OE ,""粒*$"" （*!""） *""",5,1578,456.4666,true,true,2298,60575,52,caption_context|cell_fact|column_pack|row_pack|table_summary
+row_1265,row,1265,62240db76ee957bb,表格 表 3. 3 高自密实性能混凝土强度与耐久性检测结果 行 立方体抗压强度 7d 15. 1MPa,5,1265,622.4725,true,true,2118,59069,1,caption_context|table_summary
+caption_1558,caption,1558,e90bdfd75f166d6a,表格 表 E.1.1 堆石混凝土试件的尺寸形式要求,5,1558,492.2725,true,true,2297,60555,37,caption_context|table_summary
+row_1173,row,1173,d60d08b3171b52a1,表格 行下一道工序；现场设备的选择主要是指运输设备的选择，包括型号的 确定与设备的具体布置，根据坝体填筑的高度（最大坝高为 57.2m ），为 解决上部坝体块石的垂直运输，结合大坝施工特点和现场的实际地形 条件，上部坝体的块石主要采用塔式...,5,1173,865.3125,true,true,2023,58977,1,caption_context|exact_cell|table_summary
+row_1563,row,1563,f35053b8dd9b81d4,表格 表 5.1.7 部分工程高自密实性能混凝土掺合料使用情况表 行 XLG 水库 青海 C 25W6F300 90 50%,5,1563,623.1259,true,true,2297,60560,59,caption_context|table_summary
+cell_1563,cell,1563,c95ffd4b659b5e61,表格 表 5.1.7 部分工程高自密实性能混凝土掺合料使用情况表 XLG 水库 所在地 青海,5,1563,399.4992,true,true,2297,60560,59,caption_context|table_summary
+row_934,row,934,fceb41a324a34b8b,表格 砂的表观密度 表 1 行 600.0 1317.4 1695.2,5,934,372.5159,true,true,1879,58738,2,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+row_52,row,52,2e0d4ecb75b14d4d,"表格 1 筑坝材料方案比选 行 二 坝体布置 30 道坝坝体孔洞结构少,分缝宽度不宜超过 m 二道坝坝体孔洞结构少,分缝宽度不 宜超过40m 两种方案均布置简单",5,52,583.0989,true,true,1338,57856,2,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+caption_883,caption,883,9fe9683f537fbe95,表格 沈阳工业大学硕士学位论文,5,883,395.3925,true,true,1865,58687,32,caption_context|table_summary
+caption_533,caption,533,a40f091e013e8de2,表格 而其余 5 个试件水平荷载均为缓慢下降，最终稳定在某个残余值。,5,533,658.5925,true,true,1592,58337,36,caption_context|table_summary
+caption_1598,caption,1598,4ef48413a83a5e1f,"表格 表 '""$C""$ o 研 磨 钢球 数量与 直 径",5,1598,312.0942,true,true,2298,60595,170,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_schema|table_summary
+schema_1085,schema,1085,3203487007af08ec,表格 www.nature.com/scientificreports/ 字段 Mesoscopic mechanical parameters Rock Self-compacting mortar Coarse aggregate,5,1085,473.5866,true,true,1896,58889,8,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_1110,caption,1110,85bd30bf2b8773f2,表格 表 4 修改方案下游冲坑深度,5,1110,418.2158,true,true,1925,58914,4,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+cell_1291,cell,1291,8742754a7c975209,表格 表5 混凝土与岩石间抗剪断参数 Table 5 Shear mechanical parameters between concrete and rock 坝基 f ′ 0.8,5,1291,322.9125,true,true,2154,59095,3,caption_context|table_summary
+caption_1229,caption,1229,0d3f632c510152f4,"表格 最终，确定 DEM 堆石颗粒生成所用级配曲线与现场二维分割所得级配曲线保持一致，长短轴 比  的随机取值区间为 [1.2, 2.0] ，顶点数 n 的随机取值区间为 [8, 25] 。此时， SEG-2D 与 DEM-2D 投 影...",5,1229,887.0725,true,true,2068,59033,6,caption_context|table_summary
+cell_1178,cell,1178,7e4a81df35d4fe32,表格 表 3 社会效益适用性评价标准 社会效益 不适应 < 0．25,5,1178,289.4499,true,true,2030,58982,4,caption_context|cell_fact|column_pack|row_pack|table_summary
+caption_468,caption,468,0cbfed84f45809fd,表格 骨料模型为基础进行。,5,467,511.2334,false,true,1576,58271,61,cell_fact|column_pack|exact_cell|row_pack|table_schema|table_summary
+row_1618,row,1618,7e83ea0e7bfe60b8,"表格 表 7""$""& o 标 准差 ! 选 用值 单 位 ： 度 aC 行 混凝土抗压强度标准差 ／0$ .0"" .0$",5,1618,397.2769,true,true,2298,60615,340,cell_fact|column_pack|row_pack|table_summary
+row_1569,row,1569,60bad67b0beb17de,表格 表 6.2.1 国内部分堆石混凝土重力坝坝顶宽度统计 行 SL 水库 重力坝,5,1569,598.2499,true,true,2297,60566,64,caption_context|table_summary
+caption_130,caption,130,c9a5799e150fae00,表格 中图分类号：TV641.4 文献标识码：A 文章编号：1006-7973（2021）11-0097-03,5,130,598.6725,true,true,1391,57934,1,caption_context|table_summary
+row_1167,row,1167,7e6c73b234c399e1,表格 表 3 取芯钻孔统计表 行 距坝顶 上游侧 距大坝 右坝端,5,1167,349.3042,true,true,2005,58971,3,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_summary
+cell_1652,cell,1652,772f1fbff59938eb,"表格 表 & （ 续 ） R!$ 配比用料 ""0,",5,1651,133.209,false,true,2298,60648,411,cell_fact|row_pack|table_schema|table_summary
+row_1263,row,1263,b2e2f634acd54de4,表格 表 3. 1 高自密实性能混凝土配合比 ( kg/m 3 ) 行 1# C15W4F50 理论值,5,1263,514.5546,true,true,2118,59067,1,caption_context|table_summary
+caption_383,caption,383,dc71cef8c8ef1ce4,表格 贵州大学2021 届硕士研究生学位论文 基于某实际工程的堆石混凝土力学性能的试验研究,5,386,705.2652,false,false,1576,58190,21,caption_context|exact_header|table_summary
+caption_921,caption,921,a180b045ebe3093f,表格 石坝河水库坝体重点仓面监测成果 表 7,5,921,490.0325,true,true,1867,58725,9,caption_context|table_summary
+schema_1272,schema,1272,f33f84c2b2db53ba,表格 表 2 模板形式优缺点分析表 字段 模板形式 优点 缺点,5,1272,460.4475,true,true,2123,59076,2,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+row_1454,row,1454,9e2bb647908b3bdb,表格 表13 钢筋制作及安装施工质量标准 行 主 控 项 目 钢筋的数量、规格尺寸、安装位置 符合质量标准和设计的要求 对照设计文件 检查,5,1454,578.4043,true,true,2293,60451,16,caption_context|cell_fact|column_pack|row_pack|table_summary
+row_277,row,277,b3a93c3c53ec9f0c,表格 表 2 自密实混凝土工作性能 行 635 27. 5 270 605 — —,5,277,385.1259,true,true,1505,58081,2,caption_context|table_summary
+row_85,row,85,7ef3e15123556c85,表格 表8 堆石混凝土与埋石混凝土主体工程造价对比 Table 8 Comparison of cost between main engineering projects of Rock-filled Concrete and buri...,5,85,908.2859,true,true,1355,57889,3,caption_context|exact_cell|exact_header|table_summary
+caption_158,caption,158,70dc521d3e5c97ad,表格 粘土心墙土石坝方案和堆石混凝土坝方案工程投资概算对比表,5,158,744.3401,true,true,1413,57962,4,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+schema_1643,schema,1643,bb9b170e9abebed8,表格 字段 ００００９ ００３６２０ ００３５２８ ００３４４２,5,1524,5.0,false,false,2296,60521,86,exact_cell
+caption_1588,caption,1588,c687490079c31962,"表格 表 。 ""。(""。$ o 骨料碱活性检验 （ 岩相法 ） 细骨料取样质量表",5,1588,552.7241,true,true,2298,60585,77,caption_context|exact_header|table_summary
+cell_1478,cell,1478,24e6a21d37715079,表格 分部工程施工质量评定表 分部工程名称 施工单位 施工日期,5,1478,371.049,true,true,2293,60475,43,caption_context|cell_fact|column_pack|row_pack|table_summary
+caption_717,caption,717,1034a93075847c05,表格 Table 10-2: Methods for Breach Hydrograph Generation Only,5,717,508.4104,true,true,1781,58521,76,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+schema_501,schema,501,41a20be103eaadc3,表格 表 5.2 不同 SCC 等级串并联算法与有限元模拟值（ GPa ） Tab. 5.2 Series-parallel algorithms and finite element simulation values of diffe...,5,501,878.9532,true,true,1581,58305,67,caption_context|exact_header|table_summary
+cell_1363,cell,1363,2baa7209f11d08f3,表格 表 3 高自密实性能混凝土配合比( 堆石率 55．00% ) 水泥 135 粉煤灰 324 砂 801 质量/ 材料名称 ( kg·m－3) 石子 791．00 水 182．00 外加剂 2．90,5,1363,459.8452,true,true,2235,59167,5,caption_context|cell_fact|row_pack|table_summary
+caption_102,caption,102,27a0cb708b6a4fa6,表格 表3 常态混凝土与堆石混凝土比较,5,102,488.2507,true,true,1377,57906,2,caption_context|exact_cell|exact_header|table_schema|table_summary
+caption_367,caption,367,dc71cef8c8ef1ce4,表格 贵州大学2021 届硕士研究生学位论文 基于某实际工程的堆石混凝土力学性能的试验研究,5,386,705.2652,false,true,1576,58190,21,caption_context|exact_header|table_summary
+caption_1625,caption,1625,06496deb740e644a,"表格 表 7""'""C ' （ 续 ）",5,1524,7.0,false,false,2296,60521,86,exact_cell
+schema_1024,schema,1024,14c6825a31ce04fb,表格 表4.10 混凝土强度的合格判定系数 字段 试件组数 10～14 15～24 ≥25,5,1024,548.2971,true,true,1880,58828,69,caption_context|row_pack|table_schema|table_summary
+row_231,row,231,546fdd60a92b721d,表格 表 5 RFC 大试件弹性模量值分布 行 石龙沟 绿 塘 0 0 3 13 7 2,5,231,415.8348,true,true,1485,58035,5,caption_context|exact_cell|table_summary
+row_36,row,36,f0ac6701e8a67c34,表格 表 3 围滩水电站工程某阶段Ｃ 15 自密实混凝土配合比 行 单位用量／ｋｇ·ｍ—3 2 186 6 331 6∙9,5,36,616.4687,true,true,1330,57840,4,caption_context|exact_cell|table_summary
+caption_434,caption,434,f9685c08c3f5df12,表格 4.4 本章小结,5,434,249.7394,true,true,1576,58238,51,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_319,caption,319,909209ceb77de4c9,表格 单 位 : MPa,5,315,190.4325,false,true,1539,58119,2,caption_context|table_summary
+row_658,row,658,95b7a97444f5e346,表格 泥用量越多，水化放热总量越大，导致最终绝热温升值越大，与实际情况相符 行 SCC- JR2,5,658,677.8659,true,true,1608,58462,33,caption_context|exact_cell|exact_header|table_summary
+row_544,row,544,29c4a118a8940d1c,表格 图3.14 堆石骨料直接剪切破坏剪切荷载滑移关系模拟（P0.3-N-B） 行 C-step6 D-Step50,5,544,722.9312,true,true,1592,58348,61,caption_context|cell_fact|column_pack|row_pack|table_summary
+caption_1291,caption,1291,d9e9b5296f7ef031,表格 表5 混凝土与岩石间抗剪断参数 Table 5 Shear mechanical parameters between concrete and rock,5,1291,768.9125,true,true,2154,59095,3,caption_context|table_summary
+cell_791,cell,791,495653e3c429eb4f,表格 表 3.5 自密实混凝土抗渗试验记录 水压力(MPa) SCC-4 0.775,5,791,258.1823,true,true,1819,58595,37,caption_context|numeric_unit|table_summary
+cell_273,cell,273,9963fda331862fa3,表格 表 4 自密 实 混凝土不同龄 期 的抗压强 度 试验仓 7 d均值/MPa 12.4,5,273,218.8805,true,true,1499,58077,2,caption_context|cell_fact|exact_header|numeric_unit|row_pack|table_summary
+row_1624,row,1624,8f6bdabdf0b713e5,"表格 表 7""'""C ' o 常 态 混凝土砂率 初选 表 称 行 ""0."" ""0$"" ""0)"" ""0-""",5,1624,336.7525,true,true,2298,60621,347,caption_context|table_summary
+schema_1629,schema,1629,4fac3b020d9e29a8,"表格 表 7""(""& o 碾 压混凝土用水量 初选 表 字段 碾压混凝土 Z设值 ／= 天然粗骨料最大粒径／@@ 人工粗骨料最大粒径／@@",5,1629,728.5559,true,true,2298,60626,352,caption_context|cell_fact|row_pack|table_schema|table_summary
+caption_721,caption,721,3d699201b22d5725,表格 Table 10-4: Summary of One-Dimensional Models,5,721,397.2744,true,true,1781,58525,84,caption_context|exact_cell|table_summary
+row_1448,row,1448,f670691469cb706e,表格 表8 高自密实性能混凝土拌和物检验 行 拌和物配料称量 称量系统 每4 h进行1次,5,1448,637.196,true,true,2293,60445,13,caption_context|cell_fact|column_pack|row_pack|table_summary
+caption_1648,caption,1648,12fa0ec59bed7de8,"表格 ,0*称 。 建 议 以 查 表法的结果为准 。",5,1648,355.6325,true,true,2298,60645,394,caption_context|table_summary
+row_175,row,175,b0f05917bc161360,表格 表 1 自密实混凝土配合比 行 体积用量/ L 186．5 5．5,5,175,372.9989,true,true,1436,57979,2,caption_context|exact_cell|exact_header|table_summary
+schema_1517,schema,1517,c584886231922981,表格 表C. 0.1-2 传热系数修正值 字段 保温层种类 Kbl Kb2 2. 3 1. 9 1. 5 1. 5,5,1517,557.1756,true,true,2295,60514,42,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_1257,schema,1257,ccc64982745bdc69,表格 强度 ：２１􀆰７ＭＰａ。 字段 序号 工程名称 坝型 设计等级,5,1257,218.3503,true,true,2110,59061,3,row_pack|table_schema|table_summary
+schema_1201,schema,1201,d4a396f4a1c58cd6,表格 表1 国内已建堆石混凝土拱坝统计表 Table 1 Existing Rock-filled Concrete arch dams in China 字段 序号 规模 工程名称 省份,5,1201,831.0325,true,true,2032,59005,2,caption_context|table_summary
+schema_750,schema,750,c6ad26bb412ae0b1,表格 表4-3 3-SNS 高压注浆泵 字段 型号 3SNS,5,750,377.0937,true,true,1797,58554,29,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+row_11,row,11,d5c702bdcdd3c28f,"表格 Fig. 9 . RFC four-phase model with aggregates, ITZ, SCC and ACU. 行 Elastic modulus, E (MPa) 48,444.23 23,907.00 9562...",5,11,603.6708,true,true,1165,57815,8,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+caption_803,caption,803,ec2437c5cdb4a3ef,表格 表 3.17 不同层间状况渗透系数计算结果,5,803,537.3268,true,true,1819,58607,43,caption_context|cell_fact|table_schema|table_summary
+row_1655,row,1655,ec399a8a06565f33,"表格 表 ) o 振实时间对 碾 压混凝土表观密度的 影响 行 *倍Z设（*""=） !$-／ !$!* /,0""",5,1655,547.1718,true,true,2298,60652,415,caption_context|cell_fact|row_pack|table_schema|table_summary
+cell_232,cell,232,9974bbed51148c68,表格 绿 塘 0 86. 7 13. 3 0 石龙沟 绿 塘 平均值 27. 4 34. 1,5,232,163.6717,true,true,1485,58036,5,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_summary
+schema_1571,schema,1571,b65a268510a6a8a4,表格 表 6.3.1 部分高抗渗等级要求的自密实混凝土配合比参数 字段 工程名称 设计强度等级 单方材料用量/kg/m³,5,1571,697.0364,true,true,2297,60568,68,caption_context|row_pack|table_schema|table_summary
+cell_110,cell,110,4c86c6118c61fe97,表格 表 3 砂石骨料性能检测结果 饱和面干密度/kg·m －3 砂＜5 mm 2 670,5,110,397.9344,true,true,1380,57914,2,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+schema_390,schema,390,f874d2b9e4b12617,"表格 贵州大学2021 届硕士研究生学位论文 基于某实际工程的堆石混凝土力学性能的试验研究 字段 等,2018) 。朱和国、张爱文在《复合材料原理》一书中把混凝土列入复合材料发",5,390,725.3243,true,true,1576,58194,24,caption_context|column_pack|exact_header|table_schema|table_summary
+row_1191,row,1191,396198a0fadaa411,表格 表 18 施工风险等级适用性评价标准 行 施工风险 等级 ≤0．3 0．3 ~ 0．85 ≥0．85,5,1191,451.3471,true,true,2030,58995,6,caption_context|table_summary
+caption_306,caption,306,06549f8701c800bf,表格 表 3 混凝土塑性参数表,5,306,321.4725,true,true,1528,58110,3,caption_context|table_summary
+schema_676,schema,676,992e1eee4677038d,表格 FEMA Dam Incident Planning Guide 字段 Incident Type Incident Description Notice or,5,676,449.345,true,true,1778,58480,19,caption_context|cell_fact|row_pack|table_schema|table_summary
+row_1531,row,1531,355153206f145762,表格 行 O. 037 O. 66864 O. 66721 0. 66579,5,1531,77.8863,true,true,2296,60528,103,cell_fact|column_pack|exact_header|row_pack|table_summary
+row_1625,row,1625,f5e5a20811c265c4,"表格 表 7""'""C ' （ 续 ） 行 ""0."" ""0$"" ""0)"" ""0-""",5,654,56.6812,false,false,1606,58458,65,caption_context|exact_header|table_summary
+caption_1472,caption,1472,f337f08be10e9fe2,表格 表C.4（续）,5,1472,181.4725,true,true,2293,60469,36,caption_context|table_summary
+row_629,row,629,401570f183125fca,表格 1.0212 ( ) 19.11(1 exp( 0.4976 ))      (3.4) 实测温升曲线和拟合曲线见图 3-6 ： 行 𝜃(𝜏) = 19.11(1 −exp (−0.497 6𝜏1 .021 2)),5,629,908.2956,true,true,1601,58433,26,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_summary
+schema_1608,schema,1608,9d960ed5c1e0b29d,"表格 表 *""$""& $ o 不 同 养护 条 件 下波 速 修正 值 单 位 ： O@ ／ = 字段 混凝土强度 ／度aC 养o护o条o件",5,1608,330.2976,true,true,2298,60605,269,cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_1458,cell,1458,a2e9ff9d7bbd99ed,表格 表15 伸缩缝（填充材料）施工质量标准 主控项目 检验项目 伸缩缝缝面,5,1458,313.2572,true,true,2293,60455,18,caption_context|cell_fact|column_pack|row_pack|table_summary
+caption_493,caption,493,926f1b19e503d9db,表格 c 65% 堆石率曲线拟合 d 试验曲线拟合 图 4.4 P-CMOD 曲线拟合示意图 Fig. 4.4 Schematic diagram of P-CMOD curve fitting,5,493,811.9107,true,true,1581,58297,59,caption_context|exact_header|table_summary
+schema_869,schema,869,20c3355b62e72911,表格 图 3.10 柔性网孔径和外加剂掺量对粗骨料通过能力的影响 字段 SCC-AD0.8% ( SCC-AD0.9% ( SCC-AD1.0% ( SCC-AD0.8% ( SCC-AD0.9% ( 5-10mm) 5-10mm) 5-...,5,869,834.2112,true,true,1856,58673,46,caption_context|cell_fact|column_pack|exact_header|row_pack|table_schema|table_summary
+caption_1555,caption,1555,a3dfa32d607fafda,表格 表 6.4.4 堆石混凝土基础容许温差（ ℃ ）,5,1555,451.3925,true,true,2297,60552,21,caption_context|table_summary
+cell_230,cell,230,de9672553b100a70,表格 表 3 试验关系结果 1 抗压强度/ MPa 工程项目 石龙沟2021 绿塘水库,5,230,297.119,true,true,1485,58034,5,caption_context|cell_fact|row_pack|table_summary
+schema_178,schema,178,30145c4860699cf9,表格 表 4 不同层面工况的抗剪特性参数 字段 试块 编号 试块 组别 28d 90d,5,183,471.303,false,true,1437,57987,6,caption_context|exact_cell|exact_header|table_summary
+schema_1408,schema,1408,d765fc8281df9ae3,表格 各仓面高程及开仓时间统计 表 5 字段 仓面名称 仓面高程(m) 开仓时间,5,919,558.6223,false,true,1867,58723,4,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_1503,caption,1503,f38358791f65d845,表格 表 4-3 部分掺加粉煤灰的高自密实性能混凝土施工配合比,5,1503,652.4325,true,true,2294,60500,49,caption_context|table_summary
+schema_624,schema,624,1a3b8521c535af7b,表格 防防防防防防防防堆堆上上上温温上上上 字段 1 2 3 4 5 6 7 8 9 10 11 121 2 3 4 5 6 7 8 9 10 11 121 2 3 4 5 6 7 8 9 10 11 121 2 3 4 5 6 7 8...,5,624,615.5749,true,true,1598,58428,93,caption_context|exact_header|table_summary
+caption_807,caption,807,4e56ca127ac3d12f,表格 水层内，如下图 4.7a 所示。在稳态渗流情况下，以钻孔轴心为半径的任一断面,5,807,689.9525,true,true,1819,58611,56,caption_context|table_summary
+cell_642,cell,642,e62a5723ab6733c6,表格 第三章 堆石混凝土剪切性能试验 0 0 加载位 6 0. 位移,5,642,239.8333,true,true,1606,58446,42,caption_context|table_summary
+row_319,row,319,8e8fc29b3b147f07,表格 单 位 : MPa 行 比例% 38. 5 53. 8 5 . 1,5,319,214.2736,true,true,1539,58123,4,caption_context|exact_cell|numeric_unit|row_pack|table_summary
+schema_1223,schema,1223,67687bf7eb311627,表格 表 2 副坝自密实混凝土配合比 字段 水泥 /kg·m －3 粉煤灰 /kg·m －3 砂 /kg·m －3 小石 /kg·m －3,5,1223,424.5747,true,true,2061,59027,5,caption_context|table_summary
+cell_1341,cell,1341,b6cdfb2b12674c50,表格 表 1 坝体温度特征值统计表( EL664. 0 ) T4 埋设桩号 横0 + 056. 65 纵0 + 000. 772,5,1341,380.846,true,true,2219,59145,3,caption_context|cell_fact|column_pack|exact_header|row_pack|table_schema|table_summary
+caption_163,caption,163,0435ca97abbcfda5,表格 表1 堆石料的性能参数（白云质灰岩）,5,163,412.7525,true,true,1420,57967,2,caption_context|table_summary
+row_58,row,58,ae159759e9e9df6f,表格 表 3 试验样本 行 15. 5 3. 5 12. 613 16. 138,5,58,279.0377,true,true,1343,57862,4,caption_context|row_pack|table_summary
+cell_291,cell,291,698e7d7a14de9cd7,表格 空隙率 ／％ １. ０ ２. ８ ２. ８ ２＃－１ ０. ８２ ２＃－２ ０. ７１ ２＃ ２＃－３ ０. ７８ ２＃－４ ０. ６７ 坝段 检测孔 透水率／Ｌｕ ３＃－１ ０. ６３ ３＃－２ ０. ７０ ３＃ ３＃－３ ０....,5,1067,261.7231,false,false,1888,58871,52,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_summary
+schema_1603,schema,1603,88976e3ecf0f43b8,"表格 表 )""'""。 o 水工 碾 压混凝土试件尺寸与试模 单 位 ： @@ 字段 骨料 最大 粒径 抗压试件 劈拉试件 抗弯试件 抗剪试件",5,1603,693.766,true,true,2298,60600,242,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_522,caption,522,c4e681a8fe59a298,表格 （ 2 ）根据点到平面的距离公式，  平面和  平面到原点的距离 d 和 d  可分别根据式,5,522,740.9125,true,true,1586,58326,32,caption_context|table_summary
+schema_941,schema,941,16a6defee5c5e236,表格 表 2.1 2007 年我国各品种混凝土外加剂产量（万吨） 字段 高效减水剂 高性 能减 水剂 木质 素磺 酸系 引气 剂,5,941,700.2716,true,true,1880,58745,14,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_599,caption,599,3b6f6c5fd3d60eb7,表格 尺寸 450mm×450mm×900mm 300mm×300mm×600mm,5,599,380.8325,true,true,1594,58403,89,caption_context|table_summary
+caption_1346,caption,1346,3c2ae75b0039dfab,表格 表 3 C 90 15W8 自密实混凝土力学性能参数,5,1346,490.0325,true,true,2221,59150,3,caption_context|table_summary
+cell_732,cell,732,357652273c288633,表格 Appendix B Glossary Two-dimensional hydraulic model One-dimensional hydraulic modeling considers flow variations in...,5,732,326.4268,true,true,1781,58536,141,cell_fact|row_pack|table_schema|table_summary
+cell_1134,cell,1134,03d74c64c89f8c29,表格 堆石 Mask 实例 。 不同工程堆石照片的人工标注与模 0. 838 0. 846 Mask 0. 840 0. 847,5,1134,327.1192,true,true,1969,58938,4,caption_context|table_summary
+schema_59,schema,59,2c82d6a758785fed,表格 表 4 参数取值区间 字段 类别 最终绝热 温升/℃ 比热容 /( J·kg －1·℃－1) 导热系数 /( W·m －1·℃－1),5,59,518.4489,true,true,1343,57863,4,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_617,caption,617,0b34c3f0cd540c7f,表格 上上堆上上上上上上应应上上上,5,608,365.1525,false,true,1598,58412,65,caption_context|table_summary
+caption_441,caption,441,b7493380c9f2def3,表格 −𝜓(𝜎̃ 𝑖𝑗 ) ≤−𝜓(𝜎 𝑖𝑗 ) = Φ (𝑢 𝑖 ) ≤ Φ (𝑢̃ 𝑖 ) （ 5-3 ）,5,441,387.5525,true,true,1576,58245,53,caption_context|table_summary
+cell_803,cell,803,ff7e0d28beaa9fe9,表格 表 3.17 不同层间状况渗透系数计算结果 CJ0-1 界面状态 无小石,5,803,426.1332,true,true,1819,58607,43,caption_context|row_pack|table_schema|table_summary
+caption_534,caption,534,ae3845183bd23659,表格 段，之后基本稳定，而其余 4 个试件水平荷载均为缓慢下降，最终稳定在某个残余,5,534,689.9525,true,true,1592,58338,38,caption_context|table_summary
+schema_240,schema,240,1ca62d01a58d32ba,表格 表 5 RFC 大试件弹性模量值分布 字段 工程项目 >40GPa 40~30GPa 30~20GPa,5,231,568.1148,false,true,1485,58035,5,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_schema|table_summary
+schema_1649,schema,1649,d9f42773fb00e173,表格 表 $ o 混凝土比 热 测定 记录 表 字段 试验 次数 时间 ／（B：@?9） 温度 ／% 电能表读数 ／（e·B）,5,1649,438.0344,true,true,2298,60646,395,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_1506,schema,1506,a1b9db2b377aa1a7,表格 字段 省 份 坝型 应用 部位 设计 龄期,5,1503,57.7744,false,true,2294,60500,49,exact_header|table_schema|table_summary
+cell_1304,cell,1304,bb7eeb1efbbdecb5,表格 表 2 混凝土层面抗剪断参数 铜街子 混凝土标号 R 100（层面） 90,5,1304,382.2774,true,true,2177,59108,2,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_1515,caption,1515,11017edf65c9ba54,表格 表 C. 0.1-1 保温材料的导热系数 Åi [W/(m' K)J,5,1515,541.1614,true,true,2295,60512,41,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_1410,cell,1410,09ff8b447908c98c,表格 石坝河水库坝体重点仓面监测成果 表 7 自密实混凝土测点 最大温升 幅度(℃) 0.2~11.2,5,921,423.3328,false,true,1867,58725,9,caption_context|cell_fact|numeric_unit|row_pack|table_summary
+schema_1307,schema,1307,70cc6a11706f9833,表格 表 3 坝顶高程计算成果表 字段 条件 计算 水位/m h /m 1% h/m z,5,1307,366.7553,true,true,2179,59111,4,caption_context|table_summary
+cell_1559,cell,1559,409cd4d83a61a644,表格 表 4.1.2 部分工程堆石混凝土大试件抗压试验数据 QY 水库 岩性 砂岩,5,1559,371.9743,true,true,2297,60556,51,caption_context|table_summary
+caption_1060,caption,1060,fd731998ba0b0c53,表格 表 3-22 主要机械设备配置表 Table 3-22 mainly machinery and equipment configuration table,5,1060,710.6725,true,true,1888,58864,41,caption_context|table_summary
+schema_1047,schema,1047,3e25ab0b6597759b,表格 表 3-11 填料设计技术要求及试验检测结果 Table 3-11 filler design requirements and testing test results 字段 检测项目 设计技术要求 检测结果,5,1047,1037.7856,true,true,1888,58851,33,caption_context|cell_fact|row_pack|table_schema|table_summary
+row_671,row,671,0450f4d7a0c6252f,表格 Table 1 Recommended Dam Classification System Based on Hazard Potential 行 Classification and/or Disruption of Lifeli...,5,671,628.3995,true,true,1775,58475,18,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_schema|table_summary
+caption_1500,caption,1500,2e58546eb3178e4e,表格 F.0.3 表 F.0.3 堆石混凝土单元工程施工质量验收评定表,5,1500,619.9525,true,true,2294,60497,36,caption_context|table_summary
+caption_540,caption,540,f78959dba1c1fbdb,表格 模型模拟界面上的粘聚效应。,5,540,399.8725,true,true,1592,58344,55,caption_context|table_summary
+schema_1245,schema,1245,35763a21379d30ef,表格 表 9 年平均气温封拱的最大主应力计算结果 （单位： MPa ，以压为正） 字段 绿塘 龙洞湾 沙千 风光,5,1245,675.0192,true,true,2087,59049,6,caption_context|table_summary
+schema_1145,schema,1145,01fb26c1c37f5c02,表格 表 ２ ＳＣＣ 拌和物工作性能 字段 工作性能 坍落度 ／ｍｍ 扩展度 ／ｍｍ Ｖ漏斗 ／ｓ,5,1145,433.9919,true,true,1971,58949,3,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+schema_11,schema,11,ff6c363aef25f543,"表格 Fig. 9 . RFC four-phase model with aggregates, ITZ, SCC and ACU. 字段 Parameter Rock SCC ITZ",5,11,568.4653,true,true,1165,57815,8,caption_context|exact_cell|exact_header|numeric_unit|table_schema|table_summary
+row_1404,row,1404,226b2ab41be2928c,表格 高自密实混凝土配合比及热力学参数 表 1 行 0.456 0.699 0.749 4.187,5,915,525.6389,false,true,1867,58719,2,caption_context|table_summary
+caption_945,caption,945,04c0cf56b392b2dd,表格 表2.5 纯水泥浆与JX-5 相容性,5,945,331.9325,true,true,1880,58749,21,caption_context|exact_cell|exact_header|table_summary
+row_95,row,95,f58bf9c6af100b62,表格 表 7 芯样编号表 行 试验仓 1．5 ZK －YS －01 2013．03．26,5,95,321.7159,true,true,1362,57899,4,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+row_1675,row,1675,b38eb8d604a02cd7,表格 表12 止水片（带）施工质量要求 行 主 控 项 目 片（带）外观 表面平整，无浮皮、锈污、油渍、 砂眼、钉孔、裂纹等 观察,5,1675,453.3722,true,true,2299,60672,15,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_1503,cell,1503,78c3ab87f0b7ea7c,表格 表 4-3 部分掺加粉煤灰的高自密实性能混凝土施工配合比 贵 州 坝型 重力 坝,5,1503,400.4325,true,true,2294,60500,49,caption_context|table_summary
+caption_180,caption,180,618f1997db5d64b8,表格 表 1 自密实混凝土配合比,5,345,350.8723,false,true,1566,58149,2,caption_context|exact_header|table_summary
+cell_1437,cell,1437,1a9aad59084f17b1,表格 表 1 两种坝型主要工程量及投资对照表 主 要 建 筑 工 程 量 重力坝 74 340,5,1437,304.669,true,true,2287,59241,2,caption_context|exact_header|table_summary
+caption_1269,caption,1269,d875eb44863db2f4,表格 [ 关键词 ] 堆石混凝土技术；原材料；混凝土配合比；施工过程；质量控制；质量检验,5,1269,960.5268,true,true,2122,59073,1,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_1569,schema,1569,f2870fbdb52843b7,表格 表 6.2.1 国内部分堆石混凝土重力坝坝顶宽度统计 字段 工程名称 坝型 坝高/m 坝顶宽度/m,5,1569,620.2325,true,true,2297,60566,64,caption_context|table_summary
+cell_1560,cell,1560,5e4914791c18a111,表格 表 4.2.5 部分工程高自密实性能混凝土掺合料使用情况 云 南 应用 部位 原材料品牌、规格,5,1560,399.8725,true,true,2297,60557,54,caption_context|table_summary
+schema_681,schema,681,725f08a19d35fa67,表格 Table 4 – Warning Level Integration Matrix 字段 USACE34 FERC*35 FEMA P 6436 Community,5,681,502.604,true,true,1778,58485,26,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_1145,caption,1145,61fa2d08b1d0c552,表格 表 ２ ＳＣＣ 拌和物工作性能,5,1145,389.4442,true,true,1971,58949,3,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+row_1463,row,1463,2873b12cabb7edac,表格 表18（续） 行 堆石边界与预 埋件的距离 ≥500 mm 量测 全部,5,1463,145.3729,true,true,2293,60460,20,cell_fact|column_pack|row_pack
+cell_638,cell,638,53bd822d1684a30c,表格 表3.1 标准试块立方体抗压强度表 W1 试件尺寸mm 150*150,5,638,361.8263,true,true,1606,58442,34,caption_context|numeric_unit|row_pack|table_schema|table_summary
+row_1562,row,1562,543dc01e5a81f366,表格 表 5.1.5 部分工程高自密实性能混凝土水泥用量情况汇总表 行 水泥用量（kg） 平均数,5,1562,651.8725,true,true,2297,60559,58,caption_context|table_summary
+row_259,row,259,2ef4040568b4f570,表格 表 2 估 算 渗 透 系 数 ( 或 渗 透 率 ) 值 的 经 验 公 式 行 Hazen( 1911) K = Cd2 10 K = 渗透系数( m/s) C = 常数，砂土在100 ～150 ( cm/s) －1之间 d =...,5,257,431.2911,false,true,1488,58061,4,cell_fact|column_pack|row_pack|table_summary
+schema_852,schema,852,703eaaa58cdf19af,表格 表 4 混凝土生产 字段 对象 生产总量 (t) 单位环境负荷 总环境负荷,5,207,528.9074,false,true,1469,58011,5,caption_context|cell_fact|row_pack|table_schema|table_summary
+schema_1045,schema,1045,8ee01a70cef8a59a,表格 表 3-9 细骨料设计技术要求及检测结果 Table 3-9 fine aggregate design requirements and test results 字段 检测项目 设计技术要求 砂检测结果,5,1045,1066.3549,true,true,1888,58849,31,caption_context|cell_fact|row_pack|table_schema|table_summary
+schema_106,schema,106,6a54720fb4a2ee0f,表格 表6 自密实混凝土配比 字段 空气 粉体 细骨料 粗骨料,5,106,346.8497,true,true,1377,57910,3,caption_context|exact_cell|exact_header|table_summary
+caption_197,caption,197,b43263f5fd09d13f,表格 表 2 自密实混凝土性能检测及硬化力学强度,5,197,548.5032,true,true,1465,58001,2,caption_context|exact_cell|exact_header|table_summary
+row_631,row,631,ac411c89124a1314,表格 0.9272 ( ) 15.35(1 exp( 0.2809 ))      (3.6) 行 𝜃(𝜏) = 15.35(1 −exp (−0.28 09𝜏 0.9 272),5,631,564.0038,true,true,1601,58435,28,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+schema_992,schema,992,799df395e6691560,表格 表3.15 自密实混凝土材料造价（元/m 3 ） 字段 水 元/方） 水泥 （元/方） 粉煤灰 （元/方） 砂 （元/方）,5,992,449.6956,true,true,1880,58796,49,caption_context|table_summary
+caption_947,caption,947,f4955ee3f56820b5,表格 表2.7 掺 5 0﹪粉煤灰水泥浆与 JX-5 相容性,5,947,425.158,true,true,1880,58751,22,caption_context|exact_cell|exact_header|table_summary
+cell_1516,cell,1516,a635fdd119f10a53,表格 续表 c. 0.1-1 油毡 导热系数 0.05,5,1515,182.3568,false,true,2295,60512,41,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_1624,schema,1624,1e450b5d2317536a,"表格 表 7""'""C ' o 常 态 混凝土砂率 初选 表 称 字段 骨料最大粒径 ／@@ 水o胶o比",5,1624,497.096,true,true,2298,60621,347,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_305,cell,305,33092a5ec8c2afcd,表格 表 2 蔺家坪混凝土芯样抗压强度结果表 岩石与混凝土横向接触 抗压强度 检测值/MPa 29. 9,5,305,539.2502,true,true,1528,58109,2,caption_context|cell_fact|column_pack|row_pack|table_summary
+caption_1587,caption,1587,860781861b735e6b,"表格 表 。 ""。(""。 C o 骨料碱活性检验 （ 岩相法 ） 粗骨料取样质量表",5,1587,557.2041,true,true,2298,60584,77,caption_context|exact_header|table_summary
+row_903,row,903,8e041f35cefd1d3d,表格 W/P 编号 用水量（ kg/m³ ） SF （ mm ） VF （ s ） 行 SD-5 -5,5,903,364.2192,true,true,1866,58707,35,caption_context|table_summary
+caption_264,caption,264,98af31deeb93da65,表格 表 １ １５ 个堆石混凝土的试验结果和计算结果,5,260,517.4725,false,true,1490,58064,4,caption_context|table_summary
+row_1533,row,1533,a0044ebf94585abe,表格 行 0.071 0.30488 0. 30415 0. 30343,5,1533,54.5792,true,true,2296,60530,105,exact_header|row_pack|table_summary
+caption_1622,caption,1622,6aab4d20c9233f11,"表格 表 7""'""C 。 o 常 态 混凝土 初选 用水量表 单 位 ： OE ／ @ ／",5,1622,397.0725,true,true,2298,60619,346,caption_context|table_summary
+schema_1303,schema,1303,46831ab43990e925,表格 表 1 沙坪二级吧冷风处混凝土直剪试验 字段 部位 堆石露出情况 龄期 F′,5,1303,670.4842,true,true,2177,59107,2,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_259,caption,259,ce80a8eb9ded245e,表格 表 2 估 算 渗 透 系 数 ( 或 渗 透 率 ) 值 的 经 验 公 式,5,1524,7.8,false,false,2296,60521,86,exact_cell
+cell_568,cell,568,d7a2df3b1b4459d4,表格 表 3.9 C 工程切割试件立方体抗压强度试验结果 1 2 3 4 5 6 7 8 9 450×450×450mm3 破坏荷载 抗压强度 /KN /MPa 4358.5 21.6 6248.0 30.7 数据异常，不参与分析 394...,5,568,651.0406,true,true,1594,58372,44,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_577,cell,577,2fd0d59408573f41,表格 表 3.11 B 工程切割试件劈裂抗拉强度试验结果 1 923.68 2.86 2 959.21 2.97 3 1443.66 4.47 4 697.61 2.16 5 1246.65 3.86 6 1023.80 3.17 7 5...,5,577,693.8572,true,true,1594,58381,53,caption_context|cell_fact|column_pack|numeric_unit|row_pack|table_summary
+row_77,row,77,2ee016cb6794ea51,表格 表 5 堆石混凝土单价 行 m2 16816. 8,5,77,312.4252,true,true,1353,57881,7,caption_context|exact_cell|exact_header|table_summary
+cell_1318,cell,1318,0a6ba004b8f8e6ac,表格 表 ８ 优化 配合比 Ｃ９０１５Ｗ４Ｆ１００ 外加剂／ （ｋｇ·ｍ－３） ７．８０,5,938,111.213,false,false,1879,58742,6,caption_context|exact_cell|exact_header|row_pack|table_schema|table_summary
+schema_237,schema,237,835bc9e90940fa4d,表格 表 2 所列 。 字段 项 目 平均值 标准差 最大值,5,228,267.1551,false,true,1485,58032,2,caption_context|exact_cell|exact_header|row_pack|table_schema|table_summary
+row_493,row,493,b1bf23ee7fdde967,表格 c 65% 堆石率曲线拟合 d 试验曲线拟合 图 4.4 P-CMOD 曲线拟合示意图 Fig. 4.4 Schematic diagram of P-CMOD curve fitting 行 = 27.77 𝑥 − 160.2 9𝑥,5,493,817.6103,true,true,1581,58297,59,caption_context|exact_header|table_summary
+caption_1376,caption,1376,ca426ddfaf2ce0f6,表格 网络首发时间： 2025-11-19 18:01:08 网络首发地址： https://link.cnki.net/urlid/42.1419.TV.20251119.1555.028,5,1376,698.9125,true,true,2253,59180,2,caption_context|table_summary
+caption_642,caption,642,28cd9c43b0fd426c,表格 第三章 堆石混凝土剪切性能试验,5,642,406.0325,true,true,1606,58446,42,caption_context|table_summary
+schema_437,schema,437,6536516c992e3a16,表格 泛函极值的形式。定义协调位移场 𝑢̃ 𝑖 ，协调应变场 𝜀̃ 𝑖𝑗 ，则整个结构的势能为： 字段 𝐹 𝑖 𝑑𝑆 （5-1）,5,437,721.1125,true,true,1576,58241,52,caption_context|exact_cell|exact_header|table_summary
+cell_589,cell,589,518cb155e0e992da,表格 表 4.5 试验仓 60 天龄期时超声回弹综合法试验结果 试验 测距 序号 /mm C15 回弹推定值 声速推定值 强度推定值 /MPa /km/s-1 /MPa,5,589,440.7487,true,true,1594,58393,74,caption_context|cell_fact|column_pack|row_pack|table_summary
+caption_886,caption,886,d32a50877644d47c,表格 应的接触力和位移都小。,5,886,351.7125,true,true,1865,58690,34,caption_context|table_summary
+schema_1670,schema,1670,fa4c34dc94b9cd4a,表格 表9 模板制作及安装施工质量要求（续） 字段 项 次 检验项目 质量要求 检验方法,5,1670,559.5827,true,true,2299,60667,13,caption_context|row_pack|table_schema|table_summary
+row_827,row,827,b0d332b48fd7965b,表格 表4.2 赛—果高速现场自密实混凝土性能 行 675mm 7s 24.7MPa,5,190,471.6715,false,true,1443,57994,5,caption_context|exact_cell|numeric_unit|table_summary
+schema_140,schema,140,80e6a2f9f9eedd3b,"表格 李友彬 , 等 / / 堆石混凝土层间界面抗剪稳定力学性能试验研究 字段 序 号 类 别 层间结合型式特征 摩擦系数f′",5,140,668.3451,true,true,1400,57944,4,caption_context|exact_cell|exact_header|table_summary
+row_1565,row,1565,468602c7974f9d1f,表格 表 5.2.1 V 形漏斗通过均匀性指标部分试验数据 行 0.7 1.8 24.5 0.87,5,1565,721.2392,true,true,2297,60562,61,caption_context|cell_fact|row_pack|table_schema|table_summary
+row_287,row,287,c8690fc02872098b,表格 表 ２ 回弹法强度力学指标 行 Ｃ１０⁃ ｄ ｍ Ｃ１５⁃ ｄ ｍ Ｃ１０⁃ ｆ ｃｕｃ ，ｉ Ｃ１５⁃ ｆ ｃｕｃ ，ｉ ２. ５８ ２. ２２ ９. ９９ １５. ７２ ０. ３７ ０. ４２ １. ３２ ０. ８７ １４. ２...,5,282,345.5525,false,true,1509,58086,5,caption_context|table_summary
+row_124,row,124,15ce7edd2f3e7133,表格 图1 绿塘水库的试验仓 图2 现场制作的大型试块 行 柱体。 切割加工，实质上是把试块切出无数剖面，这样可以,5,124,672.5851,true,true,1390,57928,1,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_summary
+row_636,row,636,38238350bc960dff,表格 行  1  2,5,1524,8.6,false,false,2296,60521,86,exact_cell
+cell_1247,cell,1247,9c2488f53d630a9a,表格 表 11 月均封拱温度的最大主应力计算结果 （单位： MPa ，以压为正） 混凝 土坝 绿塘 -1.25,5,1247,405.3602,true,true,2087,59051,6,caption_context|cell_fact|column_pack|row_pack|table_summary
+schema_809,schema,809,6fb8b8b8ae07e0af,表格 表 4.1 两种形态水流渗透系数计算结果对比 [76] 字段 试验压力/MPa 稳定渗流K /(m/s) 非稳定渗流K/(m/s),5,809,720.0464,true,true,1819,58613,57,caption_context|cell_fact|row_pack|table_schema|table_summary
+cell_1587,cell,1587,9eb543f9fa18dcf8,"表格 表 。 ""。(""。 C o 骨料碱活性检验 （ 岩相法 ） 粗骨料取样质量表 $粒!"" 取样质量／OE *""",5,1587,278.5633,true,true,2298,60584,77,caption_context|exact_header|table_summary
+cell_1475,cell,1475,d5de3cd6a6ab8747,表格 堆石入仓工序施工质量验收评定表 分部工程名称 工序工程 量 施工单位,5,1475,449.0431,true,true,2293,60472,39,caption_context|cell_fact|column_pack|row_pack|table_summary
+schema_200,schema,200,2a0774b9ccff4dd7,表格 表 1 开 工建设 堆石混凝土坝 基 本 情况统计表 字段 项目名称 所在地点 坝型 规模,5,200,527.9721,true,true,1468,58004,2,caption_context|exact_cell|exact_header|table_schema|table_summary
+caption_1682,caption,1682,c38930ea4fbcb928,表格 表18 外观质量检查要求,5,1682,331.2535,true,true,2299,60679,20,caption_context|exact_header|table_summary
+row_1091,row,1091,fbf92a9eeabb8102,表格 Fig. 8 . Comparison of numerical simulation and physical test stress-strain curves for defect-free SCC and RFC. 行 2%...,5,1091,612.4662,true,true,1898,58895,9,caption_context|table_summary
+cell_1668,cell,1668,7be1e0d04441cbb5,表格 表8 混凝土施工缝处理质量要求 主控 项目 检验项目 施工缝的留置位置,5,1668,429.5755,true,true,2299,60665,12,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+row_1512,row,1512,ea16abce98d8e96c,表格 表B. 3.1 混凝土在标准养护条件下龄期为 28d 时的弹性模量 行 C25 2.80X104,5,1512,718.3416,true,true,2295,60509,35,caption_context|cell_fact|column_pack|row_pack|table_summary
+schema_1472,schema,1472,d49a86add842470f,表格 表C.4（续） 字段 项次 检验项目 质量要求 检查记录,5,1472,230.876,true,true,2293,60469,36,row_pack|table_schema|table_summary
+schema_1037,schema,1037,4d3c02b4da43250a,表格 表 3-1 试验工程量 Table 3-1 Engineering of engineering quantity 字段 序号 项目名称 单位 工程量,5,1037,622.3376,true,true,1888,58841,20,caption_context|cell_fact|row_pack|table_schema|table_summary
+row_47,row,47,316e4896d87d9b24,表格 表 9 堆石混凝土各月浇筑方量（其中11月份施工4天） 行 9月份 45.0%,5,47,518.0336,true,true,1331,57851,4,caption_context|exact_cell|exact_header|table_summary
+schema_186,schema,186,15ec1263de720a30,表格 表 2 堆石混凝土部分试验结论 字段 主要参数 备注,5,186,438.9206,true,true,1438,57990,3,caption_context|exact_cell|exact_header|table_summary
+cell_1506,cell,1506,8ecd10dc146030b9,表格 云 南 坝型 重力 坝,5,1569,78.0441,false,false,2297,60566,64,caption_context|row_pack|table_summary
+caption_1370,caption,1370,5a15ca23bc6b8860,表格 表 8 流固耦合法坝体自振频率的反应谱值计算成果表,5,1370,729.2669,true,true,2240,59174,6,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+row_1311,row,1311,ff761d2386a73ee8,表格 表 １ 因 素 与水 平 行 水胶比（Ａ） ０．４０ ０．４５ ０．５０,5,1311,208.4725,true,true,2183,59115,2,caption_context|exact_cell|table_summary
+caption_1285,caption,1285,7822dbadd9aa8c49,表格 指标及试样破坏前后对比,5,1285,377.3884,true,true,2143,59089,3,caption_context|exact_cell|exact_header|table_summary
+row_21,row,21,960d6282f0209dcc,表格 图 4 坝体实测变形和反算结果 ( 单位： cm ) Fig. 4 Deformation from measurement and feed-back calculation(unit: cm) 行 80 cm 60 / 水平位移...,5,21,341.2212,true,true,1305,57825,4,cell_fact|column_pack|exact_cell|exact_header|numeric_unit|row_pack
+schema_814,schema,814,7c3b833d510512b4,表格 表 4.6 室内外渗透系数计算结果对比 字段 混凝土类型 SCC RFC,5,814,593.7187,true,true,1819,58618,61,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+schema_112,schema,112,e41a1083ecad5178,表格 表 5 自密实混凝土配合比 字段 混凝土设计等级 1 m3 混凝土材料用量/kg,5,112,647.995,true,true,1380,57916,2,caption_context|exact_cell|exact_header|numeric_unit|row_pack|table_schema|table_summary
+schema_249,schema,249,98e6b8806a775391,表格 字段 Z=−1 坝 轴 线 Z=4. 拱冠梁上游曲线方程 4.270711899−0.217560828Y+0.004359865Y+0.000004014Y 拱冠梁处右岸侧的拱圈中心线曲率方程 Z=61.292221069+0.2...,5,249,479.7525,true,true,1487,58053,5,column_pack|exact_cell|exact_header|table_schema
+caption_284,caption,284,8fdd4ba4fa34b7cd,表格 表 ４ 超声对测波形,5,284,275.204,true,true,1509,58088,7,caption_context|exact_cell|exact_header|table_summary
+caption_1451,caption,1451,5b6161e12d426cc2,表格 表11 混凝土施工缝处理质量标准,5,1451,423.3925,true,true,2293,60448,15,caption_context|table_summary
+cell_1432,cell,1432,eccd5d98947261e5,表格 表 6 超声值所占比例 单位: km/s 9. 1 3 ～3. 8 19. 7,5,1432,179.218,true,true,2282,59236,3,caption_context|exact_header|table_summary
+schema_987,schema,987,0bfd42c3bd34b32e,表格 表3.10 工作性能、力学性能检测结果 字段 检测项目 编号 坍落度 (mm) 扩展度 (mm) V 漏斗 时间(s),5,987,508.8569,true,true,1880,58791,45,caption_context|row_pack|table_schema|table_summary
+row_982,row,982,ead5d8111383eced,表格 表3.5 细砂2 筛分结果 行 4.75 2.1﹪ 2.1﹪,5,982,275.1816,true,true,1880,58786,41,caption_context|exact_cell|table_summary
+caption_49,caption,49,f3d711fd63d84c56,表格 表 11 山口上游围堰采用专用外加剂自密实混凝土浇筑的芯样抽检成果,5,49,641.9525,true,true,1331,57853,5,caption_context|exact_cell|table_summary
+cell_1328,cell,1328,ed6353f389c08125,表格 表 7 现场配合比调整试验结果表 试验结果 V 漏斗 时间/ s 19. 23,5,1328,293.0805,true,true,2192,59132,4,caption_context|cell_fact|column_pack|row_pack|table_summary
+caption_451,caption,451,8ed9df5fccc36f53,表格 (𝑀 𝑓 𝑀 𝑚 ⁄ )+𝜁 （ 5-12 ）,5,451,260.4325,true,true,1576,58255,55,caption_context|table_summary
+caption_1574,caption,1574,a636b1a295c9b6cc,表格 表 7.2.3 部分已建堆石混凝土拱坝分缝情况,5,1574,520.8325,true,true,2297,60571,73,caption_context|table_summary
+row_202,row,202,5b2ae3bedd7cec63,表格 表 3 已 建 、 在 建 堆石混凝土坝 主 要 施 工 参 数 统计表 ( 1 ) 行 打鼓台水库 砼罐车运输 泵送+ 布料机 自卸汽车,5,202,632.1772,true,true,1468,58006,3,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+cell_224,cell,224,045029d2fe7d4689,表格 表 9 堆石混凝土绝热温升与实测值对比表 重力坝 工程名称 打鼓台水库,5,224,440.1272,true,true,1474,58028,4,caption_context|exact_header|row_pack|table_schema|table_summary
+schema_1521,schema,1521,10194260a16486e3,表格 表 3.2.1 试件的最小横截面尺寸 字段 骨料最大粒径 ( rnm ) 试{斗最小横截面尺寸 (mm Xmm),5,1521,725.0168,true,true,2296,60518,16,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+row_8,row,8,b76b9237bb6b43d8,表格 TABLE III. MIX PROPORTIONS AND MAIN PARAMETER OF CONCRETE 行 Water Cement Medium Sand Small Stone,5,8,517.7549,true,true,1163,57812,4,caption_context|exact_cell|exact_header|row_pack|table_schema|table_summary
+cell_217,cell,217,fc631a9336ecb5aa,表格 表 5 堆石混凝土绝热温升相关参数计算结果 0. 461 绝热温升 最大值θ /℃ 0 13. 449,5,217,372.4634,true,true,1474,58021,2,caption_context|exact_header|numeric_unit|table_summary
+row_983,row,983,806b3dcc7e4ad742,表格 表 3.6 自密实混凝土试配试验 行 ZMS-1 804(粗砂) 0.8﹪ 42﹪,5,983,389.7225,true,true,1880,58787,43,caption_context|table_summary
+caption_981,caption,981,f1917dda1d0f94bf,表格 表3.4 细砂1 筛分结果,5,981,254.8325,true,true,1880,58785,41,caption_context|table_summary
+caption_1562,caption,1562,3ee7b31701667c39,表格 表 5.1.5 部分工程高自密实性能混凝土水泥用量情况汇总表,5,1562,664.1925,true,true,2297,60559,58,caption_context|table_summary
+schema_1423,schema,1423,6d6cd70ddbbf8ec1,表格 W / P =0.8 ； C %=25 字段 材料 水泥 粉煤灰 石子,5,1423,283.9581,true,true,2272,59227,2,caption_context|table_schema|table_summary
+caption_1435,caption,1435,bcb66708dcd084bf,表格 表 3 声速代表值 、 回弹值 、 强度实测值 、 全国测强曲线推定値数据,5,1435,901.8868,true,true,2283,59239,3,caption_context|row_pack|table_schema|table_summary
+cell_1369,cell,1369,e404f373a39adcd4,表格 表 7 附加质量模型关键部位位移应力情况 20. 48 22. 44 40. 76 67. 35 67. 39 40. 00 39. 53 19. 88 竖向位移 U /mm Y －29. 71 －29. 91 －33. 39 －2...,5,1369,523.0054,true,true,2240,59173,5,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_341,cell,341,366f89397143a043,表格 表 1 自密实混凝土与常态混凝土配合比及材料用量 C20 自密实堆石混凝土 说明 堆石率55%,5,341,399.9725,true,true,1559,58145,2,caption_context|exact_header|numeric_unit|table_summary
+cell_1048,cell,1048,89192c0642c366d7,表格 表 3-12 沥青混合料运输及摊铺过程中的温度试验成果 Table 3-12 asphalt mixture paving temperature test results in the process of transportat...,5,1048,485.9465,true,true,1888,58852,34,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_1478,caption,1478,69e1a831a0b381aa,表格 分部工程施工质量评定表,5,1478,374.2505,true,true,2293,60475,43,caption_context|exact_header|table_summary
+schema_545,schema,545,146ecc4331c87da5,表格 第 3 章 基于三维重构的堆石混凝土层面剪切细观力学模拟 字段 P0.1-0.125D P0.1-0.125D P0.1-0.125D -A-EXP -B-EXP,5,545,653.4109,true,true,1592,58349,64,caption_context|exact_header|table_summary
+cell_180,cell,180,81c561388ae9d7d0,表格 表 1 自密实混凝土配合比 体积用量/ L 外加剂 5．5,5,45,253.1867,false,true,1331,57849,3,cell_fact|exact_cell|exact_header|table_schema|table_summary
+row_1525,row,1525,8deecb473f6a360d,表格 表 A. O. 4-2 检测(试验)单位记录样表( 二 ) 行 样品名称 试件尺寸 ( mm) 样品数量 养护条件,5,1525,501.9371,true,true,2296,60522,87,caption_context|cell_fact|column_pack|row_pack|table_summary
+cell_344,cell,344,1318186053d190ed,表格 表 2 自密实混凝土与堆石混凝土力学性能试验成果 23. 5 抗压弹性模量 /GPa 21. 0,5,386,475.1476,false,true,1576,58190,21,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+cell_1228,cell,1228,405b8b4c8288f895,表格 表 1 地质参数表 ∈1j2 薄层泥 灰岩夹少量泥 质粉砂岩、页岩 风化程度 弱风化 微、新,5,1228,422.1393,true,true,2066,59032,1,cell_fact|column_pack|row_pack|table_summary
+schema_1588,schema,1588,ef92cba2763e5b79,"表格 表 。 ""。(""。$ o 骨料碱活性检验 （ 岩相法 ） 细骨料取样质量表 字段 试样粒径／@@ 取样质量／E 备o注",5,1588,650.4998,true,true,2298,60585,77,caption_context|cell_fact|row_pack|table_schema|table_summary
+caption_466,caption,466,a27bc9ba29a7d209,表格 靠、准确，相对而言， Mori-Tanaka 方法的预估值误差较小，如表 5.6 所示。,5,466,584.6725,true,true,1576,58270,60,caption_context|table_summary
+cell_78,cell,78,e30ff379534a68d9,表格 表1 堆石混凝土与埋石混凝土坝体构造和材料分区 Table 1 Construction and material zoning of Rock-filled Concrete and buried stone concrete d...,5,78,582.1325,true,true,1355,57882,1,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_summary
+row_51,row,51,5bb8f83c5cd11c79,表格 表 1 口上水库大坝所用粉煤灰指标性能 行 游离氧化钙含量 F 类粉煤灰,5,51,676.498,true,true,1337,57855,2,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+caption_320,caption,320,909209ceb77de4c9,表格 单 位 : MPa,5,315,190.4325,false,false,1539,58119,2,caption_context|table_summary
+cell_1446,cell,1446,35d39ea6ad445c51,表格 表6 原材料计量允许偏差 指标（%） 水泥 ±1%,5,1446,185.9094,true,true,2293,60443,11,caption_context|table_summary
+schema_50,schema,50,755af01b68b8b988,表格 表 12 山口上游围堰采用聚羧酸自密实混凝土浇筑的芯样抽检成果 字段 试件编号 施工部位 施工日期 试验时间,5,50,677.8759,true,true,1331,57854,5,caption_context|cell_fact|row_pack|table_schema|table_summary
+schema_1663,schema,1663,3f45e3ef2545b967,表格 表3 高自密实混凝土拌和质量要求 字段 检验项目 质量标准 检验方法 检验数量,5,1663,557.2445,true,true,2299,60660,10,caption_context|table_schema|table_summary
+schema_1688,schema,1688,6ba34ed2558c986f,表格 表A.6 基础面、施工缝处理工序施工质量验收评定表 字段 单位工程名称 单元工程量,5,1688,674.7222,true,true,2299,60685,27,caption_context|cell_fact|row_pack|table_schema|table_summary
+caption_831,caption,831,8f39847d41110666,表格 基于视觉信息的堆石混凝土施工管理系统框架如图 2.5 所示。,5,831,774.7221,true,true,1831,58635,34,caption_context|cell_fact|column_pack|row_pack|table_summary
+row_238,row,238,b4dcd25a0cb60e07,表格 表 2 自密实混凝土 C 90 15W6F50 工作性能 行 3d 7d 28d 90d,5,229,425.5461,false,true,1485,58033,2,caption_context|table_summary
+row_1107,row,1107,95fecd09ae77482e,表格 表 3 岸坡坝段结构稳定及应力计算成果表 行 抗剪安全 系数K 抗剪断安全 系数K' 坝踵应力 /kPa 坝趾应力 /kPa,5,1107,595.8316,true,true,1925,58911,3,caption_context|cell_fact|column_pack|exact_header|numeric_unit|row_pack|table_summary
+schema_769,schema,769,a871817b89b7bc31,表格 ISO14040-ISO14043 标准的作用如图 1.4 所示。 字段 ISO14040：目的和范围确定 ISO 14043 结果 解释,5,769,746.5577,true,true,1807,58573,13,caption_context|cell_fact|column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary
+caption_1385,caption,1385,a3c9add4c5f3640b,表格 测试结果为，亲水和疏水堆石表面的接触角平均值分别为 100.61° 和 51.31° 。,5,1385,724.1125,true,true,2253,59189,6,caption_context|table_summary
+row_1214,row,1214,090024bf5c0e91dc,表格 表 1 混凝土砌石重力坝统计表 行 赤水市 二级配C 90 混凝土砌毛 15 36. 5 石 5. 0,5,1214,503.2302,true,true,2040,59018,2,caption_context|cell_fact|column_pack|row_pack|table_summary
+schema_1428,schema,1428,28093e853e402e63,表格 表 2 堆石混凝土大试件试验内容及尺寸 字段 试验项目 试验内容及尺寸,5,1428,747.182,true,true,2282,59232,2,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+row_380,row,380,da8aeeb32151d8d8,表格 效应的经验公式 : 行 6ℎ +ℎ,5,380,289.4278,true,true,1576,58184,17,caption_context|exact_cell|table_summary
+caption_1369,caption,1369,21296f848445c0eb,表格 表 7 附加质量模型关键部位位移应力情况,5,1369,517.0034,true,true,2240,59173,5,caption_context|exact_header|table_summary
+cell_1293,cell,1293,d5bb5697298e260b,表格 表6 坝基主要结构面性状及抗剪断参数 Table 6 Main structural plane properties and shear resistance parameters of dam foundation 节理1 f...,5,1293,439.4689,true,true,2154,59097,3,caption_context|exact_header|table_summary
+caption_484,caption,484,7f4b6398e12f1df4,表格 图 3.4 试验梁构件尺寸 Fig. 3.4 Dimensions of test beam,5,484,521.3925,true,true,1581,58288,40,caption_context|table_summary
+row_692,row,692,fe19daf0c76683f2,表格 Source: 2016 NID database (accessed December 2017). Navigation: 0.2% Debris Control: 0.6% Grade Stabilization: 1.0%...,5,692,966.8533,true,true,1780,58496,2,caption_context|cell_fact|column_pack|row_pack|table_summary
+caption_714,caption,714,9c78d1f9e879eb3e,表格 Table 9-4: FERC Suggested Breach Parameters,5,714,404.4952,true,true,1781,58518,68,caption_context|cell_fact|exact_cell|row_pack|table_summary
+schema_1054,schema,1054,7fb787500c19b4fa,表格 表 3-17 沥青混凝土水稳定性试验成果 Table 3-17 asphalt concrete water stability test results 字段 试验条件 试件编号 单轴抗压强度 （MPa） 单轴抗压强度平均值 （M...,5,1054,936.8545,true,true,1888,58858,37,caption_context|row_pack|table_schema|table_summary
+row_966,row,966,98013f2e51975ddd,表格 HQ-1与50﹪水泥、50﹪粉煤灰的适应性 行 青松水泥 青松水泥,5,962,719.6117,false,true,1880,58766,25,cell_fact|column_pack|exact_header|row_pack|table_schema|table_summary
+caption_1129,caption,1129,a6cb9b2938f01db4,表格 表 2 洪流水库重力坝不同分区变形计算结果,5,1129,541.0776,true,true,1953,58933,5,caption_context|exact_header|table_summary
+schema_1538,schema,1538,2cbb98fc56ea94ac,表格 字段 α t / D2 0. 0000 0. 0001 0. 0002,5,1530,100.9927,false,false,2296,60527,102,exact_header|table_schema|table_summary
+schema_1012,schema,1012,df6dd2758847ccf4,表格 字段 常数项 166.678 25.385 6.566,5,1012,125.3979,true,true,1880,58816,55,cell_fact|column_pack|row_pack|table_schema|table_summary
+row_1589,row,1589,0a3a33efc8e4cdbf,"表格 表 。 ""。(""。 。 o 常见含有碱活性矿物的岩石 行 火成岩 流纹岩 安山岩 松脂岩 珍珠岩 黑曜岩 o酸性 中性火山玻璃、隐晶 微晶石英、鳞石英、 方石英",5,1589,566.8318,true,true,2298,60586,78,caption_context|cell_fact|column_pack|exact_cell|row_pack|table_summary
+schema_1021,schema,1021,0fe0e5614d0c749a,表格 外表面积、缺陷统计及孔隙率计算见表 4.7 、表 4.8 所示 字段 面积cm2 编号 面积cm2 编号,5,1021,570.5929,true,true,1880,58825,65,caption_context|exact_cell|exact_header|table_summary
+schema_900,schema,900,dee59bd6624ae39f,表格 堆石混凝土砂浆性能研究及工程应用 字段 1.04 0.9 491.6 1738.4,5,900,573.7627,true,true,1866,58704,31,caption_context|cell_fact|column_pack|row_pack|table_schema|table_summary
+caption_825,caption,825,00d4e32257e33ce1,表格 表3.1 专用自密实混凝土与堆石混凝土强度对比,5,188,562.3192,false,true,1443,57992,4,caption_context|exact_cell|exact_header|table_summary
+caption_1428,caption,1428,fe341d14cc2f2fc3,表格 表 2 堆石混凝土大试件试验内容及尺寸,5,1428,653.6011,true,true,2282,59232,2,caption_context|cell_fact|row_pack|table_schema|table_summary

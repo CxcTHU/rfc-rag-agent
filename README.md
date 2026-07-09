@@ -1,5 +1,31 @@
 # RFC-RAG-Agent
 
+## Phase 60 Post-Acceptance Runtime Sync
+
+Current branch: `codex/phase60-post-acceptance-sync`.
+
+After Phase 60 passed human verification, the closeout branch folds in the follow-up runtime fixes found during manual Agent use: resilient Markdown table rendering, responsive wide-table display, loading/auth flicker cleanup, CPU original-PDF availability evaluation, and latency diagnostics/connection reuse work. These changes keep structured TableRAG as a sidecar and do not switch the default Agent table retrieval path.
+
+Operationally, the CPU server is maintained through stable Tailscale SSH. The CPU deployment copy preserves server-local `.env.prod`, `data/`, and Docker volumes; secrets and provider raw responses are never committed.
+
+## Phase 60 Structured TableRAG Ingestion Sidecar
+
+Current branch: `codex/phase-60-structured-table-rag`.
+
+Phase 60 adds a sidecar structured TableRAG ingestion foundation. Existing Markdown table chunks remain available for compatibility and citation fallback, but tables can now be rebuilt into `document_tables`, `document_table_columns`, `document_table_rows`, `document_table_cells`, and independent `table_retrieval_units`.
+
+New sidecar flow:
+
+```text
+PDF/table chunk evidence
+-> structured table objects
+-> table_summary / table_schema / row_pack / column_pack / cell_fact / caption_context units
+-> StructuredTableSearchService
+-> hydrated headers, rows, matched units, and citation metadata
+```
+
+The default `search_tables`, `hybrid_search`, and `tool_calling_agent` behavior is unchanged in this phase. Text-to-SQL is documented as a later optional layer only after candidate `table_id` recall, never as the first table retrieval entry point.
+
 ## Phase 58H Runtime Resume And Evidence Cache Identity
 
 Current branch: `codex/phase-58-mature-agent-runtime`.

@@ -88,6 +88,9 @@ def list_documents(
 ) -> DocumentListResponse:
     repository = DocumentRepository(db)
     documents = repository.list_documents()
+    chunk_counts = repository.count_chunks_by_document_ids(
+        [document.id for document in documents]
+    )
     return DocumentListResponse(
         documents=[
             DocumentListItem(
@@ -99,7 +102,7 @@ def list_documents(
                 file_name=document.file_name,
                 file_extension=document.file_extension,
                 status=document.status,
-                chunk_count=repository.count_chunks(document.id),
+                chunk_count=chunk_counts.get(document.id, 0),
                 created_at=document.created_at,
             )
             for document in documents
@@ -177,9 +180,20 @@ def list_document_chunks(
 def document_open_url(document: Document, raw_dir: str | Path) -> str | None:
     if first_external_document_url(document) is not None:
         return f"/documents/{document.id}/open"
-    if resolve_document_file(document, raw_dir) is None:
+    if not has_local_document_reference(document):
         return None
     return f"/documents/{document.id}/open"
+
+
+def has_local_document_reference(document: Document) -> bool:
+    return any(
+        bool(value)
+        for value in (
+            document.raw_path,
+            document.file_name,
+            document.source_path if not is_http_url(document.source_path) else None,
+        )
+    )
 
 
 def first_external_document_url(document: Document) -> str | None:
@@ -210,14 +224,35 @@ def resolve_document_file(document: Document, raw_dir: str | Path) -> Path | Non
 
 
 def path_candidates(value: str, raw_root: Path) -> list[Path]:
-    path = Path(value)
-    if path.is_absolute():
-        return [path]
-    return [
-        ROOT_DIR / path,
-        raw_root / path,
-        raw_root / path.name,
-    ]
+    candidates: list[Path] = []
+    path_values = [value]
+    normalized_value = value.replace("\\", "/")
+    if normalized_value != value:
+        path_values.append(normalized_value)
+
+    for path_value in path_values:
+        path = Path(path_value)
+        if path.is_absolute():
+            candidates.append(path)
+            continue
+
+        candidates.extend(
+            [
+                ROOT_DIR / path,
+                raw_root / path,
+                raw_root / path.name,
+            ]
+        )
+
+        parts = path.parts
+        lowered_parts = [part.lower() for part in parts]
+        if "raw" in lowered_parts:
+            raw_index = lowered_parts.index("raw")
+            raw_relative_parts = parts[raw_index + 1 :]
+            if raw_relative_parts:
+                candidates.append(raw_root.joinpath(*raw_relative_parts))
+
+    return candidates
 
 
 def resolve_raw_root(raw_dir: str | Path) -> Path:

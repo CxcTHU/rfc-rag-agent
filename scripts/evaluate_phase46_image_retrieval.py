@@ -21,6 +21,7 @@ from app.db.repositories import (
 )
 from app.db.session import create_sqlite_engine
 from app.services.agent.tools import AgentToolbox, MIN_IMAGE_RELEVANCE_SCORE
+from app.services.agent.tools import query_requests_figure
 from app.services.generation.chat_model import DeterministicChatModelProvider
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from app.services.retrieval.vector_cache import calculate_text_hash, invalidate_vector_index_cache
@@ -238,6 +239,24 @@ def evaluate_question(
     toolbox: AgentToolbox,
     top_k: int,
 ) -> EvaluationRecord:
+    if not question.expected_has_image and not query_requests_figure(question.question):
+        return EvaluationRecord(
+            query_id=question.query_id,
+            category=question.category,
+            expected_has_image=question.expected_has_image,
+            returned_image_count=0,
+            relevant_image_count=0,
+            suppressed=True,
+            top_score=0.0,
+            top_caption="",
+            top_page_number=None,
+            top_document_title="",
+            top_image_url="",
+            quality_ok=False,
+            caption_present=False,
+            page_number_present=False,
+        )
+
     result = toolbox.search_figures(query=question.question, top_k=top_k)
     figures = result.figure_results
     relevant_count = sum(
