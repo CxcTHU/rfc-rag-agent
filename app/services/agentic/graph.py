@@ -4,6 +4,11 @@ from collections.abc import Sequence
 
 from langgraph.graph import END, StateGraph
 
+from app.services.brain.workflow import (
+    RESPONSIBILITY_REFUSAL_ANSWER,
+    BrainWorkflowStepRecord,
+    evaluate_responsibility_gate,
+)
 from app.services.agentic.nodes import (
     citation_check_node,
     generate_node,
@@ -62,10 +67,33 @@ def run_agentic_rag(
     chat_model_provider: ChatModelProvider,
     history: Sequence[str] | None = None,
 ) -> AgenticResult:
+    normalized_question = question.strip()
+    responsibility_gate = evaluate_responsibility_gate(normalized_question)
+    if responsibility_gate.triggered:
+        return AgenticResult(
+            question=normalized_question,
+            answer=RESPONSIBILITY_REFUSAL_ANSWER,
+            citations=[],
+            sources=[],
+            refused=True,
+            refusal_reason=responsibility_gate.refusal_reason or "responsibility_gate",
+            responsibility_gate_triggered=True,
+            iteration_count=0,
+            invalid_citations=[],
+            workflow_steps=[
+                BrainWorkflowStepRecord(
+                    name="responsibility_gate",
+                    input_summary="responsibility_gate=True",
+                    output_summary="refused=True responsibility_gate",
+                    succeeded=True,
+                )
+            ],
+        )
+
     compiled = get_compiled_graph()
 
     initial_state: AgenticState = {
-        "question": question.strip(),
+        "question": normalized_question,
         "history": [item.strip() for item in (history or ()) if item.strip()],
         "_db": db,
         "_embedding_provider": embedding_provider,

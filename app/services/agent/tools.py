@@ -168,6 +168,11 @@ FIGURE_NEGATIVE_INTENT_TERMS = (
     "\u53ea\u8981\u6587\u5b57",
     "no image",
     "without image",
+    "without images",
+    "without figure",
+    "without figures",
+    "no figure",
+    "no figures",
     "text only",
 )
 GENERIC_VISUAL_EVIDENCE_MARKERS = (
