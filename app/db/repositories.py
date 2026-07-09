@@ -224,6 +224,16 @@ class DocumentRepository:
         statement = select(func.count(Chunk.id)).where(Chunk.document_id == document_id)
         return self.db.scalar(statement) or 0
 
+    def count_chunks_by_document_ids(self, document_ids: Sequence[int]) -> dict[int, int]:
+        if not document_ids:
+            return {}
+        statement = (
+            select(Chunk.document_id, func.count(Chunk.id))
+            .where(Chunk.document_id.in_(document_ids))
+            .group_by(Chunk.document_id)
+        )
+        return {document_id: count for document_id, count in self.db.execute(statement).all()}
+
 
 class ChunkEmbeddingRepository:
     def __init__(self, db: Session) -> None:

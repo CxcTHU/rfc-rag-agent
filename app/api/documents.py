@@ -88,6 +88,9 @@ def list_documents(
 ) -> DocumentListResponse:
     repository = DocumentRepository(db)
     documents = repository.list_documents()
+    chunk_counts = repository.count_chunks_by_document_ids(
+        [document.id for document in documents]
+    )
     return DocumentListResponse(
         documents=[
             DocumentListItem(
@@ -99,7 +102,7 @@ def list_documents(
                 file_name=document.file_name,
                 file_extension=document.file_extension,
                 status=document.status,
-                chunk_count=repository.count_chunks(document.id),
+                chunk_count=chunk_counts.get(document.id, 0),
                 created_at=document.created_at,
             )
             for document in documents
@@ -177,9 +180,20 @@ def list_document_chunks(
 def document_open_url(document: Document, raw_dir: str | Path) -> str | None:
     if first_external_document_url(document) is not None:
         return f"/documents/{document.id}/open"
-    if resolve_document_file(document, raw_dir) is None:
+    if not has_local_document_reference(document):
         return None
     return f"/documents/{document.id}/open"
+
+
+def has_local_document_reference(document: Document) -> bool:
+    return any(
+        bool(value)
+        for value in (
+            document.raw_path,
+            document.file_name,
+            document.source_path if not is_http_url(document.source_path) else None,
+        )
+    )
 
 
 def first_external_document_url(document: Document) -> str | None:
