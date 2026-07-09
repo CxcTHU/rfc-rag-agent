@@ -450,7 +450,7 @@ def test_react_frontend_is_served_as_default_and_app_v2() -> None:
     asset_response = client.get(asset_path.group(1))
     assert asset_response.status_code == 200
     assert "javascript" in asset_response.headers["content-type"]
-    assert "Get Started" in asset_response.text
+    assert "进入工作台" in asset_response.text
     assert "Agent stream failed" in asset_response.text
     assert "Workflow" in asset_response.text
     assert "Sources" in asset_response.text
@@ -470,7 +470,7 @@ def test_frontend_auth_refresh_uses_checking_state_before_signed_out() -> None:
 
     assert "rfc-rag-agent.activeConversationId" in script
     assert "rfc-rag-agent.activeView" in script
-    assert "Get Started" in script
+    assert "进入工作台" in script
     return
 
     script = client.get("/static/app.js").text.replace("\r\n", "\n")
