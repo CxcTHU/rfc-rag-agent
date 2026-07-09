@@ -691,7 +691,22 @@ function App() {
     }, 30)
   }
 
-  if (authChecking || !user || !token) {
+  if (authChecking) {
+    return (
+      <main className="auth-boot-screen" aria-live="polite" aria-busy="true">
+        <div className="brand-lockup">
+          <span className="brand-mark">R</span>
+          <div>
+            <strong>RFC-RAG-Agent</strong>
+            <small>Restoring workspace session</small>
+          </div>
+        </div>
+        <Loader2 className="spin" size={22} aria-hidden="true" />
+      </main>
+    )
+  }
+
+  if (!user || !token) {
     return (
       <main className={cn('auth-screen', authVisible && 'is-login-visible')}>
         <div className="auth-hero">
