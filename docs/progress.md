@@ -1,5 +1,64 @@
 # 项目进度
 
+## Latest Status: 2026-07-09 Phase 60 Structured TableRAG Sidecar Passed Human Verification
+
+Current branch: `codex/phase-60-structured-table-rag`.
+
+Phase 60 was developed in a clean independent worktree:
+
+```text
+G:\Codex\program\rfc-rag-agent-phase60-tablerag
+```
+
+The main worktree remains reserved for the parallel backend/frontend optimization thread. Phase 60 does not switch the default `search_tables`, `hybrid_search`, or `tool_calling_agent` behavior.
+
+Implemented:
+
+```text
+alembic/versions/20260709_0009_structured_table_rag.py
+app/db/models.py -> table_extraction_runs, document_tables, document_table_columns, document_table_rows, document_table_cells, table_retrieval_units, table_retrieval_unit_embeddings
+app/services/ingestion/table_extractor.py -> preserves TableChunk.rows in addition to Markdown
+app/services/table_rag/ -> normalization, extraction drafts, repository, retrieval units, structured search
+scripts/backfill_phase60_structured_tables.py
+scripts/generate_phase60_table_retrieval_units.py
+scripts/evaluate_phase60_table_rag.py
+tests/test_phase60_structured_table_rag.py
+docs/stage60_structured_table_rag_goal_prompt.md
+docs/stage60_structured_table_rag_design.md
+docs/phase_reviews/phase-60.md
+```
+
+Validation so far:
+
+```text
+python -m py_compile Phase 60 model/service/script/test files -> passed
+python -m pytest tests/test_phase60_structured_table_rag.py -q -> 4 passed
+python -m pytest tests/test_phase60_structured_table_rag.py tests/test_db_models.py tests/test_repositories.py -q -> 14 passed
+python -m pytest tests/test_agent_tools.py tests/test_hybrid_search.py -q -> 43 passed
+local PostgreSQL backup -> data/exports/phase60_before_table_rag.backup, 513167733 bytes
+python -m alembic upgrade head -> 20260709_0009
+small structured backfill -> tables_created=5 units=74 errors=0
+full structured backfill -> document_tables=1700 document_table_cells=72900 table_retrieval_units=61531 errors=0
+python scripts/evaluate_phase60_table_rag.py --out data/evaluation/phase60_table_rag_eval.csv -> cases=5 rows=5 negative result_count=0
+python scripts/evaluate_phase60_table_rag_quality.py --sample-size 400 --out data/evaluation/phase60_table_rag_quality_eval.csv -> source_exact_rate=1.0000 top1=0.8725 top5=0.9600
+git diff --check -> no whitespace errors; CRLF warnings only
+targeted changed-file secret-shape scan -> no real key/token/header patterns found
+```
+
+The local PostgreSQL corpus now has structured sidecar entries for all 1700 existing table chunks. Default Agent/Search behavior is still unchanged.
+
+User manual verification passed on 2026-07-09. The current action is authorized closeout: update local/Obsidian notes, submit and merge Phase 60 to GitHub, then sync the CPU-server Agent. Default `search_tables`, `hybrid_search`, and `tool_calling_agent` remain unchanged by this phase.
+
+Post-ingestion table recall quality loop:
+
+```text
+Initial generated recall eval was below target.
+Fixes applied: removed broad control terms from retrieval-unit SQL prefilter, raised candidate cap, changed table fusion to max-per-route instead of unbounded accumulation, boosted exact caption/phrase matches, lowered numeric-only route weight, and added a formal source-alignment + recall quality eval script.
+Final quality: all 1700 structured tables exactly match their source table chunk Markdown; 400-case table recall sample reached top5=0.9600.
+```
+
+No tag has been created. Do not store `.env`, `.env.prod`, database passwords, JWT secrets, Redis passwords, API keys, bearer tokens, provider raw responses, `raw_response`, `reasoning_content`, hidden thought, full answers, full chunks, restricted full text, private service logs, or long-term user profiles in Git/CSV/docs/tests/Obsidian.
+
 ## Latest Status: 2026-06-30 Phase 58 Human Verification Passed And Final Runtime Fixes Completed
 
 Current branch: `codex/phase-58-mature-agent-runtime`.

@@ -1,0 +1,6 @@
+case_id,category,result_count,top_table_id,top_score,top_document_id,top_chunk_id,top_page,matched_count,matched_types,row_count,col_count,quality_score
+phase60_find_table,find_table,5,27,44.9522,1316,57831,1,12,column_pack|exact_cell|exact_header|row_pack|table_schema|table_summary,4,9,0.9083
+phase60_find_column,find_column,5,1563,251.3974,2297,60560,59,12,exact_cell|exact_header|numeric_unit,39,10,0.9492
+phase60_find_row,find_row,5,436,51.8,1576,58240,52,12,exact_cell,20,5,0.26
+phase60_find_cell,find_cell,5,969,43.4,1880,58773,27,12,exact_cell|exact_header,13,17,0.6466
+phase60_negative,negative,0,,,,,,0,,,,
