@@ -1,0 +1,13 @@
+run_at,case_id,document_id,source_type,file_extension,open_url_present,http_status,content_type,pdf_header_ok,status,latency_ms,error_summary
+2026-07-09T14:25:33.915679+00:00,open_pdf_01,2073,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,65.669,
+2026-07-09T14:25:33.915679+00:00,open_pdf_02,1167,institutional_access_pdf,.pdf,true,307,,false,skipped,60.307,external_redirect
+2026-07-09T14:25:33.915679+00:00,open_pdf_03,1288,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,67.631,
+2026-07-09T14:25:33.915679+00:00,open_pdf_04,1289,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,79.753,
+2026-07-09T14:25:33.915679+00:00,open_pdf_05,1290,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,62.538,
+2026-07-09T14:25:33.915679+00:00,open_pdf_06,1291,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,63.102,
+2026-07-09T14:25:33.915679+00:00,open_pdf_07,1292,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,76.092,
+2026-07-09T14:25:33.915679+00:00,open_pdf_08,1293,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,63.372,
+2026-07-09T14:25:33.915679+00:00,open_pdf_09,1294,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,64.966,
+2026-07-09T14:25:33.915679+00:00,open_pdf_10,1295,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,64.094,
+2026-07-09T14:25:33.915679+00:00,open_pdf_11,1296,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,62.179,
+2026-07-09T14:25:33.915679+00:00,open_pdf_12,1297,institutional_access_pdf,.pdf,true,206,application/pdf,true,passed,61.379,

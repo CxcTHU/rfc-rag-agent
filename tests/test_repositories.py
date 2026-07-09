@@ -49,11 +49,13 @@ def test_document_repository_creates_and_queries_document(tmp_path) -> None:
         saved_document = repository.get_by_content_hash("repository-hash")
         documents = repository.list_documents()
         chunk_count = repository.count_chunks(document.id)
+        chunk_counts = repository.count_chunks_by_document_ids([document.id, 999])
 
     assert saved_document is not None
     assert saved_document.id == document.id
     assert [item.title for item in documents] == ["堆石混凝土资料"]
     assert chunk_count == 1
+    assert chunk_counts == {document.id: 1}
 
 
 def test_chunk_embedding_repository_saves_and_queries_embedding(tmp_path) -> None:

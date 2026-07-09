@@ -436,18 +436,31 @@ function App() {
   async function loadConversationMessages(conversationId: number, nextToken = token) {
     if (!nextToken) return
     setLastError('')
-    const cachedMessages = messagesByConversationRef.current[conversationId]
-    if (cachedMessages?.some((message) => message.pending)) {
+    if (activeConversationIdRef.current !== conversationId) {
       setActiveConversationId(conversationId)
       activeConversationIdRef.current = conversationId
       persistActiveConversationId(conversationId)
+      setActiveCitation(null)
+    }
+    const cachedMessages = messagesByConversationRef.current[conversationId]
+    if (cachedMessages?.some((message) => message.pending)) {
       setMessages(cachedMessages)
       setLastResult(latestResultFromMessages(cachedMessages))
-      setActiveCitation(null)
       setStatus('Agent 运行中')
       return
     }
+    if (cachedMessages) {
+      setMessages(cachedMessages)
+      setLastResult(latestResultFromMessages(cachedMessages))
+    } else {
+      setMessages([])
+      setLastResult(null)
+      setStatus('姝ｅ湪鍔犺浇浼氳瘽...')
+    }
     const payload = await getConversationMessages(nextToken, conversationId)
+    if (activeConversationIdRef.current !== conversationId) {
+      return
+    }
     const hydrated = hydrateConversationMessages(payload.messages || [])
     const latest = latestResultFromMessages(hydrated)
     setActiveConversationId(payload.conversation.id)
