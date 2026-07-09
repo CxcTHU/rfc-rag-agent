@@ -13,6 +13,7 @@ from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
 from app.api.frontend import FRONTEND_DIR
+from app.api.frontend import REACT_FRONTEND_DIST_DIR
 from app.api.frontend import router as frontend_router
 from app.api.feedback import router as feedback_router
 from app.api.feedback_export import router as feedback_export_router
@@ -128,6 +129,11 @@ def create_app() -> FastAPI:
         "/static",
         StaticFiles(directory=FRONTEND_DIR / "static"),
         name="static",
+    )
+    app.mount(
+        "/app-v2/assets",
+        StaticFiles(directory=REACT_FRONTEND_DIST_DIR / "assets", check_dir=False),
+        name="react-assets",
     )
     return app
 

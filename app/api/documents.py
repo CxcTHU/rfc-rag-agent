@@ -1,11 +1,14 @@
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.db.models import Document
 from app.db.repositories import DocumentRepository
 from app.db.session import get_db
 from app.schemas.document import (
@@ -23,6 +26,7 @@ from app.services.ingestion.service import (
 )
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def get_ingestion_config() -> IngestionConfig:
@@ -78,7 +82,10 @@ def import_document(
 
 
 @router.get("", response_model=DocumentListResponse)
-def list_documents(db: Session = Depends(get_db)) -> DocumentListResponse:
+def list_documents(
+    db: Session = Depends(get_db),
+    ingestion_config: IngestionConfig = Depends(get_ingestion_config),
+) -> DocumentListResponse:
     repository = DocumentRepository(db)
     documents = repository.list_documents()
     return DocumentListResponse(
@@ -88,6 +95,7 @@ def list_documents(db: Session = Depends(get_db)) -> DocumentListResponse:
                 title=document.title,
                 source_type=document.source_type,
                 source_path=document.source_path,
+                open_url=document_open_url(document, ingestion_config.raw_dir),
                 file_name=document.file_name,
                 file_extension=document.file_extension,
                 status=document.status,
@@ -97,6 +105,33 @@ def list_documents(db: Session = Depends(get_db)) -> DocumentListResponse:
             for document in documents
         ]
     )
+
+
+@router.get("/{document_id}/open", include_in_schema=False)
+def open_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    ingestion_config: IngestionConfig = Depends(get_ingestion_config),
+):
+    repository = DocumentRepository(db)
+    document = repository.get_by_id(document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document {document_id} was not found.",
+        )
+
+    external_url = first_external_document_url(document)
+    if external_url is not None:
+        return RedirectResponse(external_url)
+
+    local_path = resolve_document_file(document, ingestion_config.raw_dir)
+    if local_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document {document_id} original file was not found.",
+        )
+    return FileResponse(local_path)
 
 
 @router.get("/{document_id}/chunks", response_model=DocumentChunksResponse)
@@ -137,3 +172,79 @@ def list_document_chunks(
             for chunk in chunks
         ],
     )
+
+
+def document_open_url(document: Document, raw_dir: str | Path) -> str | None:
+    if first_external_document_url(document) is not None:
+        return f"/documents/{document.id}/open"
+    if resolve_document_file(document, raw_dir) is None:
+        return None
+    return f"/documents/{document.id}/open"
+
+
+def first_external_document_url(document: Document) -> str | None:
+    for value in (document.source_path,):
+        if is_http_url(value):
+            return value
+    return None
+
+
+def resolve_document_file(document: Document, raw_dir: str | Path) -> Path | None:
+    raw_root = resolve_raw_root(raw_dir)
+    candidates: list[Path] = []
+    for value in (document.raw_path, document.source_path):
+        if value and not is_http_url(value):
+            candidates.extend(path_candidates(value, raw_root))
+    if document.file_name:
+        candidates.append(raw_root / Path(document.file_name).name)
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = safe_resolve(candidate)
+        if resolved is None or resolved in seen:
+            continue
+        seen.add(resolved)
+        if is_path_within(resolved, raw_root) and resolved.is_file():
+            return resolved
+    return None
+
+
+def path_candidates(value: str, raw_root: Path) -> list[Path]:
+    path = Path(value)
+    if path.is_absolute():
+        return [path]
+    return [
+        ROOT_DIR / path,
+        raw_root / path,
+        raw_root / path.name,
+    ]
+
+
+def resolve_raw_root(raw_dir: str | Path) -> Path:
+    raw_path = Path(raw_dir)
+    if not raw_path.is_absolute():
+        raw_path = ROOT_DIR / raw_path
+    resolved = safe_resolve(raw_path)
+    return resolved or raw_path
+
+
+def safe_resolve(path: Path) -> Path | None:
+    try:
+        return path.resolve()
+    except (OSError, RuntimeError):
+        return None
+
+
+def is_path_within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def is_http_url(value: str | None) -> bool:
+    if not value:
+        return False
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)

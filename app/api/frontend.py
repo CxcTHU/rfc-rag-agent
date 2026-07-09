@@ -13,7 +13,10 @@ router = APIRouter(tags=["frontend"])
 
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 ROOT_DIR = Path(__file__).resolve().parents[2]
+REACT_FRONTEND_DIST_DIR = ROOT_DIR / "frontend" / "dist"
 INDEX_PATH = FRONTEND_DIR / "index.html"
+REACT_INDEX_PATH = REACT_FRONTEND_DIST_DIR / "index.html"
+REACT_FAVICON_PATH = REACT_FRONTEND_DIST_DIR / "favicon.svg"
 QUALITY_REPORT_PATH = FRONTEND_DIR / "quality_report.html"
 QUALITY_REVIEW_PATH = FRONTEND_DIR / "quality_review.html"
 QUALITY_SUMMARY_PATH = ROOT_DIR / "data" / "evaluation" / "stage30_quality_summary.csv"
@@ -36,8 +39,25 @@ VALID_REVIEW_DECISIONS = {
 
 
 @router.get("/", include_in_schema=False)
+@router.get("/app-v2", include_in_schema=False)
+@router.get("/app-v2/", include_in_schema=False)
 def frontend_index() -> FileResponse:
+    if not REACT_INDEX_PATH.exists():
+        raise HTTPException(status_code=503, detail="React frontend has not been built")
+    return FileResponse(REACT_INDEX_PATH)
+
+
+@router.get("/legacy", include_in_schema=False)
+@router.get("/legacy/", include_in_schema=False)
+def legacy_frontend_index() -> FileResponse:
     return FileResponse(INDEX_PATH)
+
+
+@router.get("/app-v2/favicon.svg", include_in_schema=False)
+def react_frontend_favicon() -> Response:
+    if not REACT_FAVICON_PATH.exists():
+        return Response(status_code=204)
+    return FileResponse(REACT_FAVICON_PATH)
 
 
 @router.get("/quality-report", include_in_schema=False)

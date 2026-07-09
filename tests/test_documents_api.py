@@ -50,6 +50,8 @@ def test_import_document_api_and_list_documents(tmp_path) -> None:
             files={"file": ("rfc.md", markdown_content.encode("utf-8"), "text/markdown")},
         )
         list_response = client.get("/documents")
+        document_id = import_response.json()["document_id"]
+        open_response = client.get(f"/documents/{document_id}/open")
 
     assert import_response.status_code == 200
     imported = import_response.json()
@@ -62,7 +64,11 @@ def test_import_document_api_and_list_documents(tmp_path) -> None:
     assert len(documents) == 1
     assert documents[0]["title"] == "堆石混凝土概念"
     assert documents[0]["file_name"] == "rfc.md"
+    assert documents[0]["open_url"] == f"/documents/{documents[0]['id']}/open"
     assert documents[0]["chunk_count"] == imported["chunk_count"]
+
+    assert open_response.status_code == 200
+    assert "堆石混凝土由大粒径堆石体和自密实混凝土组成" in open_response.text
 
 
 def test_list_document_chunks_api_returns_imported_chunks(tmp_path) -> None:

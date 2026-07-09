@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import re
 
 import app.api.frontend as frontend_api
 from app.main import create_app
@@ -7,7 +8,7 @@ from app.main import create_app
 def test_frontend_index_is_served() -> None:
     client = TestClient(create_app())
 
-    response = client.get("/")
+    response = client.get("/legacy")
 
     assert response.status_code == 200
     assert "RAG" in response.text
@@ -16,6 +17,9 @@ def test_frontend_index_is_served() -> None:
     assert 'data-view-target="library"' in response.text
     assert 'id="ask-view"' in response.text
     assert 'id="library-view"' in response.text
+    assert 'id="evidence-view"' in response.text
+    assert 'id="trace-view"' in response.text
+    assert 'id="quality-view"' in response.text
     assert "agent-workspace-panel" in response.text
     assert "operations-grid" in response.text
     assert "answer-grid" in response.text
@@ -23,16 +27,43 @@ def test_frontend_index_is_served() -> None:
     assert "data-auth-login-form" in response.text
     assert "data-auth-register-form" in response.text
     assert "data-auth-screen" in response.text
+    assert 'class="app-shell is-auth-checking"' in response.text
     assert "data-auth-mode=\"login\"" in response.text
     assert "data-auth-mode=\"register\"" in response.text
+    assert "data-auth-start" in response.text
+    assert "Get Started" in response.text
     assert "创建账号" in response.text
     assert "登录后继续" in response.text
+    assert "构建面向工程资料的" in response.text
+    assert "智能问答" in response.text
+    assert "知识库" in response.text
+    assert "证据溯源" in response.text
+    assert "运行诊断" in response.text
+    assert "质量审阅" in response.text
+    assert "diagnostics-panel" in response.text
+    assert "工程诊断能力" in response.text
+    assert "quality-score-grid" in response.text
+    assert "审阅队列" in response.text
+    assert "data-trace-stage" in response.text
+    assert "data-trace-candidates" in response.text
+    assert "data-quality-faithfulness" in response.text
+    assert "data-quality-citations" in response.text
+    assert "data-quality-coverage" in response.text
+    assert "data-quality-safety" in response.text
+    assert "Citation Support" in response.text
+    assert "Answer Coverage" in response.text
+    assert "Safety / Refusal" in response.text
+    assert "data-run-judge" in response.text
+    assert "运行 Judge" in response.text
+    assert "人工审阅</strong>" not in response.text
+    assert "data-review-queue-status" in response.text
+    assert "workbench-rail" not in response.text
     assert "data-workspace-band" in response.text
     assert "data-auth-logout" in response.text
     assert "data-auth-status" in response.text
     assert "data-auth-username" in response.text
-    assert "/static/app.js?v=phase58-live-run-restore1" in response.text
-    assert "/static/styles.css?v=phase58-live-run-restore1" in response.text
+    assert "/static/app.js?v=phase60-table-render1" in response.text
+    assert "/static/styles.css?v=phase60-table-render1" in response.text
     assert 'class="hero-layout"' in response.text
     assert "hero-kicker" not in response.text
     assert 'class="demo-panel agent-workspace-panel"' in response.text
@@ -100,6 +131,23 @@ def test_frontend_static_assets_are_served() -> None:
     assert "submitAuthLogin" in response.text
     assert "submitAuthRegister" in response.text
     assert "loadCurrentUserFromToken" in response.text
+    assert "renderRunReviewPanels" in response.text
+    assert "resetRunReviewPanels" in response.text
+    assert 'agentJudge: "/agent/judge"' in response.text
+    assert "submitAnswerJudge" in response.text
+    assert "latestJudgePayload" in response.text
+    assert 'querySelector("[data-run-judge]")' in response.text
+    assert "latestResultStats" in response.text
+    assert "judgeScoreMap" in response.text
+    assert "safety_leak_check" in response.text
+    assert "refusal_correctness" in response.text
+    assert "citation_support" in response.text
+    assert "answer_coverage" in response.text
+    assert "renderRunReviewPanels(metadata)" in response.text
+    assert "renderRunReviewPanels(result)" in response.text
+    assert "renderRunReviewPanels(latestAssistantResult)" in response.text
+    assert "authChecking" in response.text
+    assert "is-auth-checking" in response.text
     assert "ensureAuthenticated" in response.text
     assert "setAuthMode" in response.text
     assert "authErrorMessage" in response.text
@@ -131,6 +179,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "attachLiveAgentRunToCurrentConversation" in response.text
     assert "currentLiveAgentMessage" in response.text
     assert "latestAgentUserQuestionText" in response.text
+
     assert "userMessageElement" in response.text
     assert "liveAgentEventView" in response.text
     assert "agentThoughtHtml" in response.text
@@ -167,9 +216,9 @@ def test_frontend_static_assets_are_served() -> None:
     assert "appendAgentErrorMessage" in response.text
     assert "正在思考..." in response.text
     assert "pendingThinkingMessage?.isConnected" in response.text
-    assert "Agent failed" in response.text
+    assert "Agent 失败" in response.text
     assert "setConversationListPlaceholder" in response.text
-    assert "Load failed" in response.text
+    assert "加载失败" in response.text
     assert "loadAgentConversations" in response.text
     assert "loadConversationMessages" in response.text
     assert "createAgentConversation" in response.text
@@ -190,7 +239,7 @@ def test_frontend_static_assets_are_served() -> None:
     assert "markAgentStreamingAborted" in response.text
     assert "Stopping generation" in response.text
     assert "command-button--stop" in response.text
-    assert "Stop generation" in response.text
+    assert "停止生成" in response.text
     assert "data-agent-stop" not in response.text
     assert 'querySelector("[data-agent-submit]")?.addEventListener("click"' in response.text
     assert "event.preventDefault();" in response.text
@@ -230,7 +279,8 @@ def test_frontend_static_assets_are_served() -> None:
     assert "await handlers.onToken" in response.text
     assert "finalizeAgentStreamingMessage" in response.text
     assert "appendTokenToAgentMessage" in response.text
-    assert 'setAgentPanelStatus(result?.aborted ? "aborted" : result?.refused ? "refused" : "answered")' in response.text
+    assert 'setAgentPanelStatus(result?.aborted ? "已停止" : result?.refused ? "已拒答" : "已回答")' in response.text
+    assert 'setApiStatus(result?.aborted ? "Agent 已停止" : result?.refused ? "Agent 已拒答" : "Agent 已完成")' in response.text
     assert '"Accept": "text/event-stream"' in response.text
     assert "...authHeaders()" in response.text
     assert "signal:" in response.text
@@ -359,15 +409,68 @@ def test_frontend_static_assets_are_served() -> None:
     assert "agent-composer" in styles.text
     assert "auth-panel" in styles.text
     assert "auth-screen" in styles.text
+    assert "is-auth-checking" in styles.text
     assert "auth-card" in styles.text
     assert "auth-tabs" in styles.text
     assert "auth-tab.is-active" in styles.text
+    assert "is-login-visible" in styles.text
+    assert "trace-canvas" in styles.text
+    assert "diagnostic-summary-grid" in styles.text
+    assert "quality-score-grid" in styles.text
+    assert "review-board" in styles.text
     assert "auth-help.is-error" in styles.text
     assert "auth-form" in styles.text
     assert "auth-remember" in styles.text
     assert "auth-summary" in styles.text
     assert "height: calc(100vh - 108px)" in styles.text
     assert "grid-template-rows: auto minmax(0, 1fr)" in styles.text
+
+
+def test_react_frontend_is_served_as_default_and_app_v2() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/")
+    app_v2_response = client.get("/app-v2")
+    legacy_response = client.get("/legacy")
+
+    assert response.status_code == 200
+    assert 'id="root"' in response.text
+    assert "/app-v2/assets/" in response.text
+    assert app_v2_response.status_code == 200
+    assert app_v2_response.text == response.text
+    assert legacy_response.status_code == 200
+    assert 'data-workspace-band' in legacy_response.text
+    asset_path = re.search(r'src="([^"]+/assets/[^"]+\.js)"', response.text)
+    assert asset_path is not None
+    asset_response = client.get(asset_path.group(1))
+    assert asset_response.status_code == 200
+    assert "javascript" in asset_response.headers["content-type"]
+    assert "Get Started" in asset_response.text
+    assert "Agent stream failed" in asset_response.text
+    assert "Workflow" in asset_response.text
+    assert "Sources" in asset_response.text
+    assert "rfc-rag-agent.activeConversationId" in asset_response.text
+    assert "rfc-rag-agent.activeView" in asset_response.text
+    assert "正在恢复最近一次对话" in asset_response.text
+    assert "正在恢复最近一次回答的来源" in asset_response.text
+
+
+def test_frontend_auth_refresh_uses_checking_state_before_signed_out() -> None:
+    client = TestClient(create_app())
+
+    script = client.get("/static/app.js").text.replace("\r\n", "\n")
+    styles = client.get("/static/styles.css").text.replace("\r\n", "\n")
+    index = client.get("/legacy").text
+
+    assert 'class="app-shell is-auth-checking"' in index
+    assert "authChecking: Boolean(storedAuthToken())" in script
+    assert 'classList.toggle("is-auth-checking", isChecking)' in script
+    assert 'classList.toggle("is-signed-out", !isChecking && !isSignedIn)' in script
+    assert "authScreen.hidden = isChecking || isSignedIn" in script
+    assert "workspace.hidden = isChecking || !isSignedIn" in script
+    assert script.index("await loadCurrentUserFromToken();") < script.index('await fetchJson("/health");')
+    assert ".app-shell.is-auth-checking .auth-screen" in styles
+    assert ".app-shell.is-auth-checking .workspace-band" in styles
 
 
 def test_quality_report_is_served_read_only() -> None:
