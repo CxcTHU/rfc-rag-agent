@@ -444,7 +444,7 @@ def test_agent_api_followup_respects_requested_point_count(tmp_path) -> None:
         first = client.post(
             "/agent/query",
             json={
-                "question": "堆石混凝土与自密实混凝土的区别有哪些？",
+                "question": "What affects filling capacity?",
                 "top_k": 2,
                 "conversation_id": conversation["id"],
                 "mode": "default",
