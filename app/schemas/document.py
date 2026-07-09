@@ -17,6 +17,7 @@ class DocumentListItem(BaseModel):
     title: str
     source_type: str
     source_path: str | None
+    open_url: str | None = None
     file_name: str
     file_extension: str
     status: str
