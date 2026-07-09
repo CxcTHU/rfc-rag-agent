@@ -16,6 +16,7 @@ def test_dockerfile_runs_fastapi_without_copying_runtime_data() -> None:
     assert "chainlit run" not in dockerfile
     assert "chainlit_app.py" not in dockerfile
     assert "COPY . ." not in dockerfile
+    assert "COPY frontend/dist ./frontend/dist" in dockerfile
     assert ".env" not in dockerfile
     assert "app.sqlite" not in dockerfile
     assert "obsidian-vault" not in dockerfile
