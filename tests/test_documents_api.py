@@ -4,8 +4,8 @@ from contextlib import contextmanager
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.api.documents import get_ingestion_config
-from app.db.models import Base
+from app.api.documents import get_ingestion_config, resolve_document_file
+from app.db.models import Base, Document
 from app.db.session import create_sqlite_engine, get_db
 from app.main import app
 from app.services.ingestion.service import IngestionConfig
@@ -122,3 +122,19 @@ def test_import_document_api_rejects_unsupported_file(tmp_path) -> None:
 
     assert response.status_code == 400
     assert "Unsupported file type" in response.json()["detail"]
+
+
+def test_resolve_document_file_accepts_windows_style_raw_path(tmp_path) -> None:
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    raw_file = raw_dir / "7f9097c33451cb9d563249a7ebf59d93a6b254f334406309743e2d1d95c61fb2.pdf"
+    raw_file.write_bytes(b"%PDF-1.4\n")
+    document = Document(
+        raw_path=r"data\raw\7f9097c33451cb9d563249a7ebf59d93a6b254f334406309743e2d1d95c61fb2.pdf",
+        source_path=r"G:\Codex\program\papers_0618\岩溶地区水库大坝基础防渗技术研究.pdf",
+        file_name="岩溶地区水库大坝基础防渗技术研究.pdf",
+    )
+
+    resolved = resolve_document_file(document, raw_dir)
+
+    assert resolved == raw_file.resolve()
