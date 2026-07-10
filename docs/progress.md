@@ -1,5 +1,34 @@
 # 项目进度
 
+## Latest Status: 2026-07-10 Phase 61 P0/P1 Internal Pilot Hardening
+
+Phase 61 is now the current active hardening slice. The goal is a controlled internal pilot posture, not a generalized agent platform.
+
+Implemented in this working tree:
+
+```text
+production auth/rate-limit defaults
+minimal users.role RBAC and first-user admin bootstrap
+auth guards for documents/search/chat/sources/feedback/assets/image upload
+admin guards for source sync/reindex and feedback export
+production /health/details admin-only
+SOURCE_SYNC_ALLOWED_ROOTS and EXPORT_ALLOWED_DIR path constraints
+provider HTTP error body sanitization
+bounded query/history/judge/feedback payload sizes
+AGENT_DEFAULT_MODE with tool_calling_agent as the production default
+TABLE_RAG_ENABLED integration into search_tables with feature-flag-aware cache identity
+authenticated image asset route replacing the unauthenticated image StaticFiles mount
+CI jobs for backend tests, frontend lint/build, PostgreSQL Alembic upgrade, Docker build, and secret-pattern scan
+frontend test early-return cleanup
+React Agent UX follow-ups: per-session semantic evidence cache isolation, per-conversation running/upload controls, DeepSeek V4 Flash/Pro selector, authenticated original opening through HttpOnly cookie auth, compact/full-width UI polish, and thought-process stage replay with per-stage timing
+```
+
+Current status source: `CURRENT_STATUS.md`.
+
+User manual verification passed on 2026-07-10. Phase 61 is authorized for local closeout, Obsidian update, GitHub merge, and CPU-server rsync sync.
+
+CPU deployment target remains `/home/ubuntu/rfc-rag-agent-stage44-smoke` through the `rfc-cpu` Tailscale SSH host. The CPU repo copy is a deployment copy, not a Git checkout; rsync must preserve server-local `.env.prod`, `data/`, PostgreSQL/Redis Docker volumes, and server-local corpus/PDF assets.
+
 ## Latest Status: 2026-07-10 Phase 60 Post-Acceptance Sync And CPU Runtime Fixes
 
 Current branch: `codex/phase60-post-acceptance-sync`.

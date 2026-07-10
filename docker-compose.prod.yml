@@ -51,6 +51,15 @@ services:
     environment:
       APP_ENV: production
       AUTH_ENABLED: "true"
+      AUTH_REQUIRED_IN_PROD: "true"
+      AUTH_ALLOW_PUBLIC_REGISTRATION: "false"
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_REQUIRED_IN_PROD: "true"
+      TRUST_FORWARDED_FOR: "false"
+      SOURCE_SYNC_ALLOWED_ROOTS: /app/data
+      EXPORT_ALLOWED_DIR: /app/data/evaluation
+      TABLE_RAG_ENABLED: ${TABLE_RAG_ENABLED:-false}
+      AGENT_DEFAULT_MODE: ${AGENT_DEFAULT_MODE:-tool_calling_agent}
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-rfc_user}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}@db:5432/${POSTGRES_DB:-rfc_rag}
       REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env.prod}@redis:6379/0}
       RAW_DATA_DIR: /app/data/raw

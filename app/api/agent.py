@@ -77,6 +77,25 @@ def get_agent_chat_model_provider() -> ChatModelProvider:
     )
 
 
+def resolve_agent_chat_model_provider(
+    request: AgentQueryRequest,
+    default_provider: ChatModelProvider,
+) -> ChatModelProvider:
+    """Return the request-selected chat model provider when a safe preset is set."""
+
+    if not request.chat_model:
+        return default_provider
+    settings = get_settings()
+    return create_chat_model_provider(
+        provider_name=settings.chat_model_provider,
+        model_name=request.chat_model,
+        api_key=settings.chat_model_api_key,
+        base_url=settings.chat_model_base_url,
+        temperature=settings.chat_model_temperature,
+        timeout_seconds=settings.chat_model_timeout_seconds,
+    )
+
+
 def get_agent_planner_chat_model_provider() -> ChatModelProvider | None:
     """Optional lightweight planner provider for ReAct LLM-driven planning.
 
@@ -138,6 +157,19 @@ def get_agent_embedding_provider() -> EmbeddingProvider:
         dimension=settings.embedding_dimension or None,
         timeout_seconds=settings.embedding_timeout_seconds,
     )
+
+
+def configured_agent_default_mode() -> str:
+    configured = get_settings().agent_default_mode.strip().lower()
+    if configured in {
+        "default",
+        "agentic",
+        "react_agent",
+        "tool_calling_agent",
+        "langgraph_agent",
+    }:
+        return configured
+    return "tool_calling_agent"
 
 
 def bounded_judge_source_text(source: Any, index: int) -> str:
@@ -270,6 +302,7 @@ def query_agent(
         get_agent_planner_chat_model_provider
     ),
 ) -> AgentQueryResponse:
+    chat_model_provider = resolve_agent_chat_model_provider(request, chat_model_provider)
     conversation_repository = ConversationRepository(db)
     conversation_messages: list[Message] = []
     conversation_history: list[str] = []
@@ -301,7 +334,7 @@ def query_agent(
         chat_model_provider=chat_model_provider,
         embedding_provider=embedding_provider,
         planner_chat_provider=planner_chat_provider,
-        effective_mode=request.mode or "tool_calling_agent",
+        effective_mode=request.mode or configured_agent_default_mode(),
         conversation_messages=conversation_messages,
     )
     if meta_response is not None:
@@ -352,7 +385,7 @@ def query_agent(
 
     effective_mode = request.mode
     if effective_mode is None:
-        effective_mode = "tool_calling_agent"
+        effective_mode = configured_agent_default_mode()
     log_agent_query_received(request, effective_mode=effective_mode)
 
     response: AgentQueryResponse
@@ -569,6 +602,7 @@ def stream_query_agent(
         get_agent_planner_chat_model_provider
     ),
 ) -> StreamingResponse:
+    chat_model_provider = resolve_agent_chat_model_provider(request, chat_model_provider)
     conversation_repository = ConversationRepository(db)
     conversation_messages: list[Message] = []
     conversation_history: list[str] = []
@@ -635,7 +669,7 @@ def stream_agent_query_events(
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
             planner_chat_provider=planner_chat_provider,
-            effective_mode=request.mode or "tool_calling_agent",
+            effective_mode=request.mode or configured_agent_default_mode(),
             conversation_messages=conversation_messages or [],
         )
         if meta_response is not None:
@@ -656,7 +690,7 @@ def stream_agent_query_events(
                     response = agent_response_from_chitchat(request.question, chitchat)
                     summarize = False
                 else:
-                    effective_mode = request.mode or "tool_calling_agent"
+                    effective_mode = request.mode or configured_agent_default_mode()
                     response, streamed_token_count = yield from stream_non_chitchat_agent_response(
                         request=request,
                         db=db,
@@ -721,7 +755,7 @@ def stream_non_chitchat_agent_response(
         try:
             resolved_mode = request.mode
             if resolved_mode is None:
-                resolved_mode = "tool_calling_agent"
+                resolved_mode = configured_agent_default_mode()
             effective_chat_model_provider = chat_model_provider
             if resolved_mode != "react_agent":
                 effective_chat_model_provider = QueueStreamingChatModelProvider(
@@ -1295,7 +1329,7 @@ def build_agent_query_response(
 ) -> AgentQueryResponse:
     effective_mode = request.mode
     if effective_mode is None:
-        effective_mode = "tool_calling_agent"
+        effective_mode = configured_agent_default_mode()
     log_agent_query_received(request, effective_mode=effective_mode)
 
     if effective_mode == "agentic":
@@ -1758,6 +1792,7 @@ def persist_agent_conversation_messages(
     chat_model_provider: ChatModelProvider,
     summarize: bool = True,
 ) -> None:
+    attach_chat_model_metadata(response, chat_model_provider)
     if conversation_id is None:
         return
 
@@ -1817,8 +1852,23 @@ def assistant_metadata_from_response(response: AgentQueryResponse) -> dict[str, 
             "invalid_citations",
             "refusal_category",
             "latency_trace",
+            "chat_provider",
+            "chat_model",
         ]
     }
+
+
+def attach_chat_model_metadata(
+    response: AgentQueryResponse,
+    chat_model_provider: ChatModelProvider,
+) -> AgentQueryResponse:
+    response.chat_provider = chat_model_provider.provider_name
+    response.chat_model = chat_model_provider.model_name
+    if response.latency_trace is None:
+        response.latency_trace = {}
+    response.latency_trace.setdefault("chat_provider", chat_model_provider.provider_name)
+    response.latency_trace.setdefault("chat_model", chat_model_provider.model_name)
+    return response
 
 
 def mark_response_first_token(response: AgentQueryResponse, stream_started: float) -> None:

@@ -469,12 +469,10 @@ def request_deepseek_with_curl(
         if status_code in RETRYABLE_HTTP_STATUS:
             raise TransientHTTPStatusError(
                 status_code,
-                f"Chat model request failed with HTTP {status_code}: {body[:500]}",
+                f"Chat model request failed with HTTP {status_code}",
             )
         if status_code >= 400:
-            raise RuntimeError(
-                f"Chat model request failed with HTTP {status_code}: {body[:500]}"
-            )
+            raise RuntimeError(f"Chat model request failed with HTTP {status_code}")
         return json.loads(body)
     except subprocess.TimeoutExpired as exc:
         raise TimeoutError("DeepSeek curl request timed out") from exc

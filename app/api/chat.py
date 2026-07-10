@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.schemas.chat import ChatRequest, ChatResponse, ChatSourceItem
 from app.services.generation.answer_service import (
@@ -44,6 +45,7 @@ def get_embedding_provider() -> EmbeddingProvider:
 @router.post("/chat", response_model=ChatResponse)
 def chat(
     request: ChatRequest,
+    _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
     chat_model_provider: ChatModelProvider = Depends(get_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_embedding_provider),

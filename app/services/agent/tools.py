@@ -22,13 +22,15 @@ from app.services.generation.chat_model import ChatModelProvider
 from app.services.generation.prompt_builder import ContextSource
 from app.services.generation.vision_model import create_vision_model_provider
 from app.services.graphrag.graph_search import GraphEnhancedSearchService
-from app.services.observability.latency_trace import get_current_latency_trace
+from app.services.observability.latency_trace import active_agent_cache_scope, get_current_latency_trace
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.citation_locator import CitationLocator
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.keyword_search import KeywordSearchResult, KeywordSearchService
 from app.services.retrieval.vector_cache import VectorIndexEntry
 from app.services.retrieval.vector_search import VectorSearchResult, VectorSearchService
+from app.services.table_rag.search import StructuredTableSearchService
+from app.services.table_rag.models import StructuredTableSearchResult
 
 try:
     from PIL import Image, UnidentifiedImageError
@@ -439,6 +441,38 @@ class AgentToolbox:
         cached = self._lookup_tool_result_cache(tool_name, normalized_query, top_k)
         if cached is not None:
             return cached
+        settings = get_settings()
+        if settings.table_rag_enabled:
+            structured_results = StructuredTableSearchService(self.db).search(
+                normalized_query,
+                top_k=top_k,
+            )
+            if structured_results:
+                search_results = [
+                    search_item_from_structured_table(result, self.db)
+                    for result in structured_results
+                ]
+                sources = _enrich_sources_with_citation_location(
+                    sources_from_search_results(search_results),
+                    self.db,
+                )
+                tool_result = AgentToolResult(
+                    tool_name=tool_name,
+                    call=AgentToolCallRecord(
+                        tool_name=tool_name,
+                        input_summary=summarize_input(normalized_query, top_k),
+                        output_summary=(
+                            f"returned {len(search_results)} structured table results; "
+                            "backend=structured_table_rag"
+                        ),
+                        succeeded=True,
+                    ),
+                    search_results=search_results,
+                    sources=sources,
+                    refused=False,
+                )
+                self._store_tool_result_cache(tool_name, normalized_query, top_k, tool_result)
+                return tool_result
         like_terms = table_query_terms(normalized_query)
         vector_rows: list[tuple[Chunk, Document, float]] = []
         vector_error: str | None = None
@@ -854,6 +888,7 @@ class AgentToolbox:
         identity.update(
             {
                 "layer": "tool",
+                "agent_cache_scope": active_agent_cache_scope(),
                 "tool_name": tool_name,
                 "query_mode": query_mode,
                 "query": stable_question_key or evidence_query,
@@ -890,6 +925,9 @@ class AgentToolbox:
                 "reranking_model": get_settings().reranking_model_name,
                 "reranking_recall_k": get_settings().reranking_recall_k,
                 "graph_path": get_settings().graphrag_graph_path if tool_name == "search_graph_knowledge" else "",
+                "table_rag_enabled": bool(get_settings().table_rag_enabled)
+                if tool_name == "search_tables"
+                else False,
             }
         )
         return identity
@@ -901,6 +939,8 @@ class AgentToolbox:
         top_k: int,
     ) -> AgentToolResult | None:
         if tool_name not in {"search_knowledge", "hybrid_search_knowledge", "search_tables", "search_figures"}:
+            return None
+        if tool_name == "search_tables" and get_settings().table_rag_enabled:
             return None
         cache = get_configured_layered_cache("tool")
         if cache is None:
@@ -983,6 +1023,8 @@ class AgentToolbox:
         result: AgentToolResult,
     ) -> None:
         if tool_name not in {"search_knowledge", "hybrid_search_knowledge", "search_tables", "search_figures"}:
+            return
+        if tool_name == "search_tables" and get_settings().table_rag_enabled:
             return
         cache = get_configured_layered_cache("tool")
         if cache is None:
@@ -1178,6 +1220,65 @@ def search_item_from_table_chunk(
         page_number=chunk.page_number,
         table_content=chunk.content,
     )
+
+
+def search_item_from_structured_table(
+    result: StructuredTableSearchResult,
+    db: Session,
+) -> AgentSearchItem:
+    document = db.get(Document, result.citation.document_id)
+    chunk = db.get(Chunk, result.citation.chunk_id) if result.citation.chunk_id else None
+    title = document.title if document is not None else f"Structured table {result.table_id}"
+    source_type = document.source_type if document is not None else "table"
+    source_path = document.source_path if document is not None else None
+    file_name = document.file_name if document is not None else ""
+    table_content = structured_table_markdown(result)
+    matched_preview = "; ".join(
+        match.text_preview or match.reason or match.type
+        for match in result.matched_units[:4]
+        if match.text_preview or match.reason or match.type
+    )
+    content = "\n\n".join(
+        part
+        for part in (
+            result.summary,
+            f"Matched units: {matched_preview}" if matched_preview else "",
+            table_content,
+        )
+        if part
+    )
+    return AgentSearchItem(
+        document_id=result.citation.document_id,
+        document_title=title,
+        source_type=source_type,
+        source_path=source_path,
+        file_name=file_name,
+        chunk_id=result.citation.chunk_id or 0,
+        chunk_index=chunk.chunk_index if chunk is not None else 0,
+        content=content,
+        heading_path=result.caption,
+        score=result.score,
+        chunk_type="table",
+        page_number=result.citation.page,
+        table_content=table_content,
+    )
+
+
+def structured_table_markdown(result: StructuredTableSearchResult, *, max_rows: int = 12) -> str:
+    headers = [str(header) for header in result.headers]
+    rows = [[str(cell) for cell in row] for row in result.rows[:max_rows]]
+    if not headers and rows:
+        headers = [f"col_{index + 1}" for index in range(len(rows[0]))]
+    if not headers:
+        return result.summary
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    for row in rows:
+        padded = [*row, *([""] * max(0, len(headers) - len(row)))]
+        lines.append("| " + " | ".join(padded[: len(headers)]) + " |")
+    return "\n".join(lines)
 
 
 def vector_entry_from_vector_result(result: VectorSearchResult) -> VectorIndexEntry:

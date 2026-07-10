@@ -2,12 +2,13 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class AgentQueryRequest(BaseModel):
-    question: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=4000)
     top_k: int = Field(default=8, ge=1, le=50)
     max_tool_calls: int = Field(default=2, ge=1, le=5)
     source_id: str | None = None
     history: list[str] = Field(default_factory=list, max_length=50)
     mode: str | None = None
+    chat_model: str | None = None
     conversation_id: int | None = Field(default=None, ge=1)
     image_path: str | None = None
     resume_run_id: str | None = None
@@ -34,7 +35,7 @@ class AgentQueryRequest(BaseModel):
     @field_validator("history")
     @classmethod
     def history_items_must_not_be_blank(cls, value: list[str]) -> list[str]:
-        normalized_items = [item.strip() for item in value if item.strip()]
+        normalized_items = [item.strip()[:2000] for item in value if item.strip()]
         return normalized_items
 
     @field_validator("mode")
@@ -55,6 +56,24 @@ class AgentQueryRequest(BaseModel):
                 "'tool_calling_agent', or 'langgraph_agent'"
             )
         return normalized
+
+    @field_validator("chat_model")
+    @classmethod
+    def chat_model_must_be_supported(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower().replace("_", "-")
+        aliases = {
+            "default": None,
+            "": None,
+            "deepseekv4-flash": "deepseek-v4-flash",
+            "deepseek-v4-flash": "deepseek-v4-flash",
+            "deepseek-v4-pro": "deepseek-v4-pro",
+            "deepseekv4-pro": "deepseek-v4-pro",
+        }
+        if normalized not in aliases:
+            raise ValueError("chat_model must be 'deepseek-v4-flash' or 'deepseek-v4-pro'")
+        return aliases[normalized]
 
     @field_validator("image_path")
     @classmethod
@@ -166,8 +185,8 @@ class AgentJudgeSourceItem(BaseModel):
 
 
 class AgentJudgeRequest(BaseModel):
-    question: str = Field(min_length=1)
-    answer: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=4000)
+    answer: str = Field(min_length=1, max_length=8000)
     sources: list[AgentJudgeSourceItem] = Field(default_factory=list, max_length=12)
     citations: list[int] = Field(default_factory=list, max_length=50)
     refused: bool = False
@@ -199,3 +218,5 @@ class AgentQueryResponse(BaseModel):
     refusal_category: str | None = None
     latency_trace: dict[str, object] = Field(default_factory=dict)
     image_analysis: dict[str, object] | None = None
+    chat_provider: str | None = None
+    chat_model: str | None = None

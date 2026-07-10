@@ -65,6 +65,8 @@ export type AgentWorkflowStep = {
   succeeded?: boolean
   skipped?: boolean
   error?: string | null
+  client_event_at?: number
+  client_elapsed_ms?: number
 }
 
 export type AgentQueryResponse = {
@@ -87,6 +89,8 @@ export type AgentQueryResponse = {
   judge_model?: string
   judge_status?: string
   citation_source_map?: Record<string, number | string>
+  chat_provider?: string | null
+  chat_model?: string | null
 }
 
 export type ChatMessage = {

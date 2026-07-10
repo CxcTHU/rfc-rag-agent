@@ -146,10 +146,7 @@ class OpenAICompatibleEmbeddingProvider:
                     raise RuntimeError("Embedding model request timed out") from exc
             except urllib.error.HTTPError as exc:
                 if exc.code not in RETRYABLE_HTTP_STATUS or is_last_attempt:
-                    error_body = exc.read().decode("utf-8", errors="replace")
-                    raise RuntimeError(
-                        f"Embedding model request failed with HTTP {exc.code}: {error_body}"
-                    ) from exc
+                    raise RuntimeError(f"Embedding model request failed with HTTP {exc.code}") from exc
             except urllib.error.URLError as exc:
                 if is_last_attempt:
                     raise RuntimeError(f"Embedding model request failed: {exc.reason}") from exc

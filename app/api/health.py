@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.security import require_admin_in_production
 from app.db.models import Chunk, Document
 from app.db.session import get_db
 from app.schemas.health import (
@@ -32,7 +33,10 @@ def health_check() -> HealthResponse:
 
 
 @router.get("/health/details", response_model=HealthDetailsResponse)
-def health_details(db: Session = Depends(get_db)) -> HealthDetailsResponse:
+def health_details(
+    _admin=Depends(require_admin_in_production),
+    db: Session = Depends(get_db),
+) -> HealthDetailsResponse:
     settings = get_settings()
     database = inspect_database(db)
     faiss = inspect_faiss(Path("data/faiss"))

@@ -19,8 +19,8 @@ class FeedbackCreateRequest(BaseModel):
     question_answer_log_id: int | None = Field(default=None, ge=1)
     conversation_id: int | None = Field(default=None, ge=1)
     message_id: int | None = Field(default=None, ge=1)
-    question: str = Field(min_length=1)
-    answer: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=4000)
+    answer: str = Field(min_length=1, max_length=8000)
     rating: FeedbackRating
     reason: FeedbackReason | None = None
     comment: str | None = Field(default=None, max_length=2000)

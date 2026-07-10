@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from app.core.config import Settings, get_settings
+from app.core.security import get_current_user
 from app.services.agent.image_storage import ImageStorageError, UserImageStorage
 
 
@@ -25,6 +26,7 @@ def get_user_image_storage(settings: Settings = Depends(get_settings)) -> UserIm
 @router.post("/upload-image", response_model=ImageUploadResponse)
 async def upload_image(
     file: UploadFile = File(...),
+    _current_user=Depends(get_current_user),
     settings: Settings = Depends(get_settings),
     storage: UserImageStorage = Depends(get_user_image_storage),
 ) -> ImageUploadResponse:

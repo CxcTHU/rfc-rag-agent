@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
@@ -73,6 +74,7 @@ class LatencyTrace:
         self.values.setdefault("tool_result_cache_saved_ms", 0.0)
         self.values.setdefault("semantic_cache_hit", False)
         self.values.setdefault("semantic_cache_reason", "not_checked")
+        self.values.setdefault("agent_cache_scope", "")
         self.values.setdefault("canonical_task", "")
         self.values.setdefault("hyde_generated", False)
         self.values.setdefault("hyde_used_for_vector", False)
@@ -134,6 +136,24 @@ def stable_text_cache_key(text: str) -> str:
 
 def bind_user_question_cache_key(trace: LatencyTrace, question: str) -> None:
     trace.set_value("user_question_cache_key", stable_text_cache_key(question))
+
+
+def bind_agent_conversation_cache_scope(trace: LatencyTrace, conversation_id: int | None) -> None:
+    """Scope short-lived retrieval/evidence caches to one chat session.
+
+    A missing conversation id means the request is not tied to a durable session;
+    use a per-request scope so it cannot reuse another request/session's evidence.
+    """
+    scope = f"conversation:{conversation_id}" if conversation_id is not None else f"request:{uuid.uuid4().hex}"
+    trace.set_value("agent_cache_scope", scope)
+
+
+def active_agent_cache_scope() -> str:
+    trace = get_current_latency_trace()
+    if trace is None:
+        return ""
+    value = trace.values.get("agent_cache_scope", "")
+    return value if isinstance(value, str) else ""
 
 
 _CURRENT_LATENCY_TRACE: ContextVar[LatencyTrace | None] = ContextVar(

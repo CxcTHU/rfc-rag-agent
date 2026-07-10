@@ -8,6 +8,8 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from app.api.agent import router as agent_router
+from app.api.assets import IMAGE_ASSETS_DIR
+from app.api.assets import router as assets_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
@@ -118,13 +120,8 @@ def create_app() -> FastAPI:
     app.include_router(image_upload_router)
     app.include_router(feedback_router)
     app.include_router(feedback_export_router)
-    image_assets_dir = Path("data/images")
-    image_assets_dir.mkdir(parents=True, exist_ok=True)
-    app.mount(
-        "/assets/images",
-        StaticFiles(directory=image_assets_dir),
-        name="image-assets",
-    )
+    IMAGE_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+    app.include_router(assets_router)
     app.mount(
         "/static",
         StaticFiles(directory=FRONTEND_DIR / "static"),

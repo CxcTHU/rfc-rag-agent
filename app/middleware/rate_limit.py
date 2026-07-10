@@ -12,7 +12,22 @@ from app.core.config import Settings, get_settings
 from app.services.cache.redis_client import get_redis_client
 
 
-RATE_LIMITED_PATHS = frozenset({"/agent/query", "/agent/query/stream"})
+RATE_LIMITED_PATHS = frozenset(
+    {
+        "/agent/query",
+        "/agent/query/stream",
+        "/agent/judge",
+        "/agent/upload-image",
+        "/chat",
+        "/search",
+        "/search/vector",
+        "/search/hybrid",
+        "/documents/import",
+        "/sources/sync",
+        "/feedback",
+        "/feedback/export",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -118,12 +133,14 @@ def rate_limit_should_apply(request: Request, settings: Settings) -> bool:
 
 
 def client_identifier(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
+    settings = get_settings()
+    forwarded_for = request.headers.get("x-forwarded-for") if settings.trust_forwarded_for else None
     if forwarded_for:
         return forwarded_for.split(",", 1)[0].strip() or "unknown"
-    if request.client is None:
+    client = getattr(request, "client", None)
+    if client is None:
         return "unknown"
-    return request.client.host or "unknown"
+    return getattr(client, "host", None) or "unknown"
 
 
 def rate_limit_key(client_id: str, endpoint: str, *, prefix: str = "ratelimit") -> str:

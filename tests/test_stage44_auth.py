@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
-from app.core.security import decode_access_token, password_hash, verify_password
+from app.core.security import AUTH_COOKIE_NAME, decode_access_token, password_hash, verify_password
 from app.db.models import Base, User
 from app.db.session import create_sqlite_engine, get_db
 from app.main import app
@@ -73,18 +73,26 @@ def test_stage44_register_login_and_me_do_not_expose_password_hash(tmp_path) -> 
             "/auth/me",
             headers={"Authorization": f"Bearer {token}"},
         )
+        cookie_me_response = client.get("/auth/me")
+        login_cookie_present = AUTH_COOKIE_NAME in client.cookies
+        logout_response = client.post("/auth/logout")
+        logged_out_me_response = client.get("/auth/me")
 
     assert register_response.status_code == 200
     assert "password_hash" not in register_response.text
     assert login_response.status_code == 200
     assert login_response.json()["token_type"] == "bearer"
     assert login_response.json()["expires_in"] > 0
+    assert login_cookie_present
     payload = decode_access_token(
         token,
         settings=Settings(auth_enabled=True, jwt_secret_key="stage44-test-secret"),
     )
     assert payload["sub"] == str(register_response.json()["id"])
     assert me_response.status_code == 200
+    assert cookie_me_response.status_code == 200
+    assert logout_response.status_code == 200
+    assert logged_out_me_response.status_code == 401
     assert me_response.json()["username"] == "alice"
     assert "password" not in me_response.text
 
@@ -108,6 +116,7 @@ def test_stage44_auth_protects_agent_and_conversation_routes(tmp_path) -> None:
                 "password": "stage44-password",
             },
         )
+        client.post("/auth/logout")
         unauth_agent = client.post("/agent/query", json={"question": "hello"})
         unauth_stream = client.post("/agent/query/stream", json={"question": "hello"})
         unauth_conversations = client.get("/conversations")

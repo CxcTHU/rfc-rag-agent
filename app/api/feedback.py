@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.schemas.feedback import (
     FeedbackCreateRequest,
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/feedback", tags=["feedback"])
 @router.post("", response_model=FeedbackResponse)
 def create_feedback(
     request: FeedbackCreateRequest,
+    _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FeedbackResponse:
     feedback = FeedbackService(db).submit_feedback(
@@ -31,7 +33,10 @@ def create_feedback(
 
 
 @router.get("/stats", response_model=FeedbackStatsResponse)
-def get_feedback_stats(db: Session = Depends(get_db)) -> FeedbackStatsResponse:
+def get_feedback_stats(
+    _current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FeedbackStatsResponse:
     stats = FeedbackService(db).get_feedback_stats()
     return FeedbackStatsResponse(
         total=stats.total,

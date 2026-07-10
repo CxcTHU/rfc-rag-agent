@@ -74,6 +74,7 @@ class UserCreate:
     username: str
     email: str
     password_hash: str
+    role: str = "user"
     is_active: bool = True
 
 
@@ -131,6 +132,7 @@ class UserRepository:
             username=user_data.username,
             email=user_data.email,
             password_hash=user_data.password_hash,
+            role=user_data.role,
             is_active=user_data.is_active,
         )
         self.db.add(user)
@@ -157,6 +159,9 @@ class UserRepository:
             (User.username == normalized) | (User.email == normalized)
         )
         return self.db.scalar(statement)
+
+    def count_users(self) -> int:
+        return self.db.scalar(select(func.count(User.id))) or 0
 
 
 class DocumentRepository:

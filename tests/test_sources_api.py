@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.sources import get_source_ingestion_config
+from app.core.config import Settings, get_settings
 from app.db.models import Base
 from app.db.repositories import SourceCreate, SourceRepository
 from app.db.session import create_sqlite_engine, get_db
@@ -30,8 +31,12 @@ def make_test_client(tmp_path) -> Generator[TestClient, None, None]:
     def override_ingestion_config() -> IngestionConfig:
         return IngestionConfig(raw_dir=tmp_path / "raw", chunk_size=200, chunk_overlap=20)
 
+    def override_settings() -> Settings:
+        return Settings(source_sync_allowed_roots=str(tmp_path))
+
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_source_ingestion_config] = override_ingestion_config
+    app.dependency_overrides[get_settings] = override_settings
     try:
         with TestClient(app) as client:
             yield client

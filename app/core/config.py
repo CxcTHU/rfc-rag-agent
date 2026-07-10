@@ -24,12 +24,16 @@ class Settings(BaseSettings):
     tool_result_cache_enabled: bool = True
     tool_result_cache_ttl_seconds: int = 900
     rate_limit_enabled: bool = False
+    rate_limit_required_in_prod: bool = True
     rate_limit_requests_per_minute: int = 30
     rate_limit_window_seconds: int = 60
+    trust_forwarded_for: bool = False
     pgvector_search_enabled: bool = True
     hnsw_ef_search: int = 100
     raw_data_dir: str = "data/raw"
     auth_enabled: bool = False
+    auth_required_in_prod: bool = True
+    auth_allow_public_registration: bool = False
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 1440
@@ -124,6 +128,10 @@ class Settings(BaseSettings):
     table_extraction_min_rows: int = 2
     user_image_max_size_mb: float = 10.0
     graphrag_graph_path: str = "data/knowledge_graph/domain_graph.json"
+    source_sync_allowed_roots: str = "data"
+    export_allowed_dir: str = "data/evaluation"
+    table_rag_enabled: bool = False
+    agent_default_mode: str = "tool_calling_agent"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -132,6 +140,11 @@ class Settings(BaseSettings):
     )
 
     def model_post_init(self, __context: object) -> None:
+        if self.app_env.strip().casefold() == "production":
+            if self.auth_required_in_prod:
+                self.auth_enabled = True
+            if self.rate_limit_required_in_prod:
+                self.rate_limit_enabled = True
         if not self.judge_model_provider and self.stage34_judge_provider:
             self.judge_model_provider = self.stage34_judge_provider
         if not self.judge_model_name and self.stage34_judge_model:

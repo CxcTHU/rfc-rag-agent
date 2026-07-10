@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ from app.db.session import get_db
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
+AUTH_COOKIE_NAME = "rfc_rag_agent_access_token"
 
 
 def password_hash(password: str) -> str:
@@ -87,16 +88,18 @@ def decode_access_token(token: str, settings: Settings | None = None) -> dict[st
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> User | None:
     if not settings.auth_enabled:
         return None
-    if credentials is None or credentials.scheme.casefold() != "bearer":
+    token = access_token_from_request(request, credentials)
+    if token is None:
         raise auth_exception()
     try:
-        payload = decode_access_token(credentials.credentials, settings=settings)
+        payload = decode_access_token(token, settings=settings)
         user_id = int(payload["sub"])
     except (KeyError, TypeError, ValueError) as exc:
         raise auth_exception() from exc
@@ -104,6 +107,80 @@ def get_current_user(
     if user is None or not user.is_active:
         raise auth_exception()
     return user
+
+
+def require_current_user(
+    current_user: User | None = Depends(get_current_user),
+) -> User:
+    if current_user is None:
+        raise auth_exception()
+    return current_user
+
+
+def require_admin(
+    current_user: User = Depends(require_current_user),
+) -> User:
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="admin role required",
+        )
+    return current_user
+
+
+def require_admin_when_auth_enabled(
+    current_user: User | None = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> User | None:
+    if not settings.auth_enabled:
+        return None
+    if current_user is None:
+        raise auth_exception()
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="admin role required",
+        )
+    return current_user
+
+
+def require_admin_in_production(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> User | None:
+    if settings.app_env.strip().casefold() != "production":
+        return None
+    if not settings.auth_enabled:
+        return None
+    token = access_token_from_request(request, credentials)
+    if token is None:
+        raise auth_exception()
+    try:
+        payload = decode_access_token(token, settings=settings)
+        user_id = int(payload["sub"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise auth_exception() from exc
+    current_user = UserRepository(db).get_by_id(user_id)
+    if current_user is None:
+        raise auth_exception()
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="admin role required",
+        )
+    return current_user
+
+
+def access_token_from_request(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None,
+) -> str | None:
+    if credentials is not None and credentials.scheme.casefold() == "bearer":
+        return credentials.credentials
+    cookie_token = request.cookies.get(AUTH_COOKIE_NAME)
+    return cookie_token.strip() if cookie_token and cookie_token.strip() else None
 
 
 def auth_exception() -> HTTPException:

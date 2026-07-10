@@ -73,10 +73,7 @@ class OpenAICompatibleVisionModelProvider:
         except TimeoutError as exc:
             raise RuntimeError("Vision model request timed out") from exc
         except urllib.error.HTTPError as exc:
-            error_body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"Vision model request failed with HTTP {exc.code}: {error_body}"
-            ) from exc
+            raise RuntimeError(f"Vision model request failed with HTTP {exc.code}") from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"Vision model request failed: {exc.reason}") from exc
         return parse_openai_compatible_vision_description(response_data)

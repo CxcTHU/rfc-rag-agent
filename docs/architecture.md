@@ -1,5 +1,50 @@
 # 架构说明
 
+## Phase 61 Architecture Delta: Internal Pilot Hardening
+
+Phase 61 keeps the default production Agent path narrow:
+
+```text
+FastAPI route
+-> auth / RBAC / rate-limit guard
+-> bounded request schema
+-> tool_calling_agent
+-> Agent Runtime / AgentToolbox
+-> hybrid/search/table/figure retrieval services
+-> cited answer with safe latency_trace metadata
+```
+
+Security boundary changes:
+
+```text
+AUTH_REQUIRED_IN_PROD=true
+RATE_LIMIT_REQUIRED_IN_PROD=true
+users.role in {admin,user}
+source sync -> SOURCE_SYNC_ALLOWED_ROOTS
+feedback export -> EXPORT_ALLOWED_DIR
+image assets -> authenticated route
+production /health/details -> admin only
+```
+
+Structured TableRAG is no longer only a sidecar API/service. `AgentToolbox.search_tables` can use `StructuredTableSearchService` when `TABLE_RAG_ENABLED=true`, then fall back to the existing Markdown-table vector path when the flag is off or no structured result is found. Tool-result cache identity includes the flag so gray rollout cannot reuse stale table results across modes.
+
+Phase 61 does not introduce MCP, multi-agent orchestration, public SaaS tenancy, or productized long-term memory.
+
+React thought-process display now presents a true stage replay rather than a fixed path. Completed answers combine actual workflow/tool steps with safe `latency_trace` timing fields:
+
+```text
+analysis/planning latency
+optional HyDE latency
+optional semantic evidence cache hit
+actual high-level retrieval tools
+rerank/evidence screening latency
+answer generation latency
+optional citation repair latency
+citation/source summary
+```
+
+This keeps the main UI explainable while avoiding hidden reasoning, provider raw payloads, full chunks, or fake stages that did not run.
+
 ## Phase 60 Architecture Delta: Structured TableRAG Sidecar
 
 Phase 60 adds a structured table substrate beside the existing chunk-based corpus. It does not switch the default Agent tool surface.

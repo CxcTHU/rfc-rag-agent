@@ -142,13 +142,31 @@ def test_rate_limit_middleware_fail_open_and_ignores_other_paths(monkeypatch) ->
     assert client.get("/search").status_code == 200
 
 
-def test_client_identifier_prefers_forwarded_for() -> None:
+def test_client_identifier_ignores_forwarded_for_by_default() -> None:
     app = FastAPI()
 
     @app.get("/")
     async def root():
         return {"ok": True}
 
+    client = TestClient(app)
+    request = client.build_request(
+        "GET",
+        "http://testserver/",
+        headers={"x-forwarded-for": "203.0.113.8, 127.0.0.1"},
+    )
+
+    assert client_identifier(request) == "unknown"
+
+
+def test_client_identifier_prefers_forwarded_for_when_trusted(monkeypatch) -> None:
+    app = FastAPI()
+
+    @app.get("/")
+    async def root():
+        return {"ok": True}
+
+    monkeypatch.setattr(rate_limit, "get_settings", lambda: Settings(trust_forwarded_for=True))
     client = TestClient(app)
     request = client.build_request(
         "GET",

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.security import (
+    AUTH_COOKIE_NAME,
     create_access_token,
     get_current_user,
     password_hash,
@@ -21,8 +22,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def register_user(
     request: RegisterRequest,
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> UserResponse:
     repository = UserRepository(db)
+    existing_user_count = repository.count_users()
+    if (
+        settings.auth_enabled
+        and settings.app_env.strip().casefold() == "production"
+        and existing_user_count > 0
+        and not settings.auth_allow_public_registration
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="public registration is disabled",
+        )
     if repository.get_by_username(request.username) is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -39,6 +52,7 @@ def register_user(
                 username=request.username,
                 email=str(request.email),
                 password_hash=password_hash(request.password),
+                role="admin" if existing_user_count == 0 else "user",
             )
         )
     except IntegrityError as exc:
@@ -53,6 +67,7 @@ def register_user(
 @router.post("/login", response_model=TokenResponse)
 def login_user(
     request: LoginRequest,
+    response: Response,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> TokenResponse:
@@ -64,11 +79,32 @@ def login_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = create_access_token(subject=str(user.id), settings=settings)
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        max_age=settings.jwt_access_token_expire_minutes * 60,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        path="/",
+    )
     return TokenResponse(
         access_token=token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
         user=UserResponse.model_validate(user),
     )
+
+
+@router.post("/logout")
+def logout_user(response: Response) -> dict[str, str]:
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        path="/",
+    )
+    return {"status": "ok"}
 
 
 @router.get("/me", response_model=UserResponse)

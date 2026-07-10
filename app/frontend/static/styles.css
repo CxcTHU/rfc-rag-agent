@@ -780,6 +780,7 @@ textarea::placeholder {
 .conversation-sidebar {
   min-width: 0;
   min-height: 0;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -807,12 +808,16 @@ textarea::placeholder {
   align-content: start;
   gap: 6px;
   flex: 1 1 auto;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   padding-right: 2px;
+  scrollbar-gutter: stable;
 }
 
 .conversation-list-item {
   width: 100%;
+  min-width: 0;
   min-height: 40px;
   display: flex;
   align-items: center;
@@ -830,9 +835,13 @@ textarea::placeholder {
 
 .conversation-list-item span {
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 
 .conversation-list-item:hover,

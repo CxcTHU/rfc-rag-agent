@@ -108,6 +108,13 @@ export function login(username_or_email: string, password: string) {
   })
 }
 
+export function logoutSession(token?: string | null) {
+  return apiJson<{ status: string }>('/auth/logout', {
+    token,
+    method: 'POST',
+  })
+}
+
 export function register(username: string, email: string, password: string) {
   return apiJson<AuthUser>('/auth/register', {
     method: 'POST',
@@ -151,7 +158,13 @@ export function getConversationMessages(token: string, conversationId: number) {
   return apiJson<ConversationMessagesResponse>(`/conversations/${encodeURIComponent(conversationId)}/messages`, { token })
 }
 
-export function runAgentQuery(token: string, question: string, conversationId?: number, imagePath?: string | null) {
+export function runAgentQuery(
+  token: string,
+  question: string,
+  conversationId?: number,
+  imagePath?: string | null,
+  chatModel?: string,
+) {
   return apiJson<AgentQueryResponse>('/agent/query', {
     token,
     method: 'POST',
@@ -162,6 +175,7 @@ export function runAgentQuery(token: string, question: string, conversationId?: 
       max_tool_calls: 5,
       mode: imagePath ? 'react_agent' : 'tool_calling_agent',
       image_path: imagePath || null,
+      chat_model: chatModel || null,
     }),
   })
 }
@@ -171,6 +185,7 @@ export async function streamAgentQuery(
   question: string,
   conversationId: number | undefined,
   imagePath: string | null | undefined,
+  chatModel: string | undefined,
   handlers: {
     onToken: (token: string) => void
     onMetadata: (metadata: Partial<AgentQueryResponse>) => void
@@ -194,6 +209,7 @@ export async function streamAgentQuery(
       max_tool_calls: 5,
       mode: imagePath ? 'react_agent' : 'tool_calling_agent',
       image_path: imagePath || null,
+      chat_model: chatModel || null,
     }),
   })
   if (!response.ok || !response.body) {

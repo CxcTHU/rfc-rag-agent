@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.schemas.search import (
     HybridSearchRequest,
@@ -35,6 +36,7 @@ def get_embedding_provider() -> EmbeddingProvider:
 @router.post("/search", response_model=SearchResponse)
 def search_documents(
     request: SearchRequest,
+    _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SearchResponse:
     try:
@@ -72,6 +74,7 @@ def search_documents(
 @router.post("/search/vector", response_model=VectorSearchResponse)
 def vector_search_documents(
     request: VectorSearchRequest,
+    _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
     embedding_provider: EmbeddingProvider = Depends(get_embedding_provider),
 ) -> VectorSearchResponse:
@@ -112,6 +115,7 @@ def vector_search_documents(
 @router.post("/search/hybrid", response_model=HybridSearchResponse)
 def hybrid_search_documents(
     request: HybridSearchRequest,
+    _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
     embedding_provider: EmbeddingProvider = Depends(get_embedding_provider),
 ) -> HybridSearchResponse:

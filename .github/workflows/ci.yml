@@ -11,8 +11,8 @@ on:
       - main
 
 jobs:
-  pytest:
-    name: pytest
+  python:
+    name: python deterministic tests
     runs-on: ubuntu-latest
     env:
       CHAT_MODEL_PROVIDER: deterministic
@@ -20,6 +20,8 @@ jobs:
       RERANKING_PROVIDER: deterministic
       RERANKING_ENABLED: "true"
       DATABASE_URL: sqlite:///./data/app.sqlite
+      APP_ENV: development
+      AUTH_ENABLED: "false"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -37,3 +39,93 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+  frontend:
+    name: frontend lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  postgres-migrations:
+    name: postgres alembic migration smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rfc_rag_agent_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rfc_rag_agent_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/rfc_rag_agent_ci
+      CHAT_MODEL_PROVIDER: deterministic
+      EMBEDDING_PROVIDER: deterministic
+      RERANKING_PROVIDER: deterministic
+      RERANKING_ENABLED: "true"
+      APP_ENV: development
+      AUTH_ENABLED: "false"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run Alembic migrations
+        run: python -m alembic upgrade head
+
+  docker:
+    name: docker build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t rfc-rag-agent:ci .
+
+  secret-scan:
+    name: lightweight secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Scan tracked files for obvious secrets
+        run: |
+          ! git grep -InE '(sk-[A-Za-z0-9]{20,}|Authorization: Bearer|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|JWT_SECRET_KEY=.+[A-Za-z0-9])' -- ':!*.md' ':!.env.example'

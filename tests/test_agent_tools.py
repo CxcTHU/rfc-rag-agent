@@ -3,6 +3,7 @@ import inspect
 from sqlalchemy.orm import Session, sessionmaker
 from PIL import Image
 
+from app.core.config import Settings
 from app.db.models import Base
 from app.db.repositories import (
     ChunkCreate,
@@ -26,6 +27,9 @@ from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from app.services.retrieval.vector_cache import VectorIndexEntry
 from app.services.retrieval.vector_index import VectorIndexService
 from app.services.retrieval.vector_search import VectorSearchResult
+from app.services.table_rag.extraction import draft_from_rows
+from app.services.table_rag.repository import StructuredTableRepository
+from app.services.table_rag.retrieval_units import build_retrieval_units
 
 
 def make_session(tmp_path):
@@ -353,13 +357,14 @@ def test_agent_toolbox_table_and_figure_tools_use_vector_search_service() -> Non
     assert "get_vector_index_cache" not in figure_source
 
 
-def test_agent_toolbox_search_tables_reports_vector_backend(tmp_path) -> None:
+def test_agent_toolbox_search_tables_reports_vector_backend(tmp_path, monkeypatch) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
     with TestingSessionLocal() as db:
         provider = DeterministicEmbeddingProvider(dimension=32)
         seed_agent_tool_table_documents(db)
         VectorIndexService(db, provider).build_index()
+        monkeypatch.setattr("app.services.agent.tools.get_configured_layered_cache", lambda _layer: None)
         toolbox = AgentToolbox(
             db=db,
             embedding_provider=provider,
@@ -374,6 +379,74 @@ def test_agent_toolbox_search_tables_reports_vector_backend(tmp_path) -> None:
     assert result.search_results
     assert result.search_results[0].chunk_type == "table"
     assert "vector_backend=" in result.call.output_summary
+
+
+def test_agent_toolbox_search_tables_uses_structured_table_rag_when_enabled(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        document = DocumentRepository(db).create_with_chunks(
+            DocumentCreate(
+                title="Structured RFC Mix Table",
+                source_type="local_file",
+                source_path="structured-table.pdf",
+                file_name="structured-table.pdf",
+                file_extension=".pdf",
+                content_hash="agent-tools-structured-table-hash",
+                raw_path="data/raw/structured-table.pdf",
+            ),
+            [
+                ChunkCreate(
+                    chunk_index=0,
+                    content="| material | dosage kg/m3 |\n| --- | --- |\n| cement | 120 |",
+                    char_count=62,
+                    heading_path="Mix table",
+                    start_char=None,
+                    end_char=None,
+                    chunk_type="table",
+                    page_number=5,
+                )
+            ],
+        )
+        draft = draft_from_rows(
+            [["material", "dosage kg/m3"], ["cement", "120"]],
+            document_id=document.id,
+            table_index=0,
+            page_number=5,
+            bbox=None,
+            caption="Mix table",
+            header_text="Mix table",
+            source_table_chunk_id=document.chunks[0].id,
+            extraction_run_id=None,
+            source="unit_test",
+        )
+        repository = StructuredTableRepository(db)
+        table, _created = repository.save_table(draft)
+        repository.replace_retrieval_units(table.id, build_retrieval_units(draft))
+        db.commit()
+        monkeypatch.setattr(
+            "app.services.agent.tools.get_settings",
+            lambda: Settings(table_rag_enabled=True),
+        )
+        monkeypatch.setattr("app.services.agent.tools.get_configured_layered_cache", lambda _layer: None)
+        toolbox = AgentToolbox(
+            db=db,
+            embedding_provider=provider,
+            chat_model_provider=DeterministicChatModelProvider(),
+            log_answers=False,
+        )
+
+        result = toolbox.search_tables("cement dosage 120 kg/m3 table", top_k=3)
+
+    assert result.tool_name == "search_tables"
+    assert result.call.succeeded
+    assert "backend=structured_table_rag" in result.call.output_summary
+    assert result.search_results[0].chunk_type == "table"
+    assert "cement" in result.search_results[0].table_content
 
 
 def test_agent_toolbox_search_figures_returns_quality_checked_image_results(tmp_path, monkeypatch) -> None:

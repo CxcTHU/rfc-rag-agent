@@ -8,7 +8,7 @@ UsedRetrievalMode = Literal["vector", "keyword", "hybrid", "none"]
 
 
 class ChatRequest(BaseModel):
-    question: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=4000)
     top_k: int = Field(default=8, ge=1, le=50)
     retrieval_mode: RetrievalMode = "auto"
     min_score: float = Field(default=0.0, ge=0)
@@ -25,7 +25,7 @@ class ChatRequest(BaseModel):
     @field_validator("history")
     @classmethod
     def history_items_must_not_be_blank(cls, value: list[str]) -> list[str]:
-        normalized_items = [item.strip() for item in value if item.strip()]
+        normalized_items = [item.strip()[:2000] for item in value if item.strip()]
         return normalized_items
 
 

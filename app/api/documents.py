@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.security import get_current_user
 from app.db.models import Document
 from app.db.repositories import DocumentRepository
 from app.db.session import get_db
@@ -38,6 +39,7 @@ def get_ingestion_config() -> IngestionConfig:
 def import_document(
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
+    _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
     ingestion_config: IngestionConfig = Depends(get_ingestion_config),
 ) -> DocumentImportResponse:
@@ -83,6 +85,7 @@ def import_document(
 
 @router.get("", response_model=DocumentListResponse)
 def list_documents(
+    _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
     ingestion_config: IngestionConfig = Depends(get_ingestion_config),
 ) -> DocumentListResponse:
@@ -113,6 +116,7 @@ def list_documents(
 @router.get("/{document_id}/open", include_in_schema=False)
 def open_document(
     document_id: int,
+    _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
     ingestion_config: IngestionConfig = Depends(get_ingestion_config),
 ):
@@ -140,6 +144,7 @@ def open_document(
 @router.get("/{document_id}/chunks", response_model=DocumentChunksResponse)
 def list_document_chunks(
     document_id: int,
+    _current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DocumentChunksResponse:
     repository = DocumentRepository(db)

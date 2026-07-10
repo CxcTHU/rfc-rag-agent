@@ -1040,6 +1040,51 @@ main...origin/main
 origin https://github.com/CxcTHU/rfc-rag-agent.git
 ```
 
+## CPU 服务器同步默认规则（Phase 61 起）
+
+阶段通过用户人工核验并获准“同步 CPU 服务器上的 Agent”时，默认使用 `rsync` 同步到 CPU 部署拷贝，而不是假设 CPU 目录是 Git checkout。
+
+当前稳定维护入口：
+
+```text
+SSH Host: rfc-cpu
+CPU 应用目录: /home/ubuntu/rfc-rag-agent-stage44-smoke
+同步方式: rsync
+```
+
+同步前必须先完成本地验证、普通文档更新、本地 Obsidian 更新、GitHub merge/push。同步时必须排除或保留以下服务器本地状态：
+
+```text
+.env
+.env.*
+data/
+logs/
+output/
+obsidian-vault/
+.venv/
+__pycache__/
+PostgreSQL/Redis Docker volumes
+server-local corpus/PDF/image assets
+```
+
+推荐命令形态：
+
+```bash
+rsync -az --delete \
+  --exclude '.git/' \
+  --exclude '.env' \
+  --exclude '.env.*' \
+  --exclude 'data/' \
+  --exclude 'logs/' \
+  --exclude 'output/' \
+  --exclude 'obsidian-vault/' \
+  --exclude '.venv/' \
+  --exclude '__pycache__/' \
+  ./ rfc-cpu:/home/ubuntu/rfc-rag-agent-stage44-smoke/
+```
+
+同步后在 CPU 服务器上按既有生产路径 rebuild/restart，并至少做脱敏 smoke：`/health`、首页或 `/app-v2`、认证链路、代表性 Agent 查询、原文打开。不得把 CPU `.env.prod`、密钥、数据库密码、Redis 密码、API key、Bearer token、provider raw response、完整 chunk、受限全文或私有服务日志复制回本地、写入文档或提交到 Git。
+
 以后新增功能时，优先从 `main` 新建功能分支，例如：
 
 ```text
@@ -2685,3 +2730,10 @@ public AUTH_ENABLED=true smoke -> rows=18 execute=true failed=0
 GPU BGE is supervised by user-level systemd service `rfc-bge-reranker.service`; the CPU private tunnel is supervised by `rfc-bge-tunnel.service`. The BGE endpoint must remain private. Domain/DNS/HTTPS and final user acceptance remain official-launch items.
 
 Security boundary: do not read, print, commit, or write `.env`, `.env.prod`, database passwords, JWT secrets, Redis passwords, API keys, bearer tokens, provider raw responses, full answers, full chunks, restricted full text, or private service logs into Git/CSV/docs/tests/Obsidian.
+# Phase 61 Handoff: P0/P1 Internal Pilot Hardening (2026-07-10)
+
+Current status source: `CURRENT_STATUS.md`.
+
+Phase 61 hardening is in progress in this working tree. The active goal is a controlled internal pilot posture: production auth/rate-limit defaults, minimal RBAC, guarded high-risk routes, constrained local paths, TableRAG feature-flag integration, CI release gates, and updated handoff docs.
+
+Do not tag, deploy, or commit until final regression, Alembic upgrade, Docker smoke test, and user review pass. Continue to avoid committing `.env`, `.env.prod`, API keys, bearer tokens, JWT/Redis/database secrets, provider raw responses, hidden reasoning, full chunks, restricted full text, private service logs, or raw uploaded images.

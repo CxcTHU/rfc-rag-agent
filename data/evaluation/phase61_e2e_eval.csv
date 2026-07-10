@@ -1,0 +1,8 @@
+case_id,method,path,expected_status,actual_status,passed,reason,elapsed_ms,expectation,status,error_type,result_count,tool_call_count,source_count,refused,has_latency_trace,answer_preview
+health_public_liveness,GET,/health,200,200,True,health status ok,18.447,health status is ok,200,,0,0,0,,False,
+frontend_react_entry,GET,/,200,200,True,frontend shell served,31.661,React frontend shell is served,200,,0,0,0,,False,
+hybrid_search_domain_query,POST,/search/hybrid,200,200,True,hybrid envelope ok,2053.927,hybrid search returns a bounded result envelope,200,,12,0,0,,False,
+agent_default_domain_query,POST,/agent/query,200,200,True,agent envelope ok,47235.254,default tool-calling Agent returns answer/refusal envelope with metadata,200,,0,2,12,false,True,堆石混凝土施工质量控制通常关注堆石材料特性、密实度、温度、渗流及原材料‑工艺过程等关键指标，这些指标共同保证坝体安全与耐久性[1][2][5][8]。    - **堆石料指标**：堆石的粒径（如要求粒径大于300 mm）、级配、洁净度与整
+agent_table_intent_query,POST,/agent/query,200,200,True,agent envelope ok,35551.358,table-intent Agent request completes without server error,200,,0,2,8,false,True,根据提供的资料，表格证据主要呈现了堆石混凝土（RFC）的物理力学性能指标和配合比控制要求。具体如下：  - **容重与组成比**：Table 6 [1] 给出了堆石混凝土的容重（2.53 t/m³）、石料占RFC比率（55.3%）、胶结料占
+agent_off_topic_refusal,POST,/agent/query,200,200,True,agent envelope ok,10037.546,off-topic query is handled as a safe Agent envelope,200,,0,0,0,true,True,当前问题缺少项目资料库的领域锚点，无法基于堆石混凝土资料可靠回答。
+input_limit_guard,POST,/agent/query,422,422,True,schema rejected oversized input,2.658,oversized Agent question is rejected by schema validation,422,,0,0,0,,False,

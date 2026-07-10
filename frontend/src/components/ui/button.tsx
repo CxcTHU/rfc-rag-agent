@@ -9,8 +9,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'border-teal-400/45 bg-teal-400/12 text-teal-100 hover:border-teal-300/65 hover:bg-teal-400/18',
-        secondary: 'border-slate-700/80 bg-slate-900/70 text-slate-300 hover:border-slate-600 hover:bg-slate-800/80',
-        ghost: 'border-transparent bg-transparent text-slate-400 hover:bg-slate-800/65 hover:text-slate-200',
+        secondary: 'border-zinc-700/80 bg-zinc-900/68 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800/76',
+        ghost: 'border-transparent bg-transparent text-zinc-400 hover:bg-zinc-800/58 hover:text-zinc-200',
         danger: 'border-rose-500/45 bg-rose-500/10 text-rose-100 hover:bg-rose-500/16',
       },
       size: {

@@ -1,5 +1,17 @@
 # RFC-RAG-Agent
 
+## Phase 61 P0/P1 Internal Pilot Hardening
+
+Current status lives in [CURRENT_STATUS.md](CURRENT_STATUS.md).
+
+Phase 61 tightens the project for a controlled internal pilot: production auth/rate-limit defaults, minimal RBAC, guarded high-risk routes, constrained source-sync/export paths, authenticated image assets, configurable default Agent mode, and Structured TableRAG integration behind `TABLE_RAG_ENABLED`.
+
+This phase keeps `tool_calling_agent` as the production default path and does not add MCP, multi-agent handoff, or long-term memory productization. Those remain Phase 62+ scope.
+
+User-verified local follow-ups are also part of Phase 61: per-session semantic evidence cache isolation, per-conversation run controls, DeepSeek V4 Flash/Pro model selection, authenticated original opening through HttpOnly cookie auth, full-width React layout polish, and completed thought-process replay with per-stage timing derived from safe workflow and `latency_trace` metadata.
+
+Phase 61 closeout is authorized for local documentation, local Obsidian update, GitHub merge, and CPU-server rsync deployment. The CPU deployment copy is maintained through Tailscale SSH and must preserve server-local `.env.prod`, `data/`, Docker volumes, and corpus assets.
+
 ## Phase 60 Post-Acceptance Runtime Sync
 
 Current branch: `codex/phase60-post-acceptance-sync`.

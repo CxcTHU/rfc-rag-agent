@@ -1,5 +1,33 @@
 # 数据来源登记
 
+## Phase 61 Data Access And Export Boundary
+
+Phase 61 adds no external corpus, crawler, model weights, or public data feed. It tightens access around existing data.
+
+New or changed boundary rules:
+
+```text
+users.role distinguishes admin and user.
+production public registration closes after first admin bootstrap unless AUTH_ALLOW_PUBLIC_REGISTRATION=true.
+document/search/chat/source/feedback/image routes require authentication when AUTH_ENABLED=true.
+source sync input paths must resolve under SOURCE_SYNC_ALLOWED_ROOTS.
+feedback export output paths must resolve under EXPORT_ALLOWED_DIR.
+image evidence under data/images is served by an authenticated API route.
+provider HTTP errors return status/type only, not raw provider bodies.
+```
+
+Allowed new stored data:
+
+```text
+users.role
+safe request_id / latency_trace / route metadata already used by the app
+structured table retrieval results derived from existing corpus when TABLE_RAG_ENABLED=true
+```
+
+Forbidden in Phase 61 artifacts remains unchanged: API keys, bearer tokens, JWT/database/Redis secrets, provider raw responses, hidden reasoning, full chunks, restricted full text, raw uploaded images, private logs, or long-term user profiles.
+
+The Phase 61 thought-process stage replay uses only safe operational metadata already present in `workflow_steps`, `tool_calls`, citations, source counts, and bounded `latency_trace` timing fields. It does not store hidden model reasoning, provider raw responses, full chunks, restricted full text, or raw uploaded image bytes.
+
 ## Phase 60 Structured TableRAG Data Boundary
 
 Phase 60 adds no external corpus, crawler, PDF download, model weight, source registry entry, or write-capable Agent tool. It derives structure from existing local PDFs and existing `chunks.chunk_type="table"` records.

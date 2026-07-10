@@ -22,6 +22,7 @@ from app.services.cache.layered_cache import (
     normalized_query_identity,
 )
 from app.services.observability.latency_trace import (
+    active_agent_cache_scope,
     get_current_latency_trace,
     latency_timer,
     reset_current_latency_trace,
@@ -287,6 +288,7 @@ class HybridSearchService:
         identity.update(
             {
                 "layer": "retrieval",
+                "agent_cache_scope": active_agent_cache_scope(),
                 "query": normalized_query_identity(query),
                 "fetch_k": fetch_k,
                 "hybrid_multichannel_enabled": channel_plan["multichannel_enabled"],
@@ -961,6 +963,7 @@ class HybridSearchService:
         identity.update(
             {
                 "layer": "rerank",
+                "agent_cache_scope": active_agent_cache_scope(),
                 "query": normalized_query_identity(query),
                 "top_k": top_k,
                 "recall_k": self.reranking_recall_k,

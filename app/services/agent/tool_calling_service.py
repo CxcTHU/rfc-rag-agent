@@ -49,6 +49,7 @@ from app.services.generation.chat_model import (
 )
 from app.services.observability.latency_trace import (
     LatencyTrace,
+    bind_agent_conversation_cache_scope,
     bind_user_question_cache_key,
     reset_current_latency_trace,
     set_current_latency_trace,
@@ -357,6 +358,7 @@ class ToolCallingAgentService:
         llm_call_count = 0
         latency_trace = LatencyTrace()
         bind_user_question_cache_key(latency_trace, normalized_question)
+        bind_agent_conversation_cache_scope(latency_trace, conversation_id)
         apply_evidence_identity_diagnostics(latency_trace, evidence_identity)
         latency_trace.set_value(
             "canonical_task",

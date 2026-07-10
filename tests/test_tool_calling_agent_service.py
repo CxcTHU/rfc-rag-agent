@@ -32,6 +32,7 @@ from app.services.generation.chat_model import (
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from app.services.observability.latency_trace import (
     LatencyTrace,
+    bind_agent_conversation_cache_scope,
     reset_current_latency_trace,
     set_current_latency_trace,
 )
@@ -388,6 +389,7 @@ def test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection(
             log_answers=False,
         )
         trace = LatencyTrace()
+        bind_agent_conversation_cache_scope(trace, 101)
         trace.set_value("evidence_cache_reuse_allowed", True)
         trace.set_value("evidence_entity_key", "rock-filled concrete")
         trace.set_value("evidence_intent_key", "crack_phenomena")
@@ -406,6 +408,7 @@ def test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection(
             "堆石混凝土缝隙问题",
             top_k=1,
             max_tool_calls=2,
+            conversation_id=101,
             event_sink=events.append,
         )
 
@@ -418,6 +421,52 @@ def test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection(
     assert [event.event for event in events] == ["tool_call_result"]
     assert events[0].payload["tool_name"] == "hybrid_search_knowledge"
     assert "cache hit" in events[0].payload["observation_summary"]
+
+
+def test_tool_calling_agent_semantic_evidence_cache_is_scoped_to_conversation(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    fake_redis = FakeRedis()
+    enable_tool_cache(monkeypatch, fake_redis)
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        VectorIndexService(db, provider).build_index()
+        toolbox = AgentToolbox(
+            db,
+            embedding_provider=provider,
+            chat_model_provider=DeterministicChatModelProvider(),
+            log_answers=False,
+        )
+        trace = LatencyTrace()
+        bind_agent_conversation_cache_scope(trace, 201)
+        trace.set_value("evidence_cache_reuse_allowed", True)
+        trace.set_value("evidence_entity_key", "rock-filled concrete")
+        trace.set_value("evidence_intent_key", "crack_phenomena")
+        trace.set_value("evidence_canonical_query", "堆石混凝土 rock-filled concrete 裂缝 缝隙 裂纹 开裂")
+        token = set_current_latency_trace(trace)
+        try:
+            first = toolbox.hybrid_search_knowledge("filling capacity rock-filled concrete", top_k=1)
+        finally:
+            reset_current_latency_trace(token)
+
+        second = make_service(
+            db,
+            runtime_identity_provider=RuntimeIdentityProvider(),
+        ).query(
+            "rock-filled concrete crack question",
+            top_k=1,
+            max_tool_calls=2,
+            conversation_id=202,
+        )
+
+    assert first.sources
+    assert second.latency_trace["semantic_cache_hit"] is False
+    assert second.latency_trace["tool_result_cache_hit"] is False
+    assert second.latency_trace["agent_cache_scope"] == "conversation:202"
 
 
 def test_tool_calling_agent_generates_hyde_only_on_semantic_cache_miss(

@@ -382,6 +382,37 @@ def test_agent_api_answers_model_meta_without_retrieval(tmp_path) -> None:
     assert "agent_meta" in payload["reasoning_summary"]
 
 
+def test_agent_api_accepts_chat_model_preset_override(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "what model are you using?",
+                "chat_model": "deepseek-v4-pro",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "meta"
+    assert payload["chat_model"] == "deepseek-v4-pro"
+    assert payload["latency_trace"]["chat_model"] == "deepseek-v4-pro"
+    assert "deepseek-v4-pro" in payload["answer"]
+
+
+def test_agent_api_rejects_unknown_chat_model_preset(tmp_path) -> None:
+    with make_test_client(tmp_path) as client:
+        response = client.post(
+            "/agent/query",
+            json={
+                "question": "hello",
+                "chat_model": "arbitrary-model",
+            },
+        )
+
+    assert response.status_code == 422
+
+
 def test_agent_api_default_model_meta_hides_configured_planner(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         app.dependency_overrides[get_agent_planner_chat_model_provider] = lambda: DeterministicChatModelProvider(

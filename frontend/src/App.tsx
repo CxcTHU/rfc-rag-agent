@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   BookOpen,
   Bot,
+  ChevronDown,
   Database,
   ExternalLink,
   FileText,
@@ -33,6 +34,7 @@ import {
   listConversations,
   listDocuments,
   login,
+  logoutSession,
   persistToken,
   readStoredToken,
   register,
@@ -54,6 +56,8 @@ import { cn, formatScore, safeText } from '@/lib/utils'
 
 type ViewName = 'ask' | 'library' | 'evidence' | 'trace' | 'quality'
 type AuthMode = 'login' | 'register'
+type ChatModelPreset = 'deepseek-v4-flash' | 'deepseek-v4-pro'
+type PendingImage = { path: string; filename: string }
 type CitationSourceItem = {
   displayIndex: number
   originalCitation: number
@@ -87,6 +91,25 @@ const emptyResult: AgentQueryResponse = {
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'rfc-rag-agent.activeConversationId'
 const PINNED_CONVERSATIONS_STORAGE_KEY = 'rfc-rag-agent.pinnedConversationIds'
 const ACTIVE_VIEW_STORAGE_KEY = 'rfc-rag-agent.activeView'
+const CHAT_MODEL_STORAGE_KEY = 'rfc-rag-agent.chatModel'
+const chatModelOptions: Array<{ value: ChatModelPreset; label: string }> = [
+  { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+  { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
+]
+const evidenceToolNames = new Set(['hybrid_search_knowledge', 'search_knowledge', 'search_tables', 'search_figures'])
+
+function readStoredChatModel(): ChatModelPreset {
+  const stored = window.localStorage.getItem(CHAT_MODEL_STORAGE_KEY)
+  return stored === 'deepseek-v4-pro' ? 'deepseek-v4-pro' : 'deepseek-v4-flash'
+}
+
+function persistChatModel(model: ChatModelPreset) {
+  window.localStorage.setItem(CHAT_MODEL_STORAGE_KEY, model)
+}
+
+function conversationDraftKey(conversationId: number | undefined) {
+  return conversationId ? String(conversationId) : 'draft'
+}
 
 function readStoredView(): ViewName {
   const stored = window.localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY)
@@ -139,6 +162,7 @@ function App() {
   const [registerEmail, setRegisterEmail] = useState('')
   const [registerPassword, setRegisterPassword] = useState('')
   const [question, setQuestion] = useState('')
+  const [selectedChatModel, setSelectedChatModel] = useState<ChatModelPreset>(() => readStoredChatModel())
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [, setMessagesByConversation] = useState<Record<number, ChatMessage[]>>({})
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -148,17 +172,17 @@ function App() {
   const [conversationMenu, setConversationMenu] = useState<{ id: number; x: number; y: number } | null>(null)
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [sourceFilter, setSourceFilter] = useState('')
-  const [isRunning, setIsRunning] = useState(false)
+  const [runningConversationIds, setRunningConversationIds] = useState<number[]>([])
   const [isJudgeRunning, setIsJudgeRunning] = useState(false)
-  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [uploadingConversationKeys, setUploadingConversationKeys] = useState<string[]>([])
   const [lastResult, setLastResult] = useState<AgentQueryResponse | null>(null)
   const [lastError, setLastError] = useState('')
   const [activeCitation, setActiveCitation] = useState<number | null>(null)
-  const [pendingImage, setPendingImage] = useState<{ path: string; filename: string } | null>(null)
+  const [pendingImagesByConversation, setPendingImagesByConversation] = useState<Record<string, PendingImage>>({})
   const [now, setNow] = useState(Date.now())
   const loginInputRef = useRef<HTMLInputElement | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
+  const abortControllersByConversationRef = useRef<Record<number, AbortController>>({})
   const activeConversationIdRef = useRef<number | undefined>(undefined)
   const messagesByConversationRef = useRef<Record<number, ChatMessage[]>>({})
 
@@ -234,10 +258,10 @@ function App() {
   }, [token])
 
   useEffect(() => {
-    if (!isRunning) return
+    if (!runningConversationIds.length) return
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
-  }, [isRunning])
+  }, [runningConversationIds.length])
 
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId
@@ -246,6 +270,10 @@ function App() {
   useEffect(() => {
     persistView(view)
   }, [view])
+
+  useEffect(() => {
+    persistChatModel(selectedChatModel)
+  }, [selectedChatModel])
 
   useEffect(() => {
     if (!conversationMenu) return
@@ -264,6 +292,12 @@ function App() {
   const workflowSteps = agentThoughtStepsFromResult(currentResult)
   const activeNavIndex = Math.max(0, navItems.findIndex((item) => item.id === view))
   const sortedConversations = sortConversationsByPinned(conversations, pinnedConversationIds)
+  const activeConversationKey = conversationDraftKey(activeConversationId)
+  const activeConversationIsRunning = activeConversationId
+    ? runningConversationIds.includes(activeConversationId)
+    : false
+  const activeConversationIsUploading = uploadingConversationKeys.includes(activeConversationKey)
+  const activePendingImage = pendingImagesByConversation[activeConversationKey] || null
 
   function revealAuth() {
     setAuthVisible(true)
@@ -289,6 +323,36 @@ function App() {
 
   function clearConversationMessages(conversationId: number) {
     updateConversationMessages(conversationId, [])
+  }
+
+  function setConversationRunning(conversationId: number, running: boolean) {
+    setRunningConversationIds((previous) => {
+      const exists = previous.includes(conversationId)
+      if (running && !exists) return [...previous, conversationId]
+      if (!running && exists) return previous.filter((item) => item !== conversationId)
+      return previous
+    })
+  }
+
+  function setConversationUploading(conversationKey: string, uploading: boolean) {
+    setUploadingConversationKeys((previous) => {
+      const exists = previous.includes(conversationKey)
+      if (uploading && !exists) return [...previous, conversationKey]
+      if (!uploading && exists) return previous.filter((item) => item !== conversationKey)
+      return previous
+    })
+  }
+
+  function setPendingImageForConversation(conversationKey: string, image: PendingImage | null) {
+    setPendingImagesByConversation((previous) => {
+      const next = { ...previous }
+      if (image) {
+        next[conversationKey] = image
+      } else {
+        delete next[conversationKey]
+      }
+      return next
+    })
   }
 
   async function refreshWorkspace(nextToken = token, options: { loadInitialConversation?: boolean } = {}) {
@@ -336,7 +400,9 @@ function App() {
   }
 
   function logout() {
-    abortRef.current?.abort()
+    void logoutSession(token).catch(() => undefined)
+    Object.values(abortControllersByConversationRef.current).forEach((controller) => controller.abort())
+    abortControllersByConversationRef.current = {}
     clearToken()
     persistActiveConversationId(undefined)
     setToken(null)
@@ -345,6 +411,9 @@ function App() {
     setMessages([])
     messagesByConversationRef.current = {}
     setMessagesByConversation({})
+    setRunningConversationIds([])
+    setUploadingConversationKeys([])
+    setPendingImagesByConversation({})
     setPinnedConversationIds([])
     persistPinnedConversationIds([])
     setConversationMenu(null)
@@ -451,16 +520,26 @@ function App() {
       setStatus('Agent 运行中')
       return
     }
+    const hasWarmCache = Boolean(cachedMessages)
     if (cachedMessages) {
       setMessages(cachedMessages)
       setLastResult(latestResultFromMessages(cachedMessages))
+      setStatus('已显示本地会话')
     } else {
       setMessages([])
       setLastResult(null)
-      setStatus('姝ｅ湪鍔犺浇浼氳瘽...')
+      setStatus('正在加载会话...')
     }
-    setStatus('\u6b63\u5728\u52a0\u8f7d\u4f1a\u8bdd...')
-    const payload = await getConversationMessages(nextToken, conversationId)
+    let payload
+    try {
+      payload = await getConversationMessages(nextToken, conversationId)
+    } catch (error) {
+      if (hasWarmCache && activeConversationIdRef.current === conversationId) {
+        setStatus('已显示缓存，会话刷新失败')
+        return
+      }
+      throw error
+    }
     if (activeConversationIdRef.current !== conversationId) {
       return
     }
@@ -477,14 +556,15 @@ function App() {
       const exists = items.some((item) => item.id === payload.conversation.id)
       return exists ? items.map((item) => (item.id === payload.conversation.id ? payload.conversation : item)) : [payload.conversation, ...items]
     })
-    setStatus('已加载会话')
+    setStatus(hasWarmCache ? '已刷新会话' : '已加载会话')
   }
 
   async function submitQuestion(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!token || !question.trim() || isRunning) return
+    if (!token || !question.trim()) return
     const userQuestion = question.trim()
     const startedAt = Date.now()
+    const initialConversationKey = conversationDraftKey(activeConversationId)
     let conversationId = activeConversationId
     if (!conversationId) {
       const conversation = await createConversation(token, conversationTitleFromQuestion(userQuestion))
@@ -497,13 +577,19 @@ function App() {
       setLastResult(null)
       setActiveCitation(null)
     }
+    if (abortControllersByConversationRef.current[conversationId]) return
+    const conversationKey = conversationDraftKey(conversationId)
+    const requestChatModel = selectedChatModel
     setQuestion('')
-    const attachment = pendingImage
+    const attachment = pendingImagesByConversation[initialConversationKey] || pendingImagesByConversation[conversationKey] || null
     const imagePath = attachment?.path || null
     if (attachment) {
-      setPendingImage(null)
+      setPendingImageForConversation(initialConversationKey, null)
+      if (initialConversationKey !== conversationKey) {
+        setPendingImageForConversation(conversationKey, null)
+      }
     }
-    setIsRunning(true)
+    setConversationRunning(conversationId, true)
     setNow(startedAt)
     setLastError('')
     setStatus('Agent 运行中')
@@ -519,13 +605,14 @@ function App() {
       { id: assistantId, role: 'assistant', content: '', pending: true, startedAt, events: [] },
     ])
     const controller = new AbortController()
-    abortRef.current = controller
+    abortControllersByConversationRef.current[conversationId] = controller
     try {
       await streamAgentQuery(
         token,
         userQuestion,
         conversationId,
         imagePath,
+        requestChatModel,
         {
           onToken: (chunk) => {
             updateConversationMessages(conversationId, (items) =>
@@ -542,7 +629,11 @@ function App() {
               ),
             )
           },
-          onHeartbeat: () => setStatus('Agent 运行中'),
+          onHeartbeat: () => {
+            if (activeConversationIdRef.current === conversationId) {
+              setStatus('Agent 运行中')
+            }
+          },
           onMetadata: (metadata) => {
             if (activeConversationIdRef.current === conversationId) {
               setLastResult((previous) => ({ ...(previous || emptyResult), ...metadata } as AgentQueryResponse))
@@ -570,6 +661,9 @@ function App() {
                   : message,
               ),
             )
+            if (activeConversationIdRef.current !== conversationId) {
+              return
+            }
             setStatus(warning ? 'Agent 完成，但链路有告警' : result.refused ? 'Agent 已拒答' : 'Agent 已完成')
           },
         },
@@ -588,6 +682,16 @@ function App() {
         )
       } else if (!isRecoverableAgentStreamError(streamError)) {
         const message = streamError instanceof Error ? streamError.message : 'Agent 运行失败'
+        if (activeConversationIdRef.current !== conversationId) {
+          updateConversationMessages(conversationId, (items) =>
+            items.map((item) =>
+              item.id === assistantId
+                ? { ...item, pending: false, completedAt, elapsedMs: completedAt - startedAt, error: message }
+                : item,
+            ),
+          )
+          return
+        }
         setLastError(message)
         setStatus('Agent 运行失败')
         updateConversationMessages(conversationId, (items) =>
@@ -599,7 +703,7 @@ function App() {
         )
       } else {
         try {
-          const result = await runAgentQuery(token, userQuestion, conversationId, imagePath)
+          const result = await runAgentQuery(token, userQuestion, conversationId, imagePath, requestChatModel)
           const fallbackCompletedAt = Date.now()
           const elapsedMs = resultElapsedMs(result) ?? fallbackCompletedAt - startedAt
           const warning = chainWarningFromResult(result)
@@ -621,9 +725,22 @@ function App() {
                 : message,
             ),
           )
+          if (activeConversationIdRef.current !== conversationId) {
+            return
+          }
           setStatus(warning ? 'Agent 完成，但链路有告警' : result.refused ? 'Agent 已拒答' : 'Agent 已完成')
         } catch (fallbackError) {
           const message = fallbackError instanceof Error ? fallbackError.message : 'Agent 运行失败'
+          if (activeConversationIdRef.current !== conversationId) {
+            updateConversationMessages(conversationId, (items) =>
+              items.map((item) =>
+                item.id === assistantId
+                  ? { ...item, pending: false, completedAt, elapsedMs: completedAt - startedAt, error: message }
+                  : item,
+              ),
+            )
+            return
+          }
           setLastError(message || (streamError instanceof Error ? streamError.message : 'Agent 运行失败'))
           setStatus('Agent 运行失败')
           updateConversationMessages(conversationId, (items) =>
@@ -636,13 +753,16 @@ function App() {
         }
       }
     } finally {
-      setIsRunning(false)
-      abortRef.current = null
+      setConversationRunning(conversationId, false)
+      if (abortControllersByConversationRef.current[conversationId] === controller) {
+        delete abortControllersByConversationRef.current[conversationId]
+      }
     }
   }
 
   function stopAgent() {
-    abortRef.current?.abort()
+    if (!activeConversationId) return
+    abortControllersByConversationRef.current[activeConversationId]?.abort()
   }
 
   async function runJudge() {
@@ -680,20 +800,28 @@ function App() {
   async function handleImageSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!token || !file) return
+    const conversationKey = conversationDraftKey(activeConversationIdRef.current)
+    const currentConversationId = activeConversationIdRef.current
+    if (currentConversationId && abortControllersByConversationRef.current[currentConversationId]) {
+      setLastError('当前会话运行中，请等待完成或切换到其他会话后再上传图片')
+      return
+    }
     if (!file.type.startsWith('image/')) {
       setLastError('请先选择图片文件')
       return
     }
-    setIsUploadingImage(true)
+    setConversationUploading(conversationKey, true)
     setLastError('')
     try {
       const uploaded = await uploadAgentImage(token, file)
-      setPendingImage({ path: uploaded.path, filename: uploaded.filename || file.name })
-      setStatus(`已上传图片：${uploaded.filename || file.name}`)
+      setPendingImageForConversation(conversationKey, { path: uploaded.path, filename: uploaded.filename || file.name })
+      if (conversationDraftKey(activeConversationIdRef.current) === conversationKey) {
+        setStatus(`已上传图片：${uploaded.filename || file.name}`)
+      }
     } catch (error) {
       setLastError(error instanceof Error ? error.message : '图片上传失败')
     } finally {
-      setIsUploadingImage(false)
+      setConversationUploading(conversationKey, false)
       if (event.target) {
         event.target.value = ''
       }
@@ -898,24 +1026,26 @@ function App() {
             conversations={sortedConversations}
             deleteConversation={deleteConversationById}
             imageInputRef={imageInputRef}
-            isUploadingImage={isUploadingImage}
-            isRunning={isRunning}
+            isUploadingImage={activeConversationIsUploading}
+            isRunning={activeConversationIsRunning}
             isWorkspaceHydrating={workspaceHydrating}
             loadConversationMessages={loadConversationMessages}
             messages={messages}
             newConversation={newConversation}
             now={now}
             onImageSelected={handleImageSelected}
-            pendingImage={pendingImage}
+            pendingImage={activePendingImage}
             pinnedConversationIds={pinnedConversationIds}
             question={question}
+            selectedChatModel={selectedChatModel}
             renameConversation={renameConversationById}
             selectCitation={selectCitation}
             setActiveConversationId={setActiveConversationId}
             setActiveCitation={setActiveCitation}
             setConversationMenu={setConversationMenu}
-            setPendingImage={setPendingImage}
+            setPendingImage={(image) => setPendingImageForConversation(activeConversationKey, image)}
             setQuestion={setQuestion}
+            setSelectedChatModel={setSelectedChatModel}
             status={status}
             stopAgent={stopAgent}
             submitQuestion={submitQuestion}
@@ -957,16 +1087,18 @@ function AskView(props: {
   newConversation: () => void
   now: number
   onImageSelected: (event: React.ChangeEvent<HTMLInputElement>) => void
-  pendingImage: { path: string; filename: string } | null
+  pendingImage: PendingImage | null
   pinnedConversationIds: number[]
   question: string
+  selectedChatModel: ChatModelPreset
   renameConversation: (id: number) => void
   selectCitation: (index: number) => void
   setActiveConversationId: (id: number | undefined) => void
   setActiveCitation: (index: number | null) => void
   setConversationMenu: (menu: { id: number; x: number; y: number } | null) => void
-  setPendingImage: (image: { path: string; filename: string } | null) => void
+  setPendingImage: (image: PendingImage | null) => void
   setQuestion: (value: string) => void
+  setSelectedChatModel: (value: ChatModelPreset) => void
   status: string
   stopAgent: () => void
   submitQuestion: (event: React.FormEvent<HTMLFormElement>) => void
@@ -977,7 +1109,9 @@ function AskView(props: {
     ? props.conversations.find((conversation) => conversation.id === props.conversationMenu?.id)
     : undefined
   const messageListRef = useRef<HTMLDivElement | null>(null)
+  const modelSelectRef = useRef<HTMLDivElement | null>(null)
   const shouldStickToBottomRef = useRef(true)
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const latestMessage = props.messages[props.messages.length - 1]
   const messageScrollSignature = [
     props.activeConversationId || 'none',
@@ -1002,6 +1136,19 @@ function AskView(props: {
     })
     return () => window.cancelAnimationFrame(frame)
   }, [latestMessage?.pending, messageScrollSignature, props.messages.length])
+
+  useEffect(() => {
+    if (!modelMenuOpen) return
+    function closeModelMenu(event: MouseEvent) {
+      if (modelSelectRef.current?.contains(event.target as Node)) return
+      setModelMenuOpen(false)
+    }
+    window.addEventListener('mousedown', closeModelMenu)
+    return () => window.removeEventListener('mousedown', closeModelMenu)
+  }, [modelMenuOpen])
+
+  const selectedModelOption =
+    chatModelOptions.find((option) => option.value === props.selectedChatModel) || chatModelOptions[0]
 
   return (
     <div className="ask-layout">
@@ -1092,6 +1239,7 @@ function AskView(props: {
         </div>
         <form className="composer" onSubmit={props.submitQuestion}>
           <Textarea
+            className="composer-input"
             value={props.question}
             onChange={(event) => props.setQuestion(event.target.value)}
             onKeyDown={(event) => {
@@ -1113,6 +1261,38 @@ function AskView(props: {
             </div>
           ) : null}
           <div className="composer-actions">
+            <div className="model-select" ref={modelSelectRef}>
+              <span className="model-select-label">模型</span>
+              <button
+                aria-expanded={modelMenuOpen}
+                className="model-select-trigger"
+                disabled={props.isRunning}
+                onClick={() => setModelMenuOpen((value) => !value)}
+                type="button"
+              >
+                <span>{selectedModelOption.label}</span>
+                <ChevronDown size={15} />
+              </button>
+              {modelMenuOpen && !props.isRunning ? (
+                <div className="model-select-menu" role="listbox">
+                  {chatModelOptions.map((option) => (
+                    <button
+                      aria-selected={option.value === props.selectedChatModel}
+                      className={cn('model-select-option', option.value === props.selectedChatModel && 'active')}
+                      key={option.value}
+                      onClick={() => {
+                        props.setSelectedChatModel(option.value)
+                        setModelMenuOpen(false)
+                      }}
+                      role="option"
+                      type="button"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <Button
               disabled={props.isRunning || props.isUploadingImage}
               type="button"
@@ -1170,6 +1350,7 @@ function MessageBubble({
       (typeof message.startedAt === 'number' && typeof message.completedAt === 'number'))
   const steps = finalWorkflowSteps(message)
   const citationView = buildCitationView(message.result, message.content)
+  const hasDraftContent = Boolean(message.content.trim())
   return (
     <article className={cn('message-bubble', message.role, message.chainWarning && 'warning')}>
       <div className="message-title-row">
@@ -1183,10 +1364,12 @@ function MessageBubble({
           <span>{message.chainWarning}</span>
         </div>
       ) : null}
-      {message.role === 'assistant' && steps.length ? (
+      {message.role === 'assistant' && (steps.length || message.pending) ? (
         <ThinkingDetails
           activeCitation={activeCitation}
           citationView={citationView}
+          elapsedMs={elapsed}
+          hasDraftContent={hasDraftContent}
           isPending={Boolean(message.pending)}
           selectCitation={selectCitation}
           steps={steps}
@@ -1196,7 +1379,7 @@ function MessageBubble({
         {message.error
           ? message.error
           : renderAnswerWithCitations(
-              message.content || (message.pending ? '正在思考...' : ''),
+              message.content,
               activeCitation,
               selectCitation,
               citationView,
@@ -1211,35 +1394,52 @@ function MessageBubble({
 function ThinkingDetails({
   activeCitation,
   citationView,
+  elapsedMs,
+  hasDraftContent,
   isPending,
   selectCitation,
   steps,
 }: {
   activeCitation: number | null
   citationView: CitationView
+  elapsedMs: number
+  hasDraftContent: boolean
   isPending: boolean
   selectCitation: (index: number) => void
   steps: AgentWorkflowStep[]
 }) {
   const [expanded, setExpanded] = useState(false)
-  const latestActiveStepIndex = steps.findLastIndex((step) => !isSkippedAgentStep(step))
-  const currentStepIndex = latestActiveStepIndex >= 0 ? latestActiveStepIndex : steps.length - 1
-  const currentStep = steps[currentStepIndex]
-  const visibleSteps = expanded ? steps : isPending && currentStep ? [currentStep] : []
+  const visibleSteps = expanded && !isPending ? steps : []
+  const liveTitle = thinkingLiveTitle(steps, hasDraftContent)
+  const pendingCaption = pendingAnswerPlaceholder(steps, hasDraftContent)
+  const elapsedLabel = formatDuration(elapsedMs)
   return (
     <section className={cn('thinking-details', expanded && 'expanded')}>
       <button
-        aria-expanded={expanded}
-        className="thinking-summary"
-        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={isPending ? false : expanded}
+        className={cn('thinking-summary', isPending && 'live')}
+        disabled={isPending}
+        onClick={() => {
+          if (!isPending) setExpanded((value) => !value)
+        }}
         type="button"
       >
-        <span>{isPending ? `\u5f53\u524d\uff1a${stepLabel(currentStep)}` : expanded ? '\u6536\u8d77\u601d\u8003\u8fc7\u7a0b' : '\u67e5\u770b\u601d\u8003\u8fc7\u7a0b'}</span>
-        {currentStep ? <small>{expanded ? `${steps.length} \u4e2a\u6b65\u9aa4` : `\u6700\u8fd1\uff1a${stepLabel(currentStep)}`}</small> : null}
+        <span>{isPending ? `当前：${liveTitle}` : expanded ? '收起思考过程' : '查看过程'}</span>
+        <small>
+          {isPending
+            ? `已思考 ${elapsedLabel}`
+            : `${steps.length} 个步骤${elapsedMs > 0 ? ` · 已处理 ${elapsedLabel}` : ''}`}
+        </small>
       </button>
-      <div className={cn('thinking-step-list', !expanded && isPending && 'current-only', expanded && 'expanded')}>
+      {isPending ? (
+        <div className="thinking-live-status" aria-live="polite">
+          <span className="thinking-live-dot" aria-hidden="true" />
+          <p>{pendingCaption}</p>
+        </div>
+      ) : null}
+      <div className={cn('thinking-step-list', expanded && 'expanded')}>
         {visibleSteps.map((step, visibleIndex) => {
-          const stepIndex = expanded ? visibleIndex : currentStepIndex
+          const stepIndex = visibleIndex
           return (
             <article
               className={cn('thinking-step', step.succeeded === false && 'failed', step.skipped && 'skipped')}
@@ -1249,7 +1449,10 @@ function ThinkingDetails({
                 <strong>
                   {stepIndex + 1}. {stepLabel(step)}
                 </strong>
-                <Badge>{stepStatusLabel(step)}</Badge>
+                <span className="thinking-step-meta">
+                  {stepDurationLabel(step) ? <small>{stepDurationLabel(step)}</small> : null}
+                  <Badge>{stepStatusLabel(step)}</Badge>
+                </span>
               </div>
               <div className="thinking-step-summary">
                 {renderAnswerWithCitations(stepSummary(step), activeCitation, selectCitation, citationView)}
@@ -2231,8 +2434,143 @@ function renderInlineAnswer(
 
 function finalWorkflowSteps(message: ChatMessage) {
   const eventSteps = message.events || []
-  if (eventSteps.length) return normalizeDisplaySteps(eventSteps)
-  return agentThoughtStepsFromResult(message.result, { includeRetrievalDiagnostics: false })
+  const steps = eventSteps.length
+    ? normalizeDisplaySteps(eventSteps)
+    : agentThoughtStepsFromResult(message.result, { includeRetrievalDiagnostics: false })
+  return agentStageTimeline(message, steps)
+}
+
+function agentStageTimeline(message: ChatMessage, toolSteps: AgentWorkflowStep[]) {
+  const stages: AgentWorkflowStep[] = []
+  const trace = message.result?.latency_trace || {}
+  const hydeLatencyMs = traceNumber(trace, 'hyde_latency_ms')
+  const plannerLatencyMs = Math.max(0, traceNumber(trace, 'planner_latency_ms') - hydeLatencyMs)
+  addMeasuredStage(stages, {
+    name: 'query_planning',
+    output_summary: plannerStageSummary(trace),
+    elapsedMs: plannerLatencyMs,
+  })
+  if (traceBoolean(trace, 'hyde_generated') || hydeLatencyMs > 0) {
+    addMeasuredStage(stages, {
+      name: 'hyde_generation',
+      output_summary: traceBoolean(trace, 'hyde_generated')
+        ? '已生成 HyDE 假设证据，用于增强向量召回。'
+        : `HyDE 未生成：${hydeReasonLabel(traceString(trace, 'hyde_reason'))}。`,
+      elapsedMs: hydeLatencyMs,
+      succeeded: traceBoolean(trace, 'hyde_generated'),
+    })
+  }
+  if (traceBoolean(trace, 'semantic_cache_hit')) {
+    addMeasuredStage(stages, {
+      name: 'semantic_evidence_cache',
+      output_summary: '命中本会话语义证据缓存，复用已有证据并重新生成回答。',
+      elapsedMs:
+        traceNumber(trace, 'retrieval_cache_lookup_latency_ms') +
+        traceNumber(trace, 'retrieval_cache_hydrate_latency_ms') +
+        traceNumber(trace, 'rerank_cache_lookup_latency_ms'),
+    })
+  }
+  stages.push(...toolSteps.filter((step) => stepName(step) !== 'answer_sources_summary'))
+  const rerankLatencyMs = traceNumber(trace, 'rerank_latency_ms') + traceNumber(trace, 'rerank_fallback_latency_ms')
+  addMeasuredStage(stages, {
+    name: 'rerank_evidence',
+    output_summary: rerankStageSummary(trace),
+    elapsedMs: rerankLatencyMs,
+  })
+  addMeasuredStage(stages, {
+    name: 'answer_generation',
+    output_summary: '基于已选证据生成最终回答。',
+    elapsedMs: traceNumber(trace, 'answer_latency_ms'),
+  })
+  const citationRepairCount = traceNumber(trace, 'citation_repair_count')
+  if (citationRepairCount > 0 || traceNumber(trace, 'citation_repair_latency_ms') > 0) {
+    addMeasuredStage(stages, {
+      name: 'citation_repair',
+      output_summary: `完成 ${citationRepairCount || 1} 次引用修复与校验。`,
+      elapsedMs: traceNumber(trace, 'citation_repair_latency_ms'),
+    })
+  }
+  const summarySteps = answerSourcesSummaryStep(message)
+  if (summarySteps.length && !stages.some((step) => stepName(step) === 'answer_sources_summary')) {
+    stages.push(...summarySteps)
+  }
+  return dedupeDisplaySteps(stages)
+}
+
+function answerSourcesSummaryStep(message: ChatMessage) {
+  if (message.pending || message.role !== 'assistant') return []
+  const citationView = buildCitationView(message.result, message.content)
+  const sourceCount = citationView.citationCount || message.result?.sources?.length || 0
+  if (!sourceCount) return []
+  return [
+    {
+      action: 'answer_sources_summary',
+      name: 'answer_sources_summary',
+      output_summary: `已使用 ${sourceCount} 个引用来源生成回答。`,
+      client_elapsed_ms: 0,
+      succeeded: true,
+    },
+  ]
+}
+
+function addMeasuredStage(
+  stages: AgentWorkflowStep[],
+  stage: { name: string; output_summary: string; elapsedMs: number; succeeded?: boolean },
+) {
+  if (!stage.output_summary || stage.elapsedMs <= 0) return
+  stages.push({
+    action: stage.name,
+    name: stage.name,
+    output_summary: stage.output_summary,
+    client_elapsed_ms: stage.elapsedMs,
+    succeeded: stage.succeeded ?? true,
+  })
+}
+
+function plannerStageSummary(trace: Record<string, unknown>) {
+  const model = traceString(trace, 'planner_model')
+  const followupType = traceString(trace, 'runtime_followup_type')
+  const parts = ['分析问题意图并选择检索路径']
+  if (model && model !== 'deterministic') parts.push(`规划模型：${model}`)
+  if (followupType && followupType !== 'standalone') parts.push(`上下文类型：${followupType}`)
+  return `${parts.join('；')}。`
+}
+
+function rerankStageSummary(trace: Record<string, unknown>) {
+  const cacheHit = traceBoolean(trace, 'rerank_cache_hit')
+  if (cacheHit) return '命中重排序缓存，完成证据筛选。'
+  return '完成候选证据重排序与筛选。'
+}
+
+function hydeReasonLabel(reason: string) {
+  const labels: Record<string, string> = {
+    empty_task: '问题为空',
+    provider_unavailable: '模型不可用',
+    provider_error: '模型请求失败',
+    empty: '未生成有效内容',
+    semantic_cache_hit: '已命中语义缓存',
+    not_checked: '未触发',
+  }
+  return labels[reason] || reason || '未触发'
+}
+
+function traceNumber(trace: Record<string, unknown>, key: string) {
+  const value = trace[key]
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const numberValue = Number(value)
+    return Number.isFinite(numberValue) ? numberValue : 0
+  }
+  return 0
+}
+
+function traceBoolean(trace: Record<string, unknown>, key: string) {
+  return trace[key] === true || trace[key] === 'true'
+}
+
+function traceString(trace: Record<string, unknown>, key: string) {
+  const value = trace[key]
+  return typeof value === 'string' ? value : ''
 }
 
 function agentThoughtStepsFromResult(
@@ -2264,7 +2602,45 @@ function agentThoughtStepsFromResult(
 }
 
 function normalizeDisplaySteps(steps: AgentWorkflowStep[]) {
-  return dedupeDisplaySteps(mergeToolLifecycleSteps(steps))
+  return withApproximateStepDurations(filterThinkingSteps(dedupeDisplaySteps(mergeToolLifecycleSteps(steps))))
+}
+
+function withApproximateStepDurations(steps: AgentWorkflowStep[]) {
+  return steps.map((step, index) => {
+    if (typeof step.client_elapsed_ms === 'number') return step
+    const startedAt = step.client_event_at
+    const nextAt = steps[index + 1]?.client_event_at
+    if (typeof startedAt === 'number' && typeof nextAt === 'number' && nextAt >= startedAt) {
+      return { ...step, client_elapsed_ms: nextAt - startedAt }
+    }
+    return step
+  })
+}
+
+function filterThinkingSteps(steps: AgentWorkflowStep[]) {
+  const hasToolEvidenceStep = steps.some((step) => {
+    const name = String(step.tool_name || step.name || step.action || '')
+    return [
+      'hybrid_search_knowledge',
+      'search_knowledge',
+      'search_tables',
+      'search_figures',
+      'analyze_user_image',
+    ].includes(name)
+  })
+  return steps.filter((step) => {
+    const name = String(step.tool_name || step.name || step.action || '')
+    if (isOperationalSkipStep(step)) {
+      return false
+    }
+    if (['final_answer', 'answer_with_citations', 'answer_progress', 'retrieval_diagnostics'].includes(name)) {
+      return false
+    }
+    if (hasToolEvidenceStep && ['llm_with_tools', 'tool_call_start', 'tool_call_result'].includes(name)) {
+      return false
+    }
+    return true
+  })
 }
 
 function mergeToolLifecycleSteps(steps: AgentWorkflowStep[]) {
@@ -2299,6 +2675,8 @@ function mergeToolLifecycleSteps(steps: AgentWorkflowStep[]) {
     }
     const previous = merged[existingIndex]
     const resultSummary = step.output_summary || step.observation_summary || step.step_summary
+    const startedAt = previous.client_event_at
+    const completedAt = step.client_event_at
     merged[existingIndex] = {
       ...previous,
       ...step,
@@ -2311,6 +2689,11 @@ function mergeToolLifecycleSteps(steps: AgentWorkflowStep[]) {
       succeeded: step.succeeded ?? previous.succeeded,
       skipped: step.skipped || previous.skipped,
       error: step.error || previous.error,
+      client_event_at: completedAt || startedAt,
+      client_elapsed_ms:
+        typeof startedAt === 'number' && typeof completedAt === 'number' && completedAt >= startedAt
+          ? completedAt - startedAt
+          : step.client_elapsed_ms || previous.client_elapsed_ms,
     }
   }
   return merged
@@ -2333,12 +2716,128 @@ function dedupeDisplaySteps(steps: AgentWorkflowStep[]) {
   return deduped
 }
 
+function pendingAnswerPlaceholder(steps: AgentWorkflowStep[], hasDraftContent: boolean) {
+  if (hasDraftContent) return '正在生成回答…'
+  if (hasReusableSessionEvidence(steps)) return '复用本会话证据，正在重新生成回答…'
+  const evidenceCount = latestReturnedEvidenceCount(steps)
+  if (evidenceCount !== undefined) return `已找到 ${evidenceCount} 条证据，正在整理回答…`
+  if (steps.some(isEvidenceRetrievalStep)) return '正在检索可引用证据…'
+  return '正在理解问题…'
+}
+
+function thinkingLiveTitle(steps: AgentWorkflowStep[], hasDraftContent: boolean) {
+  if (hasDraftContent) return '生成回答'
+  if (hasReusableSessionEvidence(steps)) return '复用本会话证据'
+  if (hasReturnedEvidence(steps)) return '整理证据'
+  if (steps.some(isEvidenceRetrievalStep)) return '检索证据'
+  return '理解问题'
+}
+
+function hasReusableSessionEvidence(steps: AgentWorkflowStep[]) {
+  return steps.some(isSemanticEvidenceCacheStep)
+}
+
+function hasReturnedEvidence(steps: AgentWorkflowStep[]) {
+  return latestReturnedEvidenceCount(steps) !== undefined
+}
+
+function latestReturnedEvidenceCount(steps: AgentWorkflowStep[]) {
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const count = returnedEvidenceCountForStep(steps[index])
+    if (count !== undefined) return count
+  }
+  return undefined
+}
+
+function returnedEvidenceCountForStep(step: AgentWorkflowStep) {
+  const text = `${step.output_summary || ''}; ${step.observation_summary || ''}; ${step.step_summary || ''}`
+  const count = returnedEvidenceCount(text)
+  return count && count > 0 ? count : undefined
+}
+
+function isEvidenceRetrievalStep(step: AgentWorkflowStep) {
+  return evidenceToolNames.has(stepName(step))
+}
+
+function stepName(step: Partial<AgentWorkflowStep>) {
+  return String(step.tool_name || step.name || step.action || '')
+}
+
 function stepSummary(step: AgentWorkflowStep) {
+  const concise = conciseStepSummary(step)
+  if (concise) return concise
   const summary = userFacingAgentSummary(
     step.step_summary || step.observation_summary || step.output_summary || step.input_summary || '',
     step,
   )
-  return summary || (step.error ? userFacingAgentSummary(step.error, step) : '') || '暂无步骤摘要'
+  return summary || (step.error ? userFacingAgentSummary(step.error, step) : '') || '已完成当前步骤。'
+}
+
+function conciseStepSummary(step: AgentWorkflowStep) {
+  if (stepName(step) === 'answer_sources_summary') {
+    return step.output_summary || '已使用引用来源生成回答。'
+  }
+  if (isSkippedAgentStep(step)) {
+    return skippedToolSummary(step.tool_name || step.name || step.action, step.output_summary || step.error || '')
+  }
+  const name = String(step.tool_name || step.name || step.action || '')
+  const text = `${step.output_summary || ''}; ${step.observation_summary || ''}; ${step.step_summary || ''}`
+  const returned = returnedEvidenceCountForStep(step)
+  const dynamicK = /dynamic_top_k\s*=\s*true/i.test(text)
+  if (isSemanticEvidenceCacheStep(step)) {
+    return returned === undefined
+      ? '复用本会话证据：已匹配到相近问题，并重新生成回答。'
+      : `复用本会话证据：已匹配到相近问题，复用 ${returned} 条已验证证据，并重新生成回答。`
+  }
+  if (name === 'hybrid_search_knowledge') {
+    return `混合检索：${dynamicK ? '动态 K，' : ''}${evidenceCountSummary(returned, step, '证据')}`
+  }
+  if (name === 'search_tables') {
+    return `表格检索：${evidenceCountSummary(returned, step, '表格证据')}`
+  }
+  if (name === 'search_figures') {
+    return `图片检索：${evidenceCountSummary(returned, step, '图片证据')}`
+  }
+  if (name === 'search_knowledge') {
+    return `知识库检索：${evidenceCountSummary(returned, step, '证据')}`
+  }
+  if (name === 'analyze_user_image') {
+    return '图片理解：已提取上传图片的关键信息。'
+  }
+  if (name === 'refuse' || name === 'off_topic_gate') {
+    return '安全判断：当前问题不适合基于资料回答。'
+  }
+  if (name === 'llm_with_tools') {
+    return '分析问题并选择合适的检索工具。'
+  }
+  return ''
+}
+
+function evidenceCountSummary(count: number | undefined, step: AgentWorkflowStep, unit: string) {
+  if (count !== undefined && count > 0) return `已返回 ${count} 条${unit}。`
+  return step.succeeded === true ? '已完成检索，正在筛选可用证据。' : '正在检索证据。'
+}
+
+function isSemanticEvidenceCacheStep(step: AgentWorkflowStep) {
+  const name = String(step.tool_name || step.name || step.action || '')
+  if (!['hybrid_search_knowledge', 'search_knowledge', 'search_tables', 'search_figures'].includes(name)) {
+    return false
+  }
+  const text = `${step.output_summary || ''}; ${step.observation_summary || ''}; ${step.step_summary || ''}`.toLowerCase()
+  return text.includes('cache hit')
+}
+
+function returnedEvidenceCount(text: string) {
+  const patterns = [
+    /returned\s+(\d+)\s+(?:hybrid|table|figure|search_tables|search_knowledge)?\s*results?/i,
+    /returned\s+(\d+)\s+/i,
+    /已返回\s*(\d+)\s*条/,
+  ]
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match) return Number(match[1])
+  }
+  return undefined
 }
 
 function retrievalTraceStepFromResult(result: AgentQueryResponse) {
@@ -2370,8 +2869,15 @@ function arrayTraceValue(trace: Record<string, unknown>, key: string) {
 function stepStatusLabel(step: AgentWorkflowStep) {
   if (isSkippedAgentStep(step)) return '已跳过'
   if (step.succeeded === false) return '失败'
-  if (step.error) return '有错误'
+  if (step.error) return '有提示'
   return '已完成'
+}
+
+function stepDurationLabel(step: AgentWorkflowStep) {
+  const elapsed = typeof step.client_elapsed_ms === 'number' ? step.client_elapsed_ms : undefined
+  if (elapsed === undefined || !Number.isFinite(elapsed) || elapsed < 0) return ''
+  if (elapsed < 1000) return '<1秒'
+  return formatDuration(elapsed)
 }
 
 function isSkippedAgentStep(step: AgentWorkflowStep) {
@@ -2379,19 +2885,28 @@ function isSkippedAgentStep(step: AgentWorkflowStep) {
   return text.includes('skipped') || step.skipped === true
 }
 
+function isOperationalSkipStep(step: AgentWorkflowStep) {
+  const text = `${step.error || ''} ${step.output_summary || ''} ${step.observation_summary || ''}`.toLowerCase()
+  return (
+    text.includes('near-duplicate') ||
+    text.includes('existing evidence available') ||
+    text.includes('per-iteration search tool budget reached')
+  )
+}
+
 function skippedToolSummary(toolName = '', reasonText = '') {
   const label = localizeAgentTool(toolName)
   const normalized = String(reasonText || '').toLowerCase()
   if (normalized.includes('near-duplicate')) {
-    return `已跳过：${label}；原因：与已执行检索重复`
+    return `已跳过：${label}；原因：与已执行检索重复。`
   }
   if (normalized.includes('existing evidence available')) {
-    return `已跳过：${label}；原因：已有可用证据`
+    return `已跳过：${label}；原因：已有可用证据。`
   }
   if (normalized.includes('per-iteration search tool budget reached')) {
-    return `已跳过：${label}；原因：本轮检索工具预算已用完`
+    return `已跳过：${label}；原因：本轮检索工具预算已用完。`
   }
-  return `已跳过：${label}`
+  return `已跳过：${label}。`
 }
 
 function userFacingAgentSummary(summary: string, context: Partial<AgentWorkflowStep> = {}) {
@@ -2399,7 +2914,7 @@ function userFacingAgentSummary(summary: string, context: Partial<AgentWorkflowS
   const normalized = text.toLowerCase()
   if (!text) return ''
   if (normalized.includes('calling model with tool definitions') || normalized.includes('llm_with_tools')) {
-    return '正在分析问题并选择检索工具'
+    return '分析问题并选择检索工具。'
   }
   if (
     normalized.includes('near-duplicate') ||
@@ -2409,13 +2924,27 @@ function userFacingAgentSummary(summary: string, context: Partial<AgentWorkflowS
     return skippedToolSummary(context.tool_name || context.name || context.action, text)
   }
   if (normalized.includes('model request failed') || normalized.includes('llm') || normalized.includes('provider')) {
-    return '模型请求失败，请检查 provider 配置或网络连接'
+    return '模型请求失败，请检查 provider 配置或网络连接。'
   }
+  return stripInternalDiagnostics(text)
+}
+
+function stripInternalDiagnostics(text: string) {
   return text
+    .replace(/selected_chunk_ids=[^;。\n]+[;。]?/gi, '')
+    .replace(/candidate_chunk_ids=[^;。\n]+[;。]?/gi, '')
+    .replace(/vector_candidates=\d+[;。]?/gi, '')
+    .replace(/keyword_candidates=\d+[;。]?/gi, '')
+    .replace(/relative_score_threshold=[^;。\n]+[;。]?/gi, '')
+    .replace(/vector_backend=[^;。\n]+[;。]?/gi, '')
+    .replace(/dynamic_top_k=(true|false)[;。]?/gi, '')
+    .replace(/\s*;\s*$/g, '')
+    .trim()
 }
 
 function sseEventToWorkflowStep(event: string, payload: Record<string, unknown>): AgentWorkflowStep {
   const name = String(payload.tool_name || payload.action || payload.phase || event)
+  const eventAt = Date.now()
   return {
     name,
     action: String(payload.action || event),
@@ -2431,12 +2960,14 @@ function sseEventToWorkflowStep(event: string, payload: Record<string, unknown>)
     succeeded: typeof payload.succeeded === 'boolean' ? payload.succeeded : event !== 'tool_call_result' ? undefined : true,
     skipped: Boolean(payload.skipped),
     error: typeof payload.error === 'string' ? payload.error : null,
+    client_event_at: eventAt,
     payload,
   }
 }
 
 function stepLabel(step: AgentWorkflowStep) {
-  const raw = step.tool_name || step.name || step.action || 'Agent 步骤'
+  if (isSemanticEvidenceCacheStep(step)) return '复用本会话证据'
+  const raw = step.tool_name || step.name || step.action || 'agent_step'
   return localizeAgentAction(raw)
 }
 
@@ -2444,38 +2975,54 @@ function localizeAgentAction(action = '') {
   if (action === 'search_progress') return '检索进度'
   if (action === 'answer_progress') return '生成回答'
   const labels: Record<string, string> = {
-    agent_step: 'Agent 步骤',
+    agent_step: '分析问题',
     tool_call_start: '调用工具',
     tool_call_result: '工具结果',
-    llm_with_tools: '分析问题并选择检索工具',
+    llm_with_tools: '分析问题',
     hybrid_search_knowledge: '混合检索',
-    search_knowledge: '检索知识库',
-    search_figures: '检索示例图片',
-    search_tables: '检索表格证据',
-    analyze_user_image: '分析上传图片',
+    search_knowledge: '知识库检索',
+    search_figures: '图片检索',
+    search_tables: '表格检索',
+    analyze_user_image: '图片理解',
     rewrite_query: '改写查询',
-    answer_with_citations: '生成带引用回答',
+    answer_with_citations: '生成回答',
     retrieval_diagnostics: '检索诊断',
-    refuse: '拒答判断',
-    final_answer: '最终回答',
+    refuse: '安全判断',
+    off_topic_gate: '安全判断',
+    final_answer: '生成回答',
+    query_planning: '分析规划',
+    hyde_generation: 'HyDE 生成',
+    semantic_evidence_cache: '语义缓存',
+    rerank_evidence: '证据筛选',
+    answer_generation: '生成回答',
+    citation_repair: '引用校验',
+    answer_sources_summary: '引用来源',
   }
-  return labels[action] || action || '未知步骤'
+  return labels[action] || action || '处理步骤'
 }
 
 function localizeAgentTool(toolName = '') {
   const labels: Record<string, string> = {
-    search_knowledge: '检索知识库',
+    search_knowledge: '知识库检索',
     hybrid_search_knowledge: '混合检索',
-    search_figures: '检索示例图片',
-    search_tables: '检索表格证据',
-    analyze_user_image: '分析上传图片',
-    answer_with_citations: '生成带引用回答',
+    search_figures: '图片检索',
+    search_tables: '表格检索',
+    analyze_user_image: '图片理解',
+    answer_with_citations: '生成回答',
     retrieval_diagnostics: '检索诊断',
     rewrite_query: '改写查询',
-    refuse: '拒答判断',
-    final_answer: '最终回答',
+    refuse: '安全判断',
+    off_topic_gate: '安全判断',
+    final_answer: '生成回答',
+    query_planning: '分析规划',
+    hyde_generation: 'HyDE 生成',
+    semantic_evidence_cache: '语义缓存',
+    rerank_evidence: '证据筛选',
+    answer_generation: '生成回答',
+    citation_repair: '引用校验',
+    answer_sources_summary: '引用来源',
   }
-  return labels[toolName] || toolName || '未知工具'
+  return labels[toolName] || toolName || '当前步骤'
 }
 
 function chainWarningFromResult(result: AgentQueryResponse | null) {
@@ -2494,7 +3041,8 @@ function resultElapsedMs(result: AgentQueryResponse | null | undefined) {
 }
 
 function formatDuration(ms: number) {
-  return `${Math.max(0, Math.ceil(ms / 1000))}秒`
+  const seconds = Math.max(0, Math.ceil(ms / 1000))
+  return seconds < 60 ? `${seconds}秒` : `${Math.floor(seconds / 60)}分${seconds % 60}秒`
 }
 
 export default App
