@@ -1075,10 +1075,13 @@ rsync -az --delete \
   --exclude '.env' \
   --exclude '.env.*' \
   --exclude 'data/' \
+  --exclude 'local_backups/' \
   --exclude 'logs/' \
   --exclude 'output/' \
   --exclude 'obsidian-vault/' \
   --exclude '.venv/' \
+  --exclude '.chainlit/' \
+  --exclude '.playwright-cli/' \
   --exclude '__pycache__/' \
   ./ rfc-cpu:/home/ubuntu/rfc-rag-agent-stage44-smoke/
 ```
