@@ -150,7 +150,8 @@ textarea {
   transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.nav-links button {
+.nav-links button,
+.nav-links a {
   position: relative;
   z-index: 1;
   display: inline-flex;
@@ -168,18 +169,23 @@ textarea {
   font-weight: 600;
   transition: color 180ms ease, transform 180ms ease;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .nav-links button.active,
-.nav-links button.active:hover {
+.nav-links button.active:hover,
+.nav-links a.active,
+.nav-links a.active:hover {
   color: var(--text-primary);
 }
 
-.nav-links button:not(.active):hover {
+.nav-links button:not(.active):hover,
+.nav-links a:not(.active):hover {
   color: var(--accent);
 }
 
-.nav-links button.active svg {
+.nav-links button.active svg,
+.nav-links a.active svg {
   color: var(--accent);
 }
 
@@ -392,6 +398,10 @@ textarea {
   white-space: normal;
 }
 
+.message-content.user-content {
+  white-space: pre-wrap;
+}
+
 .answer-paragraph {
   margin: 0 0 12px;
   white-space: normal;
@@ -527,6 +537,15 @@ textarea {
 
 .thinking-details summary::-webkit-details-marker {
   display: none;
+}
+
+.message-bubble.assistant {
+  cursor: pointer;
+}
+
+.message-bubble.assistant.selected {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 1px rgba(20, 200, 177, 0.12);
 }
 
 .thinking-summary.live {
@@ -705,6 +724,20 @@ textarea {
   align-self: flex-end;
   border-color: rgba(45, 212, 191, 0.2);
   background: linear-gradient(180deg, rgba(30, 33, 39, 0.92), rgba(24, 27, 32, 0.88));
+}
+
+.citation-link.invalid,
+.citation-link.invalid:hover {
+  border-color: rgba(244, 63, 94, 0.45);
+  background: rgba(244, 63, 94, 0.1);
+  color: #fda4af;
+  cursor: not-allowed;
+}
+
+.invalid-citation-badge {
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.09);
+  color: #fda4af;
 }
 
 .message-bubble.assistant {

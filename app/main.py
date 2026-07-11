@@ -108,7 +108,6 @@ def create_app() -> FastAPI:
         reset_request_id(token)
         return response
 
-    app.include_router(frontend_router)
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(documents_router)
@@ -123,15 +122,16 @@ def create_app() -> FastAPI:
     IMAGE_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     app.include_router(assets_router)
     app.mount(
+        "/assets",
+        StaticFiles(directory=REACT_FRONTEND_DIST_DIR / "assets", check_dir=False),
+        name="react-assets",
+    )
+    app.mount(
         "/static",
         StaticFiles(directory=FRONTEND_DIR / "static"),
         name="static",
     )
-    app.mount(
-        "/app-v2/assets",
-        StaticFiles(directory=REACT_FRONTEND_DIST_DIR / "assets", check_dir=False),
-        name="react-assets",
-    )
+    app.include_router(frontend_router)
     return app
 
 

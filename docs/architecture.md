@@ -1,5 +1,80 @@
 # 架构说明
 
+## Phase 62 Architecture Delta: React Feature Modules And Message-Scoped Evidence
+
+2026-07-11 route adjustment: React is now served from `/` with root BrowserRouter
+paths `/ask`, `/library`, `/evidence`, `/trace`, and `/quality`. The preserved
+legacy static workbench is available at `/old`; `/legacy` redirects to `/old`.
+Existing `/app-v2` links redirect to the equivalent root React route for
+compatibility. React build assets are served from `/assets/*`; missing assets
+return 404, and `/assets/images/*` remains the authenticated evidence-image API.
+
+Phase 62 preserves the legacy static workbench while serving the React workbench at the root path:
+
+```text
+GET /, /ask, /library, /evidence, /trace, /quality
+-> frontend/dist/index.html
+-> BrowserRouter root paths
+
+GET /old
+-> app/frontend/index.html (legacy)
+
+GET /legacy
+-> redirect /old
+
+/assets/*
+-> frontend/dist/assets StaticFiles mount; missing JS/CSS returns 404
+
+/assets/images/*
+-> authenticated evidence-image API route, registered before React asset/static fallback
+```
+
+React now owns the root workbench path, but the old static frontend, Chainlit, quality report, and quality review entries are not deleted. Historical /app-v2 links remain compatibility redirects to the equivalent root path.
+
+React provider 与模块边界：
+
+```text
+ErrorBoundary
+-> QueryClientProvider
+-> BrowserRouter
+-> AuthProvider / AuthGate
+-> ChatWorkspaceProvider
+   -> auth      token/current user/login/register/logout
+   -> chat      conversations/messages/draft/composer/useAgentStream
+   -> library   documents query/filter/table
+   -> evidence  citation mapping/Sources/Evidence
+   -> trace     real workflow/tool events and latency diagnostics
+   -> quality   Judge mutation and message-scoped cache update
+```
+
+Query key 契约：
+
+```text
+['auth', 'current-user']
+['user', userId, 'conversations']
+['user', userId, 'conversation', conversationId, 'messages']
+['user', userId, 'documents']
+```
+
+Bearer token 不进入 query key。current user 在单次登录内不自动变陈旧；conversation、messages、documents 分别使用 15/30/60 秒 stale time；窗口聚焦刷新关闭。GET 只对网络/5xx 重试一次，mutation/SSE 不自动重试。用户变化、退出或 401/403 会终止随组件卸载的 stream 并清空 Query cache。
+
+Agent 流协议：
+
+```text
+token | metadata | done | agent_step | tool_call_start
+| tool_call_result | heartbeat | error
+```
+
+token 按 animation frame 批量写入所属 conversation 的 message query；metadata 立即写入对应 assistant message，但在流关闭前仍为 pending；done/EOF 不携带最终语义。metadata 缺失是协议失败。metadata 后断流保留最终结果并显示告警。只有尚未收到任何 SSE 事件的网络错误、5xx 或缺失 body 才可同步 fallback；401/403/422/429 或已开始的流不 fallback。
+
+消息级证据真相源是 `selectedAssistantMessageId`。Sources、Evidence、Trace 和 Quality 均从该消息的 `result` 派生，citation 状态为 `{messageId, index}`。历史回答切换、citation -> source、source -> citation 都被限定在同一消息；该消息无 sources 时不得回退最近回答。
+
+新建会话只切入本地 draft；第一次有效提交成功创建 conversation 后才把附件与本地消息迁入新 query key。每个 conversation 的 stream/上传状态相互独立，切换不会终止其他会话。
+
+思考过程只使用真实 SSE events 或 metadata `workflow_steps` / `tool_calls`。`latency_trace` 的检索字段只在 Trace 作为独立诊断块，总体耗时只用于 assistant 计时；前端不从这些字段合成 planning、HyDE、rerank、answer 或 citation repair 步骤。
+
+测试分层为：Vitest/Testing Library 的 parser/hook/component 状态测试、独立 Node mock server 的 Playwright Chromium 业务 smoke，以及 FastAPI 的 legacy/React/fallback/asset 路由测试。历史章节中“无 React/Node”的描述只适用于当时阶段和现在的 legacy `/`。
+
 ## Phase 61 Architecture Delta: Internal Pilot Hardening
 
 Phase 61 keeps the default production Agent path narrow:

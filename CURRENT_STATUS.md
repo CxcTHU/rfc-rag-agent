@@ -1,6 +1,34 @@
-# Current Status: Phase 61 P0/P1 Internal Pilot Hardening
+# Current Status: Phase 62 React Frontend Engineering
 
-Date: 2026-07-10
+Date: 2026-07-11
+
+Phase 62 passed user manual verification on 2026-07-11. The user authorized local documentation and Obsidian synchronization, GitHub merge, and the `phase-62-complete` tag. Closeout must still exclude `.env`, `.env.prod`, Obsidian, local Playwright/output/PNG artifacts, secrets, provider raw responses, hidden reasoning, complete chunks, restricted full text, and raw uploaded images.
+
+Current frontend contract:
+
+- `/` serves the React workbench with Router paths for Ask, Library, Evidence, Trace, and Quality.
+- `/old` serves the preserved legacy static workbench; `/legacy` redirects to `/old`.
+- FastAPI serves the React shell for root browser routes, while `/assets/*` is mounted before fallback and missing assets stay 404. `/assets/images/*` remains the authenticated evidence-image API.
+- `App.tsx` is a 76-line authenticated route shell; business code lives in `features/auth`, `chat`, `library`, `evidence`, `trace`, and `quality`.
+- TanStack Query owns ordinary HTTP state; the dedicated `useAgentStream` owns SSE and writes only to the owning conversation/message cache.
+- New conversations remain local drafts until the first valid question. Message-scoped selection drives Sources/Evidence/Trace/Quality/Judge, and uncited retrieval-only sources are not presented as body citations.
+- Thought display uses real Agent/tool events or final metadata workflow/tool steps. `latency_trace` is diagnostic/timing data, not a source for invented thought stages.
+
+Latest automated validation before manual handoff:
+
+```text
+frontend lint -> passed without warnings
+frontend Vitest -> 7 files / 27 tests passed
+frontend build -> passed
+Playwright Chromium -> 7 passed
+FastAPI frontend routes -> 12 passed
+targeted frontend/conversation/stream Python slice -> 34 passed
+git diff --check -> passed
+```
+
+The backend Agent, Judge, Reranker, data-source registry, legacy frontend, and production default mode were not changed. Existing untracked root Playwright/output/PNG artifacts were preserved. `.env`, `.env.prod`, secrets, provider raw responses, hidden reasoning, complete chunks, restricted full text, and raw uploads were not modified or added.
+
+## Phase 61 Baseline: P0/P1 Internal Pilot Hardening
 
 Phase 61 moves the project from a strong internal prototype toward a controlled internal pilot. The focus is not adding broad agent-platform features; it is tightening the default production posture, making release checks repeatable, and connecting Phase 60 Structured TableRAG to the production path behind a feature flag.
 

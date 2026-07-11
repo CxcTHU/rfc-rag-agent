@@ -1,12 +1,54 @@
 # RFC-RAG-Agent
 
+## Phase 62 React Frontend Engineering（人工验收通过）
+
+当前开发分支：`codex/phase-62-react-frontend-engineering`。本阶段只重构 React 工作台与前端托管方式，不修改后端 Agent、Judge、Reranker 主链路，也不改变生产默认 Agent 模式。
+
+前端现为双入口：
+
+- `/`：React 入口，加载后 replace 到 `/ask`；
+- `/ask`、`/library`、`/evidence`、`/trace`、`/quality`：React Router 子路由，支持直达、刷新和浏览器前进/后退；
+- `/assets/*`：React 静态资源 mount，缺失资源保持 404，不被 SPA fallback 转成 HTML；既有 `/assets/images/*` 仍走鉴权图片证据路由；
+- `/old`：保留 `app/frontend/` 旧静态工作台；`/legacy` 兼容重定向到 `/old`。
+
+React 工程化增量：
+
+```text
+main.tsx
+-> ErrorBoundary
+-> QueryClientProvider
+-> BrowserRouter
+-> AuthProvider / AuthGate
+-> ChatWorkspaceProvider
+-> features/{auth,chat,library,evidence,trace,quality}
+```
+
+`App.tsx` 已从集中式业务组件缩减为认证壳、导航和 Routes。普通 HTTP 状态由 TanStack Query 管理，Agent SSE 由独立 `useAgentStream` 管理。新对话先进入本地草稿，首个有效问题才创建后端 conversation；所选 assistant message 同时驱动 Sources、Evidence、Trace、Quality 和 Judge，citation 高亮使用 `{messageId, index}`，无来源回答不会回退到其他消息。
+
+思考过程只显示真实 SSE Agent/tool 事件或最终 metadata 中的 `workflow_steps` / `tool_calls`；`latency_trace` 只用于总体计时与 Trace 诊断，不再合成规划、HyDE、rerank、回答或引用修复步骤。
+
+本阶段新增 Vitest/Testing Library 和基于合成延迟 SSE mock server 的 Playwright Chromium E2E，并把 `lint -> unit -> build -> Chromium -> E2E` 加入 CI。当前本地自动验证结果：
+
+```text
+npm --prefix frontend run lint                                      passed
+npm --prefix frontend run test:unit                                 27 passed
+npm --prefix frontend run build                                     passed
+npm --prefix frontend run test:e2e                                  7 passed
+python -m pytest tests/test_frontend_app.py -q                       12 passed
+python -m pytest tests/test_frontend_app.py tests/test_react_latency_trace.py tests/test_conversations_api.py tests/test_agent_stream_api.py -q
+                                                                    34 passed
+git diff --check                                                    passed
+```
+
+用户已于 2026-07-11 完成人工验收 PASS，并授权本地文档/Obsidian 同步、GitHub 合并与 `phase-62-complete` tag。阶段收口提交仍排除 `.env`、`.env.prod`、Obsidian、本地 Playwright/output/PNG 产物、密钥、provider raw response、hidden reasoning、完整 chunk、受限全文和原始上传图片。
+
 ## Phase 61 P0/P1 Internal Pilot Hardening
 
 Current status lives in [CURRENT_STATUS.md](CURRENT_STATUS.md).
 
 Phase 61 tightens the project for a controlled internal pilot: production auth/rate-limit defaults, minimal RBAC, guarded high-risk routes, constrained source-sync/export paths, authenticated image assets, configurable default Agent mode, and Structured TableRAG integration behind `TABLE_RAG_ENABLED`.
 
-This phase keeps `tool_calling_agent` as the production default path and does not add MCP, multi-agent handoff, or long-term memory productization. Those remain Phase 62+ scope.
+This phase keeps `tool_calling_agent` as the production default path and does not add MCP, multi-agent handoff, or long-term memory productization. Those also remain outside the frontend-focused Phase 62 scope and are reserved for a later phase.
 
 User-verified local follow-ups are also part of Phase 61: per-session semantic evidence cache isolation, per-conversation run controls, DeepSeek V4 Flash/Pro model selection, authenticated original opening through HttpOnly cookie auth, full-width React layout polish, and completed thought-process replay with per-stage timing derived from safe workflow and `latency_trace` metadata.
 
@@ -1837,19 +1879,23 @@ POST /sources/{source_id}/reindex
 
 ## 前端工作台
 
-阶段 5 新增浏览器界面：
+Phase 62 frontend entry contract: React workbench is served at /; legacy static workbench is preserved at /old, and /legacy redirects to /old.
 
 ```text
-GET /
+GET /                                  React -> /ask
+GET /{ask,library,evidence,trace,quality}
+GET /old                              legacy static workbench
+GET /legacy                           redirect -> /old
 ```
 
-前端入口由 FastAPI 直接提供，静态文件位于：
+legacy 静态文件和 React 工程分别位于：
 
 ```text
 app/frontend/
+frontend/
 ```
 
-当前工作台支持：
+The following list records the historical legacy workbench capabilities; the React root workbench focuses on Ask, Library, message-scoped Evidence, Trace, and Quality review:
 
 - 查看来源总数、已收集来源、已入库来源、资料数和 chunk 总数。
 - 查看 sources 列表，并按关键词、状态、全文权限筛选。
@@ -1947,6 +1993,19 @@ rfc-rag-agent/
       static/
         app.js
         styles.css
+  frontend/
+    src/
+      components/states/
+      features/
+        auth/
+        chat/
+        library/
+        evidence/
+        trace/
+        quality/
+    e2e/
+    playwright.config.ts
+    vitest.config.ts
   data/
     evaluation/
     imports/
