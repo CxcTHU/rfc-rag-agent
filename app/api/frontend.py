@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from fastapi import Body
 from fastapi import HTTPException
 from fastapi import Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 
 router = APIRouter(tags=["frontend"])
@@ -38,26 +38,61 @@ VALID_REVIEW_DECISIONS = {
 }
 
 
+RESERVED_ROOT_FALLBACK_PREFIXES = {
+    "agent",
+    "assets",
+    "auth",
+    "chat",
+    "conversations",
+    "documents",
+    "feedback",
+    "health",
+    "quality-report",
+    "quality-review",
+    "search",
+    "sources",
+    "static",
+}
+
+
+@router.get("/old", include_in_schema=False)
+@router.get("/old/", include_in_schema=False)
+def legacy_frontend_index() -> FileResponse:
+    return FileResponse(INDEX_PATH)
+
+
+@router.get("/legacy", include_in_schema=False)
+@router.get("/legacy/", include_in_schema=False)
+def legacy_frontend_redirect() -> RedirectResponse:
+    return RedirectResponse(url="/old", status_code=307)
+
+
 @router.get("/", include_in_schema=False)
-@router.get("/app-v2", include_in_schema=False)
-@router.get("/app-v2/", include_in_schema=False)
-def frontend_index() -> FileResponse:
+def react_frontend_index() -> FileResponse:
     if not REACT_INDEX_PATH.exists():
         raise HTTPException(status_code=503, detail="React frontend has not been built")
     return FileResponse(REACT_INDEX_PATH)
 
 
-@router.get("/legacy", include_in_schema=False)
-@router.get("/legacy/", include_in_schema=False)
-def legacy_frontend_index() -> FileResponse:
-    return FileResponse(INDEX_PATH)
-
-
-@router.get("/app-v2/favicon.svg", include_in_schema=False)
+@router.get("/favicon.svg", include_in_schema=False)
 def react_frontend_favicon() -> Response:
     if not REACT_FAVICON_PATH.exists():
         return Response(status_code=204)
     return FileResponse(REACT_FAVICON_PATH)
+
+
+@router.get("/app-v2", include_in_schema=False)
+@router.get("/app-v2/", include_in_schema=False)
+def react_app_v2_redirect() -> RedirectResponse:
+    return RedirectResponse(url="/", status_code=307)
+
+
+@router.get("/app-v2/{path:path}", include_in_schema=False)
+def react_app_v2_child_redirect(path: str) -> RedirectResponse:
+    target = "/" + path.strip("/")
+    if target == "/":
+        target = "/ask"
+    return RedirectResponse(url=target, status_code=307)
 
 
 @router.get("/quality-report", include_in_schema=False)
@@ -316,3 +351,13 @@ def _upsert_human_review(path: Path, review_row: dict[str, str]) -> None:
 @router.get("/favicon.ico", include_in_schema=False)
 def favicon() -> Response:
     return Response(status_code=204)
+
+
+@router.get("/{path:path}", include_in_schema=False)
+def react_frontend_fallback(path: str) -> FileResponse:
+    """Return the React shell for browser-owned root routes."""
+
+    first_segment = path.split("/", 1)[0]
+    if first_segment in RESERVED_ROOT_FALLBACK_PREFIXES or "." in first_segment:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return react_frontend_index()

@@ -10,7 +10,7 @@ from app.main import create_app
 def test_frontend_index_is_served() -> None:
     client = TestClient(create_app())
 
-    response = client.get("/legacy")
+    response = client.get("/old")
 
     assert response.status_code == 200
     assert "RFC-RAG-Agent" in response.text
@@ -63,54 +63,58 @@ def test_frontend_static_assets_are_served() -> None:
     assert "overflow-x: hidden" in styles.text
 
 
-def test_react_frontend_is_served_as_default_and_app_v2() -> None:
+def test_react_root_and_old_routes_are_served() -> None:
     client = TestClient(create_app())
 
-    response = client.get("/")
-    app_v2_response = client.get("/app-v2")
-    legacy_response = client.get("/legacy")
+    root_response = client.get("/")
+    old_response = client.get("/old")
 
-    assert response.status_code == 200
-    assert 'id="root"' in response.text
-    assert "/app-v2/assets/" in response.text
-    assert app_v2_response.status_code == 200
-    assert app_v2_response.text == response.text
-    assert legacy_response.status_code == 200
-    assert "data-workspace-band" in legacy_response.text
+    assert root_response.status_code == 200
+    assert 'id="root"' in root_response.text
+    assert "/assets/" in root_response.text
+    assert old_response.status_code == 200
+    assert "data-workspace-band" in old_response.text
+    assert "/static/app.js" in old_response.text
 
-    asset_path = re.search(r'src="([^"]+/assets/[^"]+\.js)"', response.text)
+    legacy_redirect = client.get("/legacy", follow_redirects=False)
+    assert legacy_redirect.status_code == 307
+    assert legacy_redirect.headers["location"] == "/old"
+
+    app_v2_redirect = client.get("/app-v2/library", follow_redirects=False)
+    assert app_v2_redirect.status_code == 307
+    assert app_v2_redirect.headers["location"] == "/library"
+
+    for route in ("ask", "library", "evidence", "trace", "quality", "unknown-route"):
+        route_response = client.get(f"/{route}")
+        assert route_response.status_code == 200
+        assert route_response.text == root_response.text
+
+    asset_path = re.search(r'src="([^"]*/assets/[^"]+\.js)"', root_response.text)
     assert asset_path is not None
     asset_response = client.get(asset_path.group(1))
     assert asset_response.status_code == 200
     assert "javascript" in asset_response.headers["content-type"]
-    assert "Agent stream failed" in asset_response.text
-    assert "Workflow" in asset_response.text
-    assert "Sources" in asset_response.text
-    assert "rfc-rag-agent.activeConversationId" in asset_response.text
-    assert "rfc-rag-agent.activeView" in asset_response.text
-    assert "rfc-rag-agent.chatModel" in asset_response.text
-    assert "deepseek-v4-flash" in asset_response.text
-    assert "deepseek-v4-pro" in asset_response.text
-    assert "chat_model" in asset_response.text
-    assert "复用本会话证据" in asset_response.text
-    assert "已显示本地会话" in asset_response.text
-    assert "已刷新会话" in asset_response.text
+    css_path = re.search(r'href="([^"]+\.css)"', root_response.text)
+    assert css_path is not None
+    css_response = client.get(css_path.group(1))
+    assert css_response.status_code == 200
+    assert "text/css" in css_response.headers["content-type"]
+
+    missing_asset = client.get("/assets/does-not-exist.js")
+    assert missing_asset.status_code == 404
+    assert 'id="root"' not in missing_asset.text
 
 
 def test_frontend_auth_refresh_uses_checking_state_before_signed_out() -> None:
     client = TestClient(create_app())
 
     response = client.get("/")
-    asset_path = re.search(r'src="([^"]+/assets/[^"]+\.js)"', response.text)
+    asset_path = re.search(r'src="([^"]*/assets/[^"]+\.js)"', response.text)
     assert asset_path is not None
-    react_script = client.get(asset_path.group(1)).text
     legacy_script = client.get("/static/app.js").text.replace("\r\n", "\n")
     legacy_styles = client.get("/static/styles.css").text.replace("\r\n", "\n")
-    legacy_index = client.get("/legacy").text
+    legacy_index = client.get("/old").text
 
-    assert "rfc-rag-agent.activeConversationId" in react_script
-    assert "rfc-rag-agent.activeView" in react_script
-    assert "Agent stream failed" in react_script
     react_css_path = re.search(r'href="([^"]+\.css)"', response.text)
     assert react_css_path is not None
     react_styles = client.get(react_css_path.group(1)).text
@@ -118,29 +122,23 @@ def test_frontend_auth_refresh_uses_checking_state_before_signed_out() -> None:
     assert ".conversation-list" in react_styles
     source_styles = Path("frontend/src/index.css").read_text(encoding="utf-8")
     source_app = Path("frontend/src/App.tsx").read_text(encoding="utf-8")
-    assert "复用本会话证据" in source_app
-    assert "isSemanticEvidenceCacheStep" in source_app
-    assert "evidenceCountSummary" in source_app
-    assert "pendingAnswerPlaceholder" in source_app
-    assert "thinkingLiveTitle" in source_app
-    assert "answerSourcesSummaryStep" in source_app
-    assert "isOperationalSkipStep" in source_app
-    assert "agentStageTimeline" in source_app
-    assert "planner_latency_ms" in source_app
-    assert "hyde_latency_ms" in source_app
-    assert "rerank_evidence" in source_app
-    assert "answer_generation" in source_app
-    assert "semantic_evidence_cache" in source_app
-    assert "traceNumber" in source_app
-    assert "if (elapsed < 1000) return '<1秒'" in source_app
-    assert "已使用 ${sourceCount} 个引用来源生成回答。" in source_app
-    assert "ThinkingActivityRail" not in source_app
-    assert "thinkingActivityPhases" not in source_app
-    assert "composer-input" in source_app
-    assert "已返回 ${returned ?? 0}" not in source_app
-    assert "正在思考..." not in source_app
-    assert "hint: \"快\"" not in source_app
-    assert "hint: \"强\"" not in source_app
+    source_main = Path("frontend/src/main.tsx").read_text(encoding="utf-8")
+    source_workspace = Path("frontend/src/features/chat/ChatWorkspaceProvider.tsx").read_text(encoding="utf-8")
+    source_stream = Path("frontend/src/features/chat/useAgentStream.ts").read_text(encoding="utf-8")
+    source_workflow = Path("frontend/src/features/trace/workflow.ts").read_text(encoding="utf-8")
+    assert "BrowserRouter" in source_main
+    assert 'basename="/app-v2"' not in source_main
+    assert "QueryClientProvider" in source_main
+    assert "activeView" not in source_app
+    assert "apiJson" not in source_app
+    assert "selectedAssistantMessageId" in source_workspace
+    assert "rfc-rag-agent.activeConversationId" in source_workspace
+    assert "createConversation" in source_workspace
+    assert "event.type === 'metadata'" in source_stream
+    assert "Stream ended without metadata" in source_stream
+    assert "event.type === 'heartbeat'" in source_stream
+    assert "agentStageTimeline" not in source_workflow
+    assert "latency_trace" in source_workflow
     assert "overflow-y: auto" in source_styles
     assert "overflow-x: hidden" in source_styles
     assert ".composer:focus-within" in source_styles

@@ -123,7 +123,22 @@ def request_json(base_url: str, case: E2ECase, timeout_seconds: int) -> tuple[in
         with urlopen(req, timeout=timeout_seconds) as response:
             raw = response.read()
             elapsed_ms = (time.perf_counter() - started) * 1000.0
-            return response.status, parse_body(raw, response.headers.get("content-type", "")), elapsed_ms, None
+            parsed = parse_body(raw, response.headers.get("content-type", ""))
+            status = response.status
+            if case.case_id == "frontend_react_entry":
+                legacy_req = Request(base_url.rstrip("/") + "/old", method="GET", headers=headers)
+                with urlopen(legacy_req, timeout=timeout_seconds) as legacy_response:
+                    legacy_raw = legacy_response.read()
+                    legacy_parsed = parse_body(
+                        legacy_raw,
+                        legacy_response.headers.get("content-type", ""),
+                    )
+                    if isinstance(parsed, dict) and isinstance(legacy_parsed, dict):
+                        parsed["_legacy_text"] = legacy_parsed.get("_text", "")
+                    if legacy_response.status != 200:
+                        status = legacy_response.status
+                elapsed_ms = (time.perf_counter() - started) * 1000.0
+            return status, parsed, elapsed_ms, None
     except HTTPError as exc:
         raw = exc.read()
         elapsed_ms = (time.perf_counter() - started) * 1000.0
@@ -184,7 +199,13 @@ def evaluate_case(case: E2ECase, status: int, body: Any, error_type: str | None)
         return ok, "health status ok" if ok else "health status is not ok", checks
     if case.case_id == "frontend_react_entry":
         text = body.get("_text", "") if isinstance(body, dict) else ""
-        ok = 'id="root"' in text and "/app-v2/assets/" in text
+        legacy_text = body.get("_legacy_text", "") if isinstance(body, dict) else ""
+        ok = (
+            'id="root"' in text
+            and "/assets/" in text
+            and "data-workspace-band" in legacy_text
+            and "/static/app.js" in legacy_text
+        )
         return ok, "frontend shell served" if ok else "frontend shell markers missing", checks
     if case.case_id == "input_limit_guard":
         return True, "schema rejected oversized input", checks

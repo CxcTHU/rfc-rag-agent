@@ -41,7 +41,7 @@ jobs:
         run: python -m pytest -q
 
   frontend:
-    name: frontend lint and build
+    name: frontend lint, unit, build, and e2e
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -62,9 +62,35 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: Run frontend unit tests
+        working-directory: frontend
+        run: npm run test:unit
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+      - name: Verify tracked frontend dist is current
+        working-directory: frontend
+        run: |
+          git diff --exit-code -- dist
+          test -z "$(git ls-files --others --exclude-standard dist)"
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright smoke tests
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-playwright-report
+          path: frontend/playwright-report
+          if-no-files-found: ignore
 
   postgres-migrations:
     name: postgres alembic migration smoke

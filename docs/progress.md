@@ -1,4 +1,27 @@
-# 项目进度
+# Project Progress
+
+## Latest Status: 2026-07-11 Phase 62 React Frontend Engineering (manual acceptance PASS)
+
+Branch: codex/phase-62-react-frontend-engineering. User manual verification passed and the user authorized local docs/Obsidian sync, GitHub merge, and phase-62-complete tag.
+
+Phase 62 turns the React workbench into a maintainable and testable frontend project. React Router is served at / with /ask, /library, /evidence, /trace, and /quality; the preserved legacy static workbench is served at /old, and /legacy redirects to /old. Missing /assets/* files keep returning 404.
+
+Final manual-review follow-ups: the local new-conversation row no longer shows a draft label, Agent thinking/processed time is rounded to integer seconds, rendered answer tables no longer show Table N columns x M rows, and source-title ???????? was confirmed to originate from stored document metadata so the frontend does not mask it.
+
+Final local validation recorded for closeout:
+
+```text
+npm --prefix frontend run lint                  passed
+npm --prefix frontend run test:unit             7 files / 27 tests passed
+npm --prefix frontend run build                 passed
+python -m pytest tests/test_frontend_app.py -q  12 passed
+git diff --check                                passed
+```
+
+Submission boundaries still exclude .env, .env.prod, Obsidian, local Playwright/output/PNG artifacts, secrets, provider raw responses, hidden reasoning, complete chunks, restricted full text, and raw uploaded images.
+
+---
+
 
 ## Latest Status: 2026-07-10 Phase 61 P0/P1 Internal Pilot Hardening
 

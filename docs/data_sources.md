@@ -1,5 +1,19 @@
 # 数据来源登记
 
+## Phase 62 Frontend Engineering Data Boundary
+
+Phase 62 不新增外部语料、爬虫、PDF、来源登记记录、模型权重、数据库表或后端内容源。Library 继续只读取既有 `/documents`；没有新增 `/sources` 登记页签。
+
+TanStack Query 仅在浏览器内存管理当前用户、会话/消息、文档列表以及当前前端会话内的 Judge 结果。它不是第二内容库，不把回答作为跨会话语义缓存，也不改变现有 `sources -> documents -> chunks` 的检索数据链。
+
+消息级 Sources 完全来自该 assistant message 已有的 `AgentQueryResponse` / conversation metadata。前端只做 citation-to-source 映射和选择高亮，不复制、编造或回退其他消息的来源。无来源回答明确显示空态。
+
+Playwright mock server 只使用合成数据：假用户、假 token、短问题、短回答、假文档、短脱敏 source 和 mock Judge 分数。测试 trace、截图、视频和 HTML report 只写入 `frontend/test-results` / `frontend/playwright-report`，并由 `frontend/.gitignore` 排除。根目录既存 `.playwright-cli/`、`output/` 和 `v3-*.png` 不属于 Phase 62 提交资产，实施中未删除或覆盖。
+
+`workflow_steps`、tool lifecycle、heartbeat 与 `latency_trace` 继续只允许后端安全摘要。前端及测试不得保存或显示 provider raw response、`reasoning_content`、hidden reasoning、完整 chunk、受限全文、真实 Bearer/API key、私有日志或原始上传图片。
+
+历史网页采集章节中的“不使用 Selenium/Playwright”只约束 corpus crawler；Phase 62 Playwright 仅测试本地合成应用，不采集外部网页或形成新资料源。
+
 ## Phase 61 Data Access And Export Boundary
 
 Phase 61 adds no external corpus, crawler, model weights, or public data feed. It tightens access around existing data.
