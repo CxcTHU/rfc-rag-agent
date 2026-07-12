@@ -1,0 +1,13 @@
+case_id,category,query,history,expected_tool,expected_graph_requirement,expected_required_channel,expected_degradation,minimum_citations
+gap-text-01,ordinary_text,堆石混凝土的优势有哪些？,,hybrid_search_knowledge,disabled,,none,1
+gap-rel-01,required_graph,GB/T 50081 与抗压强度试验是什么关系？,,hybrid_search_knowledge,required,graph,none,1
+gap-rel-negative-01,negative_relationship,不要分析堆石混凝土的上下游关系，只说明定义。,,hybrid_search_knowledge,disabled,,none,1
+gap-figure-01,explicit_figure,请给我堆石混凝土施工图片。,,search_figures,disabled,figure,none,1
+gap-table-01,explicit_table,请列出堆石混凝土配合比表格。,,search_tables,disabled,table,none,1
+gap-figure-history-01,current_turn_override,现在请给我堆石混凝土施工图片。,上一轮：不要图片，只用文字。,search_figures,disabled,figure,none,1
+gap-table-history-01,current_turn_negative,这次不要表格，请文字说明堆石混凝土。,上一轮：请给出配合比表格。,hybrid_search_knowledge,disabled,,none,1
+gap-required-missing-01,required_evidence_missing,请给出堆石混凝土施工图片。,,search_figures,disabled,figure,evidence_insufficient,0
+gap-rerank-primary-01,primary_reranker_fault,堆石混凝土的优势有哪些？,,hybrid_search_knowledge,disabled,,fallback_reranker,1
+gap-rerank-dual-01,dual_reranker_fault,堆石混凝土的优势有哪些？,,hybrid_search_knowledge,disabled,,fusion_fail_soft,1
+gap-pgvector-fault-01,pgvector_fault,堆石混凝土的优势有哪些？,,hybrid_search_knowledge,disabled,,faiss_fail_open,1
+gap-graph-fault-01,graph_fault,GB/T 50081 与抗压强度试验是什么关系？,,hybrid_search_knowledge,required,graph,graph_fail_open,1

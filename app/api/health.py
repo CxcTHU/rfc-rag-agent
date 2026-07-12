@@ -1,3 +1,4 @@
+from hashlib import sha256
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
@@ -16,6 +17,7 @@ from app.schemas.health import (
     HealthResponse,
     ProviderConfigHealth,
     ProviderItemHealth,
+    RetrievalContractHealthResponse,
 )
 from app.services.retrieval.faiss_index import read_metadata
 
@@ -30,6 +32,51 @@ def health_check() -> HealthResponse:
         service=settings.app_name,
         environment=settings.app_env,
     )
+
+
+@router.get("/health/retrieval-contract", response_model=RetrievalContractHealthResponse)
+def retrieval_contract_health(
+    _admin=Depends(require_admin_in_production),
+    db: Session = Depends(get_db),
+) -> RetrievalContractHealthResponse:
+    """Expose only safe configuration and corpus identity for frozen E2E A/B runs."""
+
+    settings = get_settings()
+    document_count = db.query(Document).count()
+    chunk_count = db.query(Chunk).count()
+    corpus_fingerprint = retrieval_corpus_fingerprint(db)
+    return RetrievalContractHealthResponse(
+        status="ok",
+        service=settings.app_name,
+        environment=settings.app_env,
+        corpus_fingerprint=corpus_fingerprint,
+        document_count=document_count,
+        chunk_count=chunk_count,
+        retrieval_runtime_enabled=settings.retrieval_runtime_enabled,
+        retrieval_runtime_default_enabled=settings.retrieval_runtime_default_enabled,
+        pgvector_search_enabled=settings.pgvector_search_enabled,
+        vector_backend_policy=settings.vector_backend_policy,
+    )
+
+
+def retrieval_corpus_fingerprint(db: Session) -> str:
+    """Hash only stable metadata; never expose document or chunk content."""
+
+    digest = sha256()
+    for document in db.query(Document.id, Document.content_hash).order_by(Document.id):
+        digest.update(f"document:{document.id}:{document.content_hash}\\n".encode("utf-8"))
+    for chunk in db.query(
+        Chunk.id,
+        Chunk.document_id,
+        Chunk.chunk_index,
+        Chunk.chunk_type,
+    ).order_by(Chunk.id):
+        digest.update(
+            f"chunk:{chunk.id}:{chunk.document_id}:{chunk.chunk_index}:{chunk.chunk_type}\\n".encode(
+                "utf-8"
+            )
+        )
+    return digest.hexdigest()
 
 
 @router.get("/health/details", response_model=HealthDetailsResponse)

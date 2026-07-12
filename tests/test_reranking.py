@@ -1,5 +1,6 @@
 import io
 import json
+import http.client
 import urllib.error
 
 import pytest
@@ -120,6 +121,35 @@ def test_reranker_retries_transient_ssl_error(monkeypatch) -> None:
     )
 
     results = provider.rerank("filling capacity", ["first", "second"], top_k=1)
+
+    assert results[0].index == 0
+    assert attempts["count"] == 2
+
+
+def test_reranker_retries_remote_disconnect(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def disconnected_then_success(request, *, timeout, provider_name, model_name):
+        del request, timeout, provider_name, model_name
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise http.client.RemoteDisconnected(
+                "Remote end closed connection without response"
+            )
+        return {"results": [{"index": 0, "relevance_score": 0.8}]}
+
+    monkeypatch.setattr(
+        "app.services.retrieval.reranking.request_json_without_proxy",
+        disconnected_then_success,
+    )
+    provider = OpenAICompatibleReRankingProvider(
+        model_name="GLM-Rerank",
+        api_key="test-key",
+        base_url="https://llmapi.paratera.com/v1/p002",
+        retry_backoff_seconds=0,
+    )
+
+    results = provider.rerank("rock mechanics", ["first", "second"], top_k=1)
 
     assert results[0].index == 0
     assert attempts["count"] == 2

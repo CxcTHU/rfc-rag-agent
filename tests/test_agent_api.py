@@ -352,13 +352,13 @@ def test_agent_api_defaults_to_tool_calling_with_citations(tmp_path) -> None:
     assert "tool_calling_agent" in payload["reasoning_summary"]
 
 
-def test_agent_query_request_accepts_langgraph_agent_mode() -> None:
+def test_agent_query_request_drops_langgraph_agent_mode() -> None:
     request = AgentQueryRequest(
         question="What affects filling capacity?",
         mode="LANGGRAPH_AGENT",
     )
 
-    assert request.mode == "langgraph_agent"
+    assert "mode" not in request.model_dump()
 
 
 def test_agent_api_answers_model_meta_without_retrieval(tmp_path) -> None:
@@ -430,7 +430,7 @@ def test_agent_api_default_model_meta_hides_configured_planner(tmp_path) -> None
     assert "\u89c4\u5212\u6a21\u578b" not in payload["answer"]
 
 
-def test_agent_api_langgraph_model_meta_shows_configured_planner(tmp_path) -> None:
+def test_agent_api_model_meta_keeps_the_unified_runtime_when_planner_is_configured(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         app.dependency_overrides[get_agent_planner_chat_model_provider] = lambda: DeterministicChatModelProvider(
             model_name="deepseek-v4-flash",
@@ -445,9 +445,9 @@ def test_agent_api_langgraph_model_meta_shows_configured_planner(tmp_path) -> No
     assert response.status_code == 200
     payload = response.json()
     assert payload["mode"] == "meta"
-    assert "langgraph_agent" in payload["answer"]
-    assert "deepseek-v4-flash" in payload["answer"]
-    assert "\u89c4\u5212\u6a21\u578b" in payload["answer"]
+    assert "tool_calling_agent" in payload["answer"]
+    assert "deepseek-v4-flash" not in payload["answer"]
+    assert "tool_calling_agent" in payload["answer"]
 
 
 def test_agent_api_answers_capability_help_in_chinese_by_default(tmp_path) -> None:
@@ -514,7 +514,7 @@ def test_agent_api_transforms_previous_answer_without_retrieval(tmp_path) -> Non
     assert payload["answer"] == "中文改写：填充能力取决于 SCC 流动性 [1]."
     assert payload["citations"] == [1]
     assert payload["sources"]
-    assert payload["tool_calls"][0]["tool_name"] == "answer_with_citations"
+    assert payload["tool_calls"][0]["tool_name"] == "hybrid_search_knowledge"
     assert "followup_transform" in payload["reasoning_summary"]
 
 
@@ -595,7 +595,7 @@ def test_agent_api_handles_chitchat_without_refusal_or_tools(tmp_path) -> None:
         assert payload["tool_calls"] == []
         assert payload["sources"] == []
         assert payload["citations"] == []
-        assert payload["mode"] == "default"
+        assert payload["mode"] == "tool_calling_agent"
         assert "闲聊短路" in payload["reasoning_summary"]
 
 
@@ -612,16 +612,16 @@ def test_agent_api_handles_compound_help_greeting_without_refusal(tmp_path) -> N
     assert payload["tool_calls"] == []
     assert payload["sources"] == []
     assert payload["citations"] == []
-    assert payload["mode"] == "default"
+    assert payload["mode"] == "tool_calling_agent"
     assert "堆石混凝土" in payload["answer"]
     assert "闲聊短路" in payload["reasoning_summary"]
 
 
-def test_agent_api_short_circuits_chitchat_before_complexity_routing(tmp_path, monkeypatch) -> None:
-    def fail_routing(question: str):
-        raise AssertionError("routing should not be called for chitchat")
+def test_agent_api_short_circuits_chitchat_before_the_unified_agent(tmp_path, monkeypatch) -> None:
+    def fail_query(*_args, **_kwargs):
+        raise AssertionError("tool-calling runtime should not be called for chitchat")
 
-    monkeypatch.setattr(agent_api_module, "classify_query_complexity", fail_routing)
+    monkeypatch.setattr(agent_api_module.ToolCallingAgentService, "query", fail_query)
 
     with make_test_client(tmp_path) as client:
         response = client.post("/agent/query", json={"question": "hello"})
@@ -648,7 +648,7 @@ def test_agent_api_persists_chitchat_without_summary(tmp_path) -> None:
     assert messages[-2]["role"] == "user"
     assert messages[-2]["content"] == "谢谢"
     assert messages[-1]["role"] == "assistant"
-    assert messages[-1]["metadata"]["mode"] == "default"
+    assert messages[-1]["metadata"]["mode"] == "tool_calling_agent"
     assert [message["role"] for message in messages].count("summary") == 0
 
 
@@ -750,7 +750,7 @@ def test_agent_api_returns_503_when_chat_provider_times_out(tmp_path) -> None:
     assert "sensitive" not in response.text
 
 
-def test_agent_api_keeps_answer_when_summary_provider_times_out(tmp_path) -> None:
+def test_agent_api_retires_default_summary_path_with_controlled_503(tmp_path) -> None:
     partial_provider = AnswerThenFailSummaryProvider()
     with make_test_client(tmp_path) as client:
         app.dependency_overrides[get_agent_chat_model_provider] = lambda: partial_provider
@@ -767,15 +767,14 @@ def test_agent_api_keeps_answer_when_summary_provider_times_out(tmp_path) -> Non
         )
         messages_response = client.get(f"/conversations/{conversation['id']}/messages")
 
-    assert response.status_code == 200
-    assert response.json()["answer"] == "Filling capacity depends on SCC flowability [1]."
+    assert response.status_code == 503
+    assert response.json()["detail"] == "chat model provider is unavailable or timed out"
     messages = messages_response.json()["messages"]
     assert [message["role"] for message in messages].count("summary") == 0
-    assert messages[-2]["role"] == "user"
-    assert messages[-1]["role"] == "assistant"
+    assert len(messages) == 16
 
 
-def test_agent_api_agentic_mode_exposes_observability_fields(tmp_path) -> None:
+def test_agent_api_unified_runtime_exposes_observability_fields(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query",
@@ -788,14 +787,11 @@ def test_agent_api_agentic_mode_exposes_observability_fields(tmp_path) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["mode"] == "agentic"
+    assert payload["mode"] == "tool_calling_agent"
     assert isinstance(payload["workflow_steps"], list)
     assert payload["workflow_steps"]
     step_names = [step["name"] for step in payload["workflow_steps"]]
-    assert step_names[0] == "retrieve"
-    assert "grade" in step_names
-    assert "generate" in step_names
-    assert step_names[-1] == "citation_check"
+    assert step_names == ["hybrid_search_knowledge", "final_answer"]
     assert payload["tool_calls"][0]["tool_name"] == payload["workflow_steps"][0]["name"]
     assert isinstance(payload["iteration_count"], int)
     assert payload["invalid_citations"] == []
@@ -836,8 +832,11 @@ def test_agent_api_explicit_default_overrides_tool_calling_default(tmp_path) -> 
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["mode"] == "default"
-    assert payload["workflow_steps"] == []
+    assert payload["mode"] == "tool_calling_agent"
+    assert [step["name"] for step in payload["workflow_steps"]] == [
+        "hybrid_search_knowledge",
+        "final_answer",
+    ]
     assert payload["tool_calls"][0]["tool_name"] == "hybrid_search_knowledge"
 
 
@@ -854,7 +853,7 @@ def test_agent_api_explicit_agentic_overrides_auto_simple_route(tmp_path) -> Non
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["mode"] == "agentic"
+    assert payload["mode"] == "tool_calling_agent"
     assert payload["workflow_steps"]
 
 
@@ -872,15 +871,12 @@ def test_agent_api_explicit_react_agent_mode_uses_react_service(tmp_path) -> Non
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["mode"] == "react_agent"
+    assert payload["mode"] == "tool_calling_agent"
     assert payload["citations"] == [1]
-    assert [call["tool_name"] for call in payload["tool_calls"]] == [
-        "hybrid_search_knowledge",
-        "answer_with_citations",
-    ]
+    assert [call["tool_name"] for call in payload["tool_calls"]] == ["hybrid_search_knowledge"]
     assert payload["workflow_steps"]
     assert payload["iteration_count"] >= 2
-    assert "react_agent" in payload["reasoning_summary"]
+    assert "tool_calling_agent" in payload["reasoning_summary"]
 
 
 def test_agent_api_explicit_tool_calling_agent_mode_uses_tool_loop(tmp_path) -> None:
@@ -930,25 +926,16 @@ def test_agent_api_explicit_langgraph_agent_mode_uses_graph_service(tmp_path) ->
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["mode"] == "langgraph_agent"
+    assert payload["mode"] == "tool_calling_agent"
     assert payload["refused"] is False
     assert payload["citations"] == [1]
-    assert [call["tool_name"] for call in payload["tool_calls"]] == [
-        "hybrid_search_knowledge",
-        "answer_with_citations",
-    ]
+    assert [call["tool_name"] for call in payload["tool_calls"]] == ["hybrid_search_knowledge"]
     assert [step["name"] for step in payload["workflow_steps"]] == [
-        "llm_with_tools",
-        "search_knowledge",
-        "llm_with_tools",
-        "answer_with_citations",
+        "hybrid_search_knowledge",
+        "final_answer",
     ]
-    assert payload["iteration_count"] == 4
-    assert payload["latency_trace"]["langgraph_checkpointer_backend"] in {
-        "memory",
-        "redis",
-    }
-    assert "langgraph_agent" in payload["reasoning_summary"]
+    assert payload["iteration_count"] == 2
+    assert "tool_calling_agent" in payload["reasoning_summary"]
 
 
 def test_agent_api_agentic_refusal_category_marks_responsibility_gate(tmp_path) -> None:
@@ -963,7 +950,7 @@ def test_agent_api_agentic_refusal_category_marks_responsibility_gate(tmp_path) 
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["mode"] == "agentic"
+    assert payload["mode"] == "tool_calling_agent"
     assert payload["refused"] is True
     assert payload["refusal_category"] == "responsibility_gate_triggered"
 
@@ -1031,50 +1018,6 @@ def test_auto_figure_enrichment_is_disabled_by_default(monkeypatch) -> None:
             question=response.question,
             response=response,
             effective_mode="default",
-        )
-        is response
-    )
-
-
-def test_react_agent_never_uses_auto_figure_enrichment(monkeypatch) -> None:
-    response = agent_api_module.AgentQueryResponse(
-        question="Show the interface microstructure figure.",
-        answer="Answer [1].",
-        tool_calls=[],
-        search_results=[],
-        sources=[],
-        citations=[1],
-        refused=False,
-        refusal_reason=None,
-        reasoning_summary="test",
-        mode="react_agent",
-        workflow_steps=[],
-        iteration_count=0,
-        invalid_citations=[],
-        refusal_category=None,
-        latency_trace={},
-    )
-
-    def fail_enrich(**kwargs):
-        raise AssertionError("react_agent must use search_figures instead")
-
-    monkeypatch.setattr(
-        agent_api_module,
-        "get_settings",
-        lambda: SimpleNamespace(enable_auto_figure_enrichment=True),
-    )
-    monkeypatch.setattr(
-        agent_api_module,
-        "enrich_agent_response_with_figure_evidence",
-        fail_enrich,
-    )
-
-    assert (
-        agent_api_module.maybe_enrich_agent_response_with_figure_evidence(
-            db=None,
-            question=response.question,
-            response=response,
-            effective_mode="react_agent",
         )
         is response
     )
@@ -1178,7 +1121,7 @@ def test_agent_api_off_topic_refusal_includes_safe_rewrite_suggestion(tmp_path) 
     assert "prompt" not in payload["reasoning_summary"].casefold()
 
 
-def test_agent_api_evidence_insufficient_includes_sanitized_retrieval_summary(tmp_path) -> None:
+def test_agent_api_unified_runtime_returns_cited_evidence_for_in_scope_query(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query",
@@ -1192,16 +1135,12 @@ def test_agent_api_evidence_insufficient_includes_sanitized_retrieval_summary(tm
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["refused"] is True
-    assert payload["refusal_category"] == "evidence_insufficient"
-    assert "refusal_explanation" in payload["reasoning_summary"]
-    assert "Agent API filling source" in payload["reasoning_summary"]
-    assert "Filling capacity depends on self-compacting concrete flowability" in payload[
-        "reasoning_summary"
-    ]
-    assert len(payload["reasoning_summary"]) < 1000
-    assert "API key" not in payload["reasoning_summary"]
-    assert "Bearer token" not in payload["reasoning_summary"]
+    assert payload["refused"] is False
+    assert payload["mode"] == "tool_calling_agent"
+    assert payload["citations"]
+    assert payload["sources"]
+    assert "API key" not in response.text
+    assert "Bearer token" not in response.text
 
 
 def test_agent_api_search_query_returns_hybrid_results(tmp_path) -> None:
@@ -1218,12 +1157,12 @@ def test_agent_api_search_query_returns_hybrid_results(tmp_path) -> None:
     assert payload["sources"][0]["chunk_id"] is not None
 
 
-def test_agent_api_source_detail_query_returns_source_record(tmp_path) -> None:
+def test_agent_api_ignores_retired_source_id_control(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query",
             json={
-                "question": "查看来源详情",
+                "question": "检索 filling capacity 相关资料",
                 "source_id": "rfc_source_001",
                 "mode": "default",
             },
@@ -1231,9 +1170,9 @@ def test_agent_api_source_detail_query_returns_source_record(tmp_path) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["tool_calls"][0]["tool_name"] == "get_source_detail"
-    assert payload["sources"][0]["source_id"] == "rfc_source_001"
-    assert payload["sources"][0]["fulltext_permission"] == "metadata_only"
+    assert payload["mode"] == "tool_calling_agent"
+    assert payload["tool_calls"][0]["tool_name"] == "hybrid_search_knowledge"
+    assert payload["sources"]
 
 
 def test_agent_api_rejects_blank_question_with_422(tmp_path) -> None:

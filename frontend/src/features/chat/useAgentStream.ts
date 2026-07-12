@@ -104,9 +104,7 @@ export function useAgentStream(callbacks: AgentStreamCallbacks) {
         body: JSON.stringify({
           question: request.question,
           conversation_id: request.conversationId,
-          top_k: 8,
           max_tool_calls: 5,
-          mode: request.imagePath ? 'react_agent' : 'tool_calling_agent',
           image_path: request.imagePath || null,
           chat_model: request.chatModel || null,
         }),

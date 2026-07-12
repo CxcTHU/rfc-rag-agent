@@ -2161,3 +2161,16 @@ Phase 55 adds no new external source corpus, crawler, PDF download, restricted f
 - Sanitized quality report summary CSV used by `/quality-report/data.json`.
 
 The synced cloud baseline is operational evidence, not a new data-source category. No API key, Bearer token, Authorization header, provider raw response, hidden reasoning, full answer text, full chunk body, restricted full text, source PDF, or private BGE service log is added to Git, docs, tests, public CSVs, or Obsidian.
+## Phase 63 Retrieval Runtime Data Boundary
+
+Phase 63 adds no external corpus, crawler, PDF, community summary, global graph
+report, DRIFT index, or user profile. It reuses the existing local knowledge
+graph and chunk database. The graph file fingerprint is a short digest only;
+graph content is not copied into cache identities or diagnostics.
+
+Committed evaluation data contains case IDs, categories, safe test queries,
+expected routes, and expected evidence-type labels. Dry-run and explicit
+execution outputs are restricted to tool names, plan fields, chunk IDs, counts,
+timings, booleans, and error categories. They exclude raw answers, raw API
+responses, provider payloads, complete evidence/chunks, hidden reasoning,
+credentials, restricted full text, and source document bytes.

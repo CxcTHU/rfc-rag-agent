@@ -23,6 +23,7 @@ LATENCY_FIELDS = (
     "tool_latency_ms",
     "graph_search_latency_ms",
     "keyword_search_latency_ms",
+    "bm25_search_latency_ms",
     "table_channel_latency_ms",
     "figure_channel_latency_ms",
     "provider_http_latency_ms",
@@ -43,6 +44,8 @@ class LatencyTrace:
             self.values.setdefault(field_name, 0.0)
         self.values.setdefault("time_to_first_token_ms", None)
         self.values.setdefault("time_to_final_ms", 0.0)
+        self.values.setdefault("streaming_degraded", False)
+        self.values.setdefault("streamed_token_count", 0)
         self.values.setdefault("iteration_count", 0)
         self.values.setdefault("tool_call_count", 0)
         self.values.setdefault("query_embedding_cache_hits", 0)
@@ -81,6 +84,13 @@ class LatencyTrace:
         self.values.setdefault("hyde_reason", "not_checked")
         self.values.setdefault("hyde_model", "")
         self.values.setdefault("vector_search_backend", "not_run")
+        self.values.setdefault("lexical_search_backend", "not_run")
+        self.values.setdefault("vector_search_degraded", False)
+        self.values.setdefault("vector_search_fallback_reason", "")
+        self.values.setdefault("vector_backend_policy", "prefer_pgvector")
+        self.values.setdefault("reranking_degraded", False)
+        self.values.setdefault("reranking_degradation_level", "")
+        self.values.setdefault("reranking_error_type", "")
         self.values.setdefault("planner_model", "deterministic")
         self.values.setdefault("retrieval_strategy", "none")
         self.values.setdefault("graph_search_available", False)
@@ -93,6 +103,25 @@ class LatencyTrace:
         self.values.setdefault("retrieval_eligible_channels", [])
         self.values.setdefault("retrieval_channel_candidate_counts", {})
         self.values.setdefault("retrieval_selected_channels", [])
+        self.values.setdefault("retrieval_runtime_mode", "legacy")
+        self.values.setdefault("retrieval_plan_schema", "legacy")
+        self.values.setdefault("retrieval_plan_digest", "legacy")
+        self.values.setdefault("retrieval_plan_fallback", False)
+        self.values.setdefault("retrieval_plan_fallback_reason", "")
+        self.values.setdefault("retrieval_intent_source", "deterministic")
+        self.values.setdefault("retrieval_graph_requirement", "disabled")
+        self.values.setdefault("retrieval_graph_budget_profile", "disabled")
+        self.values.setdefault("retrieval_graph_max_hops", 0)
+        self.values.setdefault("retrieval_graph_max_matches", 0)
+        self.values.setdefault("retrieval_table_text_requirement", "disabled")
+        self.values.setdefault("retrieval_figure_caption_requirement", "disabled")
+        self.values.setdefault("retrieval_required_channels", [])
+        self.values.setdefault("retrieval_required_channel_insertions", [])
+        self.values.setdefault("retrieval_required_channels_satisfied", True)
+        self.values.setdefault("graph_fingerprint", "disabled")
+        self.values.setdefault("graph_selected_count", 0)
+        self.values.setdefault("graph_selected_chunk_ids", [])
+        self.values.setdefault("graph_relation_type_preview", [])
         self.values.setdefault("runtime_context_assembled", False)
         self.values.setdefault("runtime_followup_type", "standalone")
         self.values.setdefault("runtime_recent_topic", "")

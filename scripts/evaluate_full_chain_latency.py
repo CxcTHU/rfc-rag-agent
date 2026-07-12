@@ -134,7 +134,6 @@ def run_cases(*, limit: int, execute: bool) -> list[dict[str, Any]]:
             try:
                 result = service.query(
                     question=case.question,
-                    top_k=case.top_k,
                     max_tool_calls=case.max_tool_calls,
                 )
                 rows.append(row_from_result(case, result))

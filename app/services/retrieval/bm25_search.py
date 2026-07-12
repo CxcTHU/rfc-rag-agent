@@ -1,8 +1,10 @@
 import math
 import re
 from dataclasses import dataclass
+from threading import RLock
+from weakref import WeakKeyDictionary
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Chunk, Document
@@ -47,12 +49,32 @@ class BM25SearchResult:
 
 @dataclass(frozen=True)
 class _BM25Document:
-    chunk: Chunk
-    document: Document
+    document_id: int
+    document_title: str
+    source_type: str
+    source_path: str | None
+    file_name: str
+    chunk_id: int
+    chunk_index: int
+    raw_content: str
+    heading_path: str | None
     title: str
     heading: str
     content: str
     length: int
+    title_length: int
+    heading_length: int
+    chunk_type: str
+    source_image_path: str | None
+    caption: str | None
+    page_number: int | None
+
+
+_BM25_CORPUS_CACHE: WeakKeyDictionary[
+    object,
+    tuple[tuple[object, ...], tuple[_BM25Document, ...]],
+] = WeakKeyDictionary()
+_BM25_CORPUS_CACHE_LOCK = RLock()
 
 
 class BM25SearchService:
@@ -99,19 +121,61 @@ class BM25SearchService:
         return diversify_bm25_results(sorted_results, top_k)
 
     def _list_documents(self) -> list[_BM25Document]:
+        bind = self.db.get_bind()
+        fingerprint = self._corpus_fingerprint()
+        with _BM25_CORPUS_CACHE_LOCK:
+            cached = _BM25_CORPUS_CACHE.get(bind)
+            if cached is not None and cached[0] == fingerprint:
+                return list(cached[1])
+            corpus = tuple(self._load_documents())
+            _BM25_CORPUS_CACHE[bind] = (fingerprint, corpus)
+            return list(corpus)
+
+    def _corpus_fingerprint(self) -> tuple[object, ...]:
+        statement = (
+            select(
+                func.count(Chunk.id),
+                func.max(Chunk.id),
+                func.max(Chunk.created_at),
+                func.max(Document.updated_at),
+            )
+            .select_from(Chunk)
+            .join(Document, Chunk.document_id == Document.id)
+        )
+        return tuple(self.db.execute(statement).one())
+
+    def _load_documents(self) -> list[_BM25Document]:
         statement = select(Chunk, Document).join(Document, Chunk.document_id == Document.id).order_by(Document.id, Chunk.chunk_index)
         rows = self.db.execute(statement).all()
         return [
             _BM25Document(
-                chunk=chunk,
-                document=document,
+                document_id=document.id,
+                document_title=document.title,
+                source_type=document.source_type,
+                source_path=document.source_path,
+                file_name=document.file_name,
+                chunk_id=chunk.id,
+                chunk_index=chunk.chunk_index,
+                raw_content=chunk.content,
+                heading_path=chunk.heading_path,
                 title=normalize_text(document.title),
                 heading=normalize_text(chunk.heading_path),
                 content=normalize_text(chunk.content),
                 length=max(1, lexical_length(chunk.content)),
+                title_length=lexical_length(document.title),
+                heading_length=lexical_length(chunk.heading_path or ""),
+                chunk_type=chunk.chunk_type,
+                source_image_path=chunk.source_image_path,
+                caption=chunk.caption,
+                page_number=chunk.page_number,
             )
             for chunk, document in rows
         ]
+
+
+def clear_bm25_corpus_cache() -> None:
+    with _BM25_CORPUS_CACHE_LOCK:
+        _BM25_CORPUS_CACHE.clear()
 
 
 def expand_bm25_query_terms(query: str) -> list[SearchTerm]:
@@ -163,8 +227,8 @@ def score_document(
         if title_hits or heading_hits or content_hits:
             matched_terms.append(normalized_term)
 
-        title_score += bm25_term_score(title_hits, idf, field_length=lexical_length(item.document.title), avg_length=avg_length, k1=k1, b=0.2) * term_weight * TITLE_WEIGHT
-        heading_score += bm25_term_score(title_hits + heading_hits, idf, field_length=lexical_length(item.chunk.heading_path or ""), avg_length=avg_length, k1=k1, b=0.4) * term_weight * HEADING_WEIGHT
+        title_score += bm25_term_score(title_hits, idf, field_length=item.title_length, avg_length=avg_length, k1=k1, b=0.2) * term_weight * TITLE_WEIGHT
+        heading_score += bm25_term_score(title_hits + heading_hits, idf, field_length=item.heading_length, avg_length=avg_length, k1=k1, b=0.4) * term_weight * HEADING_WEIGHT
         content_score += bm25_term_score(content_hits, idf, field_length=item.length, avg_length=avg_length, k1=k1, b=b) * term_weight * CONTENT_WEIGHT
 
     if has_specific_terms and not specific_hit:
@@ -174,24 +238,24 @@ def score_document(
         return None
 
     return BM25SearchResult(
-        document_id=item.document.id,
-        document_title=item.document.title,
-        source_type=item.document.source_type,
-        source_path=item.document.source_path,
-        file_name=item.document.file_name,
-        chunk_id=item.chunk.id,
-        chunk_index=item.chunk.chunk_index,
-        content=item.chunk.content,
-        heading_path=item.chunk.heading_path,
+        document_id=item.document_id,
+        document_title=item.document_title,
+        source_type=item.source_type,
+        source_path=item.source_path,
+        file_name=item.file_name,
+        chunk_id=item.chunk_id,
+        chunk_index=item.chunk_index,
+        content=item.raw_content,
+        heading_path=item.heading_path,
         score=score,
         matched_terms=tuple(dict.fromkeys(matched_terms)),
         title_score=title_score,
         heading_score=heading_score,
         content_score=content_score,
-        chunk_type=item.chunk.chunk_type,
-        source_image_path=item.chunk.source_image_path,
-        caption=item.chunk.caption,
-        page_number=item.chunk.page_number,
+        chunk_type=item.chunk_type,
+        source_image_path=item.source_image_path,
+        caption=item.caption,
+        page_number=item.page_number,
     )
 
 

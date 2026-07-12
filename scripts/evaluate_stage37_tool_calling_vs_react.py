@@ -342,7 +342,7 @@ def evaluate_tool_calling(
             embedding_provider=embedding_provider,
             chat_model_provider=provider,
             log_answers=False,
-        ).query(case.question, top_k=3, max_tool_calls=3, history=list(case.history))
+        ).query(case.question, max_tool_calls=3, history=list(case.history))
     except Exception as exc:  # noqa: BLE001 - evaluation records safe summaries.
         return ModeOutcome(
             case=case,
@@ -467,6 +467,10 @@ def run_evaluation(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     os.environ["RERANKING_ENABLED"] = "false"
+    # The deterministic comparison owns an in-memory SQLite fixture.  It must
+    # not consult a process-local Redis cache, otherwise CI results depend on
+    # an external service rather than on the fixture seeded above.
+    os.environ["REDIS_ENABLED"] = "false"
     get_settings.cache_clear()
     session_factory = make_session_factory()
     embedding_provider = DeterministicEmbeddingProvider(dimension=32)

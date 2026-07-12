@@ -1,6 +1,11 @@
+from sqlalchemy import inspect, text
 from sqlalchemy.pool import QueuePool, SingletonThreadPool
 
-from app.db.session import create_database_engine, create_sqlite_engine
+from app.db.session import (
+    create_database_engine,
+    create_sqlite_engine,
+    ensure_sqlite_compat_columns,
+)
 
 
 def test_stage44_create_database_engine_uses_sqlite_connect_args(tmp_path) -> None:
@@ -35,6 +40,27 @@ def test_stage44_create_database_engine_rejects_unknown_backend() -> None:
         assert "Unsupported DATABASE_URL backend" in str(exc)
     else:
         raise AssertionError("unsupported backend should fail fast")
+
+
+def test_stage44_sqlite_compat_adds_missing_embedding_vector(tmp_path) -> None:
+    database_path = tmp_path / "legacy-vector.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE chunk_embeddings ("
+                "id INTEGER PRIMARY KEY, "
+                "embedding_json TEXT NOT NULL"
+                ")"
+            )
+        )
+
+    ensure_sqlite_compat_columns(engine)
+
+    columns = {
+        column["name"] for column in inspect(engine).get_columns("chunk_embeddings")
+    }
+    assert "embedding_vector" in columns
 
 
 def test_stage44_alembic_initial_migration_declares_existing_and_user_tables() -> None:

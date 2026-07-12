@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     trust_forwarded_for: bool = False
     pgvector_search_enabled: bool = True
     hnsw_ef_search: int = 100
+    vector_backend_policy: str = "prefer_pgvector"
     raw_data_dir: str = "data/raw"
     auth_enabled: bool = False
     auth_required_in_prod: bool = True
@@ -101,6 +102,7 @@ class Settings(BaseSettings):
     reranking_dynamic_max_results: int = 12
     reranking_dynamic_relative_score_threshold: float = 0.65
     reranking_fallback_enabled: bool = False
+    reranking_fusion_fail_soft_enabled: bool = True
     reranking_fallback_provider: str = "paratera"
     reranking_fallback_model_name: str = "GLM-Rerank"
     reranking_fallback_api_key: str = ""
@@ -114,7 +116,16 @@ class Settings(BaseSettings):
     hybrid_graph_channel_weight: float = 1.1
     hybrid_table_text_channel_weight: float = 0.9
     hybrid_figure_caption_channel_weight: float = 0.8
-    hybrid_graph_max_matches: int = 75
+    hybrid_graph_max_matches: int = 50
+    retrieval_runtime_enabled: bool = True
+    retrieval_runtime_default_enabled: bool = True
+    retrieval_runtime_schema: str = "phase63-gap-closure-v1"
+    retrieval_relationship_required_threshold: float = 0.80
+    retrieval_relationship_preferred_threshold: float = 0.45
+    retrieval_graph_preferred_max_hops: int = 1
+    retrieval_graph_preferred_max_matches: int = 20
+    retrieval_graph_required_max_hops: int = 2
+    retrieval_graph_required_max_matches: int = 50
 
     vision_model_provider: str = ""
     vision_model_name: str = ""

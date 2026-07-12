@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Sequence
 
 from app.services.generation.chat_model import ChatMessage, ChatModelProvider
 from app.services.retrieval.query_embedding_cache import normalize_query_text
+from app.services.retrieval.runtime import (
+    RetrievalIntentProfile,
+    clamp_confidence,
+    deterministic_intent_profile,
+    normalize_explicitness,
+    normalize_label,
+)
 
 
 CANONICALIZATION_SCHEMA = "phase58h-evidence-identity-v1"
@@ -75,6 +82,9 @@ class EvidenceQueryIdentity:
     reason: str = "unclassified"
     model_provider: str = ""
     model_name: str = ""
+    retrieval_intent: RetrievalIntentProfile = field(
+        default_factory=RetrievalIntentProfile
+    )
 
     def diagnostics(self) -> dict[str, object]:
         return {
@@ -90,6 +100,7 @@ class EvidenceQueryIdentity:
             "evidence_cache_reuse_allowed": self.safe_for_cache_reuse,
             "evidence_cache_reuse_block_reason": "" if self.safe_for_cache_reuse else self.reason,
             "evidence_cache_identity_schema": CANONICALIZATION_SCHEMA,
+            **self.retrieval_intent.diagnostics(),
         }
 
 
@@ -208,6 +219,7 @@ def build_evidence_query_identity(
             entity_key="",
             intent_key="",
             reason="empty_query",
+            retrieval_intent=deterministic_intent_profile(query, history=history),
         )
 
     inherited_topic = latest_history_topic(history or ())
@@ -238,6 +250,7 @@ def build_evidence_query_identity(
             confidence=0.45,
             safe_for_cache_reuse=False,
             reason="constraint_change",
+            retrieval_intent=deterministic_intent_profile(raw_query, history=history),
         )
 
     canonical_query = normalize_query_text(" ".join([*entity_terms, *intent_terms, *modifiers]))
@@ -250,6 +263,7 @@ def build_evidence_query_identity(
         confidence=0.95,
         safe_for_cache_reuse=True,
         reason="canonicalized",
+        retrieval_intent=deterministic_intent_profile(raw_query, history=history),
     )
 
 
@@ -268,6 +282,7 @@ def raw_identity(
         confidence=0.0,
         safe_for_cache_reuse=False,
         reason=reason,
+        retrieval_intent=deterministic_intent_profile(raw_query),
     )
 
 
@@ -277,10 +292,11 @@ def refine_evidence_query_identity_with_llm(
     base_identity: EvidenceQueryIdentity,
     provider: ChatModelProvider | None,
     history: Sequence[str] | None = None,
+    force: bool = False,
 ) -> EvidenceQueryIdentity:
     if provider is None:
         return base_identity
-    if base_identity.safe_for_cache_reuse:
+    if base_identity.safe_for_cache_reuse and not force:
         return base_identity
     if str(getattr(provider, "provider_name", "")).casefold() in {"", "deterministic", "fake", "local"}:
         return base_identity
@@ -313,6 +329,16 @@ def refine_evidence_query_identity_with_llm(
                                 "canonical_query": "standalone retrieval query with entity and intent terms",
                                 "confidence": "0.0 to 1.0",
                                 "safe_for_cache_reuse": "boolean",
+                                "visual_intent": "0.0 to 1.0 routing score",
+                                "table_intent": "0.0 to 1.0 routing score",
+                                "relationship_intent": "0.0 to 1.0 routing score",
+                                "relationship_type": "specific relation label or none",
+                                "graph_search_mode": "none or local",
+                                "visual_explicitness": "explicit, implicit, none, or negative",
+                                "table_explicitness": "explicit, implicit, none, or negative",
+                                "relationship_explicitness": "explicit, implicit, none, or negative",
+                                "entities": "bounded list of relevant entity labels",
+                                "required_evidence_types": "subset of text, relationship, table, figure",
                             },
                         },
                         ensure_ascii=False,
@@ -347,13 +373,27 @@ def refine_evidence_query_identity_with_llm(
     if modifiers and canonical_query:
         canonical_query = normalize_query_text(" ".join([canonical_query, *modifiers]))
     confidence = clamp_confidence(parsed.get("confidence"))
+    retrieval_intent = retrieval_intent_from_json(
+        parsed,
+        query=query,
+        history=history or (),
+        source="llm",
+    )
     safe = bool(parsed.get("safe_for_cache_reuse")) and confidence >= 0.65
     if not entity_key or not intent_key or not canonical_query or not safe:
-        return raw_identity(
-            base_identity.raw_query,
-            "llm_identity_low_confidence",
+        return EvidenceQueryIdentity(
+            raw_query=base_identity.raw_query,
+            canonical_query=canonical_query or base_identity.raw_query,
             entity_key=entity_key or base_identity.entity_key,
             intent_key=intent_key or base_identity.intent_key,
+            modifiers=modifiers,
+            source="llm",
+            confidence=confidence,
+            safe_for_cache_reuse=False,
+            reason="llm_identity_not_reusable",
+            model_provider=getattr(result, "provider", "") or getattr(provider, "provider_name", ""),
+            model_name=getattr(result, "model_name", "") or getattr(provider, "model_name", ""),
+            retrieval_intent=retrieval_intent,
         )
     return EvidenceQueryIdentity(
         raw_query=base_identity.raw_query,
@@ -367,7 +407,115 @@ def refine_evidence_query_identity_with_llm(
         reason="llm_canonicalized",
         model_provider=getattr(result, "provider", "") or getattr(provider, "provider_name", ""),
         model_name=getattr(result, "model_name", "") or getattr(provider, "model_name", ""),
+        retrieval_intent=retrieval_intent,
     )
+
+
+def retrieval_intent_from_json(
+    values: dict[str, object],
+    *,
+    query: str,
+    history: Sequence[str],
+    source: str,
+) -> RetrievalIntentProfile:
+    fallback = deterministic_intent_profile(query, history=history)
+    required = values.get("required_evidence_types")
+    entities = values.get("entities")
+    required_values = (
+        [str(item) for item in required]
+        if isinstance(required, list)
+        else list(fallback.required_evidence_types)
+    )
+    visual_negative = fallback.visual_explicitness == "negative"
+    table_negative = fallback.table_explicitness == "negative"
+    relationship_negative = fallback.relationship_explicitness == "negative"
+    visual_explicit = fallback.visual_explicitness == "explicit"
+    table_explicit = fallback.table_explicitness == "explicit"
+    relationship_explicit = fallback.relationship_explicitness == "explicit"
+    if visual_negative:
+        required_values = [item for item in required_values if item != "figure"]
+    if table_negative:
+        required_values = [item for item in required_values if item != "table"]
+    if relationship_negative:
+        required_values = [item for item in required_values if item != "relationship"]
+    for evidence_type, explicit, negative in (
+        ("figure", visual_explicit, visual_negative),
+        ("table", table_explicit, table_negative),
+        ("relationship", relationship_explicit, relationship_negative),
+    ):
+        if explicit and not negative and evidence_type not in required_values:
+            required_values.append(evidence_type)
+    return RetrievalIntentProfile(
+        visual_intent=(
+            0.0
+            if visual_negative
+            else max(
+                fallback.visual_intent,
+                clamp_confidence(values.get("visual_intent")),
+            )
+            if visual_explicit
+            else values.get("visual_intent", fallback.visual_intent)
+        ),
+        table_intent=(
+            0.0
+            if table_negative
+            else max(
+                fallback.table_intent,
+                clamp_confidence(values.get("table_intent")),
+            )
+            if table_explicit
+            else values.get("table_intent", fallback.table_intent)
+        ),
+        relationship_intent=(
+            0.0
+            if relationship_negative
+            else max(
+                fallback.relationship_intent,
+                clamp_confidence(values.get("relationship_intent")),
+            )
+            if relationship_explicit
+            else values.get("relationship_intent", fallback.relationship_intent)
+        ),
+        relationship_type=(
+            "none"
+            if relationship_negative
+            else normalize_label(values.get("relationship_type")) or fallback.relationship_type
+        ),
+        graph_search_mode=(
+            "none"
+            if relationship_negative
+            else "local"
+            if normalize_label(values.get("graph_search_mode")) == "local"
+            else fallback.graph_search_mode
+        ),
+        visual_explicitness=(
+            "negative"
+            if visual_negative
+            else "explicit"
+            if visual_explicit
+            else normalize_explicitness(values.get("visual_explicitness", fallback.visual_explicitness))
+        ),
+        table_explicitness=(
+            "negative"
+            if table_negative
+            else "explicit"
+            if table_explicit
+            else normalize_explicitness(values.get("table_explicitness", fallback.table_explicitness))
+        ),
+        relationship_explicitness=(
+            "negative"
+            if relationship_negative
+            else "explicit"
+            if relationship_explicit
+            else normalize_explicitness(values.get(
+                "relationship_explicitness",
+                fallback.relationship_explicitness,
+            ))
+        ),
+        entities=tuple(str(item) for item in entities) if isinstance(entities, list) else fallback.entities,
+        required_evidence_types=tuple(required_values),
+        source=source,
+    ).normalized()
 
 
 def parse_identity_json(text: str) -> dict[str, object] | None:

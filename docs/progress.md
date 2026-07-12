@@ -4706,3 +4706,91 @@ Known remaining issues: one stable advantages follow-up still misses; LLM identi
 ```
 
 No `git add`, commit, tag, push, or PR has been performed.
+## Latest Status: 2026-07-11 Phase 63 Retrieval Runtime
+
+Current branch: `codex/phase-63-retrieval-runtime`.
+
+Implementation is complete and production rollout remains disabled pending user
+human verification. Phase 63 adds one-call identity plus intent planning, a
+bounded shared Local GraphRetriever, plan-aware Hybrid channel routing, safe
+graph provenance in reranking, plan/graph-aware cache identities, three default
+model-visible retrieval tools, and a 60-case legacy/current evaluator.
+
+Verified so far:
+
+```text
+focused retrieval/graph/cache/Agent suite after review fixes: 122 passed
+Agent API/SSE/reranking with temporary SQLite: 66 passed
+Phase 63 evaluator tests: 5 passed (included in later focused/full runs)
+60-case dry-run: case/schema/output-safety validation only; routing gates not executed
+final full backend suite with temporary SQLite: 1370 passed, 1 skipped
+Stage 30 quality gate: overall=91.52, grade=A, release_decision=pass
+```
+
+The first API/SSE command inherited a local PostgreSQL URL at port 5433 and
+failed during app startup because that service was not running. Re-running the
+same tests with an isolated temporary SQLite database and `AUTH_ENABLED=false`
+passed all 66 tests; the temporary database was removed afterward.
+
+## Latest Status: 2026-07-12 Phase 63 Single-Agent Runtime Consolidation
+
+The public Agent retrieval contract now has one production runtime:
+`tool_calling_agent`. The frontend no longer sends `mode` or `top_k`; both
+fields are absent from `AgentQueryRequest`, and retired client fields are
+ignored rather than selecting an old execution path. Model-visible high-level
+retrieval tools now accept only `query`; Retrieval Runtime supplies bounded
+internal budgets and Hybrid retains Dynamic-K as the final result selector.
+
+Uploaded-image analysis now enters the same Tool Calling service instead of a
+ReAct branch. Both `/agent/query` and `/agent/query/stream` dispatch directly
+to that service; the retired default, agentic, ReAct, and LangGraph API
+branches are no longer reachable online. Targeted contract tests and frontend
+unit/build checks passed; broad regression and human verification remain
+required before any Git submission.
+
+## Latest Status: 2026-07-12 Phase 63 Real E2E Closure
+
+The reported `agent stream failed` was reproduced against the real local corpus.
+The root cause was an older SQLite schema missing
+`chunk_embeddings.embedding_vector`; FAISS metadata hydration selected the ORM
+column and raised `sqlite3.OperationalError`. Startup now repairs that one
+SQLite-only compatibility column idempotently. PostgreSQL remains Alembic-owned.
+
+Real SSE evaluation also found that an explicit figure request could propose
+both `search_figures` and Hybrid in one model turn while the one-tool budget
+prioritized Hybrid. Explicit positive figure intent now prioritizes
+`search_figures`; ordinary and negative-figure queries keep Hybrid priority.
+
+Verification:
+
+```text
+real regression query after schema repair: success, refused=false, 6 citations, 9 sources
+safe SSE E2E set: text, relationship, figure, table, and three negative-intent slices covered
+figure targeted retest: search_figures succeeded, 2 figure sources, 2 citations
+relationship targeted retest: Graph active (preferred by LLM confidence), 3 citations
+browser E2E on port 8000: completed in 59s, 6 citations, 10 retrieval sources
+full backend: 1378 passed, 1 skipped
+fresh focused verification: 54 passed
+Stage 30 gate: 91.52 / A / pass
+Python compile and git diff checks: passed
+```
+
+Port 8000 is running the repaired Agent. The temporary browser-test user and
+its conversation were deleted. No staging, commit, tag, push, or PR was done.
+
+## Latest Status: 2026-07-12 Phase 63 Default Runtime Release
+
+The user accepted the functional Retrieval Runtime upgrade and authorized the
+default switch, documentation/Obsidian synchronization, GitHub merge, and the
+Phase 63 tag. `RETRIEVAL_RUNTIME_ENABLED` and
+`RETRIEVAL_RUNTIME_DEFAULT_ENABLED` now default to `true`; legacy Hybrid
+gating remains an explicit fallback.
+
+The frozen no-cache real-provider A/B used two separately configured processes
+against the same 1153-document / 51738-chunk corpus and strict pgvector HNSW.
+Phase 63 completed 9/9 cases, while legacy completed 8/9; explicit asset route
+completion improved from 2/3 to 3/3; all Runtime BM25, pgvector, SSE, selected
+count, and conversation-persistence checks passed. Median end-to-end latency
+was 38.3s versus legacy 21.3s (+80.22%), so Phase 64 is exclusively responsible
+for latency decomposition and reduction. No answer text, source content,
+provider payload, or credential was written to the evaluation artifacts.

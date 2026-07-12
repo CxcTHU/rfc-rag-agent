@@ -1,13 +1,14 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AgentQueryRequest(BaseModel):
+    # Removed fields are deliberately ignored at this boundary so an older
+    # browser cannot select a retired runtime while deployments roll forward.
+    model_config = ConfigDict(extra="ignore")
+
     question: str = Field(min_length=1, max_length=4000)
-    top_k: int = Field(default=8, ge=1, le=50)
     max_tool_calls: int = Field(default=2, ge=1, le=5)
-    source_id: str | None = None
     history: list[str] = Field(default_factory=list, max_length=50)
-    mode: str | None = None
     chat_model: str | None = None
     conversation_id: int | None = Field(default=None, ge=1)
     image_path: str | None = None
@@ -22,40 +23,11 @@ class AgentQueryRequest(BaseModel):
             raise ValueError("question must not be empty")
         return normalized
 
-    @field_validator("source_id")
-    @classmethod
-    def source_id_must_not_be_blank(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("source_id must not be empty")
-        return normalized
-
     @field_validator("history")
     @classmethod
     def history_items_must_not_be_blank(cls, value: list[str]) -> list[str]:
         normalized_items = [item.strip()[:2000] for item in value if item.strip()]
         return normalized_items
-
-    @field_validator("mode")
-    @classmethod
-    def mode_must_be_supported(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip().lower()
-        if normalized not in {
-            "default",
-            "agentic",
-            "react_agent",
-            "tool_calling_agent",
-            "langgraph_agent",
-        }:
-            raise ValueError(
-                "mode must be 'default', 'agentic', 'react_agent', or "
-                "'tool_calling_agent', or 'langgraph_agent'"
-            )
-        return normalized
 
     @field_validator("chat_model")
     @classmethod
@@ -171,6 +143,7 @@ class FigureSearchResultItem(BaseModel):
 
 class AgentWorkflowStepItem(BaseModel):
     name: str
+    step_id: str | None = None
     input_summary: str
     output_summary: str
     succeeded: bool
@@ -211,7 +184,7 @@ class AgentQueryResponse(BaseModel):
     refused: bool
     refusal_reason: str | None
     reasoning_summary: str
-    mode: str = "default"
+    mode: str = "tool_calling_agent"
     workflow_steps: list[AgentWorkflowStepItem] = Field(default_factory=list)
     iteration_count: int = 0
     invalid_citations: list[int] = Field(default_factory=list)

@@ -10,11 +10,16 @@ from app.services.agent.tools import (
     AgentToolResult,
     AgentToolbox,
 )
+from app.services.agent.evidence_identity import (
+    build_evidence_query_identity,
+    refine_evidence_query_identity_with_llm,
+)
 from app.services.agent.tool_calling_service import (
     ToolCallingAgentService,
     ToolCallingRuntimeEvent,
     citation_repair_messages,
     evidence_answer_messages,
+    executable_tool_call_ids,
     final_answer_strategy_instruction,
     tool_calling_tool_definitions,
     tool_calling_messages,
@@ -30,6 +35,12 @@ from app.services.generation.chat_model import (
     ToolCallingChatModelResult,
 )
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
+from app.services.retrieval.runtime import (
+    build_retrieval_plan,
+    reset_current_retrieval_plan,
+    retrieval_runtime_result_limit,
+    set_current_retrieval_plan,
+)
 from app.services.observability.latency_trace import (
     LatencyTrace,
     bind_agent_conversation_cache_scope,
@@ -268,6 +279,48 @@ class RuntimeIdentityProvider:
         raise AssertionError("runtime identity provider should not select tools")
 
 
+class RelationshipRuntimeIdentityProvider(RuntimeIdentityProvider):
+    model_name = "runtime-relationship-intent-v1"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        return ChatModelResult(
+            answer=(
+                '{"entity_key":"rock-filled concrete",'
+                '"intent_key":"causal_relationship",'
+                '"canonical_query":"rock-filled concrete filling capacity causes",'
+                '"confidence":0.95,'
+                '"safe_for_cache_reuse":true,'
+                '"relationship_intent":0.96,'
+                '"relationship_type":"causal",'
+                '"graph_search_mode":"local",'
+                '"relationship_explicitness":"explicit",'
+                '"required_evidence_types":["text","relationship"]}'
+            ),
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+
+class UncitedStreamingChatProvider(CitationRepairChatProvider):
+    emitted_tokens: list[str]
+
+    def __init__(self) -> None:
+        self.emitted_tokens = []
+
+    def stream_generate(self, messages: list[ChatMessage]):
+        yield "Filling capacity depends on SCC flowability."
+
+    def emit_stream_token(self, token: str) -> None:
+        self.emitted_tokens.append(token)
+
+
+class ForbiddenRuntimeIdentityProvider(RuntimeIdentityProvider):
+    model_name = "runtime-identity-must-not-run"
+
+    def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
+        raise AssertionError("safe deterministic identity must keep the fast path")
+
+
 class IdentityAndHydeProvider(RuntimeIdentityProvider):
     model_name = "identity-hyde-test-v1"
 
@@ -357,7 +410,6 @@ def test_tool_calling_agent_uses_llm_runtime_identity_for_open_synonyms(tmp_path
             runtime_identity_provider=RuntimeIdentityProvider(),
         ).query(
             "堆石混凝土的裂纹问题",
-            top_k=2,
             max_tool_calls=2,
         )
 
@@ -368,6 +420,58 @@ def test_tool_calling_agent_uses_llm_runtime_identity_for_open_synonyms(tmp_path
     assert trace["evidence_intent_key"] == "crack_phenomena"
     assert trace["evidence_cache_reuse_allowed"] is True
     assert trace["runtime_contextualization_source"] == "llm"
+
+
+def test_phase63_tool_calling_binds_identity_intent_to_retrieval_runtime(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        service = make_service(
+            db,
+            chat_provider=CitationRepairChatProvider(),
+            runtime_identity_provider=RelationshipRuntimeIdentityProvider(),
+        )
+        settings = get_settings()
+        original = settings.retrieval_runtime_enabled
+        settings.retrieval_runtime_enabled = True
+        try:
+            result = service.query(
+                "What causes rock-filled concrete filling capacity?",
+                max_tool_calls=2,
+            )
+        finally:
+            settings.retrieval_runtime_enabled = original
+
+    assert result.latency_trace["retrieval_plan_schema"] == "phase63-gap-closure-v1"
+    assert result.latency_trace["retrieval_graph_requirement"] == "required"
+    assert result.latency_trace["retrieval_graph_max_hops"] == 2
+    assert result.latency_trace["retrieval_plan_digest"] != "legacy"
+
+
+def test_phase63_safe_deterministic_identity_skips_llm_classifier(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        service = make_service(
+            db,
+            chat_provider=CitationRepairChatProvider(),
+            runtime_identity_provider=ForbiddenRuntimeIdentityProvider(),
+        )
+        settings = get_settings()
+        original = settings.retrieval_runtime_enabled
+        settings.retrieval_runtime_enabled = True
+        try:
+            result = service.query(
+                "堆石混凝土的优势有哪些？",
+                max_tool_calls=2,
+            )
+        finally:
+            settings.retrieval_runtime_enabled = original
+
+    assert result.latency_trace["evidence_cache_identity_source"] == "deterministic"
+    assert result.latency_trace["evidence_cache_reuse_allowed"] is True
 
 
 def test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection(
@@ -395,9 +499,25 @@ def test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection(
         trace.set_value("evidence_intent_key", "crack_phenomena")
         trace.set_value("evidence_canonical_query", "堆石混凝土 rock-filled concrete 裂缝 缝隙 裂纹 开裂")
         token = set_current_latency_trace(trace)
+        identity = refine_evidence_query_identity_with_llm(
+            "堆石混凝土缝隙问题",
+            base_identity=build_evidence_query_identity("堆石混凝土缝隙问题"),
+            provider=RuntimeIdentityProvider(),
+        )
+        retrieval_token = set_current_retrieval_plan(
+            build_retrieval_plan(
+                identity.retrieval_intent,
+                identity.canonical_query,
+                get_settings(),
+            )
+        )
         try:
-            first = toolbox.hybrid_search_knowledge("filling capacity rock-filled concrete", top_k=1)
+            first = toolbox.hybrid_search_knowledge(
+                "filling capacity rock-filled concrete",
+                top_k=retrieval_runtime_result_limit("hybrid_search_knowledge"),
+            )
         finally:
+            reset_current_retrieval_plan(retrieval_token)
             reset_current_latency_trace(token)
         events = []
         second = make_service(
@@ -406,7 +526,6 @@ def test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection(
             runtime_identity_provider=RuntimeIdentityProvider(),
         ).query(
             "堆石混凝土缝隙问题",
-            top_k=1,
             max_tool_calls=2,
             conversation_id=101,
             event_sink=events.append,
@@ -449,7 +568,10 @@ def test_tool_calling_agent_semantic_evidence_cache_is_scoped_to_conversation(
         trace.set_value("evidence_canonical_query", "堆石混凝土 rock-filled concrete 裂缝 缝隙 裂纹 开裂")
         token = set_current_latency_trace(trace)
         try:
-            first = toolbox.hybrid_search_knowledge("filling capacity rock-filled concrete", top_k=1)
+            first = toolbox.hybrid_search_knowledge(
+                "filling capacity rock-filled concrete",
+                top_k=get_settings().reranking_dynamic_max_results,
+            )
         finally:
             reset_current_latency_trace(token)
 
@@ -458,7 +580,6 @@ def test_tool_calling_agent_semantic_evidence_cache_is_scoped_to_conversation(
             runtime_identity_provider=RuntimeIdentityProvider(),
         ).query(
             "rock-filled concrete crack question",
-            top_k=1,
             max_tool_calls=2,
             conversation_id=202,
         )
@@ -484,7 +605,6 @@ def test_tool_calling_agent_generates_hyde_only_on_semantic_cache_miss(
             runtime_identity_provider=IdentityAndHydeProvider(),
         ).query(
             "堆石混凝土裂纹问题",
-            top_k=2,
             max_tool_calls=2,
         )
 
@@ -503,7 +623,6 @@ def test_tool_calling_agent_searches_then_returns_cited_answer(tmp_path) -> None
         seed_tool_calling_documents(db)
         result = make_service(db).query(
             "What affects filling capacity in rock-filled concrete?",
-            top_k=2,
             max_tool_calls=3,
         )
 
@@ -544,7 +663,6 @@ def test_tool_calling_agent_stops_when_reranking_fails(tmp_path, monkeypatch) ->
         seed_tool_calling_documents(db)
         result = make_service(db).query(
             "What affects filling capacity in rock-filled concrete?",
-            top_k=2,
             max_tool_calls=3,
         )
 
@@ -629,7 +747,6 @@ def test_tool_calling_agent_adds_figures_for_visual_queries(tmp_path, monkeypatc
         )
         result = make_service(db, chat_provider=chat_provider).query(
             "Show the rock-filled concrete stress strain curve figure.",
-            top_k=1,
             max_tool_calls=3,
         )
 
@@ -640,6 +757,75 @@ def test_tool_calling_agent_adds_figures_for_visual_queries(tmp_path, monkeypatc
     assert image_sources[0].caption == "图3-4 堆石混凝土应力应变曲线"
     assert image_sources[0].page_number == 3
     assert image_sources[0].image_url == "/assets/images/tool_calling_fixture/page3_img1.png"
+
+
+def test_tool_calling_runtime_preflights_explicit_table_request(tmp_path, monkeypatch) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    calls: list[str] = []
+    events: list[ToolCallingRuntimeEvent] = []
+    table_item = AgentSearchItem(
+        document_id=1,
+        document_title="Rock-filled concrete mix table",
+        source_type="local_file",
+        source_path="mix.md",
+        file_name="mix.md",
+        chunk_id=30,
+        chunk_index=0,
+        content="Table: SCC mix ratio for rock-filled concrete.",
+        heading_path="Mix ratio",
+        score=0.9,
+        chunk_type="table",
+    )
+    table_source = AgentSourceReference(
+        source_id="chunk:30",
+        title=table_item.document_title,
+        source_type=table_item.source_type,
+        document_id=table_item.document_id,
+        chunk_id=table_item.chunk_id,
+        chunk_index=table_item.chunk_index,
+        content=table_item.content,
+        score=table_item.score,
+        chunk_type="table",
+    )
+
+    def fake_search_tables(self, query: str, top_k: int = 4) -> AgentToolResult:
+        calls.append(query)
+        return AgentToolResult(
+            tool_name="search_tables",
+            call=AgentToolCallRecord(
+                tool_name="search_tables",
+                input_summary=f"query={query}; top_k={top_k}",
+                output_summary="returned 1 table results",
+                succeeded=True,
+            ),
+            search_results=[table_item],
+            sources=[table_source],
+        )
+
+    monkeypatch.setattr(
+        "app.services.agent.tools.AgentToolbox.search_tables",
+        fake_search_tables,
+    )
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        result = make_service(db).query(
+            "请列出堆石混凝土配合比表格",
+            max_tool_calls=3,
+            event_sink=events.append,
+        )
+
+    assert calls
+    assert result.tool_calls[0].tool_name == "search_tables"
+    assert result.sources[0].chunk_type == "table"
+    assert result.latency_trace["retrieval_required_tool"] == "search_tables"
+    preflight_event = next(
+        event
+        for event in events
+        if event.event == "tool_call_result"
+        and event.payload["step_id"] == "runtime-search_tables"
+    )
+    assert preflight_event.payload["selected_count"] == 1
+    assert result.latency_trace["retrieval_selected_count"] == 1
 
 
 def test_tool_calling_runtime_grounds_visual_followup_tool_query(
@@ -706,7 +892,6 @@ def test_tool_calling_runtime_grounds_visual_followup_tool_query(
         result = make_service(db, chat_provider=VisualFollowupChatProvider()).query(
             "我需要图片支撑",
             history=("大坝的裂缝成因有哪些？请给我详细列出来",),
-            top_k=4,
             max_tool_calls=3,
         )
 
@@ -717,7 +902,7 @@ def test_tool_calling_runtime_grounds_visual_followup_tool_query(
     assert "裂缝" in executed_queries[0]
     assert "图片" in executed_queries[0]
     assert result.latency_trace["runtime_followup_type"] == "visual_evidence_request"
-    assert result.latency_trace["runtime_tool_arg_rewrite_count"] == 1
+    assert result.latency_trace["runtime_tool_arg_rewrite_count"] == 0
     assert result.latency_trace["runtime_evidence_counts"]["figure"] == 1
 
 
@@ -760,7 +945,6 @@ def test_tool_calling_visual_followup_empty_figures_stops_with_clear_reason(
                 "\u5927\u575d\u7684\u88c2\u7f1d\u6210\u56e0\u6709\u54ea\u4e9b\uff1f"
                 "\u8bf7\u7ed9\u6211\u8be6\u7ec6\u5217\u51fa\u6765",
             ),
-            top_k=4,
             max_tool_calls=3,
         )
 
@@ -770,7 +954,7 @@ def test_tool_calling_visual_followup_empty_figures_stops_with_clear_reason(
     assert len(executed_queries) == 1
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0].tool_name == "search_figures"
-    assert result.latency_trace["runtime_stop_reason"] == "figure_evidence_not_found"
+    assert result.latency_trace["runtime_stop_reason"] == "required_asset_evidence_not_found"
 
 
 def test_tool_calling_agent_emits_safe_runtime_events(tmp_path) -> None:
@@ -781,7 +965,6 @@ def test_tool_calling_agent_emits_safe_runtime_events(tmp_path) -> None:
         seed_tool_calling_documents(db)
         result = make_service(db).query(
             "What affects filling capacity?",
-            top_k=2,
             max_tool_calls=3,
             event_sink=events.append,
         )
@@ -791,13 +974,18 @@ def test_tool_calling_agent_emits_safe_runtime_events(tmp_path) -> None:
     assert "agent_step" in event_names
     assert "tool_call_start" in event_names
     assert "tool_call_result" in event_names
+    start_event = next(event for event in events if event.event == "tool_call_start")
+    result_event = next(event for event in events if event.event == "tool_call_result")
+    assert start_event.payload["step_id"] == result_event.payload["step_id"]
+    assert result.workflow_steps[0].step_id == start_event.payload["step_id"]
+    assert result_event.payload["selected_count"] == result.latency_trace["retrieval_selected_count"]
     serialized_payloads = " ".join(str(event.payload) for event in events)
     assert "raw_response" not in serialized_payloads
     assert "Bearer" not in serialized_payloads
     assert "reasoning_content" not in serialized_payloads
 
 
-def test_tool_calling_agent_supports_multi_round_tool_calls(tmp_path) -> None:
+def test_tool_calling_agent_streams_after_first_successful_evidence_round(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
     chat_provider = DeterministicChatModelProvider(
         tool_call_rounds=(
@@ -822,21 +1010,16 @@ def test_tool_calling_agent_supports_multi_round_tool_calls(tmp_path) -> None:
         seed_tool_calling_documents(db)
         result = make_service(db, chat_provider=chat_provider).query(
             "Compare filling capacity and flowability.",
-            top_k=2,
             max_tool_calls=3,
         )
 
     assert not result.refused
-    assert [call.tool_name for call in result.tool_calls] == [
-        "hybrid_search_knowledge",
-        "search_knowledge",
-    ]
+    assert [call.tool_name for call in result.tool_calls] == ["hybrid_search_knowledge"]
     assert result.tool_calls[0].succeeded
-    assert not result.tool_calls[1].succeeded
-    assert result.tool_calls[1].error == "existing evidence available; tool call skipped"
     assert result.latency_trace["executed_tool_call_count"] == 1
-    assert result.latency_trace["skipped_tool_call_count"] == 1
-    assert result.latency_trace["llm_call_count"] == 3
+    assert result.latency_trace["skipped_tool_call_count"] == 0
+    assert result.latency_trace["llm_call_count"] == 2
+    assert result.latency_trace["streamed_token_count"] > 0
 
 
 def test_tool_calling_agent_executes_one_search_per_iteration(tmp_path) -> None:
@@ -862,7 +1045,6 @@ def test_tool_calling_agent_executes_one_search_per_iteration(tmp_path) -> None:
         seed_tool_calling_documents(db)
         result = make_service(db, chat_provider=chat_provider).query(
             "Compare filling capacity and flowability.",
-            top_k=2,
             max_tool_calls=3,
         )
 
@@ -878,7 +1060,31 @@ def test_tool_calling_agent_executes_one_search_per_iteration(tmp_path) -> None:
     assert result.latency_trace["skipped_tool_call_count"] == 1
 
 
-def test_tool_calling_agent_blocks_repeated_queries(tmp_path) -> None:
+def test_explicit_figure_intent_prioritizes_figure_tool_within_budget() -> None:
+    tool_calls = (
+        ChatToolCall(
+            id="hybrid",
+            name="hybrid_search_knowledge",
+            arguments={"query": "堆石混凝土破坏形态", "top_k": 8},
+        ),
+        ChatToolCall(
+            id="figures",
+            name="search_figures",
+            arguments={"query": "堆石混凝土破坏形态图片", "top_k": 8},
+        ),
+    )
+
+    executable = executable_tool_call_ids(
+        tool_calls,
+        previous_tool_queries=(),
+        sources_available=False,
+        preferred_tool_name="search_figures",
+    )
+
+    assert executable == {"figures"}
+
+
+def test_tool_calling_agent_does_not_request_duplicate_after_evidence_converges(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
     chat_provider = DeterministicChatModelProvider(
         tool_call_rounds=(
@@ -903,18 +1109,17 @@ def test_tool_calling_agent_blocks_repeated_queries(tmp_path) -> None:
         seed_tool_calling_documents(db)
         result = make_service(db, chat_provider=chat_provider).query(
             "What affects filling capacity?",
-            top_k=2,
             max_tool_calls=3,
         )
 
-    assert result.latency_trace["repeated_query_count"] == 1
-    assert result.latency_trace["near_duplicate_query_count"] == 1
+    assert result.latency_trace["repeated_query_count"] == 0
+    assert result.latency_trace["near_duplicate_query_count"] == 0
     assert result.latency_trace["executed_tool_call_count"] == 1
-    assert result.latency_trace["skipped_tool_call_count"] == 1
-    assert result.tool_calls[1].error == "near-duplicate query skipped"
+    assert result.latency_trace["skipped_tool_call_count"] == 0
+    assert len(result.tool_calls) == 1
 
 
-def test_tool_calling_agent_blocks_near_duplicate_queries(tmp_path) -> None:
+def test_tool_calling_agent_does_not_request_near_duplicate_after_evidence_converges(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
     chat_provider = DeterministicChatModelProvider(
         tool_call_rounds=(
@@ -939,29 +1144,47 @@ def test_tool_calling_agent_blocks_near_duplicate_queries(tmp_path) -> None:
         seed_tool_calling_documents(db)
         result = make_service(db, chat_provider=chat_provider).query(
             "What affects RFC filling capacity?",
-            top_k=2,
             max_tool_calls=3,
         )
 
     assert not result.refused
-    assert result.latency_trace["near_duplicate_query_count"] == 1
-    assert result.tool_calls[1].error == "near-duplicate query skipped"
+    assert result.latency_trace["near_duplicate_query_count"] == 0
+    assert len(result.tool_calls) == 1
+    assert result.latency_trace["streamed_token_count"] > 0
 
 
-def test_tool_calling_agent_repairs_missing_final_citations(tmp_path) -> None:
+def test_tool_calling_agent_streams_cited_final_answer_without_repair(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
     with TestingSessionLocal() as db:
         seed_tool_calling_documents(db)
         result = make_service(db, chat_provider=CitationRepairChatProvider()).query(
             "What affects filling capacity?",
-            top_k=2,
             max_tool_calls=3,
         )
 
     assert not result.refused
     assert result.citations == [1]
-    assert result.latency_trace["citation_repair_count"] == 1
+    assert result.latency_trace["citation_repair_count"] == 0
+    assert result.latency_trace["streamed_token_count"] > 0
+
+
+def test_tool_calling_agent_streams_safe_citation_suffix_for_uncited_answer(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    chat_provider = UncitedStreamingChatProvider()
+
+    with TestingSessionLocal() as db:
+        seed_tool_calling_documents(db)
+        result = make_service(db, chat_provider=chat_provider).query(
+            "What affects filling capacity?",
+            max_tool_calls=3,
+        )
+
+    assert not result.refused
+    assert result.citations == [1]
+    assert result.answer.endswith("证据引用：[1]")
+    assert chat_provider.emitted_tokens == ["\n\n证据引用：[1]"]
+    assert result.latency_trace["citation_repair_count"] == 0
 
 
 def test_tool_calling_agent_converges_when_tool_errors(tmp_path) -> None:
@@ -976,7 +1199,6 @@ def test_tool_calling_agent_converges_when_tool_errors(tmp_path) -> None:
             log_answers=False,
         ).query(
             "What affects filling capacity?",
-            top_k=2,
             max_tool_calls=2,
         )
 
@@ -1051,12 +1273,11 @@ def test_tool_calling_structured_final_answer_prompt_is_default() -> None:
     assert "Do not reveal internal outline" in messages[0].content
 
 
-def test_tool_calling_tools_include_search_figures() -> None:
+def test_phase63_default_tool_surface_keeps_three_high_level_tools() -> None:
     tool_names = [tool.function.name for tool in tool_calling_tool_definitions()]
 
     assert tool_names == [
         "hybrid_search_knowledge",
-        "search_knowledge",
         "search_figures",
         "search_tables",
     ]

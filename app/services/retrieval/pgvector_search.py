@@ -20,6 +20,13 @@ class PgVectorSearchStatus:
     reason: str = ""
 
 
+@dataclass(frozen=True)
+class PgVectorSearchOutcome:
+    matches: list[VectorIndexMatch] | None
+    enabled: bool
+    reason: str = ""
+
+
 class PgVectorSearchService:
     """PostgreSQL pgvector HNSW search with safe FAISS fallback boundaries."""
 
@@ -47,10 +54,14 @@ class PgVectorSearchService:
         self,
         query_embedding: Sequence[float],
         top_k: int,
-    ) -> list[VectorIndexMatch] | None:
+    ) -> PgVectorSearchOutcome:
         status = self.status()
         if not status.enabled:
-            return None
+            return PgVectorSearchOutcome(
+                matches=None,
+                enabled=False,
+                reason=bounded_pgvector_reason(status.reason),
+            )
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0")
         if len(query_embedding) != self.embedding_provider.dimension:
@@ -99,7 +110,7 @@ class PgVectorSearchService:
                 },
             ).mappings()
         except SQLAlchemyError:
-            return None
+            return PgVectorSearchOutcome(matches=None, enabled=True, reason="sql_error")
 
         matches: list[VectorIndexMatch] = []
         for row in rows:
@@ -127,7 +138,15 @@ class PgVectorSearchService:
                     score=max(0.0, 1.0 - distance),
                 )
             )
-        return matches
+        return PgVectorSearchOutcome(matches=matches, enabled=True)
+
+
+def bounded_pgvector_reason(reason: str) -> str:
+    if reason.startswith("unsupported_dialect"):
+        return "unsupported_dialect"
+    if reason in {"disabled", "unsupported_dimension", "sql_error"}:
+        return reason
+    return "unavailable"
 
 
 def format_pgvector_literal(vector: Sequence[float], *, expected_dimension: int) -> str:

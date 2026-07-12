@@ -45,12 +45,14 @@ from app.services.generation.chat_model import (
     ChatToolCall,
     ChatToolDefinition,
     ChatToolFunction,
+    ToolCallingChatModelResult,
     create_chat_model_provider,
 )
 from app.services.observability.latency_trace import (
     LatencyTrace,
     bind_agent_conversation_cache_scope,
     bind_user_question_cache_key,
+    get_current_latency_trace,
     reset_current_latency_trace,
     set_current_latency_trace,
 )
@@ -59,12 +61,19 @@ from app.services.retrieval.hybrid_search import (
     reset_current_hyde_vector_query,
     set_current_hyde_vector_query,
 )
+from app.services.retrieval.runtime import (
+    build_retrieval_action,
+    build_retrieval_plan,
+    retrieval_runtime_result_limit,
+    reset_current_retrieval_plan,
+    set_current_retrieval_plan,
+)
 
 
 TOOL_CALLING_DEFAULT_MAX_ITERATIONS = 3
 TOOL_CALLING_HARD_MAX_ITERATIONS = 3
 ALLOWED_TOOL_NAMES = frozenset(
-    {"search_knowledge", "hybrid_search_knowledge", "search_figures", "search_tables"}
+    {"hybrid_search_knowledge", "search_figures", "search_tables"}
 )
 TOOL_RESULT_SNIPPET_LIMIT = 900
 TOOL_RESULT_MAX_SOURCES = 8
@@ -72,9 +81,8 @@ TOOL_CALLING_MAX_EXECUTED_TOOLS_PER_ITERATION = 1
 TOOL_CALLING_NEAR_DUPLICATE_THRESHOLD = 0.65
 TOOL_CALLING_PREFERRED_TOOL_ORDER = {
     "hybrid_search_knowledge": 0,
-    "search_knowledge": 1,
-    "search_figures": 2,
-    "search_tables": 3,
+    "search_figures": 1,
+    "search_tables": 2,
 }
 ToolCallingFinalAnswerStrategy = Literal["baseline", "structured_final_answer"]
 TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY: ToolCallingFinalAnswerStrategy = (
@@ -216,19 +224,17 @@ class ToolCallingAgentService:
     def query(
         self,
         question: str,
-        top_k: int = 8,
         max_tool_calls: int = TOOL_CALLING_DEFAULT_MAX_ITERATIONS,
         history: Sequence[str] | None = None,
         event_sink: ToolCallingEventSink | None = None,
         conversation_id: int | None = None,
         resume_policy: str = "auto",
         resume_run_id: str | None = None,
+        image_path: str | None = None,
     ) -> AgentQueryResult:
         normalized_question = question.strip()
         if not normalized_question:
             raise ValueError("question must not be empty")
-        if top_k <= 0:
-            raise ValueError("top_k must be greater than 0")
         if max_tool_calls <= 0:
             raise ValueError("max_tool_calls must be greater than 0")
 
@@ -236,7 +242,7 @@ class ToolCallingAgentService:
             agent_logger,
             "query_received",
             mode="tool_calling_agent",
-            top_k=top_k,
+            retrieval_budget_owner="runtime",
             max_tool_calls=max_tool_calls,
             final_answer_strategy=self.final_answer_strategy,
             question_summary=safe_text_summary(normalized_question, limit=80),
@@ -248,12 +254,25 @@ class ToolCallingAgentService:
             runtime_state.context.standalone_task or normalized_question,
             history=history,
         )
+        settings = get_settings()
         evidence_identity = refine_evidence_query_identity_with_llm(
             runtime_state.context.standalone_task or normalized_question,
             base_identity=evidence_identity,
             provider=self.runtime_identity_provider,
             history=history,
         )
+        retrieval_plan = (
+            build_retrieval_plan(
+                evidence_identity.retrieval_intent,
+                evidence_identity.canonical_query
+                or runtime_state.context.standalone_task
+                or normalized_question,
+                settings,
+            )
+            if settings.retrieval_runtime_enabled
+            else None
+        )
+        retrieval_action = build_retrieval_action(evidence_identity.retrieval_intent)
         if evidence_identity.safe_for_cache_reuse and evidence_identity.canonical_query:
             runtime_state.context = replace(
                 runtime_state.context,
@@ -348,7 +367,10 @@ class ToolCallingAgentService:
         search_results: list[AgentSearchItem] = []
         sources: list[AgentSourceReference] = []
         previous_tool_queries: list[str] = []
-        needs_figure_evidence = should_search_figures(normalized_question)
+        needs_figure_evidence = (
+            retrieval_action.required_tool == "search_figures"
+            or should_search_figures(normalized_question)
+        )
         figure_search_executed = False
         repeated_query_count = 0
         near_duplicate_query_count = 0
@@ -360,6 +382,21 @@ class ToolCallingAgentService:
         bind_user_question_cache_key(latency_trace, normalized_question)
         bind_agent_conversation_cache_scope(latency_trace, conversation_id)
         apply_evidence_identity_diagnostics(latency_trace, evidence_identity)
+        if retrieval_plan is not None:
+            for key, value in retrieval_plan.diagnostics().items():
+                latency_trace.set_value(key, value)
+            plan_fallback = retrieval_plan.intent_source != "llm"
+            latency_trace.set_value("retrieval_plan_fallback", plan_fallback)
+            latency_trace.set_value(
+                "retrieval_plan_fallback_reason",
+                evidence_identity.reason if plan_fallback else "",
+            )
+        else:
+            latency_trace.set_value("retrieval_runtime_mode", "legacy")
+            latency_trace.set_value("retrieval_plan_digest", "legacy")
+        latency_trace.set_value("retrieval_required_tool", retrieval_action.required_tool or "")
+        latency_trace.set_value("retrieval_forbidden_tools", list(retrieval_action.forbidden_tools))
+        latency_trace.set_value("retrieval_action_reason", retrieval_action.reason)
         latency_trace.set_value(
             "canonical_task",
             evidence_identity.canonical_query
@@ -370,9 +407,166 @@ class ToolCallingAgentService:
             latency_trace.set_value(key, value)
         apply_runtime_diagnostics(latency_trace, runtime_state)
         latency_token = set_current_latency_trace(latency_trace)
+        retrieval_token = set_current_retrieval_plan(retrieval_plan)
         hyde_token = None
 
         try:
+            if image_path:
+                image_started = time.perf_counter()
+                image_tool_result = self.toolbox.analyze_user_image(
+                    image_path,
+                    normalized_question,
+                    top_k=retrieval_runtime_result_limit("analyze_user_image", settings),
+                )
+                image_call = replace(image_tool_result.call, step_id="uploaded-image-analysis")
+                image_tool_result = replace(image_tool_result, call=image_call)
+                latency_trace.add_duration(
+                    "tool_latency_ms",
+                    (time.perf_counter() - image_started) * 1000.0,
+                )
+                tool_calls.append(image_call)
+                workflow_steps.append(image_call)
+                search_results = merge_search_results(
+                    search_results,
+                    image_tool_result.search_results,
+                )
+                sources = merge_sources(sources, image_tool_result.sources)
+                runtime_state.evidence.add(
+                    tool_name=image_tool_result.tool_name,
+                    query=normalized_question,
+                    result_count=len(image_tool_result.search_results),
+                    succeeded=image_call.succeeded,
+                )
+                apply_runtime_diagnostics(latency_trace, runtime_state)
+                self._emit(
+                    event_sink,
+                    "tool_call_start",
+                    {
+                        "iteration": 1,
+                        "step_id": image_call.step_id,
+                        "tool_name": image_call.tool_name,
+                        "input_summary": image_call.input_summary,
+                    },
+                )
+                self._emit_tool_result(event_sink, image_call, iteration=1)
+                return result_from_tool_calling_loop(
+                    question=normalized_question,
+                    answer="" if image_tool_result.refused else (image_tool_result.answer or ""),
+                    tool_calls=tool_calls,
+                    workflow_steps=workflow_steps,
+                    search_results=search_results,
+                    sources=sources,
+                    citations=list(range(1, len(sources) + 1)) if sources else [],
+                    refused=image_tool_result.refused,
+                    refusal_reason=image_tool_result.refusal_reason,
+                    llm_call_count=0,
+                    repeated_query_count=0,
+                    near_duplicate_query_count=0,
+                    skipped_tool_call_count=0,
+                    executed_tool_call_count=1,
+                    citation_repair_count=0,
+                    runtime_state=runtime_state,
+                    latency_trace=latency_trace.finalize(
+                        iteration_count=1,
+                        tool_call_count=1,
+                    ),
+                    image_analysis=image_tool_result.image_analysis,
+                )
+
+            if retrieval_action.required_tool is not None:
+                preflight_query = (
+                    runtime_state.context.standalone_task or normalized_question
+                )
+                preflight_tool_name = retrieval_action.required_tool
+                self._emit(
+                    event_sink,
+                    "tool_call_start",
+                    {
+                        "iteration": 1,
+                        "step_id": f"runtime-{preflight_tool_name}",
+                        "tool_name": preflight_tool_name,
+                        "input_summary": f"query={truncate_text(preflight_query)}",
+                    },
+                )
+                preflight_started = time.perf_counter()
+                if preflight_tool_name == "search_figures":
+                    preflight_result = self.toolbox.search_figures(
+                        preflight_query,
+                        top_k=retrieval_runtime_result_limit("search_figures", settings),
+                    )
+                    figure_search_executed = True
+                else:
+                    preflight_result = self.toolbox.search_tables(
+                        preflight_query,
+                        top_k=retrieval_runtime_result_limit("search_tables", settings),
+                    )
+                preflight_result = replace(
+                    preflight_result,
+                    call=replace(
+                        preflight_result.call,
+                        step_id=f"runtime-{preflight_tool_name}",
+                    ),
+                )
+                latency_trace.add_duration(
+                    "tool_latency_ms",
+                    (time.perf_counter() - preflight_started) * 1000.0,
+                )
+                tool_calls.append(preflight_result.call)
+                workflow_steps.append(preflight_result.call)
+                executed_tool_call_count += 1
+                search_results = merge_search_results(
+                    search_results,
+                    preflight_result.search_results,
+                )
+                sources = merge_sources(sources, preflight_result.sources)
+                runtime_state.evidence.add(
+                    tool_name=preflight_result.tool_name,
+                    query=preflight_query,
+                    result_count=len(preflight_result.search_results),
+                    succeeded=preflight_result.call.succeeded,
+                )
+                if preflight_result.call.succeeded:
+                    latency_trace.set_value(
+                        "retrieval_selected_count",
+                        len(preflight_result.search_results),
+                    )
+                    latency_trace.set_value(
+                        "retrieval_selected_chunk_ids",
+                        [item.chunk_id for item in preflight_result.search_results],
+                    )
+                apply_runtime_diagnostics(latency_trace, runtime_state)
+                self._emit_tool_result(event_sink, preflight_result.call, iteration=1)
+                if not preflight_result.search_results:
+                    refusal_reason = (
+                        preflight_result.refusal_reason
+                        or f"No relevant {preflight_tool_name} evidence was found."
+                    )
+                    runtime_state.stop_reason = "required_asset_evidence_not_found"
+                    runtime_state.final_decision = "refuse"
+                    apply_runtime_diagnostics(latency_trace, runtime_state)
+                    return result_from_tool_calling_loop(
+                        question=normalized_question,
+                        answer=refusal_reason,
+                        tool_calls=tool_calls,
+                        workflow_steps=workflow_steps,
+                        search_results=search_results,
+                        sources=sources,
+                        citations=[],
+                        refused=True,
+                        refusal_reason=refusal_reason,
+                        llm_call_count=0,
+                        repeated_query_count=0,
+                        near_duplicate_query_count=0,
+                        skipped_tool_call_count=0,
+                        executed_tool_call_count=executed_tool_call_count,
+                        citation_repair_count=0,
+                        runtime_state=runtime_state,
+                        latency_trace=latency_trace.finalize(
+                            iteration_count=len(workflow_steps),
+                            tool_call_count=len(tool_calls),
+                        ),
+                    )
+
             if resume_decision.should_resume and resume_decision.run is not None:
                 resumed = result_from_runtime_checkpoint(
                     question=normalized_question,
@@ -402,7 +596,10 @@ class ToolCallingAgentService:
                     evidence_identity.canonical_query
                     or runtime_state.context.standalone_task
                     or normalized_question,
-                    top_k=top_k,
+                    top_k=retrieval_runtime_result_limit(
+                        semantic_cache_tool_name,
+                        settings,
+                    ),
                     tool_name=semantic_cache_tool_name,
                 )
             if semantic_cached is not None and semantic_cached.search_results:
@@ -470,24 +667,73 @@ class ToolCallingAgentService:
                 latency_trace.set_value("runtime_run_id", active_run.run_id)
 
             for iteration in range(1, max_iterations + 1):
+                streaming_final_generation = bool(sources)
                 self._emit(
                     event_sink,
                     "agent_step",
                     {
                         "iteration": iteration,
-                        "action": "llm_with_tools",
-                        "step_summary": "calling model with tool definitions",
+                        "action": (
+                            "stream_final_answer"
+                            if streaming_final_generation
+                            else "llm_with_tools"
+                        ),
+                        "step_summary": (
+                            "streaming final answer from retrieved evidence"
+                            if streaming_final_generation
+                            else "calling model with tool definitions"
+                        ),
                     },
                 )
                 llm_started = time.perf_counter()
-                if not hasattr(self.chat_model_provider, "generate_with_tools"):
-                    raise RuntimeError(
-                        "chat model provider does not support tool calling"
+                if streaming_final_generation:
+                    answer_parts: list[str] = []
+                    if hasattr(self.chat_model_provider, "stream_generate"):
+                        for token_text in self.chat_model_provider.stream_generate(
+                            evidence_answer_messages(
+                                normalized_question,
+                                sources=sources,
+                                history=history,
+                                final_answer_strategy=self.final_answer_strategy,
+                            )
+                        ):
+                            if not token_text:
+                                continue
+                            latency_trace.mark_first_token()
+                            answer_parts.append(token_text)
+                            latency_trace.set_value(
+                                "streamed_token_count",
+                                int(latency_trace.values["streamed_token_count"]) + 1,
+                            )
+                        model_result = ToolCallingChatModelResult(
+                            content="".join(answer_parts),
+                            tool_calls=[],
+                            provider=self.chat_model_provider.provider_name,
+                            model_name=self.chat_model_provider.model_name,
+                        )
+                    else:
+                        latency_trace.set_value("streaming_degraded", True)
+                        if not hasattr(self.chat_model_provider, "generate_with_tools"):
+                            raise RuntimeError(
+                                "chat model provider supports neither streaming nor tool calling"
+                            )
+                        model_result = self.chat_model_provider.generate_with_tools(
+                            messages,
+                            tools,
+                        )
+                else:
+                    if not hasattr(self.chat_model_provider, "generate_with_tools"):
+                        raise RuntimeError(
+                            "chat model provider does not support tool calling"
+                        )
+                    model_result = self.chat_model_provider.generate_with_tools(
+                        messages,
+                        tools,
                     )
-                model_result = self.chat_model_provider.generate_with_tools(messages, tools)
                 llm_call_count += 1
                 llm_duration_ms = (time.perf_counter() - llm_started) * 1000.0
-                latency_trace.add_duration("planner_latency_ms", llm_duration_ms)
+                if not streaming_final_generation:
+                    latency_trace.add_duration("planner_latency_ms", llm_duration_ms)
 
                 if model_result.tool_calls:
                     messages.append(
@@ -512,6 +758,9 @@ class ToolCallingAgentService:
                         grounded_tool_calls,
                         previous_tool_queries=previous_tool_queries,
                         sources_available=bool(sources),
+                        preferred_tool_name=(
+                            "search_figures" if needs_figure_evidence else None
+                        ),
                     )
                     for tool_call in grounded_tool_calls:
                         query = tool_query_from_call(tool_call, default_query=normalized_question)
@@ -528,6 +777,7 @@ class ToolCallingAgentService:
                                 output_summary="near-duplicate query skipped",
                                 succeeded=False,
                                 error="near-duplicate query skipped",
+                                step_id=tool_call.id,
                             )
                             tool_calls.append(repeated_record)
                             workflow_steps.append(repeated_record)
@@ -559,6 +809,7 @@ class ToolCallingAgentService:
                                 output_summary=reason,
                                 succeeded=False,
                                 error=reason,
+                                step_id=tool_call.id,
                             )
                             tool_calls.append(skipped_record)
                             workflow_steps.append(skipped_record)
@@ -585,8 +836,21 @@ class ToolCallingAgentService:
                         tool_result = self._execute_tool_call(
                             tool_call=tool_call,
                             default_query=normalized_question,
-                            top_k=top_k,
+                            forbidden_tools=retrieval_action.forbidden_tools,
                         )
+                        tool_result = replace(
+                            tool_result,
+                            call=replace(tool_result.call, step_id=tool_call.id),
+                        )
+                        if tool_result.call.succeeded and tool_result.tool_name in ALLOWED_TOOL_NAMES:
+                            latency_trace.set_value(
+                                "retrieval_selected_count",
+                                len(tool_result.search_results),
+                            )
+                            latency_trace.set_value(
+                                "retrieval_selected_chunk_ids",
+                                [item.chunk_id for item in tool_result.search_results],
+                            )
                         latency_trace.add_duration(
                             "tool_latency_ms",
                             (time.perf_counter() - tool_started) * 1000.0,
@@ -728,8 +992,20 @@ class ToolCallingAgentService:
                             figure_query = runtime_state.context.standalone_task or normalized_question
                             figure_result = self.toolbox.search_figures(
                                 figure_query,
-                                top_k=min(4, top_k),
+                                top_k=retrieval_runtime_result_limit(
+                                    "search_figures",
+                                    settings,
+                                ),
                             )
+                            if figure_result.call.succeeded:
+                                latency_trace.set_value(
+                                    "retrieval_selected_count",
+                                    len(figure_result.search_results),
+                                )
+                                latency_trace.set_value(
+                                    "retrieval_selected_chunk_ids",
+                                    [item.chunk_id for item in figure_result.search_results],
+                                )
                             figure_search_executed = True
                             executed_tool_call_count += 1
                             iteration_executed_tool_count += 1
@@ -829,6 +1105,7 @@ class ToolCallingAgentService:
                                     input_summary="evidence convergence",
                                     output_summary=truncate_text(answer_content),
                                     succeeded=True,
+                                    step_id="final",
                                 )
                             )
                             return result_from_tool_calling_loop(
@@ -863,6 +1140,25 @@ class ToolCallingAgentService:
                         allowed_source_ids,
                     )
                     answer_content = model_result.content
+                    stream_token_emitter = getattr(
+                        self.chat_model_provider,
+                        "emit_stream_token",
+                        None,
+                    )
+                    if (
+                        sources
+                        and not citations
+                        and streaming_final_generation
+                        and callable(stream_token_emitter)
+                    ):
+                        citation_suffix = "\n\n证据引用：[1]"
+                        stream_token_emitter(citation_suffix)
+                        answer_content += citation_suffix
+                        citations = [1]
+                        latency_trace.set_value(
+                            "streamed_token_count",
+                            int(latency_trace.values["streamed_token_count"]) + 1,
+                        )
                     if sources and not citations:
                         repair_started = time.perf_counter()
                         repair_result = self.chat_model_provider.generate(
@@ -903,6 +1199,7 @@ class ToolCallingAgentService:
                                 output_summary=refusal_reason,
                                 succeeded=False,
                                 error=refusal_reason,
+                                step_id="final",
                             )
                         )
                         runtime_state.stop_reason = "final_content_without_citations"
@@ -964,6 +1261,7 @@ class ToolCallingAgentService:
                             input_summary="model content",
                             output_summary=truncate_text(answer_content),
                             succeeded=True,
+                            step_id="final",
                         )
                     )
                     return result_from_tool_calling_loop(
@@ -1030,6 +1328,7 @@ class ToolCallingAgentService:
         finally:
             if hyde_token is not None:
                 reset_current_hyde_vector_query(hyde_token)
+            reset_current_retrieval_plan(retrieval_token)
             reset_current_latency_trace(latency_token)
 
     def _execute_tool_call(
@@ -1037,7 +1336,7 @@ class ToolCallingAgentService:
         *,
         tool_call: ChatToolCall,
         default_query: str,
-        top_k: int,
+        forbidden_tools: Sequence[str] = (),
     ) -> AgentToolResult:
         if tool_call.name not in ALLOWED_TOOL_NAMES:
             return failed_tool_call_result(
@@ -1045,11 +1344,15 @@ class ToolCallingAgentService:
                 "unsupported tool",
                 f"Tool {tool_call.name} is not allowed.",
             )
+        if tool_call.name in forbidden_tools:
+            return failed_tool_call_result(
+                tool_call.name,
+                "forbidden tool",
+                f"Tool {tool_call.name} is forbidden by explicit user intent.",
+            )
 
         query = tool_query_from_call(tool_call, default_query=default_query)
-        requested_top_k = tool_top_k_from_call(tool_call, default_top_k=top_k)
-        if tool_call.name == "search_knowledge":
-            return self.toolbox.search_knowledge(query, top_k=requested_top_k)
+        requested_top_k = retrieval_runtime_result_limit(tool_call.name)
         if tool_call.name == "search_figures":
             return self.toolbox.search_figures(query, top_k=requested_top_k)
         if tool_call.name == "search_tables":
@@ -1076,6 +1379,7 @@ class ToolCallingAgentService:
             "tool_call_start",
             {
                 "iteration": iteration,
+                "step_id": tool_call.id,
                 "tool_name": tool_call.name,
                 "input_summary": safe_tool_input_summary(tool_call),
             },
@@ -1096,15 +1400,23 @@ class ToolCallingAgentService:
             succeeded=record.succeeded,
             output_summary=record.output_summary,
         )
+        trace = get_current_latency_trace()
+        selected_count = (
+            int(trace.values.get("retrieval_selected_count", 0) or 0)
+            if trace is not None and record.tool_name in ALLOWED_TOOL_NAMES
+            else 0
+        )
         self._emit(
             event_sink,
             "tool_call_result",
             {
                 "iteration": iteration,
+                "step_id": record.step_id,
                 "tool_name": record.tool_name,
                 "observation_summary": record.output_summary,
                 "succeeded": record.succeeded,
                 "skipped": bool(record.error and "skipped" in record.error),
+                "selected_count": selected_count,
             },
         )
 
@@ -1290,12 +1602,6 @@ def tool_calling_tool_definitions() -> list[ChatToolDefinition]:
                 "type": "string",
                 "description": "Search query for the local RFC knowledge base.",
             },
-            "top_k": {
-                "type": "integer",
-                "description": "Maximum number of results to return.",
-                "minimum": 1,
-                "maximum": 8,
-            },
         },
         "required": ["query"],
         "additionalProperties": False,
@@ -1307,16 +1613,6 @@ def tool_calling_tool_definitions() -> list[ChatToolDefinition]:
                 description=(
                     "Read-only hybrid keyword/vector search over the local "
                     "rock-filled concrete knowledge base."
-                ),
-                parameters=query_schema,
-            )
-        ),
-        ChatToolDefinition(
-            function=ChatToolFunction(
-                name="search_knowledge",
-                description=(
-                    "Read-only keyword search over the local rock-filled concrete "
-                    "knowledge base."
                 ),
                 parameters=query_schema,
             )
@@ -1453,19 +1749,9 @@ def tool_query_from_call(tool_call: ChatToolCall, default_query: str) -> str:
     return default_query
 
 
-def tool_top_k_from_call(tool_call: ChatToolCall, default_top_k: int) -> int:
-    raw_top_k = tool_call.arguments.get("top_k")
-    if isinstance(raw_top_k, int):
-        return max(1, min(raw_top_k, 8))
-    if isinstance(raw_top_k, str) and raw_top_k.isdigit():
-        return max(1, min(int(raw_top_k), 8))
-    return max(1, min(default_top_k, 8))
-
-
 def safe_tool_input_summary(tool_call: ChatToolCall) -> str:
     query = tool_call.arguments.get("query", "")
-    top_k = tool_call.arguments.get("top_k", "")
-    return f"query={truncate_text(str(query))}; top_k={top_k}"
+    return f"query={truncate_text(str(query))}"
 
 
 def normalize_tool_query(query: str) -> str:
@@ -1508,6 +1794,7 @@ def executable_tool_call_ids(
     *,
     previous_tool_queries: Sequence[str],
     sources_available: bool,
+    preferred_tool_name: str | None = None,
 ) -> set[str]:
     if sources_available:
         return set()
@@ -1523,7 +1810,10 @@ def executable_tool_call_ids(
         candidates.append(tool_call)
 
     candidates.sort(
-        key=lambda call: TOOL_CALLING_PREFERRED_TOOL_ORDER.get(call.name, 99)
+        key=lambda call: (
+            0 if call.name == preferred_tool_name else 1,
+            TOOL_CALLING_PREFERRED_TOOL_ORDER.get(call.name, 99),
+        )
     )
     return {
         call.id
@@ -1575,6 +1865,7 @@ def result_from_tool_calling_loop(
     citation_repair_count: int,
     runtime_state: AgentRuntimeState | None = None,
     latency_trace: dict[str, object],
+    image_analysis: dict[str, object] | None = None,
 ) -> AgentQueryResult:
     latency_trace = dict(latency_trace)
     if runtime_state is not None:
@@ -1620,6 +1911,7 @@ def result_from_tool_calling_loop(
         workflow_steps=workflow_steps,
         iteration_count=len(workflow_steps),
         latency_trace=latency_trace,
+        image_analysis=image_analysis,
     )
 
 

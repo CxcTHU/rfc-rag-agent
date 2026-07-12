@@ -4891,4 +4891,45 @@ public app HTTP port
 
 The app container must not use container-local `127.0.0.1:8091` to reach a separate GPU server. For the current verified deployment, `RERANKING_BASE_URL` points to the CPU Docker-host tunnel endpoint, which forwards privately to the GPU BGE service. The GPU reranker remains private; only the app HTTP port is exposed before domain/DNS/HTTPS.
 
-GPU BGE and the CPU tunnel are supervised by user-level systemd services. Retrieval remains conservative for production: pgvector/FAISS and existing Agent modes stay available, while GraphRAG+BGE routing should still respect the Phase 54 ordinary-query regression caveat.
+GPU BGE and the CPU tunnel are supervised by user-level systemd services. Retrieval remains conservative for production: pgvector/FAISS policy and the unified Tool Calling Agent remain available, while GraphRAG+BGE routing should still respect the Phase 54 ordinary-query regression caveat.
+## Phase 63 Retrieval Runtime Addendum
+
+Phase 63 introduces a request-scoped control plane above the existing Hybrid
+kernel. Its public Agent API has one runtime, `tool_calling_agent`; request and
+tool schemas expose no `mode` or `top_k`, so low-level retrieval knobs never
+reach the model or browser:
+
+```text
+user question + bounded history
+-> AgentRuntime contextualization
+-> one runtime identity/intent JSON call
+-> RetrievalPlan (code-owned thresholds and budgets)
+-> model selects one of three high-level tools (query only)
+-> Retrieval Runtime supplies bounded internal budgets
+-> HybridSearchService
+   -> keyword + vector always
+   -> Local GraphRetriever / table_text / figure_caption by bound plan
+   -> weighted RRF fusion
+   -> provenance-aware rerank
+   -> required-channel preservation
+-> cited answer
+```
+
+An uploaded image uses the same Tool Calling service through a code-owned
+`analyze_user_image` preflight. There is no online dispatch path for the
+retired default, agentic, ReAct, or LangGraph Agent modes.
+
+Runtime is enabled by default. When it is explicitly disabled, or when no plan
+is bound, Hybrid keeps the complete legacy lexical channel-gating behavior.
+When enabled, the bound plan is the sole source of optional-channel eligibility.
+Negative intent has
+precedence; explicit high-confidence relationship intent can require graph
+evidence; lower-confidence relationship intent can prefer a one-hop graph
+budget. Numeric thresholds, maximum matches, maximum two hops, channel weights,
+and rerank settings remain configuration/code owned.
+
+Retrieval, rerank, and Hybrid tool-result cache identities include the safe plan
+digest. Graph-eligible identities also include a short SHA-256 fingerprint of
+the local graph file, preventing reuse across plan or graph revisions. Local
+GraphRAG remains fail-open: missing or invalid graph data records bounded
+diagnostics and continues with keyword/vector evidence.

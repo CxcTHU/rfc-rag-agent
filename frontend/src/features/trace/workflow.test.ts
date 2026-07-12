@@ -17,17 +17,28 @@ describe('workflowStepsForMessage', () => {
     expect(workflowStepsForMessage(message)).toEqual([])
   })
 
-  it('uses captured real SSE events while pending and metadata workflow after completion', () => {
+  it('reconciles completed metadata into captured SSE steps without replacing live state', () => {
     const message: ChatMessage = {
       id: 'assistant-2', role: 'assistant', content: '', pending: true,
-      events: [{ name: 'search_knowledge', action: 'tool_call_start' }],
+      events: [{
+        name: 'hybrid_search_knowledge', action: 'tool_call_result', step_id: 'call-1',
+        output_summary: 'returned 6 hybrid results',
+      }],
     }
-    expect(workflowStepsForMessage(message).map((step) => step.name)).toEqual(['search_knowledge'])
+    expect(workflowStepsForMessage(message).map((step) => step.name)).toEqual(['hybrid_search_knowledge'])
     message.pending = false
     message.result = {
       question: 'q', answer: 'a', sources: [], citations: [], refused: false,
-      mode: 'tool_calling_agent', workflow_steps: [{ name: 'final_answer', step_summary: '真实完成步骤' }],
+      mode: 'tool_calling_agent', workflow_steps: [
+        {
+          name: 'hybrid_search_knowledge', step_id: 'call-1',
+          output_summary: 'returned 11 hybrid results',
+        },
+        { name: 'final_answer', step_id: 'final', step_summary: '真实完成步骤' },
+      ],
     }
-    expect(workflowStepsForMessage(message).map((step) => step.name)).toEqual(['final_answer'])
+    const steps = workflowStepsForMessage(message)
+    expect(steps.map((step) => step.name)).toEqual(['hybrid_search_knowledge', 'final_answer'])
+    expect(steps[0].output_summary).toBe('returned 6 hybrid results')
   })
 })

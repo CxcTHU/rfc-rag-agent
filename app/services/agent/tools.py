@@ -27,6 +27,7 @@ from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.citation_locator import CitationLocator
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.keyword_search import KeywordSearchResult, KeywordSearchService
+from app.services.retrieval.runtime import current_retrieval_plan, retrieval_plan_digest
 from app.services.retrieval.vector_cache import VectorIndexEntry
 from app.services.retrieval.vector_search import VectorSearchResult, VectorSearchService
 from app.services.table_rag.search import StructuredTableSearchService
@@ -206,6 +207,7 @@ class AgentToolCallRecord:
     output_summary: str
     succeeded: bool
     error: str | None = None
+    step_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -883,6 +885,12 @@ class AgentToolbox:
             elif isinstance(canonical, str) and canonical.strip():
                 evidence_query = normalized_query_identity(canonical)
                 stable_question_key = ""
+        settings = get_settings()
+        runtime_plan = (
+            current_retrieval_plan()
+            if settings.retrieval_runtime_enabled
+            else None
+        )
         identity = base_cache_identity(self.db)
         query_mode = "user_question" if stable_question_key else "evidence_identity"
         identity.update(
@@ -928,6 +936,11 @@ class AgentToolbox:
                 "table_rag_enabled": bool(get_settings().table_rag_enabled)
                 if tool_name == "search_tables"
                 else False,
+                "retrieval_plan_digest": retrieval_plan_digest(runtime_plan),
+                "retrieval_runtime_schema": (
+                    runtime_plan.schema if runtime_plan is not None else "legacy"
+                ),
+                "graph_fingerprint": tool_graph_fingerprint(tool_name, runtime_plan),
             }
         )
         return identity
@@ -999,6 +1012,7 @@ class AgentToolbox:
         ]
         refused = bool(payload.get("refused")) and not search_results
         refusal_reason = payload.get("refusal_reason") if isinstance(payload.get("refusal_reason"), str) else None
+        restore_tool_cache_retrieval_diagnostics(payload)
         _trace_tool_cache_selected_results(tool_name, search_results)
         return AgentToolResult(
             tool_name=tool_name,
@@ -1046,6 +1060,7 @@ class AgentToolbox:
                 },
                 "refused": result.refused,
                 "refusal_reason": result.refusal_reason,
+                "retrieval_diagnostics": current_safe_retrieval_diagnostics(),
             },
         )
 
@@ -1139,8 +1154,50 @@ def _trace_tool_cache_selected_results(tool_name: str, search_results: list[Agen
     trace.set_value("retrieval_selection_reason", "tool_result_cache_hit")
 
 
+SAFE_RETRIEVAL_DIAGNOSTIC_FIELDS = (
+    "graph_fingerprint",
+    "graph_selected_count",
+    "graph_selected_chunk_ids",
+    "graph_relation_type_preview",
+    "retrieval_required_channels",
+    "retrieval_required_channel_insertions",
+    "retrieval_required_channels_satisfied",
+)
+
+
+def current_safe_retrieval_diagnostics() -> dict[str, object]:
+    trace = get_current_latency_trace()
+    if trace is None:
+        return {}
+    return {
+        key: trace.values[key]
+        for key in SAFE_RETRIEVAL_DIAGNOSTIC_FIELDS
+        if key in trace.values
+    }
+
+
+def restore_tool_cache_retrieval_diagnostics(payload: dict[str, object]) -> None:
+    trace = get_current_latency_trace()
+    diagnostics = payload.get("retrieval_diagnostics")
+    if trace is None or not isinstance(diagnostics, dict):
+        return
+    for key in SAFE_RETRIEVAL_DIAGNOSTIC_FIELDS:
+        if key in diagnostics:
+            trace.set_value(key, diagnostics[key])
+
+
 def stable_cache_identity_part(value: str) -> str:
     return " ".join((value or "").strip().split())
+
+
+def tool_graph_fingerprint(tool_name: str, runtime_plan: object | None) -> str:
+    if tool_name != "hybrid_search_knowledge" or runtime_plan is None:
+        return "disabled"
+    if getattr(runtime_plan, "graph_requirement", "disabled") == "disabled":
+        return "disabled"
+    from app.services.graphrag.retriever import graph_content_fingerprint
+
+    return graph_content_fingerprint(Path(get_settings().graphrag_graph_path))
 
 
 def stable_cache_modifier_suffix(value: object) -> str:

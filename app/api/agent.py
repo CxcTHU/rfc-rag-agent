@@ -34,14 +34,10 @@ from app.schemas.agent import (
 from app.services.agent.chitchat import ChitchatResult, detect_chitchat
 from app.services.agent import intent_router
 from app.services.agent.refusal_explainer import build_refusal_explanation
-from app.services.agent.service import AgentQueryResult, AgentService
+from app.services.agent.service import AgentQueryResult
 from app.services.agent.tools import image_url_from_source_image_path, page_number_from_source_image_path
-from app.services.agent.graph_builder import LangGraphAgentService
-from app.services.agent.react_service import ReActAgentService
 from app.services.agent.tool_calling_service import ToolCallingAgentService
 from app.services.agent.runtime_checkpoint import AgentRuntimeRunRepository
-from app.services.agent.routing import classify_query_complexity
-from app.services.agentic.graph import run_agentic_rag
 from app.services.agentic.state import AgenticResult
 from app.services.conversation.history import (
     history_from_messages,
@@ -160,15 +156,7 @@ def get_agent_embedding_provider() -> EmbeddingProvider:
 
 
 def configured_agent_default_mode() -> str:
-    configured = get_settings().agent_default_mode.strip().lower()
-    if configured in {
-        "default",
-        "agentic",
-        "react_agent",
-        "tool_calling_agent",
-        "langgraph_agent",
-    }:
-        return configured
+    """The only public production Agent mode after Phase 63 consolidation."""
     return "tool_calling_agent"
 
 
@@ -298,9 +286,6 @@ def query_agent(
     current_user: User | None = Depends(get_current_user),
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
-    planner_chat_provider: ChatModelProvider | None = Depends(
-        get_agent_planner_chat_model_provider
-    ),
 ) -> AgentQueryResponse:
     chat_model_provider = resolve_agent_chat_model_provider(request, chat_model_provider)
     conversation_repository = ConversationRepository(db)
@@ -333,8 +318,8 @@ def query_agent(
         question=request.question,
         chat_model_provider=chat_model_provider,
         embedding_provider=embedding_provider,
-        planner_chat_provider=planner_chat_provider,
-        effective_mode=request.mode or configured_agent_default_mode(),
+        planner_chat_provider=None,
+        effective_mode="tool_calling_agent",
         conversation_messages=conversation_messages,
     )
     if meta_response is not None:
@@ -383,185 +368,22 @@ def query_agent(
         )
         return response
 
-    effective_mode = request.mode
-    if effective_mode is None:
-        effective_mode = configured_agent_default_mode()
+    effective_mode = "tool_calling_agent"
     log_agent_query_received(request, effective_mode=effective_mode)
 
-    response: AgentQueryResponse
-    if effective_mode == "agentic":
-        try:
-            agentic_result = run_agentic_rag(
-                question=request.question,
-                db=db,
-                embedding_provider=embedding_provider,
-                chat_model_provider=chat_model_provider,
-                history=conversation_history or request.history,
-            )
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        except RuntimeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="chat model provider is unavailable or timed out",
-            ) from exc
-        response = maybe_enrich_agent_response_with_figure_evidence(
-            db=db,
-            question=request.question,
-            response=agent_response_from_agentic_result(agentic_result),
-            effective_mode=effective_mode,
-        )
-        log_agent_response_event(response)
-        persist_agent_conversation_messages(
-            repository=conversation_repository,
-            conversation_id=request.conversation_id,
-            question=request.question,
-            response=response,
-            chat_model_provider=chat_model_provider,
-        )
-        return response
-
-    if effective_mode == "react_agent":
-        try:
-            result = ReActAgentService(
-                db=db,
-                chat_model_provider=chat_model_provider,
-                embedding_provider=embedding_provider,
-                planner_chat_provider=planner_chat_provider,
-            ).query(
-                question=request.question,
-                top_k=request.top_k,
-                max_tool_calls=request.max_tool_calls,
-                history=conversation_history or request.history,
-                image_path=request.image_path,
-            )
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        except RuntimeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="chat model provider is unavailable or timed out",
-            ) from exc
-        response = maybe_enrich_agent_response_with_figure_evidence(
-            db=db,
-            question=request.question,
-            response=agent_response_from_result(result),
-            effective_mode=effective_mode,
-        )
-        log_agent_response_event(response)
-        persist_agent_conversation_messages(
-            repository=conversation_repository,
-            conversation_id=request.conversation_id,
-            question=request.question,
-            response=response,
-            chat_model_provider=chat_model_provider,
-        )
-        return response
-
-    if effective_mode == "langgraph_agent":
-        try:
-            result = LangGraphAgentService(
-                db=db,
-                chat_model_provider=chat_model_provider,
-                embedding_provider=embedding_provider,
-                planner_chat_provider=planner_chat_provider,
-            ).query(
-                question=request.question,
-                top_k=request.top_k,
-                max_tool_calls=request.max_tool_calls,
-                source_id=request.source_id,
-                history=conversation_history or request.history,
-                image_path=request.image_path,
-                thread_id=(
-                    f"conversation:{request.conversation_id}"
-                    if request.conversation_id is not None
-                    else None
-                ),
-            )
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        except RuntimeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="chat model provider is unavailable or timed out",
-            ) from exc
-        response = maybe_enrich_agent_response_with_figure_evidence(
-            db=db,
-            question=request.question,
-            response=agent_response_from_result(result),
-            effective_mode=effective_mode,
-        )
-        log_agent_response_event(response)
-        persist_agent_conversation_messages(
-            repository=conversation_repository,
-            conversation_id=request.conversation_id,
-            question=request.question,
-            response=response,
-            chat_model_provider=chat_model_provider,
-        )
-        return response
-
-    if effective_mode == "tool_calling_agent":
-        try:
-            result = ToolCallingAgentService(
-                db=db,
-                chat_model_provider=chat_model_provider,
-                embedding_provider=embedding_provider,
-            ).query(
-                question=request.question,
-                top_k=request.top_k,
-                max_tool_calls=request.max_tool_calls,
-                history=conversation_history or request.history,
-                conversation_id=request.conversation_id,
-                resume_policy=request.resume_policy,
-                resume_run_id=request.resume_run_id,
-            )
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        except RuntimeError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="chat model provider is unavailable or timed out",
-            ) from exc
-        response = maybe_enrich_agent_response_with_figure_evidence(
-            db=db,
-            question=request.question,
-            response=agent_response_from_result(result),
-            effective_mode=effective_mode,
-        )
-        log_agent_response_event(response)
-        persist_agent_conversation_messages(
-            repository=conversation_repository,
-            conversation_id=request.conversation_id,
-            question=request.question,
-            response=response,
-            chat_model_provider=chat_model_provider,
-        )
-        return response
-
     try:
-        result = AgentService(
+        result = ToolCallingAgentService(
             db=db,
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
         ).query(
             question=request.question,
-            top_k=request.top_k,
             max_tool_calls=request.max_tool_calls,
-            source_id=request.source_id,
             history=conversation_history or request.history,
+            conversation_id=request.conversation_id,
+            resume_policy=request.resume_policy,
+            resume_run_id=request.resume_run_id,
+            image_path=request.image_path,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -573,13 +395,7 @@ def query_agent(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="chat model provider is unavailable or timed out",
         ) from exc
-
-    response = maybe_enrich_agent_response_with_figure_evidence(
-        db=db,
-        question=request.question,
-        response=agent_response_from_result(result),
-        effective_mode=effective_mode,
-    )
+    response = agent_response_from_result(result)
     log_agent_response_event(response)
     persist_agent_conversation_messages(
         repository=conversation_repository,
@@ -598,9 +414,6 @@ def stream_query_agent(
     current_user: User | None = Depends(get_current_user),
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
-    planner_chat_provider: ChatModelProvider | None = Depends(
-        get_agent_planner_chat_model_provider
-    ),
 ) -> StreamingResponse:
     chat_model_provider = resolve_agent_chat_model_provider(request, chat_model_provider)
     conversation_repository = ConversationRepository(db)
@@ -638,7 +451,6 @@ def stream_query_agent(
             conversation_history=conversation_history,
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
-            planner_chat_provider=planner_chat_provider,
         ),
         media_type="text/event-stream",
         headers={
@@ -657,7 +469,6 @@ def stream_agent_query_events(
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
-    planner_chat_provider: ChatModelProvider | None = None,
 ) -> Iterator[str]:
     stream_started = time.perf_counter()
     try:
@@ -668,8 +479,8 @@ def stream_agent_query_events(
             question=request.question,
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
-            planner_chat_provider=planner_chat_provider,
-            effective_mode=request.mode or configured_agent_default_mode(),
+            planner_chat_provider=None,
+            effective_mode="tool_calling_agent",
             conversation_messages=conversation_messages or [],
         )
         if meta_response is not None:
@@ -690,14 +501,12 @@ def stream_agent_query_events(
                     response = agent_response_from_chitchat(request.question, chitchat)
                     summarize = False
                 else:
-                    effective_mode = request.mode or configured_agent_default_mode()
                     response, streamed_token_count = yield from stream_non_chitchat_agent_response(
                         request=request,
                         db=db,
                         conversation_history=conversation_history,
                         chat_model_provider=chat_model_provider,
                         embedding_provider=embedding_provider,
-                        planner_chat_provider=planner_chat_provider,
                     )
                     if streamed_token_count == 0:
                         for token in split_streaming_text(response.answer):
@@ -747,28 +556,21 @@ def stream_non_chitchat_agent_response(
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
-    planner_chat_provider: ChatModelProvider | None = None,
 ) -> Iterator[str | tuple[AgentQueryResponse, int]]:
     queue: Queue[tuple[str, Any]] = Queue()
 
     def produce_response() -> None:
         try:
-            resolved_mode = request.mode
-            if resolved_mode is None:
-                resolved_mode = configured_agent_default_mode()
-            effective_chat_model_provider = chat_model_provider
-            if resolved_mode != "react_agent":
-                effective_chat_model_provider = QueueStreamingChatModelProvider(
-                    base_provider=chat_model_provider,
-                    queue=queue,
-                )
+            effective_chat_model_provider = QueueStreamingChatModelProvider(
+                base_provider=chat_model_provider,
+                queue=queue,
+            )
             response = build_agent_query_response(
                 request=request,
                 db=db,
                 conversation_history=conversation_history,
                 chat_model_provider=effective_chat_model_provider,
                 embedding_provider=embedding_provider,
-                planner_chat_provider=planner_chat_provider,
                 event_sink=lambda event: queue.put(("agent_event", event)),
             )
         except Exception as exc:  # noqa: BLE001 - forwarded to SSE error mapping.
@@ -1155,7 +957,7 @@ def response_from_previous_answer_transform(
         "refused": False,
         "refusal_reason": None,
         "reasoning_summary": "followup_transform: rewrote previous assistant answer without retrieval",
-        "mode": previous_metadata.get("mode", "default") or "default",
+        "mode": "tool_calling_agent",
         "workflow_steps": previous_metadata.get("workflow_steps", []),
         "iteration_count": previous_metadata.get("iteration_count", 0),
         "invalid_citations": previous_metadata.get("invalid_citations", []),
@@ -1172,7 +974,7 @@ def maybe_enrich_agent_response_with_figure_evidence(
     response: AgentQueryResponse,
     effective_mode: str,
 ) -> AgentQueryResponse:
-    if effective_mode == "react_agent":
+    if response.image_analysis is not None:
         return response
     if not get_settings().enable_auto_figure_enrichment:
         return response
@@ -1327,121 +1129,22 @@ def build_agent_query_response(
     planner_chat_provider: ChatModelProvider | None = None,
     event_sink=None,
 ) -> AgentQueryResponse:
-    effective_mode = request.mode
-    if effective_mode is None:
-        effective_mode = configured_agent_default_mode()
-    log_agent_query_received(request, effective_mode=effective_mode)
-
-    if effective_mode == "agentic":
-        agentic_result = run_agentic_rag(
-            question=request.question,
-            db=db,
-            embedding_provider=embedding_provider,
-            chat_model_provider=chat_model_provider,
-            history=conversation_history or request.history,
-        )
-        response = maybe_enrich_agent_response_with_figure_evidence(
-            db=db,
-            question=request.question,
-            response=agent_response_from_agentic_result(agentic_result),
-            effective_mode=effective_mode,
-        )
-        log_agent_response_event(response)
-        return response
-
-    if effective_mode == "react_agent":
-        result = ReActAgentService(
-            db=db,
-            chat_model_provider=chat_model_provider,
-            embedding_provider=embedding_provider,
-            planner_chat_provider=planner_chat_provider,
-        ).query(
-            question=request.question,
-            top_k=request.top_k,
-            max_tool_calls=request.max_tool_calls,
-            history=conversation_history or request.history,
-            image_path=request.image_path,
-            event_sink=event_sink,
-        )
-        response = maybe_enrich_agent_response_with_figure_evidence(
-            db=db,
-            question=request.question,
-            response=agent_response_from_result(result),
-            effective_mode=effective_mode,
-        )
-        log_agent_response_event(response)
-        return response
-
-    if effective_mode == "langgraph_agent":
-        result = LangGraphAgentService(
-            db=db,
-            chat_model_provider=chat_model_provider,
-            embedding_provider=embedding_provider,
-            planner_chat_provider=planner_chat_provider,
-        ).query(
-            question=request.question,
-            top_k=request.top_k,
-            max_tool_calls=request.max_tool_calls,
-            source_id=request.source_id,
-            history=conversation_history or request.history,
-            image_path=request.image_path,
-            thread_id=(
-                f"conversation:{request.conversation_id}"
-                if request.conversation_id is not None
-                else None
-            ),
-            event_sink=event_sink,
-        )
-        response = maybe_enrich_agent_response_with_figure_evidence(
-            db=db,
-            question=request.question,
-            response=agent_response_from_result(result),
-            effective_mode=effective_mode,
-        )
-        log_agent_response_event(response)
-        return response
-
-    if effective_mode == "tool_calling_agent":
-        result = ToolCallingAgentService(
-            db=db,
-            chat_model_provider=chat_model_provider,
-            embedding_provider=embedding_provider,
-        ).query(
-            question=request.question,
-            top_k=request.top_k,
-            max_tool_calls=request.max_tool_calls,
-            history=conversation_history or request.history,
-            event_sink=event_sink,
-            conversation_id=request.conversation_id,
-            resume_policy=request.resume_policy,
-            resume_run_id=request.resume_run_id,
-        )
-        response = maybe_enrich_agent_response_with_figure_evidence(
-            db=db,
-            question=request.question,
-            response=agent_response_from_result(result),
-            effective_mode=effective_mode,
-        )
-        log_agent_response_event(response)
-        return response
-
-    result = AgentService(
+    log_agent_query_received(request, effective_mode="tool_calling_agent")
+    result = ToolCallingAgentService(
         db=db,
         chat_model_provider=chat_model_provider,
         embedding_provider=embedding_provider,
     ).query(
         question=request.question,
-        top_k=request.top_k,
         max_tool_calls=request.max_tool_calls,
-        source_id=request.source_id,
         history=conversation_history or request.history,
+        event_sink=event_sink,
+        conversation_id=request.conversation_id,
+        resume_policy=request.resume_policy,
+        resume_run_id=request.resume_run_id,
+        image_path=request.image_path,
     )
-    response = maybe_enrich_agent_response_with_figure_evidence(
-        db=db,
-        question=request.question,
-        response=agent_response_from_result(result),
-        effective_mode=effective_mode,
-    )
+    response = agent_response_from_result(result)
     log_agent_response_event(response)
     return response
 
@@ -1456,9 +1159,8 @@ def log_agent_query_received(
         "query_received",
         mode=effective_mode,
         conversation_id=request.conversation_id,
-        top_k=request.top_k,
+        retrieval_budget_owner="runtime",
         max_tool_calls=request.max_tool_calls,
-        source_id=request.source_id,
         question_summary=safe_text_summary(request.question, limit=80),
     )
 
@@ -1522,6 +1224,10 @@ class QueueStreamingChatModelProvider:
             self.queue.put(("token", token))
             yield token
 
+    def emit_stream_token(self, token: str) -> None:
+        if token:
+            self.queue.put(("token", token))
+
     def generate_with_tools(
         self,
         messages: Sequence[ChatMessage],
@@ -1544,7 +1250,7 @@ def agent_response_from_chitchat(
         refused=False,
         refusal_reason=None,
         reasoning_summary=chitchat.reasoning_summary,
-        mode="default",
+        mode="tool_calling_agent",
         workflow_steps=[],
         iteration_count=0,
         invalid_citations=[],
@@ -1593,6 +1299,7 @@ def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryRespo
     workflow_steps = [
         AgentWorkflowStepItem(
             name=step.name,
+            step_id=getattr(step, "step_id", None) or None,
             input_summary=step.input_summary,
             output_summary=step.output_summary,
             succeeded=step.succeeded,
@@ -1717,6 +1424,7 @@ def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
         workflow_steps=[
             AgentWorkflowStepItem(
                 name=step.tool_name,
+                step_id=step.step_id or None,
                 input_summary=step.input_summary,
                 output_summary=step.output_summary,
                 succeeded=step.succeeded,

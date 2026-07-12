@@ -9,6 +9,7 @@ real-provider runs.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -259,6 +260,10 @@ EVAL_CASES: tuple[EvalCase, ...] = (
 def run_evaluation(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    # Keep the deterministic local fixture independent of process-local caches.
+    os.environ["RERANKING_ENABLED"] = "false"
+    os.environ["REDIS_ENABLED"] = "false"
+    get_settings.cache_clear()
     session_factory = make_session_factory()
     embedding_provider = DeterministicEmbeddingProvider(dimension=32)
 

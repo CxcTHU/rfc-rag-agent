@@ -15,9 +15,18 @@ from app.core.config import Settings
 from app.services.graphrag.graph_store import build_knowledge_graph, save_graph
 from app.services.graphrag.schema import GraphEntity, GraphExtractionResult, GraphRelation
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
+from app.services.retrieval.bm25_search import BM25SearchResult, BM25SearchService
 from app.services.retrieval.hybrid_search import HybridSearchResult, HybridSearchService
 from app.services.retrieval.hybrid_search import normalize_score
+from app.services.retrieval.runtime import (
+    RetrievalIntentProfile,
+    build_retrieval_plan,
+    current_retrieval_plan,
+    reset_current_retrieval_plan,
+    set_current_retrieval_plan,
+)
 from app.services.retrieval.keyword_search import KeywordSearchResult
+from app.services.retrieval.keyword_search import KeywordSearchService
 from app.services.observability.latency_trace import (
     LatencyTrace,
     reset_current_latency_trace,
@@ -191,6 +200,50 @@ def test_hybrid_search_returns_keyword_results_when_vector_index_is_missing(tmp_
     assert "Filling Capacity" in results[0].document_title
 
 
+def test_phase63_default_hybrid_uses_bm25_not_heuristic_keyword(tmp_path, monkeypatch) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    bm25_calls = 0
+    original_bm25_search = BM25SearchService.search
+
+    def counted_bm25_search(self, query: str, top_k: int = 5):
+        nonlocal bm25_calls
+        bm25_calls += 1
+        return original_bm25_search(self, query, top_k=top_k)
+
+    def forbidden_keyword_search(self, query: str, top_k: int = 5):
+        raise AssertionError("default Hybrid must not call KeywordSearchService")
+
+    monkeypatch.setattr(BM25SearchService, "search", counted_bm25_search)
+    monkeypatch.setattr(KeywordSearchService, "search", forbidden_keyword_search)
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        service = HybridSearchService(
+            db,
+            provider,
+            parallel=False,
+            reranking_enabled=False,
+        )
+        original = (
+            service.settings.retrieval_candidate_cache_enabled,
+            service.settings.rerank_order_cache_enabled,
+        )
+        try:
+            service.settings.retrieval_candidate_cache_enabled = False
+            service.settings.rerank_order_cache_enabled = False
+            results = service.search("filling capacity", top_k=2)
+        finally:
+            (
+                service.settings.retrieval_candidate_cache_enabled,
+                service.settings.rerank_order_cache_enabled,
+            ) = original
+
+    assert bm25_calls == 1
+    assert results
+    assert "bm25" in results[0].channels
+
+
 def test_hybrid_search_verified_defaults_are_enabled() -> None:
     settings = Settings(_env_file=None)
 
@@ -257,7 +310,8 @@ def test_hybrid_multichannel_graph_channel_enters_default_hybrid_kernel(tmp_path
             reset_current_latency_trace(token)
 
     assert any("graph" in result.channels for result in results)
-    assert trace.values["retrieval_eligible_channels"] == ["keyword", "vector", "graph"]
+    assert trace.values["lexical_search_backend"] == "bm25"
+    assert trace.values["retrieval_eligible_channels"] == ["bm25", "vector", "graph"]
     assert trace.values["graph_search_available"] is True
     assert trace.values["retrieval_channel_candidate_counts"]["graph"] >= 1
 
@@ -295,6 +349,191 @@ def test_hybrid_multichannel_table_and_figure_caption_channels_are_gated(tmp_pat
     assert any("table_text" in result.channels for result in table_results)
     assert any("figure_caption" in result.channels for result in figure_results)
     assert trace.values["retrieval_channel_candidate_counts"]["figure_caption"] >= 1
+
+
+def test_phase63_runtime_plan_overrides_legacy_term_gates(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        service = HybridSearchService(db, provider, parallel=False, reranking_enabled=False)
+        original = service.settings.retrieval_runtime_enabled
+        service.settings.retrieval_runtime_enabled = True
+        plan = build_retrieval_plan(
+            RetrievalIntentProfile(
+                relationship_intent=0.96,
+                relationship_type="causal",
+                graph_search_mode="local",
+                relationship_explicitness="explicit",
+                visual_intent=0.99,
+                visual_explicitness="negative",
+                source="llm",
+            ),
+            "why did this happen",
+            service.settings,
+        )
+        token = set_current_retrieval_plan(plan)
+        try:
+            channel_plan = service._channel_plan("why did this happen and show an image")
+            cache_identity = service._retrieval_cache_identity(
+                "why did this happen and show an image",
+                fetch_k=15,
+                channel_plan=channel_plan,
+            )
+        finally:
+            reset_current_retrieval_plan(token)
+            service.settings.retrieval_runtime_enabled = original
+
+    assert channel_plan["eligible_channels"] == ("bm25", "vector", "graph")
+    assert channel_plan["channel_requirements"]["graph"] == "required"
+    assert channel_plan["channel_requirements"]["figure_caption"] == "disabled"
+    assert cache_identity["retrieval_plan_digest"] != "legacy"
+    assert cache_identity["retrieval_pipeline_schema"] == "hybrid-phase63-gap-closure-bm25-pgvector-v1"
+    assert cache_identity["graph_weight"] == service.settings.hybrid_graph_channel_weight
+
+
+def test_phase63_legacy_channel_gates_remain_default(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        service = HybridSearchService(db, provider, parallel=False, reranking_enabled=False)
+        original = service.settings.retrieval_runtime_enabled
+        service.settings.retrieval_runtime_enabled = False
+        try:
+            channel_plan = service._channel_plan("why did this happen and show an image")
+        finally:
+            service.settings.retrieval_runtime_enabled = original
+
+    assert "graph" not in channel_plan["eligible_channels"]
+    assert "figure_caption" in channel_plan["eligible_channels"]
+    assert channel_plan["runtime_mode"] == "legacy"
+
+
+def test_phase63_direct_hybrid_default_switch_builds_scoped_fallback_plan(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        seed_hybrid_documents(db)
+        service = HybridSearchService(db, provider, parallel=False, reranking_enabled=False)
+        original = (
+            service.settings.retrieval_runtime_enabled,
+            service.settings.retrieval_runtime_default_enabled,
+        )
+        trace = LatencyTrace()
+        latency_token = set_current_latency_trace(trace)
+        service.settings.retrieval_runtime_enabled = True
+        service.settings.retrieval_runtime_default_enabled = True
+        try:
+            service.search("堆石混凝土与填充性能有什么关系", top_k=2)
+        finally:
+            (
+                service.settings.retrieval_runtime_enabled,
+                service.settings.retrieval_runtime_default_enabled,
+            ) = original
+            reset_current_latency_trace(latency_token)
+
+    assert "graph" in trace.values["retrieval_eligible_channels"]
+    assert current_retrieval_plan() is None
+
+
+def test_phase63_runtime_graph_channel_preserves_relation_provenance(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    graph_path = tmp_path / "phase63-runtime-graph.json"
+    rerank_inputs: list[str] = []
+
+    class CapturingReRankingProvider:
+        provider_name = "phase63-capturing-reranker"
+        model_name = "phase63-capturing-reranker-v1"
+
+        def rerank(self, query, candidates, top_k=5):
+            rerank_inputs.extend(candidates)
+            return [
+                ReRankResult(
+                    index=index,
+                    score=1.0 - index * 0.1,
+                    content=candidates[index],
+                )
+                for index in range(min(len(candidates), top_k))
+            ]
+
+    with TestingSessionLocal() as db:
+        provider = DeterministicEmbeddingProvider(dimension=32)
+        chunk_ids = seed_multichannel_documents(db)
+        graph = build_knowledge_graph(
+            [
+                GraphExtractionResult(
+                    chunk_id=chunk_ids["text"],
+                    document_id=1,
+                    document_title="RFC Standard Relationship",
+                    entities=(
+                        GraphEntity(name="NB/T 10077", type="Standard"),
+                        GraphEntity(name="compressive strength", type="Parameter"),
+                    ),
+                    relations=(
+                        GraphRelation(
+                            subject="NB/T 10077",
+                            predicate="standard_defines",
+                            object="compressive strength",
+                            source_chunk_id=chunk_ids["text"],
+                        ),
+                    ),
+                )
+            ]
+        )
+        save_graph(graph, graph_path)
+        service = HybridSearchService(
+            db,
+            provider,
+            parallel=False,
+            reranking_enabled=True,
+            reranking_provider=CapturingReRankingProvider(),
+            reranking_recall_k=3,
+        )
+        original = (
+            service.settings.retrieval_runtime_enabled,
+            service.settings.graphrag_graph_path,
+        )
+        service.settings.retrieval_runtime_enabled = True
+        service.settings.graphrag_graph_path = str(graph_path)
+        trace = LatencyTrace()
+        latency_token = set_current_latency_trace(trace)
+        plan = build_retrieval_plan(
+            RetrievalIntentProfile(
+                relationship_intent=0.96,
+                relationship_type="standard_reference",
+                graph_search_mode="local",
+                relationship_explicitness="explicit",
+                source="llm",
+            ),
+            "NB/T 10077 compressive strength details",
+            service.settings,
+        )
+        token = set_current_retrieval_plan(plan)
+        try:
+            results = service.search(
+                "NB/T 10077 compressive strength details",
+                top_k=2,
+            )
+        finally:
+            reset_current_retrieval_plan(token)
+            reset_current_latency_trace(latency_token)
+            (
+                service.settings.retrieval_runtime_enabled,
+                service.settings.graphrag_graph_path,
+            ) = original
+
+    graph_result = next(result for result in results if "graph" in result.channels)
+    assert graph_result.matched_node_ids
+    assert graph_result.graph_hop_count is not None
+    assert graph_result.relation_types == ("standard_defines",)
+    assert trace.values["graph_selected_count"] >= 1
+    assert graph_result.chunk_id in trace.values["graph_selected_chunk_ids"]
+    assert trace.values["graph_relation_type_preview"] == ["standard_defines"]
+    assert trace.values["graph_fingerprint"] != "disabled"
+    assert all(isinstance(item, str) for item in rerank_inputs)
+    assert any("Graph relation types: standard_defines" in item for item in rerank_inputs)
 
 
 def test_hybrid_parallel_results_match_serial_results(tmp_path) -> None:
@@ -363,7 +602,7 @@ def test_hybrid_search_runs_keyword_and_vector_in_parallel(tmp_path, monkeypatch
             ]
 
     monkeypatch.setattr(
-        "app.services.retrieval.hybrid_search.KeywordSearchService",
+        "app.services.retrieval.hybrid_search.BM25SearchService",
         SlowKeywordSearchService,
     )
     monkeypatch.setattr(
@@ -552,7 +791,7 @@ def test_hybrid_search_dynamic_top_k_keeps_minimum_then_filters_tail(tmp_path) -
             )
             import app.services.retrieval.hybrid_search as hybrid_module
 
-            original_keyword = hybrid_module.KeywordSearchService.search
+            original_keyword = hybrid_module.BM25SearchService.search
             original_vector = hybrid_module.VectorSearchService.search
             original_dynamic = (
                 service.settings.reranking_dynamic_top_k_enabled,
@@ -560,17 +799,31 @@ def test_hybrid_search_dynamic_top_k_keeps_minimum_then_filters_tail(tmp_path) -
                 service.settings.reranking_dynamic_max_results,
                 service.settings.reranking_dynamic_relative_score_threshold,
             )
-            hybrid_module.KeywordSearchService.search = fake_keyword_search
+            original_runtime = service.settings.retrieval_runtime_enabled
+            plan = build_retrieval_plan(
+                RetrievalIntentProfile(
+                    table_intent=0.95,
+                    table_explicitness="explicit",
+                    required_evidence_types=("text", "table"),
+                ),
+                "concrete table",
+                service.settings,
+            )
+            plan_token = set_current_retrieval_plan(plan)
+            hybrid_module.BM25SearchService.search = fake_keyword_search
             hybrid_module.VectorSearchService.search = fake_vector_search
             try:
+                service.settings.retrieval_runtime_enabled = True
                 service.settings.reranking_dynamic_top_k_enabled = True
                 service.settings.reranking_dynamic_min_results = 4
                 service.settings.reranking_dynamic_max_results = 5
                 service.settings.reranking_dynamic_relative_score_threshold = 0.65
                 results = service.search("concrete", top_k=1)
             finally:
-                hybrid_module.KeywordSearchService.search = original_keyword
+                hybrid_module.BM25SearchService.search = original_keyword
                 hybrid_module.VectorSearchService.search = original_vector
+                service.settings.retrieval_runtime_enabled = original_runtime
+                reset_current_retrieval_plan(plan_token)
                 (
                     service.settings.reranking_dynamic_top_k_enabled,
                     service.settings.reranking_dynamic_min_results,
@@ -584,7 +837,7 @@ def test_hybrid_search_dynamic_top_k_keeps_minimum_then_filters_tail(tmp_path) -
     assert trace.values["retrieval_selected_count"] == 4
 
 
-def test_hybrid_search_fails_when_reranker_fails_without_fallback(tmp_path) -> None:
+def test_hybrid_search_uses_fusion_fail_soft_when_reranker_fails_without_fallback(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
     class FailingReRankingProvider:
@@ -608,14 +861,17 @@ def test_hybrid_search_fails_when_reranker_fails_without_fallback(tmp_path) -> N
                 reranking_enabled=True,
             )
             service.reranking_fallback_provider = None
-            with pytest.raises(RuntimeError, match="GLM fallback reranker"):
-                service.search("concrete", top_k=1)
+            results = service.search("concrete", top_k=1)
         finally:
             reset_current_latency_trace(token)
 
     assert trace.values["reranking_fallback"] is True
     assert trace.values["reranking_fallback_used"] is False
     assert trace.values["reranking_fallback_error"] == "not_configured"
+    assert results
+    assert trace.values["reranking_degraded"] is True
+    assert trace.values["reranking_degradation_level"] == "fusion_fail_soft"
+    assert trace.values["retrieval_selection_reason"] == "reranker_unavailable_fusion_dynamic"
 
 
 def test_hybrid_search_quality_default_fetches_75_candidates(monkeypatch, tmp_path) -> None:
@@ -645,7 +901,7 @@ def test_hybrid_search_quality_default_fetches_75_candidates(monkeypatch, tmp_pa
         return []
 
     monkeypatch.setattr(
-        "app.services.retrieval.hybrid_search.KeywordSearchService.search",
+        "app.services.retrieval.hybrid_search.BM25SearchService.search",
         fake_keyword_search,
     )
     monkeypatch.setattr(
@@ -722,7 +978,7 @@ def test_hybrid_search_limits_merged_candidates_before_reranking(monkeypatch, tm
         ]
 
     monkeypatch.setattr(
-        "app.services.retrieval.hybrid_search.KeywordSearchService.search",
+        "app.services.retrieval.hybrid_search.BM25SearchService.search",
         fake_keyword_search,
     )
     monkeypatch.setattr(
@@ -774,7 +1030,7 @@ def test_hybrid_search_falls_open_when_default_reranker_factory_fails(monkeypatc
     assert len(results) == 1
 
 
-def test_hybrid_search_surfaces_reranker_failure_without_fallback(tmp_path) -> None:
+def test_hybrid_search_completes_with_fusion_when_primary_reranker_fails(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
     class FailingReRankingProvider:
@@ -796,8 +1052,9 @@ def test_hybrid_search_surfaces_reranker_failure_without_fallback(tmp_path) -> N
             reranking_enabled=True,
         )
         service.reranking_fallback_provider = None
-        with pytest.raises(RuntimeError, match="GLM fallback reranker"):
-            service.search("filling capacity", top_k=1)
+        results = service.search("filling capacity", top_k=1)
+
+    assert results
 
 
 
@@ -853,7 +1110,7 @@ def test_hybrid_search_uses_secondary_reranker_when_primary_fails(tmp_path) -> N
     assert trace.values["reranking_fallback_error"] == ""
 
 
-def test_hybrid_search_fails_when_secondary_reranker_fails(tmp_path) -> None:
+def test_hybrid_search_uses_fusion_fail_soft_when_secondary_reranker_fails(tmp_path) -> None:
     TestingSessionLocal = make_session(tmp_path)
 
     class FailingReRankingProvider:
@@ -870,20 +1127,22 @@ def test_hybrid_search_fails_when_secondary_reranker_fails(tmp_path) -> None:
         trace = LatencyTrace()
         token = set_current_latency_trace(trace)
         try:
-            with pytest.raises(RuntimeError, match="GLM fallback reranker 也失败"):
-                HybridSearchService(
-                    db,
-                    provider,
-                    reranking_provider=FailingReRankingProvider(),
-                    reranking_fallback_provider=FailingReRankingProvider(),
-                    reranking_enabled=True,
-                ).search("filling capacity", top_k=1)
+            results = HybridSearchService(
+                db,
+                provider,
+                reranking_provider=FailingReRankingProvider(),
+                reranking_fallback_provider=FailingReRankingProvider(),
+                reranking_enabled=True,
+            ).search("filling capacity", top_k=1)
         finally:
             reset_current_latency_trace(token)
 
     assert trace.values["reranking_fallback"] is True
     assert trace.values["reranking_fallback_used"] is False
     assert trace.values["reranking_fallback_error"] == "runtime_error"
+    assert results
+    assert trace.values["reranking_degraded"] is True
+    assert trace.values["reranking_degradation_level"] == "fusion_fail_soft"
 
 
 def test_hybrid_search_uses_fusion_dynamic_k_when_secondary_scores_are_degenerate(
@@ -1001,8 +1260,7 @@ def test_hybrid_search_records_reranker_trace_and_fallback(tmp_path) -> None:
                 reranking_enabled=True,
             )
             service.reranking_fallback_provider = None
-            with pytest.raises(RuntimeError, match="GLM fallback reranker"):
-                service.search("filling capacity", top_k=1)
+            results = service.search("filling capacity", top_k=1)
         finally:
             reset_current_latency_trace(token)
 
@@ -1011,6 +1269,9 @@ def test_hybrid_search_records_reranker_trace_and_fallback(tmp_path) -> None:
     assert trace.values["reranking_fallback"] is True
     assert trace.values["reranking_fallback_count"] == 1
     assert trace.values["reranking_error"] == "runtime_error"
+    assert results
+    assert trace.values["reranking_degraded"] is True
+    assert trace.values["reranking_error_type"] == "fallback_not_configured"
 
 
 def test_hybrid_search_can_disable_reranking(tmp_path) -> None:

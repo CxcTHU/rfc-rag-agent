@@ -48,7 +48,7 @@ def test_agent_stream_api_defaults_to_tool_calling_metadata_done(tmp_path) -> No
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query/stream",
-            json={"question": "What affects filling capacity?", "top_k": 2},
+            json={"question": "What affects filling capacity?"},
         )
 
     assert response.status_code == 200
@@ -72,7 +72,7 @@ def test_agent_stream_api_short_circuits_chitchat(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query/stream",
-            json={"question": "谢谢", "top_k": 2},
+            json={"question": "谢谢"},
         )
 
     assert response.status_code == 200
@@ -92,7 +92,7 @@ def test_agent_stream_api_short_circuits_model_meta(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query/stream",
-            json={"question": "你用的什么大模型？", "top_k": 2},
+            json={"question": "你用的什么大模型？"},
         )
 
     assert response.status_code == 200
@@ -117,7 +117,6 @@ def test_agent_stream_api_persists_completed_conversation_messages(tmp_path) -> 
             "/agent/query/stream",
             json={
                 "question": "What affects filling capacity?",
-                "top_k": 2,
                 "conversation_id": conversation["id"],
             },
         )
@@ -139,7 +138,6 @@ def test_agent_stream_api_default_routes_to_tool_calling(tmp_path) -> None:
                     "Search and compare filling capacity and thermal control "
                     "mechanisms in rock-filled concrete."
                 ),
-                "top_k": 2,
             },
         )
 
@@ -150,15 +148,13 @@ def test_agent_stream_api_default_routes_to_tool_calling(tmp_path) -> None:
     assert events[-1][0] == "done"
 
 
-def test_agent_stream_api_supports_tool_calling_agent_mode(tmp_path) -> None:
+def test_agent_stream_api_uses_the_unified_tool_calling_agent(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query/stream",
             json={
                 "question": "What affects filling capacity in rock-filled concrete?",
-                "top_k": 2,
                 "max_tool_calls": 3,
-                "mode": "tool_calling_agent",
             },
         )
 
@@ -180,15 +176,13 @@ def test_agent_stream_api_supports_tool_calling_agent_mode(tmp_path) -> None:
     assert "bearer" not in serialized
 
 
-def test_agent_stream_api_supports_langgraph_agent_mode(tmp_path) -> None:
+def test_agent_stream_api_uses_one_runtime_for_legacy_free_requests(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query/stream",
             json={
                 "question": "What affects filling capacity in rock-filled concrete?",
-                "top_k": 2,
                 "max_tool_calls": 3,
-                "mode": "langgraph_agent",
             },
         )
 
@@ -200,12 +194,8 @@ def test_agent_stream_api_supports_langgraph_agent_mode(tmp_path) -> None:
     assert "tool_call_result" in event_names
     assert event_names[-2:] == ["metadata", "done"]
     metadata = next(payload for name, payload in events if name == "metadata")
-    assert metadata["mode"] == "langgraph_agent"
+    assert metadata["mode"] == "tool_calling_agent"
     assert metadata["citations"] == [1]
-    assert [call["tool_name"] for call in metadata["tool_calls"]] == [
-        "hybrid_search_knowledge",
-        "answer_with_citations",
-    ]
     serialized = response.text.casefold()
     assert "raw_response" not in serialized
     assert "reasoning_content" not in serialized
@@ -230,6 +220,31 @@ class SlowStreamingChatModelProvider:
     def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
         return ChatModelResult(
             answer="".join(self.stream_generate(messages)),
+            provider=self.provider_name,
+            model_name=self.model_name,
+        )
+
+    def generate_with_tools(
+        self,
+        messages: list[ChatMessage],
+        tools: list[ChatToolDefinition],
+    ) -> ToolCallingChatModelResult:
+        if not any(message.role == "tool" for message in messages):
+            return ToolCallingChatModelResult(
+                content="",
+                tool_calls=[
+                    ChatToolCall(
+                        id="slow_search",
+                        name="hybrid_search_knowledge",
+                        arguments={"query": "filling capacity"},
+                    )
+                ],
+                provider=self.provider_name,
+                model_name=self.model_name,
+            )
+        return ToolCallingChatModelResult(
+            content="Filling capacity depends on SCC flowability [1].",
+            tool_calls=[],
             provider=self.provider_name,
             model_name=self.model_name,
         )
@@ -278,17 +293,8 @@ class SlowToolCallingStreamingChatModelProvider:
                 provider=self.provider_name,
                 model_name=self.model_name,
             )
-        return ToolCallingChatModelResult(
-            content="",
-            tool_calls=[
-                ChatToolCall(
-                    id="call_2",
-                    name="hybrid_search_knowledge",
-                    arguments={"query": "filling capacity", "top_k": 2},
-                )
-            ],
-            provider=self.provider_name,
-            model_name=self.model_name,
+        raise AssertionError(
+            "evidence-complete Tool Calling must use stream_generate, not a second non-streaming tool call"
         )
 
     def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
@@ -324,8 +330,6 @@ def test_agent_stream_yields_first_token_before_model_finishes(tmp_path, monkeyp
             event_stream = stream_agent_query_events(
                 request=AgentQueryRequest(
                     question="What affects filling capacity?",
-                    top_k=2,
-                    mode="default",
                 ),
                 db=db,
                 conversation_repository=ConversationRepository(db),
@@ -340,47 +344,10 @@ def test_agent_stream_yields_first_token_before_model_finishes(tmp_path, monkeyp
         remaining_events = list(event_stream)
 
     assert elapsed < 0.25
-    assert first_event.startswith("event: token\n")
-    assert '"Filling "' in first_event
-    assert any("event: metadata" in event for event in remaining_events)
-
-
-def test_agent_stream_emits_heartbeat_before_slow_first_token(tmp_path, monkeypatch) -> None:
-    disable_external_stream_caches(monkeypatch)
-    monkeypatch.setattr("app.api.agent.AGENT_STREAM_HEARTBEAT_SECONDS", 0.05)
-    monkeypatch.setattr(
-        "app.services.retrieval.hybrid_search.create_reranking_provider",
-        lambda **_kwargs: None,
-    )
-    database_path = tmp_path / "agent_stream_heartbeat.sqlite"
-    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
-    Base.metadata.create_all(bind=engine)
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    embedding_provider = DeterministicEmbeddingProvider(dimension=32)
-
-    with TestingSessionLocal() as db:
-        seed_agent_api_document(db)
-        SourceRepository(db).create_source(source_record())
-
-        with TestingSessionLocal() as db:
-            event_stream = stream_agent_query_events(
-                request=AgentQueryRequest(
-                    question="What affects filling capacity?",
-                    top_k=2,
-                    mode="default",
-                ),
-                db=db,
-                conversation_repository=ConversationRepository(db),
-                conversation_history=[],
-                chat_model_provider=SlowFirstTokenStreamingChatModelProvider(),
-                embedding_provider=embedding_provider,
-            )
-
-            first_event = next(event_stream)
-            remaining_events = list(event_stream)
-
-    assert first_event.startswith("event: heartbeat\n")
-    assert any(event.startswith("event: token\n") for event in remaining_events)
+    assert first_event.startswith("event: agent_step\n")
+    token_event = next(event for event in remaining_events if event.startswith("event: token\n"))
+    assert token_event.startswith("event: token\n")
+    assert '"Filling "' in token_event
     assert any("event: metadata" in event for event in remaining_events)
 
 
@@ -407,8 +374,6 @@ def test_tool_calling_agent_streams_final_answer_before_model_finishes(
             event_stream = stream_agent_query_events(
                 request=AgentQueryRequest(
                     question="What affects filling capacity?",
-                    top_k=2,
-                    mode="tool_calling_agent",
                 ),
                 db=db,
                 conversation_repository=ConversationRepository(db),

@@ -54,6 +54,7 @@ export type AgentSource = {
 
 export type AgentWorkflowStep = {
   name: string
+  step_id?: string
   input_summary?: string
   output_summary?: string
   step_summary?: string

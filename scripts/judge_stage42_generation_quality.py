@@ -276,7 +276,6 @@ def build_strategy_answers(
         for case in cases:
             result = service.query(
                 case.question,
-                top_k=5,
                 max_tool_calls=3,
                 history=list(case.history),
             )
