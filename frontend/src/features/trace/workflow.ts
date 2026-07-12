@@ -10,6 +10,7 @@ export function sseEventToWorkflowStep(event: AgentStreamEvent): AgentWorkflowSt
       : event.type
   return {
     name,
+    step_id: typeof payload.step_id === 'string' ? payload.step_id : undefined,
     action: event.type,
     tool_name: typeof payload.tool_name === 'string' ? payload.tool_name : undefined,
     input_summary: stringValue(payload.input_summary),
@@ -30,7 +31,36 @@ export function workflowStepsForMessage(message: ChatMessage) {
     : message.result?.tool_calls?.length
       ? message.result.tool_calls
       : message.events || []
-  return normalizeActualSteps(authoritative)
+  return reconcileWorkflowSteps(message.events || [], authoritative)
+}
+
+export function reconcileWorkflowSteps(
+  liveSteps: AgentWorkflowStep[],
+  finalSteps: AgentWorkflowStep[],
+) {
+  const live = normalizeActualSteps(liveSteps)
+  const final = normalizeActualSteps(finalSteps)
+  if (!live.length) return final
+  const finalByKey = new Map(final.map((step) => [workflowStepKey(step), step]))
+  const liveKeys = new Set(live.map(workflowStepKey))
+  const reconciled = live.map((step) => {
+    const completed = finalByKey.get(workflowStepKey(step))
+    return completed ? { ...completed, ...definedValues(step) } : step
+  })
+  return normalizeActualSteps([
+    ...reconciled,
+    ...final.filter((step) => !liveKeys.has(workflowStepKey(step))),
+  ])
+}
+
+function workflowStepKey(step: AgentWorkflowStep) {
+  return step.step_id || [stepName(step), step.input_summary || ''].join('|')
+}
+
+function definedValues(step: AgentWorkflowStep) {
+  return Object.fromEntries(
+    Object.entries(step).filter(([, value]) => value !== undefined),
+  ) as Partial<AgentWorkflowStep>
 }
 
 export function normalizeActualSteps(steps: AgentWorkflowStep[]) {

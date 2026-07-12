@@ -1,5 +1,34 @@
 # RFC-RAG-Agent
 
+## Phase 63 Guarded Retrieval Runtime
+
+Phase 63 makes Retrieval Runtime the production default through
+`RETRIEVAL_RUNTIME_ENABLED=true` and
+`RETRIEVAL_RUNTIME_DEFAULT_ENABLED=true`. The existing runtime identity provider now
+returns semantic cache identity and retrieval intent in one structured model
+call. Code-owned thresholds convert that proposal into bounded graph,
+table-text, and figure-caption requirements; the model does not choose channel
+budgets, hop counts, candidate counts, or rerank settings.
+
+The default model-visible retrieval surface is now three high-level tools:
+
+- `hybrid_search_knowledge`
+- `search_tables`
+- `search_figures`
+
+These schemas accept only `query`. The browser and public Agent request no
+longer send `mode` or `top_k`; Retrieval Runtime owns internal result budgets,
+and Hybrid Dynamic-K determines the final evidence count. Uploaded images enter
+the same Tool Calling service through code-owned image analysis. Local
+GraphRAG is implemented by one fail-open `GraphRetriever` shared by Hybrid and
+internal graph retrieval. It is capped at two hops and preserves safe
+node, relation, and edge-evidence provenance for fusion and reranking.
+
+The legacy path remains available only when Runtime is explicitly disabled or
+when no plan is bound; it is not the default production route. The next phase
+is dedicated to reducing real-provider end-to-end latency. There is no online
+API dispatch path for default, agentic, ReAct, or LangGraph Agent modes.
+
 ## Phase 62 React Frontend Engineering（人工验收通过）
 
 当前开发分支：`codex/phase-62-react-frontend-engineering`。本阶段只重构 React 工作台与前端托管方式，不修改后端 Agent、Judge、Reranker 主链路，也不改变生产默认 Agent 模式。

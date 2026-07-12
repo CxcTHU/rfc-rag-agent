@@ -58,9 +58,7 @@ export function runAgentQuery(
     body: JSON.stringify({
       question,
       conversation_id: conversationId ?? null,
-      top_k: 8,
       max_tool_calls: 5,
-      mode: imagePath ? 'react_agent' : 'tool_calling_agent',
       image_path: imagePath || null,
       chat_model: chatModel || null,
     }),

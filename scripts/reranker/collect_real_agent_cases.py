@@ -311,7 +311,7 @@ def run_agent_case(
             embedding_provider=embedding_provider,
             chat_model_provider=chat_provider,
             log_answers=False,
-        ).query(question, top_k=top_k, max_tool_calls=max_tool_calls)
+        ).query(question, max_tool_calls=max_tool_calls)
     if mode == "react_agent":
         return ReActAgentService(
             db=db,

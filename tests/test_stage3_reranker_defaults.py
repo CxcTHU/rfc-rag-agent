@@ -25,9 +25,9 @@ def test_default_reranker_uses_glm_when_bge_gpu_is_unavailable(monkeypatch) -> N
     assert settings.reranking_api_key == ""
 
 
-def test_stage3_quality_first_final_top_k_defaults() -> None:
+def test_stage3_quality_first_defaults_keep_agent_budget_in_runtime() -> None:
     assert ChatRequest(question="What is RFC?").top_k == 8
-    assert AgentQueryRequest(question="What is RFC?").top_k == 8
+    assert "top_k" not in AgentQueryRequest.model_fields
     assert RetrievalConfig().top_k == 8
     assert RetrievalConfig.from_chat_request().top_k == 8
 

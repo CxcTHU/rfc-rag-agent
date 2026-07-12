@@ -7,6 +7,18 @@ class HealthResponse(BaseModel):
     environment: str
 
 
+class RetrievalContractHealthResponse(HealthResponse):
+    """Safe retrieval identity used to freeze an external A/B evaluation."""
+
+    corpus_fingerprint: str
+    document_count: int
+    chunk_count: int
+    retrieval_runtime_enabled: bool
+    retrieval_runtime_default_enabled: bool
+    pgvector_search_enabled: bool
+    vector_backend_policy: str
+
+
 class DatabaseHealth(BaseModel):
     status: str
     connected: bool

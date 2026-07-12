@@ -60,24 +60,44 @@ def ensure_sqlite_compat_columns(target_engine: Engine) -> None:
     if target_engine.dialect.name != "sqlite":
         return
     inspector = inspect(target_engine)
-    if "users" not in inspector.get_table_names():
-        return
-    user_columns = {column["name"] for column in inspector.get_columns("users")}
-    if "role" in user_columns:
-        return
+    table_names = set(inspector.get_table_names())
     with target_engine.begin() as connection:
-        connection.execute(
-            text("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'")
-        )
-        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_users_role ON users (role)"))
-        first_user_id = connection.execute(
-            text("SELECT id FROM users ORDER BY id ASC LIMIT 1")
-        ).scalar()
-        if first_user_id is not None:
+        if "chunk_embeddings" in table_names:
+            embedding_columns = {
+                column["name"]
+                for column in inspector.get_columns("chunk_embeddings")
+            }
+            if "embedding_vector" not in embedding_columns:
+                connection.execute(
+                    text(
+                        "ALTER TABLE chunk_embeddings "
+                        "ADD COLUMN embedding_vector TEXT"
+                    )
+                )
+
+        if "users" in table_names:
+            user_columns = {
+                column["name"] for column in inspector.get_columns("users")
+            }
+            if "role" in user_columns:
+                return
             connection.execute(
-                text("UPDATE users SET role='admin' WHERE id=:user_id"),
-                {"user_id": first_user_id},
+                text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"
+                )
             )
+            connection.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_users_role ON users (role)")
+            )
+            first_user_id = connection.execute(
+                text("SELECT id FROM users ORDER BY id ASC LIMIT 1")
+            ).scalar()
+            if first_user_id is not None:
+                connection.execute(
+                    text("UPDATE users SET role='admin' WHERE id=:user_id"),
+                    {"user_id": first_user_id},
+                )
 
 
 def get_db() -> Generator[Session, None, None]:

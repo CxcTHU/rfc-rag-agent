@@ -80,6 +80,8 @@ def enable_layered_cache(monkeypatch, fake_redis: FakeRedis, *layers: str) -> No
     monkeypatch.setenv("RETRIEVAL_CANDIDATE_CACHE_ENABLED", str("retrieval" in layers).lower())
     monkeypatch.setenv("RERANK_ORDER_CACHE_ENABLED", str("rerank" in layers).lower())
     monkeypatch.setenv("TOOL_RESULT_CACHE_ENABLED", str("tool" in layers).lower())
+    monkeypatch.setenv("RETRIEVAL_RUNTIME_ENABLED", "false")
+    monkeypatch.setenv("RETRIEVAL_RUNTIME_DEFAULT_ENABLED", "false")
     get_settings.cache_clear()
     monkeypatch.setattr(
         "app.services.cache.layered_cache.get_redis_client",
@@ -103,8 +105,8 @@ def test_phase56_retrieval_candidate_cache_skips_second_keyword_vector_run(
         VectorIndexService(db, provider).build_index()
 
         original_keyword_search = (
-            __import__("app.services.retrieval.hybrid_search", fromlist=["KeywordSearchService"])
-            .KeywordSearchService.search
+                __import__("app.services.retrieval.hybrid_search", fromlist=["BM25SearchService"])
+                .BM25SearchService.search
         )
         original_vector_search = (
             __import__("app.services.retrieval.hybrid_search", fromlist=["VectorSearchService"])
@@ -122,7 +124,7 @@ def test_phase56_retrieval_candidate_cache_skips_second_keyword_vector_run(
             return original_vector_search(self, query, top_k)
 
         monkeypatch.setattr(
-            "app.services.retrieval.hybrid_search.KeywordSearchService.search",
+            "app.services.retrieval.hybrid_search.BM25SearchService.search",
             counted_keyword_search,
         )
         monkeypatch.setattr(

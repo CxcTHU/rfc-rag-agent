@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db.models import Base
 from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository
 from app.db.session import create_sqlite_engine
-from app.services.retrieval.bm25_search import BM25SearchService, inverse_document_frequency, lexical_length
+from app.services.retrieval.bm25_search import (
+    BM25SearchService,
+    clear_bm25_corpus_cache,
+    inverse_document_frequency,
+    lexical_length,
+)
 
 
 def make_session(tmp_path):
@@ -164,3 +169,24 @@ def test_bm25_helpers_handle_length_and_idf() -> None:
         corpus_size=10,
         document_frequency=8,
     )
+
+
+def test_bm25_reuses_normalized_corpus_until_database_changes(tmp_path, monkeypatch) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    clear_bm25_corpus_cache()
+    load_count = 0
+    original = BM25SearchService._load_documents
+
+    def counted_load(service: BM25SearchService):
+        nonlocal load_count
+        load_count += 1
+        return original(service)
+
+    monkeypatch.setattr(BM25SearchService, "_load_documents", counted_load)
+    with TestingSessionLocal() as db:
+        seed_bm25_documents(db)
+        BM25SearchService(db).search("rock filled concrete", top_k=2)
+        BM25SearchService(db).search("compressive strength", top_k=2)
+
+    assert load_count == 1
+    clear_bm25_corpus_cache()

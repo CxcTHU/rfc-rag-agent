@@ -535,7 +535,7 @@ def evaluate_config(
                     embedding_provider=embedding_provider,
                     chat_model_provider=chat_provider,
                     log_answers=False,
-                ).query(case.question, top_k=5, max_tool_calls=3, history=list(case.history))
+                ).query(case.question, max_tool_calls=3, history=list(case.history))
                 response = agent_response_from_result(result)
             else:
                 result = LangGraphAgentService(

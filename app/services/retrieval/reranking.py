@@ -191,6 +191,9 @@ class OpenAICompatibleReRankingProvider:
             except urllib.error.URLError as exc:
                 if is_last_attempt:
                     raise RuntimeError(f"Reranking model request failed: {exc.reason}") from exc
+            except ConnectionError as exc:
+                if is_last_attempt:
+                    raise RuntimeError("Reranking model connection was interrupted") from exc
             self._sleep_before_retry(attempt)
         # Defensive: the loop either returns or raises on the last attempt.
         raise RuntimeError("Reranking model request failed after retries")

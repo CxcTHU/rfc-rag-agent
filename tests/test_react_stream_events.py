@@ -2,7 +2,7 @@ from tests.test_agent_stream_api import parse_sse_events
 from tests.test_agent_api import make_test_client
 
 
-def test_react_agent_stream_emits_step_and_tool_events_before_metadata(tmp_path) -> None:
+def test_retired_react_mode_streams_unified_runtime_events_before_metadata(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query/stream",
@@ -26,7 +26,7 @@ def test_react_agent_stream_emits_step_and_tool_events_before_metadata(tmp_path)
     assert event_names[-2:] == ["metadata", "done"]
 
     metadata = next(payload for name, payload in events if name == "metadata")
-    assert metadata["mode"] == "react_agent"
+    assert metadata["mode"] == "tool_calling_agent"
     assert metadata["workflow_steps"]
     assert metadata["tool_calls"]
     assert metadata["citations"] == [1]

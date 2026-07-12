@@ -1,0 +1,10 @@
+case_id,category,query,expected_tool,expected_graph_requirement,minimum_citations
+e2e-text-01,regression_text,堆石混凝土的优势？,hybrid_search_knowledge,disabled,1
+e2e-text-02,ordinary_text,堆石混凝土施工质量控制有哪些关键点？,hybrid_search_knowledge,disabled,1
+e2e-rel-01,relationship,堆石混凝土的材料组成与抗压强度有什么关系？,hybrid_search_knowledge,active,1
+e2e-fig-01,figure,请展示堆石混凝土破坏形态的图片作为证据,search_figures,disabled,1
+e2e-table-01,table,请从资料表格中列出堆石混凝土的配合比参数,search_tables,disabled,1
+e2e-neg-fig-01,negative_visual,只用文字说明堆石混凝土的优势，不要图片,hybrid_search_knowledge,disabled,1
+e2e-neg-table-01,negative_table,不要表格，只用文字说明堆石混凝土施工质量控制要点,hybrid_search_knowledge,disabled,1
+e2e-neg-rel-01,negative_relationship,只解释堆石混凝土的定义，不分析实体关系或上下游关系,hybrid_search_knowledge,disabled,1
+e2e-rock-mechanics-01,ordinary_text,坝址区岩石或岩体的力学性质参数有哪些？,hybrid_search_knowledge,disabled,1

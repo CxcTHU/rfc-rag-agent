@@ -34,8 +34,9 @@ class FakeQueryEmbeddingCache:
 
 
 class FakePgVectorSearch:
-    def __init__(self, matches):
+    def __init__(self, matches, *, reason=""):
         self.matches = matches
+        self.reason = reason
         self.called = False
 
     def search(self, query_embedding, top_k):
@@ -87,6 +88,7 @@ def test_phase50_pgvector_config_defaults_are_safe() -> None:
 
     assert settings.pgvector_search_enabled is True
     assert settings.hnsw_ef_search == 100
+    assert settings.vector_backend_policy == "prefer_pgvector"
 
 
 def test_phase50_pgvector_migration_creates_vector_column_and_hnsw_index() -> None:
@@ -129,6 +131,24 @@ def test_pgvector_search_is_disabled_for_sqlite(tmp_path) -> None:
     assert "unsupported_dialect:sqlite" == status.reason
 
 
+def test_pgvector_search_preserves_disabled_reason_in_outcome(tmp_path) -> None:
+    database_path = tmp_path / "pgvector-outcome.sqlite"
+    engine = create_sqlite_engine(f"sqlite:///{database_path.as_posix()}")
+    Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    with TestingSessionLocal() as db:
+        outcome = PgVectorSearchService(
+            db,
+            FakeProvider(),
+            Settings(pgvector_search_enabled=True),
+        ).search(FakeProvider().embed_query("query"), top_k=1)
+
+    assert outcome.matches is None
+    assert outcome.enabled is False
+    assert outcome.reason == "unsupported_dialect"
+
+
 def test_vector_search_prefers_pgvector_when_available() -> None:
     match = make_match(score=0.95)
     pgvector = FakePgVectorSearch([match])
@@ -152,11 +172,14 @@ def test_vector_search_prefers_pgvector_when_available() -> None:
     assert fallback.called is False
     assert results[0].chunk_id == 10
     assert trace.values["vector_search_backend"] == "pgvector_hnsw"
+    assert trace.values["vector_search_degraded"] is False
+    assert trace.values["vector_search_fallback_reason"] == ""
+    assert trace.values["vector_backend_policy"] == "prefer_pgvector"
 
 
 def test_vector_search_falls_back_to_faiss_when_pgvector_skips() -> None:
     match = make_match(score=0.88)
-    pgvector = FakePgVectorSearch(None)
+    pgvector = FakePgVectorSearch(None, reason="unsupported_dialect")
     fallback = FakeFallbackIndex([match])
     trace = LatencyTrace()
     token = set_current_latency_trace(trace)
@@ -176,4 +199,7 @@ def test_vector_search_falls_back_to_faiss_when_pgvector_skips() -> None:
     assert pgvector.called is True
     assert fallback.called is True
     assert results[0].chunk_id == 10
-    assert trace.values["vector_search_backend"] == "faiss"
+    assert trace.values["vector_search_backend"] == "faiss_fail_open"
+    assert trace.values["vector_search_degraded"] is True
+    assert trace.values["vector_search_fallback_reason"] == "unsupported_dialect"
+    assert trace.values["vector_backend_policy"] == "prefer_pgvector"

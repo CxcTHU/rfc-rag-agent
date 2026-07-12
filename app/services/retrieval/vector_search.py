@@ -8,7 +8,7 @@ from app.core.config import Settings, get_settings
 from app.services.retrieval.embedding import EmbeddingProvider
 from app.services.retrieval.keyword_search import SearchTerm, capped_count, expand_query_terms, normalize_text
 from app.services.observability.latency_trace import get_current_latency_trace, latency_timer
-from app.services.retrieval.pgvector_search import PgVectorSearchService
+from app.services.retrieval.pgvector_search import PgVectorSearchOutcome, PgVectorSearchService
 from app.services.retrieval.query_embedding_cache import QueryEmbeddingCache, get_query_embedding_cache
 from app.services.retrieval.vector_cache import VectorIndexCache, VectorIndexMatch, get_vector_index_cache
 
@@ -107,13 +107,24 @@ class VectorSearchService:
         query_embedding: Sequence[float],
         top_k: int,
     ) -> list[VectorIndexMatch]:
-        pgvector_matches = self.pgvector_search.search(query_embedding, top_k=top_k)
-        if pgvector_matches is not None:
-            set_vector_search_backend("pgvector_hnsw")
-            return pgvector_matches
+        raw_outcome = self.pgvector_search.search(query_embedding, top_k=top_k)
+        outcome = normalize_pgvector_outcome(raw_outcome, self.pgvector_search)
+        if outcome.matches is not None:
+            set_vector_search_backend(
+                "pgvector_hnsw",
+                degraded=False,
+                fallback_reason="",
+                policy=self.settings.vector_backend_policy,
+            )
+            return outcome.matches
 
         matches = self.index_cache.search(query_embedding, top_k=top_k)
-        set_vector_search_backend("faiss")
+        set_vector_search_backend(
+            "faiss_fail_open",
+            degraded=True,
+            fallback_reason=outcome.reason,
+            policy=self.settings.vector_backend_policy,
+        )
         return matches
 
 
@@ -202,7 +213,28 @@ def normalized_anchor_score(anchor_score: float, max_anchor_score: float) -> flo
     return min(1.0, anchor_score / max_anchor_score)
 
 
-def set_vector_search_backend(backend: str) -> None:
+def normalize_pgvector_outcome(
+    outcome: object,
+    service: object,
+) -> PgVectorSearchOutcome:
+    if isinstance(outcome, PgVectorSearchOutcome):
+        return outcome
+    if isinstance(outcome, list):
+        return PgVectorSearchOutcome(matches=outcome, enabled=True)
+    reason = str(getattr(service, "reason", "unavailable") or "unavailable")
+    return PgVectorSearchOutcome(matches=None, enabled=False, reason=reason)
+
+
+def set_vector_search_backend(
+    backend: str,
+    *,
+    degraded: bool,
+    fallback_reason: str,
+    policy: str,
+) -> None:
     trace = get_current_latency_trace()
     if trace is not None:
         trace.set_value("vector_search_backend", backend)
+        trace.set_value("vector_search_degraded", degraded)
+        trace.set_value("vector_search_fallback_reason", fallback_reason)
+        trace.set_value("vector_backend_policy", policy)

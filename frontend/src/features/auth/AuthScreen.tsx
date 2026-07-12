@@ -62,16 +62,30 @@ export function AuthScreen() {
         </section>
         <div className="auth-capability-grid">
           <article className="auth-capability-card hybrid">
-            <div className="capability-demo" aria-hidden="true"><Database size={22} /></div>
+            <div className="capability-demo" aria-hidden="true">
+              <div className="hybrid-path top"><span>BM25</span><i /></div>
+              <div className="hybrid-path bottom"><span>Vector</span><i /></div>
+              <div className="hybrid-core"><Database size={22} /><b>K</b></div>
+              <div className="hybrid-rank"><span /><span /><span /></div>
+            </div>
             <strong>混合检索</strong><span>BM25 + 向量召回，动态 K 与 rerank 排序</span>
           </article>
           <article className="auth-capability-card graph">
-            <div className="capability-demo" aria-hidden="true"><GitBranch size={22} /></div>
+            <div className="capability-demo" aria-hidden="true">
+              <div className="graph-links" />
+              <span className="graph-node node-a">标准</span>
+              <span className="graph-node node-b">参数</span>
+              <span className="graph-node node-c">试验</span>
+              <GitBranch className="graph-icon" size={18} />
+            </div>
             <strong>GraphRAG</strong><span>结合实体关系，补全工程机理线索</span>
           </article>
           <article className="auth-capability-card multimodal">
             <div className="capability-demo" aria-hidden="true">
-              <FileText size={18} /><ImageIcon size={18} /><FileSearch size={18} />
+              <div className="modal-stack doc"><FileText size={18} /><span>文档</span></div>
+              <div className="modal-stack image"><ImageIcon size={18} /><span>图片</span></div>
+              <div className="modal-stack table"><FileSearch size={18} /><span>表格</span></div>
+              <div className="modal-scan" />
             </div>
             <strong>多模态</strong><span>图表与图片证据入链，支持引用溯源</span>
           </article>

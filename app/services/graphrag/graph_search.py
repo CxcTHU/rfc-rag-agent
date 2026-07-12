@@ -126,32 +126,29 @@ class GraphEnhancedSearchService:
         if max_hops < 1 or max_hops > 2:
             raise ValueError("max_hops must be 1 or 2")
 
-        graph_matches: list[GraphSearchMatch] = []
-        graph_summary = GraphSearchSummary(available=False, fallback=True, hop_count=max_hops)
-        with latency_timer("graph_search_latency_ms"):
-            try:
-                graph = self._load_graph()
-                graph_matches = graph_search_matches(
-                    graph,
-                    normalized_query,
-                    max_hops=max_hops,
-                    relation_focus=self.relation_focus,
-                )
-                graph_summary = GraphSearchSummary(
-                    available=True,
-                    fallback=False,
-                    matched_entity_count=len(matched_query_node_ids(graph, normalized_query)),
-                    candidate_chunk_count=len(graph_matches),
-                    hop_count=max_hops,
-                )
-            except (OSError, ValueError, RuntimeError) as exc:
-                graph_summary = GraphSearchSummary(
-                    available=False,
-                    fallback=True,
-                    error=type(exc).__name__,
-                    hop_count=max_hops,
-                )
-        record_graph_summary(graph_summary)
+        from app.services.graphrag.retriever import GraphRetriever
+
+        outcome = GraphRetriever(
+            graph=self.graph,
+            graph_path=self.graph_path,
+        ).retrieve(
+            normalized_query,
+            max_hops=max_hops,
+            max_matches=self.max_graph_matches,
+            relation_focus=self.relation_focus,
+        )
+        graph_matches = [
+            GraphSearchMatch(
+                chunk_id=candidate.chunk_id,
+                score=candidate.score,
+                matched_node_ids=candidate.matched_node_ids,
+                hop_count=candidate.hop_count,
+                relation_types=candidate.relation_types,
+                relation_evidence=candidate.relation_evidence,
+            )
+            for candidate in outcome.candidates
+        ]
+        graph_summary = outcome.summary
 
         hybrid_results = self._hybrid_search(
             normalized_query,
@@ -421,12 +418,13 @@ def query_terms(text: str) -> list[str]:
 
 def graph_results_from_matches(
     db: Session,
-    matches: list[GraphSearchMatch],
+    matches: list[GraphSearchMatch] | list[Any],
 ) -> list[HybridSearchResult]:
     chunk_ids = [match.chunk_id for match in matches]
     if not chunk_ids:
         return []
     score_by_chunk = {match.chunk_id: match.score for match in matches}
+    match_by_chunk = {match.chunk_id: match for match in matches}
     statement = (
         select(Chunk, Document)
         .join(Document, Document.id == Chunk.document_id)
@@ -441,6 +439,7 @@ def graph_results_from_matches(
         if row is None:
             continue
         chunk, document = row
+        match = match_by_chunk[chunk_id]
         score = score_by_chunk[chunk_id] / max(max_score, 1e-9)
         results.append(
             HybridSearchResult(
@@ -460,6 +459,10 @@ def graph_results_from_matches(
                 source_image_path=chunk.source_image_path,
                 caption=chunk.caption,
                 page_number=chunk.page_number,
+                matched_node_ids=tuple(match.matched_node_ids),
+                graph_hop_count=int(match.hop_count),
+                relation_types=tuple(match.relation_types),
+                relation_evidence=tuple(match.relation_evidence),
             )
         )
     return results

@@ -40,6 +40,30 @@ const metadata = {
 describe('useAgentStream', () => {
   beforeEach(() => vi.unstubAllGlobals())
 
+  it('sends one unified request contract for text and uploaded images', async () => {
+    const handlers = callbacks()
+    const fetchMock = vi.fn().mockResolvedValue(sseResponse([
+      `event: metadata\ndata: ${JSON.stringify(metadata)}\n\n`,
+      'event: done\ndata: {}\n\n',
+    ]))
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useAgentStream(handlers))
+
+    await act(async () => {
+      await result.current.start({ ...request, imagePath: 'data/user_uploads/2026-07-12/crack.png' })
+    })
+
+    const payload = JSON.parse(String(fetchMock.mock.calls[0][1].body))
+    expect(payload).toMatchObject({
+      question: request.question,
+      conversation_id: request.conversationId,
+      image_path: 'data/user_uploads/2026-07-12/crack.png',
+    })
+    expect(payload).not.toHaveProperty('mode')
+    expect(payload).not.toHaveProperty('top_k')
+    expect(payload).not.toHaveProperty('source_id')
+  })
+
   it('treats metadata as the final result and done only as transport completion', async () => {
     const handlers = callbacks()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([

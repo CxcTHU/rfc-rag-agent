@@ -62,9 +62,9 @@ def test_eval_script_exists():
     assert "delta_p1" in text
 
 
-def test_agent_schema_has_mode():
+def test_agent_schema_ignores_retired_mode():
     from app.schemas.agent import AgentQueryRequest
     req = AgentQueryRequest(question="test", mode="agentic")
-    assert req.mode == "agentic"
+    assert not hasattr(req, "mode")
     req_default = AgentQueryRequest(question="test")
-    assert req_default.mode is None
+    assert not hasattr(req_default, "mode")

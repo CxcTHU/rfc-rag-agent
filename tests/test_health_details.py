@@ -141,3 +141,19 @@ def test_basic_health_endpoint_remains_unchanged(tmp_path, monkeypatch) -> None:
 
     assert response.status_code == 200
     assert set(response.json()) == {"status", "service", "environment"}
+
+
+def test_retrieval_contract_health_is_safe_and_content_free(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with make_test_client(tmp_path) as client:
+        response = client.get("/health/retrieval-contract")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["document_count"] == 1
+    assert payload["chunk_count"] == 2
+    assert len(payload["corpus_fingerprint"]) == 64
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert "Thermal control reduces hydration heat" not in serialized
+    assert "Filling capacity depends on flowability" not in serialized
