@@ -63,20 +63,26 @@ frontend/.vite/
 frontend/coverage/
 frontend/.vitest/
 
-# Local agent planning/handoff scratch files
-/task_plan*.md
-/findings*.md
-/progress*.md
+# Stage 64+ planning and handoff files are Git-tracked on their phase branch.
+# Keep only disposable subagent prompts local.
 /subagent_*_goal.md
 
 # Chainlit local runtime cache
 .chainlit/translations/
 
-# Obsidian knowledge base is local-only; never commit it.
+# Legacy Obsidian vault is local-only.
 obsidian-vault/
 obsidian-vault/**
+# The current Obsidian knowledge base is local-only except its stage-log branch.
 obsidian-agent开发/
-obsidian-agent开发/**
+!obsidian-agent开发/
+obsidian-agent开发/*
+!obsidian-agent开发/阶段/
+# Historical stage notes remain local. Phase 64 and later notes plus the stage
+# index are tracked with their active phase branch.
+obsidian-agent开发/阶段/阶段 [0-9] - *
+obsidian-agent开发/阶段/阶段 [1-5][0-9] - *
+obsidian-agent开发/阶段/阶段 6[0-3]*
 
 # Local AI agent tool configs (Claude Code / Codex) — keep local-only
 .claude/

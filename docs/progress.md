@@ -4794,3 +4794,27 @@ count, and conversation-persistence checks passed. Median end-to-end latency
 was 38.3s versus legacy 21.3s (+80.22%), so Phase 64 is exclusively responsible
 for latency decomposition and reduction. No answer text, source content,
 provider payload, or credential was written to the evaluation artifacts.
+
+## Latest Status: 2026-07-13 Phase 64 Mainstream-Agent Latency Closeout
+
+The user completed functional manual acceptance for Phase 64 and authorized
+local documentation, the tracked Phase 64 Obsidian stage log, GitHub
+publication, and merge. The phase adds a feature-gated Route-First short loop,
+bounded complex retrieval fan-out, latency attribution, safe connection reuse,
+BM25/graph local-path reductions, official `zhipu/rerank` deployment
+contract, Dynamic-K correction, and React repairs for repeated-run timing and
+inline image evidence.
+
+The performance outcome is deliberately qualified. Small real A/B probes
+showed directional improvement: official-rerank B Flash first-token P50/P95
+was 17.480/18.683 seconds compared with A Pro 38.974/39.831 seconds, and B
+final P95 was 21.286 seconds compared with A 44.292 seconds. The B P95 remains
+above the Phase 64 15-second first-token target; the 30-case × 3 cold A/B and
+blind judge were not run. Functional acceptance must not be read as a passed
+latency release gate.
+
+Phase 64's frozen review is `docs/phase_reviews/phase-64.md`; reproducible
+safe evidence is under `data/evaluation/phase64_*`, with corresponding
+evaluators under `scripts/`. The next latency phase should measure cold
+first-token end-to-end, load a versioned lexical snapshot built at corpus
+update time, and only then make an authorized final-model service decision.

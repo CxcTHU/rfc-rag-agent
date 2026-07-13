@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Sequence
 
 from app.services.generation.chat_model import ChatMessage, ChatModelProvider
+from app.services.observability.latency_trace import LatencyTrace
 from app.services.retrieval.query_embedding_cache import normalize_query_text
 from app.services.retrieval.runtime import (
     RetrievalIntentProfile,
@@ -82,6 +84,7 @@ class EvidenceQueryIdentity:
     reason: str = "unclassified"
     model_provider: str = ""
     model_name: str = ""
+    hyde_passage: str = ""
     retrieval_intent: RetrievalIntentProfile = field(
         default_factory=RetrievalIntentProfile
     )
@@ -293,6 +296,7 @@ def refine_evidence_query_identity_with_llm(
     provider: ChatModelProvider | None,
     history: Sequence[str] | None = None,
     force: bool = False,
+    trace: LatencyTrace | None = None,
 ) -> EvidenceQueryIdentity:
     if provider is None:
         return base_identity
@@ -300,6 +304,7 @@ def refine_evidence_query_identity_with_llm(
         return base_identity
     if str(getattr(provider, "provider_name", "")).casefold() in {"", "deterministic", "fake", "local"}:
         return base_identity
+    started = time.perf_counter()
     try:
         result = provider.generate(
             [
@@ -339,6 +344,7 @@ def refine_evidence_query_identity_with_llm(
                                 "relationship_explicitness": "explicit, implicit, none, or negative",
                                 "entities": "bounded list of relevant entity labels",
                                 "required_evidence_types": "subset of text, relationship, table, figure",
+                                "hyde_passage": "optional evidence-like retrieval passage under 120 words; empty when unnecessary",
                             },
                         },
                         ensure_ascii=False,
@@ -347,12 +353,19 @@ def refine_evidence_query_identity_with_llm(
             ]
         )
     except Exception:
+        record_planner_call(trace, provider=provider, duration_ms=(time.perf_counter() - started) * 1000.0)
         return raw_identity(
             base_identity.raw_query,
             "llm_identity_failed",
             entity_key=base_identity.entity_key,
             intent_key=base_identity.intent_key,
         )
+    record_planner_call(
+        trace,
+        provider=provider,
+        duration_ms=(time.perf_counter() - started) * 1000.0,
+        result=result,
+    )
     parsed = parse_identity_json(result.answer)
     if parsed is None:
         return raw_identity(
@@ -380,6 +393,15 @@ def refine_evidence_query_identity_with_llm(
         source="llm",
     )
     safe = bool(parsed.get("safe_for_cache_reuse")) and confidence >= 0.65
+    hyde_passage = normalize_hyde_passage(parsed.get("hyde_passage"))
+    if trace is not None:
+        trace.set_value("hyde_generated", bool(hyde_passage))
+        trace.set_value("hyde_used_for_vector", False)
+        trace.set_value("hyde_reason", "unified_planner" if hyde_passage else "planner_empty")
+        trace.set_value(
+            "hyde_model",
+            getattr(result, "model_name", "") or getattr(provider, "model_name", ""),
+        )
     if not entity_key or not intent_key or not canonical_query or not safe:
         return EvidenceQueryIdentity(
             raw_query=base_identity.raw_query,
@@ -407,8 +429,35 @@ def refine_evidence_query_identity_with_llm(
         reason="llm_canonicalized",
         model_provider=getattr(result, "provider", "") or getattr(provider, "provider_name", ""),
         model_name=getattr(result, "model_name", "") or getattr(provider, "model_name", ""),
+        hyde_passage=hyde_passage,
         retrieval_intent=retrieval_intent,
     )
+
+
+def normalize_hyde_passage(value: object) -> str:
+    return " ".join(str(value or "").split())[:1200]
+
+
+def record_planner_call(
+    trace: LatencyTrace | None,
+    *,
+    provider: ChatModelProvider,
+    duration_ms: float,
+    result: object | None = None,
+) -> None:
+    if trace is None:
+        return
+    trace.add_duration("planner_latency_ms", duration_ms)
+    # The current structured planner is non-streaming, so its first usable
+    # output arrives with the completed JSON response.
+    trace.set_value("planner_ttft_ms", round(duration_ms, 3))
+    trace.set_value("hyde_latency_ms", 0.0)
+    trace.set_value("planner_call_count", int(trace.values.get("planner_call_count", 0)) + 1)
+    trace.set_value(
+        "planner_model",
+        getattr(result, "model_name", "") or getattr(provider, "model_name", "") or "unknown",
+    )
+    trace.set_value("hyde_generated", False)
 
 
 def retrieval_intent_from_json(

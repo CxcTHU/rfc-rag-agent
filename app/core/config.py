@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     rerank_order_cache_ttl_seconds: int = 900
     tool_result_cache_enabled: bool = True
     tool_result_cache_ttl_seconds: int = 900
+    semantic_evidence_cache_enabled: bool = False
     rate_limit_enabled: bool = False
     rate_limit_required_in_prod: bool = True
     rate_limit_requests_per_minute: int = 30
@@ -65,6 +66,16 @@ class Settings(BaseSettings):
     runtime_identity_model_base_url: str = ""
     runtime_identity_model_temperature: float = 0.0
     runtime_identity_model_timeout_seconds: float = 10.0
+    agent_short_loop_enabled: bool = False
+    phase64_route_first_enabled: bool = False
+    phase64_execution_graph_schema: str = "phase64-route-first-v1"
+    phase64_fast_path_min_selected_sources: int = 2
+    phase64_final_non_thinking_enabled: bool = False
+    bm25_startup_warmup_enabled: bool = True
+    agent_final_snippet_chars: int = 320
+    agent_final_history_chars: int = 1000
+    agent_final_max_tokens: int = 1200
+    agent_final_estimated_input_token_budget: int = 0
 
     judge_model_provider: str = ""
     judge_model_name: str = ""
@@ -109,6 +120,9 @@ class Settings(BaseSettings):
     reranking_fallback_base_url: str = "https://llmapi.paratera.com/v1/p002"
     reranking_fallback_timeout_seconds: float = 30.0
     hybrid_multichannel_enabled: bool = True
+    phase64_retrieval_fanout_enabled: bool = False
+    phase64_retrieval_max_workers: int = 5
+    phase64_retrieval_max_inflight: int = 8
     hybrid_graph_channel_enabled: bool = True
     hybrid_table_text_channel_enabled: bool = True
     hybrid_figure_caption_channel_enabled: bool = True

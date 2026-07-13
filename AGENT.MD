@@ -377,9 +377,10 @@ Stage 30 -> 91.52 / A / pass
 新线程启动时按顺序做：
 
 1. 阅读 `G:\Codex\program\rfc-rag-agent\AGENT.MD`。
-2. 如果项目目录已经创建，继续阅读项目内的 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
-3. 检查当前目录结构和 Git 状态，确认用户已有改动，不要覆盖用户工作。
-4. 根据本文件里的路线，判断当前处于哪个阶段，再继续推进。
+2. 优先阅读根目录 `handoff.md`；它是上一个 Agent 留给下一个 Agent 的现场快照。文件不存在时，在继续前创建最小快照并说明原因。
+3. 如果项目目录已经创建，继续阅读项目内的 `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
+4. 阅读根目录 `task_plan.md`、`findings.md`、`progress.md`，再检查当前目录结构和 Git 状态，确认用户已有改动，不要覆盖用户工作。
+5. 根据本文件里的路线、`handoff.md` 和 Git 状态判断当前阶段，再继续推进。
 
 本文件的作用不是一次性定死所有细节，而是给“从零搭建堆石混凝土问答 Agent”提供稳定方向。
 
@@ -667,7 +668,7 @@ codex/phase-27-chainlit-docker-ci
 - 自动更新 `docs/progress.md`：作为最权威进度记录，写清完成内容、验证方式、遗留问题、下一阶段任务和面试表达。
 - 自动判断并更新 `docs/architecture.md`：如果阶段改变了模块边界、数据流、数据库表、API、检索链路或部署结构，必须同步更新；如果不需要改，也要说明原因。
 - 自动判断并更新 `AGENT.MD`：如果阶段经验改变了后续 agent 的工作规则、阶段路线、教学要求、避坑规则或推荐下一步，必须同步更新；如果不需要改，也要说明原因。
-- 自动更新 Obsidian 知识库：阶段页、阶段索引、首页、分类页和重要知识点笔记要与实际进度一致。
+- 自动更新本地 Obsidian 知识库 `obsidian-agent开发/`：阶段日志必须写入 `obsidian-agent开发/阶段/`，并按需要同步阶段索引、首页、分类页和重要知识点笔记。
 - 阶段完成并通过验证后，必须在阶段最终提交上创建阶段 tag，命名格式为 `phase-X-complete`，例如 `phase-3-complete`。tag 必须指向该阶段的最终功能提交；如果之后只是补充流程规则或文档修正，不要把阶段 tag 移到这些后续提交上。最终回复必须说明提交号和 tag 名称；如果暂时不能创建 tag，必须说明原因和补救动作。
 - 必须落盘阶段验收报告：每个阶段通过验收时，验收方（在 Claude + Codex 闭环中通常是规划/验收方 Claude）必须把验收报告写入 `docs/phase_reviews/phase-X.md`，内容至少包含：验收结论（PASS 或整改清单）、逐项核对证据（范围对齐、测试、评测指标、安全合规、文档同步、提交边界）、以及带入后续阶段的遗留观察。验收报告是闭环的固定产物，每个阶段都不得省略；验收方必须直接核对工作区（读 diff、独立重跑测试、复现评测、扫描敏感信息），不能仅凭开发方的口头汇报判定通过。
 
@@ -685,11 +686,37 @@ codex/phase-27-chainlit-docker-ci
 
 ### 交接协议（时间分片核心）
 
-- **开工前**：先读 `AGENT.MD`、`README.md`、`docs/progress.md`，再运行 `git status -sb`、`git log --oneline -5`，确认上一个 Agent 留下的分支、未提交改动和当前阶段，绝不覆盖对方未提交的工作。
-- **交班前**：把工作区留在可理解状态。要么是干净的（无零散半成品），要么在 `docs/progress.md` 或根目录 `progress.md` 写清「当前未提交的改动是什么、下一步该做什么」，方便另一个 Agent 接手。
-- **根目录 `task_plan.md` / `findings.md` / `progress.md`** 是当前活跃阶段的工作记忆，由正在干活的 Agent 维护，交接时必须更新到最新。
+- **开工前**：先读 `AGENT.MD`，再优先读 `handoff.md`、`README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md` 和根目录工作记忆；随后运行 `git status -sb`、`git log --oneline -5`，确认上一个 Agent 留下的分支、未提交改动和当前阶段，绝不覆盖对方未提交的工作。
+- **交班前**：更新 `handoff.md`，把工作区留在可理解状态。要么是干净的（无零散半成品），要么 `handoff.md` 和根目录 `progress.md` 必须写清「当前未提交的改动是什么、下一步该做什么」，方便另一个 Agent 接手。
+- **根目录 `task_plan.md` / `findings.md` / `progress.md` / `handoff.md`** 是当前活跃阶段的工作记忆，由正在干活的 Agent 维护，交接时必须更新到最新。
 - **`docs/progress.md`** 是最权威进度记录；**`AGENT.MD`** 是共享大脑。两者只在阶段收尾或明确节点更新，避免两个 Agent 反复抢改造成冲突。
-- **阶段任务书 / goal prompt 模板**：规划方（在 Claude + Codex 闭环中通常是 Claude）为每个新阶段编写「阶段开发任务书」（即 Codex 新对话要设置的 goal）时，以本地模板 `obsidian-vault/模板/goal prompt.md` 为基准；同目录下还有配套的 `开启 prompt.md`、`提交 prompt.md`、`Phase 汇报模板.md`、`知识点模板.md`。注意 `obsidian-vault/` 是本地 only、已 `.gitignore`，这些模板不随仓库分发，仅供本机 Claude / Codex 取用；任务书生成的 goal prompt 正文不超过 4000 字符。
+- **阶段任务书 / goal prompt 模板**：规划方（在 Claude + Codex 闭环中通常是 Claude）为每个新阶段编写「阶段开发任务书」（即 Codex 新对话要设置的 goal）时，以本地 `obsidian-agent开发/` 中现有模板为基准；该知识库是 local-only、已 `.gitignore`，不随仓库分发，仅供本机 Claude / Codex 取用；任务书生成的 goal prompt 正文不超过 4000 字符。
+
+### 阶段工作记忆、证据与日志宪法
+
+从阶段 64 起，所有阶段开发必须按下表维护文件；不要把同一信息复制到不属于它的文件，也不要以一句「已经测过」替代可复跑证据。
+
+| 层级 | 放什么 | 不放什么 | 更新时机 |
+|---|---|---|---|
+| `AGENT.MD` | 长期宪法：开发流程、测试门禁、安全规则、协作规则 | 当前阶段进度、临时结论 | 仅长期规则改变时 |
+| `docs/architecture.md` | 当前架构事实、关键边界、主链路 | 每次调试过程 | 架构事实改变时 |
+| `docs/decisions/ADR-xxx.md` | 不易逆转的设计决策、备选方案与理由 | 日常任务记录 | 做出持久设计决定时 |
+| `task_plan.md` | 当前阶段唯一执行计划、验收条件 | 已结束阶段历史 | 开工、计划变更、任务完成时 |
+| `findings.md` | 已验证事实、复现方式、证据链接 | 推测和待确认观点 | 获得可复验证据时 |
+| `progress.md` | 交接状态：做到哪、卡在哪、下一步 | 长篇阶段复盘 | 每个可交接节点、阻塞或停工前 |
+| `handoff.md` | 上一个 Agent 留给下一个 Agent 的现场快照：阶段、分支、工作树、运行命令、已验证结果、阻塞、下一条安全动作 | 长篇历史、设计复盘、敏感信息 | 开工接手、交班、阻塞、暂停前 |
+| `docs/phase_reviews/phase-X.md` | 阶段完成后的冻结评审、指标、遗留项 | 进行中的工作状态 | 独立验收完成后 |
+| `data/evaluation/` 与对应脚本 | 可复跑的真实评测证据、配置标签、脱敏指标 | 仅文字描述的“测过了”、原始回答/证据/凭据 | 每次评测结论形成时 |
+
+详细规则：
+
+- `handoff.md` 是新 Session 恢复现场的第一优先级文件；它必须写明当前阶段/目标、当前分支与 `git status -sb` 摘要、正在运行或必须避免重复的命令、已完成且有证据的工作、阻塞条件、未提交改动边界、下一条安全动作，以及相关计划/评测/评审文件路径。
+- 从阶段 64 起，`handoff.md`、`task_plan.md`、`findings.md`、`progress.md` 是当前阶段分支必须纳入 Git 的受控规划与交接文件；它们必须随阶段分支保存，但仍不得将临时状态误写入阶段冻结评审。
+- `findings.md` 只记录已经通过测试、命令输出、可复现步骤或链接验证的事实。假设、待确认方案和猜测必须留在 `task_plan.md` 的待办或 `handoff.md` 的阻塞项，明确标记为未验证。
+- 每个阶段从开始、每个可验证里程碑、阻塞与收尾都要更新对应的阶段日志：`obsidian-agent开发/阶段/阶段 N - 阶段名称.md`。该目录是同一个 Obsidian 知识库的指定阶段分支，不是第二套知识库；从阶段 64 起，该 `阶段/` 分支必须随当前阶段分支纳入 Git。
+- 阶段日志至少包含：目标、实现内容、变更文件/模块、验证命令与结果、评测证据路径、问题与解决方式、遗留项、下一步、面试表达，以及指向 `task_plan.md`、`findings.md`、`progress.md`、`handoff.md`、ADR 或阶段评审的双链/路径。
+- `docs/progress.md` 保留为长期权威阶段里程碑；只有明确节点或阶段收尾才更新，不能替代根目录 `progress.md` 和 `handoff.md` 的即时交接作用。
+- 纳入 Git 的规划文件、阶段日志、真实评测产物和文档一律遵守现有敏感信息边界：不得写入 API key、Bearer token、数据库/Redis/JWT 密码、provider raw response、hidden reasoning、完整受限全文、完整 chunk、原始回答或私有日志。交接快照只记录脱敏状态、命令名称、文件路径、哈希/计数和下一步，不能记录私有运行详情。
 
 ### 分支与提交边界
 
@@ -783,33 +810,16 @@ codex/phase-27-chainlit-docker-ci
 知识库目录：
 
 ```text
-obsidian-vault/
+obsidian-agent开发/
 ```
 
 维护原则：
 
 - 每个阶段结束时，必须自动更新 Obsidian 知识库，不需要用户单独提醒。
-- 必须同步 `obsidian-vault/首页.md`，让“当前重点 / 已完成 / 下一阶段”与真实阶段一致。
-- 必须同步 `obsidian-vault/阶段索引.md`，把已完成阶段、下一阶段和计划中阶段放在正确分组。
-- 必须同步当前阶段页，例如 `obsidian-vault/阶段/阶段 1 - 本地资料导入与关键词检索.md`，包括 front matter 里的 `status`、阶段目标、完成内容、验证结果、知识点链接、面试表达、上一阶段和下一阶段。
-- 必须维护 `obsidian-vault/阶段汇报/` 分支：
-  - 每个大阶段建立一个目录，例如 `obsidian-vault/阶段汇报/阶段 5 - 前端界面/`。
-  - 每个小 Phase 单独一篇笔记，标题格式建议为 `Phase N - 小阶段名称`。
-  - 每篇小 Phase 笔记必须固定记录以下 10 项，不得省略、合并或只在大阶段最终收尾时统一补写：
-    1. 本 Phase 目标
-    2. 本 Phase 完成的主要任务
-    3. 新增/修改了哪些内容
-    4. 关键代码或模块说明
-    5. 遇到的问题与解决方式
-    6. 新词解释
-    7. 验证结果
-    8. 当前遗留问题
-    9. 下一 Phase 要做什么
-    10. 面试表达
-  - `obsidian-vault/阶段汇报索引.md` 必须链接所有已记录的大阶段 Phase 汇报索引。
-  - 每个大阶段页必须反向链接本阶段的 Phase 汇报索引，方便从阶段页进入小 Phase 复盘。
-  - 如果是事后回填小 Phase 汇报，必须在对应索引中说明内容依据，例如来自 `docs/progress.md`、阶段页、测试结果或提交记录。
-  - `obsidian-vault/` 是本地知识库，只做本地维护和复盘，不得提交到 Git，也不得上传到 GitHub。阶段收尾回复可以说明已更新本地知识库，但提交范围必须排除所有 Obsidian 文件。
+- 必须同步 `obsidian-agent开发/首页.md` 与阶段索引；如文件不存在，在当前知识库结构中新增等价索引，不要回写旧 `obsidian-vault/`。
+- 阶段开发日志固定写入 `obsidian-agent开发/阶段/`，文件名使用 `阶段 N - 阶段名称.md`；每个可交接节点都更新，不允许只在大阶段结束后补写。
+- 每篇阶段日志必须固定记录：目标、主要任务、变更内容、关键模块、问题与解决方式、新词解释、验证结果与评测路径、遗留问题、下一步、面试表达和相关工作记忆/评审链接。
+- `obsidian-agent开发/` 中只有 `阶段/` 分支从阶段 64 起需要纳入当前阶段 Git 分支；知识库的其他本地笔记仍不提交，除非用户另行明确授权。阶段收尾回复必须说明阶段日志是否已纳入阶段提交范围。
 - 每个重要知识点都要单独成文，不要只写在阶段总结里。
 - 每个知识点必须标明：所属阶段、对应代码或文档位置、解决的问题、在项目中的作用、面试追问。
 - 每个知识点必须使用 Obsidian 双链连接到阶段页和分类页，例如 `[[阶段 0 - FastAPI 工程底座]]`、`[[后端工程]]`。
@@ -1061,6 +1071,7 @@ data/
 logs/
 output/
 obsidian-vault/
+obsidian-agent开发/
 .venv/
 __pycache__/
 PostgreSQL/Redis Docker volumes
@@ -1079,6 +1090,7 @@ rsync -az --delete \
   --exclude 'logs/' \
   --exclude 'output/' \
   --exclude 'obsidian-vault/' \
+  --exclude 'obsidian-agent开发/' \
   --exclude '.venv/' \
   --exclude '.chainlit/' \
   --exclude '.playwright-cli/' \

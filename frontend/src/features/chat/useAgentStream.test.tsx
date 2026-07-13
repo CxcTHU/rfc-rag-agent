@@ -79,6 +79,37 @@ describe('useAgentStream', () => {
     expect(result.current.runStates[7].status).toBe('completed')
   })
 
+  it('replaces a completed run state when the same conversation starts again', async () => {
+    const handlers = callbacks()
+    let releaseSecondResponse: ((response: Response) => void) | undefined
+    const secondResponse = new Promise<Response>((resolve) => { releaseSecondResponse = resolve })
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(sseResponse([
+        `event: metadata\ndata: ${JSON.stringify(metadata)}\n\n`,
+        'event: done\ndata: {}\n\n',
+      ]))
+      .mockReturnValueOnce(secondResponse))
+    const { result } = renderHook(() => useAgentStream(handlers))
+
+    await act(async () => { await result.current.start(request) })
+    expect(result.current.runStates[request.conversationId].status).toBe('completed')
+
+    let secondRun: Promise<void> | undefined
+    await act(async () => {
+      secondRun = result.current.start(request)
+      await Promise.resolve()
+    })
+    expect(result.current.runStates[request.conversationId].status).toBe('connecting')
+
+    await act(async () => {
+      releaseSecondResponse?.(sseResponse([
+        `event: metadata\ndata: ${JSON.stringify(metadata)}\n\n`,
+        'event: done\ndata: {}\n\n',
+      ]))
+      await secondRun
+    })
+  })
+
   it('fails when done arrives without metadata', async () => {
     const handlers = callbacks()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(['event: done\ndata: {}\n\n'])))

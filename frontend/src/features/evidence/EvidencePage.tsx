@@ -8,7 +8,7 @@ import { renderAnswerWithCitations } from '@/features/evidence/citations'
 import {
   SourceCard,
 } from '@/features/evidence/SourcesPanel'
-import { sourceItemsForResult, sourceMetaLine, sourceOpenUrl } from '@/features/evidence/sourceModel'
+import { imageSourceItemsForResult, sourceItemsForResult, sourceMetaLine, sourceOpenUrl } from '@/features/evidence/sourceModel'
 import { safeText } from '@/lib/utils'
 import type { AgentQueryResponse } from '@/lib/types'
 
@@ -18,7 +18,7 @@ export function EvidencePage() {
   const result = workspace.selectedResult
   const activeCitation = workspace.activeCitation
   const activeIndex = activeCitation && activeCitation.messageId === message?.id ? activeCitation.index : null
-  const mediaCount = result ? imageEvidenceSources(result).length + tableEvidenceSources(result).length : 0
+  const mediaCount = result ? imageSourceItemsForResult(result).length + tableEvidenceSources(result).length : 0
 
   if (workspace.messagesError) {
     return <Panel><RetryState title="证据加载失败" error={workspace.messagesError} onRetry={() => void workspace.retryMessages()} /></Panel>
@@ -61,7 +61,7 @@ export function EvidencePage() {
 }
 
 function EvidenceMedia({ result }: { result: AgentQueryResponse }) {
-  const figures = imageEvidenceSources(result)
+  const figures = imageSourceItemsForResult(result)
   const tables = tableEvidenceSources(result)
   return (
     <>
@@ -91,17 +91,6 @@ function OriginalDocumentLink({ source }: { source: AgentQueryResponse['sources'
   const url = sourceOpenUrl(source)
   if (!url) return null
   return <a className="source-open-link" href={url} target="_blank" rel="noreferrer"><ExternalLink size={14} />打开原文</a>
-}
-
-function imageEvidenceSources(result: AgentQueryResponse) {
-  if (result.refused) return []
-  const seen = new Set<string>()
-  return result.sources.flatMap((source) => {
-    const imageUrl = source.image_url || ''
-    if (!imageUrl || source.chunk_type !== 'image_description' || seen.has(imageUrl)) return []
-    seen.add(imageUrl)
-    return [{ source, imageUrl }]
-  }).slice(0, 4)
 }
 
 function tableEvidenceSources(result: AgentQueryResponse) {

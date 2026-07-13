@@ -1,0 +1,22 @@
+{
+  "validation_mode": "fixed-input-serial-alternating-rerank-probe",
+  "candidate_count": 12,
+  "rounds_per_provider": 5,
+  "parallel_cloud": {
+    "attempted": 5,
+    "completed": 5,
+    "error_count": 0,
+    "p50_ms": 302.569,
+    "p95_ms": 2141.696,
+    "max_ms": 2141.696
+  },
+  "zhipu_official": {
+    "attempted": 5,
+    "completed": 5,
+    "error_count": 0,
+    "p50_ms": 237.599,
+    "p95_ms": 378.45,
+    "max_ms": 378.45
+  },
+  "conclusion": "directional_only_not_a_quality_or_phase64_latency_gate"
+}

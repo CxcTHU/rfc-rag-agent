@@ -1,0 +1,126 @@
+# 阶段 64 - 主流 Agent 延迟优化
+
+> 状态：用户人工功能验收 PASS（2026-07-13）
+> 分支：`codex/phase-64-mainstream-agent-latency`
+> 冻结评审：[`docs/phase_reviews/phase-64.md`](../../docs/phase_reviews/phase-64.md)
+
+## 目标
+
+将 Phase 63 的默认检索运行时拆分为 planner、检索/rerank、首回答 token
+与最终生成的可观测链路；以冻结交替 A/B 审计优化，而不牺牲引用、拒答、
+动态证据选择或多模态证据。
+
+目标值为首 token P50 ≤ 8 秒、P95 ≤ 15 秒、最终 P95 ≤ 30 秒。功能通过
+不等于这些性能目标已经达到，性能结论必须以可复跑证据为准。
+
+## 实现内容
+
+### 路由与 Agent 短环
+
+- 新增 B 路径 Route-First：普通无历史文本直达快路径；显式关系、图片、表格、
+  追问和上传图片保留复杂路径。
+- 统一 planner 的 identity、intent、route 与可选 HyDE；B 由 Harness 执行
+  已批准的一次高层检索，跳过第二次模型工具选择。
+- 快路径证据不足时仅可升级一次，复杂路径才允许有界 fan-out；全局并发上限为 8。
+- 复杂关系请求保留 graph 意图下限，明确“不要关系分析”仍优先。
+
+### 检索与生成
+
+- 图检索改为本地图的有界双向遍历和按入选候选生成 provenance，消除全图复制/
+  全候选证据构造。
+- BM25 在保持现有评分和排序的条件下先过滤不可能命中的 chunk；启动时预热
+  可复用语料。
+- 保留 75 条 rerank 候选池与 Dynamic-K 最终 4–12 条来源；不再把最终来源
+  写成固定 8 条。
+- B 可请求 DeepSeek V4 非思考模式；最终提示可观测但默认不启用 token ceiling，
+  因为 1664 ceiling 未证明收益。
+- 官方智谱 `zhipu/rerank` 成为本机实际默认；旧并行云不是 fallback。
+- SSE HTTP 连接池复用完整消费的连接；异常流会失效连接，不伪造首回答 token。
+
+### 可观测性与体验
+
+- 安全 trace 分别记录 planner、检索、rerank、最终模型 TTFT、连接复用、
+  引用修复与 DeepSeek 数值 cache usage；不记录 prompt、回答、证据正文、
+  provider 原始包、推理或凭据。
+- 前端 Flash/Pro 为用户显式选择；评测器校验请求模型与 SSE 实际模型。
+- 修复同一会话第二次请求的思考计时状态机。
+- 图片证据卡片直接显示在回答下方：按 URL 去重，最多 4 张，保留真实引用序号；
+  未在正文引用的图片明确标为“仅检索”。
+
+## 前后效果
+
+| 指标/能力 | 优化前或 A | Phase 64 B/修复后 | 结论 |
+|---|---:|---:|---|
+| 单条关系图检索本地 profile | 约 12.6 秒 | 约 0.31 秒 | 有界图遍历显著降耗 |
+| BM25 已检查 warm profile | 约 4.3 秒 | 约 1.9 秒 | 保持评分语义的预筛有效 |
+| 重启后首个 B 请求 BM25 | — | 1.107 秒 | 启动预热有效 |
+| 3 对官方 rerank 的 B 首 token P50/P95 | A Pro：38.97 / 39.83 秒 | Flash：17.48 / 18.68 秒 | 方向性改善，P95 仍未达 15 秒 |
+| 3 对官方 rerank 的最终 P95 | A Pro：44.29 秒 | Flash：21.29 秒 | 方向性改善 |
+| 官方 vs 旧并行云 rerank（5 次、12 candidates） | 旧：P50/P95 302.569/2141.696 ms | 官方：237.599/378.450 ms | 小样本更稳定，非 75-candidate 质量结论 |
+| 同会话第二次请求计时 | 固定“<1秒” | 终态 run 可被新 run 替换 | 已修复 |
+| 图片资源回答 | 只输出文字说明 | 回答下方内联图片证据 | 已修复 |
+
+以上 A/B 仅为小样本方向性结果：完整 30 题 × 3 轮冷链路和真实盲评未执行，
+不得将表中数据表述为完整性能门禁通过。
+
+## 验证与证据
+
+- 最终后端回归：`python -m pytest -q` → `1479 passed, 1 skipped`。
+- 前端：`npm run test:unit` → `31 passed`；`npm run lint`、`npm run build` 均通过。
+- Stage 30：`python scripts/score_stage30_quality.py` → `91.52 / A / pass`。
+
+- 冻结用例与安全指标：`data/evaluation/phase64_latency_cases.csv`。
+- 官方 rerank 实测：`data/evaluation/phase64_zhipu_flash_probe.csv` 与对应 summary。
+- rerank 稳定性对照：`data/evaluation/phase64_reranker_provider_stability_ab.json`。
+- 启动预热与连接复用：`data/evaluation/phase64_bm25_startup_probe.csv`、
+  `data/evaluation/phase64_connection_probe_first.csv`、
+  `data/evaluation/phase64_connection_probe_second.csv`。
+- A/B 与盲评脚本：`scripts/evaluate_phase64_latency_ab.py`、
+  `scripts/judge_phase64_latency_ab.py`。
+- 实施设计与计划：`docs/superpowers/specs/2026-07-13-phase-64-*-design.md`、
+  `docs/superpowers/plans/2026-07-13-phase-64-*.md`。
+
+## 问题与解决
+
+1. **错误的“关闭 reranker”方向**：用户明确要求保持真实 GLM/官方智谱 rerank；
+   本阶段没有以关闭 rerank 换取延迟。
+2. **将 75 误当最终 Top-K**：75 是 rerank 候选池，最终来源由 Dynamic-K 决定；
+   已修正为 4–12。
+3. **图片检索后未显示图片**：结果元数据已有 image URL，问题在 MessageBubble 未渲染；
+   复用来源选择器后修复。
+4. **第二轮计时卡住**：完成 run 阻止新 run 的 connecting patch；仅允许新 run
+   替换 completed/stopped/error 状态。
+
+## 遗留项与下一步
+
+- 目标冷链路首 token P95 ≤ 15 秒未被证明；最新小样本为 18.68 秒。
+- 完整 30×3 冻结 A/B、盲评、质量非劣统计尚未执行。
+- 后续应先建立端到端冷启动门禁，再把 BM25 索引改为“数据变更时构建、
+  启动时加载”的 versioned lexical snapshot；不要只优化热路径。
+- 若冷链路 TTFT 的主因仍是最终模型排队/调度，应以模型 lane 或服务容量方案
+  解决，不应通过关闭 rerank、固定 Dynamic-K 或伪造首 token 规避。
+
+## 新词解释
+
+- **Route-First**：先用确定性低成本信号选择快/复杂路径，再决定是否需要 planner
+  和附加检索通道。
+- **Fan-out**：将已批准且相互独立的检索通道并发执行；不是对所有通道无差别并发。
+- **Dynamic-K**：按分数和覆盖需求动态决定最终送入生成的证据数量。
+- **TTFT**：Time To First Token，最终模型产生首个真实回答 token 的时间。
+- **Versioned lexical snapshot**：由数据版本绑定、可在服务启动时直接加载的倒排索引，
+  用于降低冷启动首请求成本。
+
+## 面试表达
+
+我没有通过关闭 rerank 或伪造进度来压低 Agent 延迟，而是把 Planner、检索/
+rerank、首 token 和最终生成拆成安全可观测的阶段；用 feature-gated A/B、
+真实 rerank、Dynamic-K 和引用门禁验证优化。图遍历和 BM25 的本地计算明显下降，
+但真实 P95 的主要剩余瓶颈被归因到最终模型服务，因此如实保留为下一阶段的
+冷链路优化课题。
+
+## 关联
+
+- [[阶段 63 - 检索运行时]]
+- [[00-索引]]
+- `task_plan.md`、`findings.md`、`progress.md`、`handoff.md`
+- `docs/phase_reviews/phase-64.md`

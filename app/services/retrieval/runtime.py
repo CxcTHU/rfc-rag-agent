@@ -205,6 +205,11 @@ def build_retrieval_action(profile: RetrievalIntentProfile) -> RetrievalAction:
     )
 
 
+def retrieval_tool_for_action(action: RetrievalAction) -> HighLevelEvidenceTool:
+    """Resolve one Runtime action to exactly one public evidence tool."""
+    return action.required_tool or "hybrid_search_knowledge"
+
+
 def retrieval_runtime_result_limit(
     tool_name: HighLevelRetrievalTool,
     settings: Settings | None = None,

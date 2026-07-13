@@ -56,6 +56,19 @@ def retrieval_contract_health(
         retrieval_runtime_default_enabled=settings.retrieval_runtime_default_enabled,
         pgvector_search_enabled=settings.pgvector_search_enabled,
         vector_backend_policy=settings.vector_backend_policy,
+        retrieval_runtime_schema=settings.retrieval_runtime_schema,
+        agent_short_loop_enabled=settings.agent_short_loop_enabled,
+        phase64_route_first_enabled=settings.phase64_route_first_enabled,
+        phase64_retrieval_fanout_enabled=settings.phase64_retrieval_fanout_enabled,
+        phase64_final_non_thinking_enabled=settings.phase64_final_non_thinking_enabled,
+        phase64_execution_graph_schema=settings.phase64_execution_graph_schema,
+        reranking_enabled=settings.reranking_enabled,
+        reranking_provider=settings.reranking_provider,
+        reranking_model_name=settings.reranking_model_name,
+        retrieval_candidate_cache_enabled=settings.retrieval_candidate_cache_enabled,
+        rerank_order_cache_enabled=settings.rerank_order_cache_enabled,
+        tool_result_cache_enabled=settings.tool_result_cache_enabled,
+        semantic_evidence_cache_enabled=settings.semantic_evidence_cache_enabled,
     )
 
 

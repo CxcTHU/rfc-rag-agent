@@ -17,6 +17,19 @@ class RetrievalContractHealthResponse(HealthResponse):
     retrieval_runtime_default_enabled: bool
     pgvector_search_enabled: bool
     vector_backend_policy: str
+    retrieval_runtime_schema: str
+    agent_short_loop_enabled: bool
+    phase64_route_first_enabled: bool
+    phase64_retrieval_fanout_enabled: bool
+    phase64_final_non_thinking_enabled: bool
+    phase64_execution_graph_schema: str
+    reranking_enabled: bool
+    reranking_provider: str
+    reranking_model_name: str
+    retrieval_candidate_cache_enabled: bool
+    rerank_order_cache_enabled: bool
+    tool_result_cache_enabled: bool
+    semantic_evidence_cache_enabled: bool
 
 
 class DatabaseHealth(BaseModel):

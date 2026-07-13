@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
-import { AlertTriangle, BookOpen, ChevronDown, Loader2, Play, Square } from 'lucide-react'
+import { AlertTriangle, BookOpen, ChevronDown, ExternalLink, Loader2, Play, Square } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/input'
@@ -8,6 +8,7 @@ import { EmptyState, LoadingState, RetryState } from '@/components/states'
 import { useChatWorkspace } from '@/features/chat/ChatWorkspaceContext'
 import { formatDuration, resultElapsedMs, type ChatModelPreset } from '@/features/chat/model'
 import { buildCitationView, renderAnswerWithCitations, type CitationView } from '@/features/evidence/citations'
+import { imageSourceItemsForResult, sourceMetaLine, sourceOpenUrl } from '@/features/evidence/sourceModel'
 import { SourcesPanel } from '@/features/evidence/SourcesPanel'
 import {
   currentLiveStepTitle,
@@ -330,9 +331,52 @@ export function MessageBubble({
       ) : null}
       {message.error ? <RetryState compact title="Agent 运行失败" error={message.error} onRetry={onRetry} retryLabel="放回输入框" /> : null}
       {message.pending ? <Loader2 className="spin" size={16} /> : null}
+      {isAssistant && message.result ? <InlineFigureEvidence result={message.result} onCitation={onCitation} /> : null}
       {isAssistant && citationView.citationCount ? <Badge className="citation-count-badge">{citationView.citationCount} 个引用</Badge> : null}
       {isAssistant && citationView.invalidCitationCount ? <Badge className="invalid-citation-badge">{citationView.invalidCitationCount} 个无效引用</Badge> : null}
     </article>
+  )
+}
+
+function InlineFigureEvidence({
+  result,
+  onCitation,
+}: {
+  result: NonNullable<ChatMessage['result']>
+  onCitation: (index: number) => void
+}) {
+  const figures = imageSourceItemsForResult(result)
+  if (!figures.length) return null
+
+  return (
+    <section className="inline-figure-evidence" aria-label="本回答检索到的图片证据">
+      <div className="inline-figure-evidence-header">
+        <strong>图片证据</strong>
+        <Badge>{figures.length} 张</Badge>
+      </div>
+      <div className="inline-figure-evidence-grid">
+        {figures.map(({ displayIndex, hasCitation, imageUrl, source }) => {
+          const openUrl = sourceOpenUrl(source)
+          return (
+            <article className="inline-figure-card" key={`${imageUrl}-${displayIndex}`}>
+              <img alt={source.caption || source.title} src={imageUrl} />
+              <div className="inline-figure-card-copy">
+                <strong>{source.caption || source.title}</strong>
+                <small>{sourceMetaLine(source)}</small>
+                <div className="inline-figure-card-actions">
+                  {hasCitation ? (
+                    <button aria-label={`定位图片来源 [${displayIndex}]`} className="inline-figure-citation" type="button" onClick={() => onCitation(displayIndex)}>
+                      [{displayIndex}]
+                    </button>
+                  ) : <Badge>仅检索</Badge>}
+                  {openUrl ? <a href={openUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} />打开原文</a> : null}
+                </div>
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

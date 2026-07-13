@@ -5,6 +5,7 @@ import json
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.config import get_settings
 from app.db.models import Base
 from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository
 from app.db.session import create_sqlite_engine, get_db
@@ -145,6 +146,11 @@ def test_basic_health_endpoint_remains_unchanged(tmp_path, monkeypatch) -> None:
 
 def test_retrieval_contract_health_is_safe_and_content_free(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("RERANKING_ENABLED", "true")
+    monkeypatch.setenv("RERANKING_PROVIDER", "zhipu")
+    monkeypatch.setenv("RERANKING_MODEL_NAME", "rerank")
+    monkeypatch.setenv("SEMANTIC_EVIDENCE_CACHE_ENABLED", "false")
+    get_settings.cache_clear()
 
     with make_test_client(tmp_path) as client:
         response = client.get("/health/retrieval-contract")
@@ -154,6 +160,16 @@ def test_retrieval_contract_health_is_safe_and_content_free(tmp_path, monkeypatc
     assert payload["document_count"] == 1
     assert payload["chunk_count"] == 2
     assert len(payload["corpus_fingerprint"]) == 64
+    assert payload["agent_short_loop_enabled"] is False
+    assert payload["phase64_route_first_enabled"] is False
+    assert payload["phase64_retrieval_fanout_enabled"] is False
+    assert payload["phase64_final_non_thinking_enabled"] is False
+    assert payload["phase64_execution_graph_schema"]
+    assert payload["retrieval_runtime_schema"]
+    assert payload["reranking_enabled"] is True
+    assert payload["reranking_provider"] == "zhipu"
+    assert payload["reranking_model_name"] == "rerank"
+    assert payload["semantic_evidence_cache_enabled"] is False
     serialized = json.dumps(payload, ensure_ascii=False)
     assert "Thermal control reduces hydration heat" not in serialized
     assert "Filling capacity depends on flowability" not in serialized

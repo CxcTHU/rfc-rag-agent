@@ -21,6 +21,17 @@ export function sourceItemsForResult(result: AgentQueryResponse) {
   return [...citationItems, ...retrievalOnly]
 }
 
+export function imageSourceItemsForResult(result: AgentQueryResponse) {
+  if (result.refused) return []
+  const seen = new Set<string>()
+  return sourceItemsForResult(result).flatMap((item) => {
+    const imageUrl = item.source.image_url || ''
+    if (!imageUrl || item.source.chunk_type !== 'image_description' || seen.has(imageUrl)) return []
+    seen.add(imageUrl)
+    return [{ ...item, imageUrl }]
+  }).slice(0, 4)
+}
+
 export function sourceMetaLine(source: AgentQueryResponse['sources'][number]) {
   const parts = [
     source.page_number ? `第 ${source.page_number} 页` : '',

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 
+from app.core.config import get_settings
 from app.schemas.agent import AgentQueryRequest
 from app.services.agent.tool_calling_service import (
     ToolCallingAgentService,
@@ -12,6 +13,28 @@ from app.services.generation.chat_model import DeterministicChatModelProvider
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 from tests.test_agent_api import make_test_client
 from tests.test_tool_calling_agent_service import make_session, seed_tool_calling_documents
+
+
+class CountingPhase63ToolPlanningProvider:
+    provider_name = "phase63-tool-loop"
+    model_name = "phase63-tool-loop-v1"
+
+    def __init__(self) -> None:
+        self.delegate = DeterministicChatModelProvider(
+            provider_name=self.provider_name,
+            model_name=self.model_name,
+        )
+        self.generate_with_tools_calls = 0
+
+    def generate(self, messages):
+        return self.delegate.generate(messages)
+
+    def stream_generate(self, messages):
+        yield from self.delegate.stream_generate(messages)
+
+    def generate_with_tools(self, messages, tools):
+        self.generate_with_tools_calls += 1
+        return self.delegate.generate_with_tools(messages, tools)
 
 
 def test_agent_request_drops_retired_retrieval_controls() -> None:
@@ -35,6 +58,27 @@ def test_high_level_tool_schemas_and_service_do_not_expose_top_k() -> None:
         assert set(definition.function.parameters["properties"]) == {"query"}
 
     assert "top_k" not in inspect.signature(ToolCallingAgentService.query).parameters
+
+
+def test_phase63_flag_keeps_model_owned_tool_selection_loop(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("AGENT_SHORT_LOOP_ENABLED", "false")
+    monkeypatch.setenv("SEMANTIC_EVIDENCE_CACHE_ENABLED", "false")
+    get_settings.cache_clear()
+    session_factory = make_session(tmp_path)
+    with session_factory() as db:
+        seed_tool_calling_documents(db)
+        provider = CountingPhase63ToolPlanningProvider()
+        service = ToolCallingAgentService(
+            db=db,
+            embedding_provider=DeterministicEmbeddingProvider(dimension=32),
+            chat_model_provider=provider,
+            log_answers=False,
+        )
+        result = service.query("What affects filling capacity?")
+
+    assert provider.generate_with_tools_calls == 1
+    assert result.latency_trace["planner_call_count"] == 0
+    assert result.latency_trace["executed_tool_call_count"] == 1
 
 
 def test_unified_agent_api_ignores_legacy_mode_and_top_k(tmp_path) -> None:

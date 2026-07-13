@@ -494,9 +494,13 @@ def test_phase63_runtime_graph_channel_preserves_relation_provenance(tmp_path) -
         original = (
             service.settings.retrieval_runtime_enabled,
             service.settings.graphrag_graph_path,
+            service.settings.rerank_order_cache_enabled,
         )
         service.settings.retrieval_runtime_enabled = True
         service.settings.graphrag_graph_path = str(graph_path)
+        # This test verifies the exact text passed to the provider. A shared
+        # rerank cache would legitimately bypass that provider call.
+        service.settings.rerank_order_cache_enabled = False
         trace = LatencyTrace()
         latency_token = set_current_latency_trace(trace)
         plan = build_retrieval_plan(
@@ -522,6 +526,7 @@ def test_phase63_runtime_graph_channel_preserves_relation_provenance(tmp_path) -
             (
                 service.settings.retrieval_runtime_enabled,
                 service.settings.graphrag_graph_path,
+                service.settings.rerank_order_cache_enabled,
             ) = original
 
     graph_result = next(result for result in results if "graph" in result.channels)

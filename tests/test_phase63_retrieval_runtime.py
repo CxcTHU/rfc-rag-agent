@@ -10,7 +10,7 @@ from app.services.agent.evidence_identity import (
     refine_evidence_query_identity_with_llm,
 )
 from app.services.generation.chat_model import ChatModelResult
-from app.services.graphrag.graph_store import save_graph
+from app.services.graphrag.graph_store import load_graph, save_graph
 from app.services.graphrag.retriever import GraphRetriever, graph_content_fingerprint
 from app.services.retrieval.reranking import ReRankResult
 from app.services.retrieval.runtime import (
@@ -378,6 +378,45 @@ def test_phase63_graph_retriever_preserves_provenance_and_caps_candidates(tmp_pa
         encoding="utf-8",
     )
     assert graph_content_fingerprint(graph_path) != first_fingerprint
+
+
+def test_phase63_graph_retriever_avoids_copying_the_entire_graph_for_local_walk(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    graph_path = write_phase63_relation_graph(tmp_path)
+    graph = load_graph(graph_path)
+
+    def fail_if_full_copy_is_requested():
+        raise AssertionError("local graph traversal must not clone the full graph")
+
+    monkeypatch.setattr(graph, "to_undirected", fail_if_full_copy_is_requested)
+    outcome = GraphRetriever(graph=graph).retrieve(
+        "GB/T 50081 与抗压强度试验是什么关系？",
+        max_hops=2,
+        max_matches=1,
+    )
+
+    assert len(outcome.candidates) == 1
+    assert outcome.candidates[0].relation_types
+
+
+def test_graph_store_reuses_unchanged_graph_file_and_invalidates_changed_version(
+    tmp_path: Path,
+) -> None:
+    graph_path = write_phase63_relation_graph(tmp_path)
+
+    first = load_graph(graph_path)
+    second = load_graph(graph_path)
+
+    assert second is first
+    first.add_node("Material:changed", name="changed", type="Material")
+    save_graph(first, graph_path)
+
+    refreshed = load_graph(graph_path)
+
+    assert refreshed is not first
+    assert refreshed.has_node("Material:changed")
 
 
 def test_phase63_graph_retriever_fails_open_when_graph_is_missing(tmp_path: Path) -> None:

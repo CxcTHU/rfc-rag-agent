@@ -1,0 +1,41 @@
+{
+  "purpose": "directional DeepSeek streaming cache telemetry; not a cold-chain latency gate",
+  "case_id": "e2e-text-02",
+  "configuration": {
+    "variant": "phase64",
+    "requested_chat_model": "deepseek-v4-flash",
+    "observed_chat_model": "deepseek-v4-flash",
+    "reranker": "zhipu/rerank",
+    "rerank_candidate_pool": 75,
+    "dynamic_k_range": [4, 12],
+    "request_result_caches_disabled": true,
+    "estimated_input_token_budget": 0
+  },
+  "runs": [
+    {
+      "run": 1,
+      "citation_count": 8,
+      "selected_count": 12,
+      "first_token_ms": 14736.22,
+      "final_model_ttft_ms": 9280.557,
+      "retrieval_total_latency_ms": 4133.237,
+      "rerank_latency_ms": 1122.592,
+      "provider_prompt_tokens": 2941,
+      "provider_prompt_cache_hit_tokens": 1920,
+      "provider_prompt_cache_miss_tokens": 1021
+    },
+    {
+      "run": 2,
+      "citation_count": 8,
+      "selected_count": 12,
+      "first_token_ms": 12027.943,
+      "final_model_ttft_ms": 8803.976,
+      "retrieval_total_latency_ms": 2188.446,
+      "rerank_latency_ms": 846.099,
+      "provider_prompt_tokens": 2941,
+      "provider_prompt_cache_hit_tokens": 2816,
+      "provider_prompt_cache_miss_tokens": 125
+    }
+  ],
+  "interpretation": "The repeated request reported 896 additional provider cache-hit tokens and 896 fewer misses. Its end-to-end first token was 2708.277 ms lower, but this two-run directional observation is confounded by retrieval and provider variation. It does not enable semantic evidence caching, establish a cold-chain gate, or justify a prompt-order behavior change."
+}

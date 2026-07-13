@@ -1,5 +1,27 @@
 # RFC-RAG-Agent
 
+## Phase 64 Mainstream-Agent Latency（功能人工验收 PASS）
+
+Phase 64 adds a feature-gated Route-First / short-agent-loop candidate above
+the Phase 63 Retrieval Runtime. Ordinary no-history text can avoid a second
+model tool-selection turn; explicit relationship, figure, table, follow-up,
+and uploaded-image requests retain their required evidence paths. The B path
+keeps real BM25, strict pgvector, official deployment reranking, Dynamic-K
+4–12 final evidence selection, cited generation, and refusal boundaries.
+
+The phase also adds safe latency attribution, bounded complex-path fan-out,
+BM25 startup warmup, graph traversal bounds, final SSE connection reuse, and
+explicit user Flash/Pro selection. The React workbench repairs repeated-run
+thinking time and renders returned image-description evidence directly below
+an answer.
+
+User functional acceptance passed on 2026-07-13. The original cold-path
+latency gate has **not** passed: the complete 30-case × 3 A/B plus blind judge
+was not executed, and a three-pair directional Flash sample measured
+first-token P95 of 18.683 seconds versus the 15-second target. The frozen
+review, safe evaluation evidence, before/after measurements, and follow-up are
+recorded in [Phase 64 review](docs/phase_reviews/phase-64.md).
+
 ## Phase 63 Guarded Retrieval Runtime
 
 Phase 63 makes Retrieval Runtime the production default through

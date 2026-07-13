@@ -4,6 +4,7 @@ import json
 import re
 from collections import Counter
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -260,7 +261,24 @@ def save_graph(graph: nx.MultiDiGraph, path: Path) -> None:
 
 
 def load_graph(path: Path) -> nx.MultiDiGraph:
-    return graph_from_json_data(json.loads(path.read_text(encoding="utf-8")))
+    resolved = path.resolve(strict=True)
+    stat = resolved.stat()
+    return _load_graph_cached(
+        str(resolved),
+        int(stat.st_mtime_ns),
+        int(stat.st_size),
+    )
+
+
+@lru_cache(maxsize=8)
+def _load_graph_cached(
+    resolved_path: str,
+    mtime_ns: int,
+    size: int,
+) -> nx.MultiDiGraph:
+    """Reuse an immutable-on-read graph, invalidating whenever its file changes."""
+    del mtime_ns, size
+    return graph_from_json_data(json.loads(Path(resolved_path).read_text(encoding="utf-8")))
 
 
 def graph_stats(graph: nx.MultiDiGraph) -> GraphStats:

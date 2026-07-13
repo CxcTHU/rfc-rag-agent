@@ -105,7 +105,7 @@ class BM25SearchService:
         }
         results = [
             result
-            for item in corpus
+            for item in self._candidate_documents(corpus, terms)
             if (result := score_document(item, terms, document_frequency, len(corpus), avg_length, self.k1, self.b))
             is not None
         ]
@@ -119,6 +119,25 @@ class BM25SearchService:
             ),
         )
         return diversify_bm25_results(sorted_results, top_k)
+
+    @staticmethod
+    def _candidate_documents(
+        corpus: list[_BM25Document],
+        terms: list[SearchTerm],
+    ) -> list[_BM25Document]:
+        """Discard documents that cannot score before the full BM25 calculation."""
+        normalized_terms = tuple(term.text for term in terms if term.text)
+        if not normalized_terms:
+            return []
+        return [
+            item
+            for item in corpus
+            if any(
+                term in field
+                for term in normalized_terms
+                for field in (item.title, item.heading, item.content)
+            )
+        ]
 
     def _list_documents(self) -> list[_BM25Document]:
         bind = self.db.get_bind()
@@ -178,6 +197,11 @@ def clear_bm25_corpus_cache() -> None:
         _BM25_CORPUS_CACHE.clear()
 
 
+def warm_bm25_corpus(db: Session) -> int:
+    """Build the reusable lexical corpus before serving the first request."""
+    return len(BM25SearchService(db)._list_documents())
+
+
 def expand_bm25_query_terms(query: str) -> list[SearchTerm]:
     expanded = {term.text: term for term in expand_query_terms(query)}
     normalized_query = normalize_text(query)
@@ -209,7 +233,7 @@ def score_document(
     specific_hit = False
 
     for term in terms:
-        normalized_term = normalize_text(term.text)
+        normalized_term = term.text
         if not normalized_term:
             continue
         df = document_frequency.get(term.text, 0)

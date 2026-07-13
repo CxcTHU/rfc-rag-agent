@@ -35,4 +35,54 @@ describe('chat rendering', () => {
     expect(screen.getByText('后端返回的真实检索事件')).toBeInTheDocument()
     expect(screen.queryByText(/HyDE|引用修复|规划阶段/)).not.toBeInTheDocument()
   })
+
+  it('renders deduplicated retrieved image evidence inline below an assistant answer', () => {
+    render(
+      <MessageBubble
+        activeCitation={null}
+        isSelected={false}
+        message={{
+          id: 'assistant-with-figure',
+          role: 'assistant',
+          content: '检索到了对应图片证据。[1]',
+          result: {
+            question: '有图片资源吗？',
+            answer: '检索到了对应图片证据。[1]',
+            citations: [1],
+            refused: false,
+            mode: 'agent',
+            workflow_steps: [],
+            sources: [
+              {
+                title: 'RFC 孔隙结构示意图',
+                source_type: 'local_file',
+                document_id: 7,
+                chunk_id: 101,
+                chunk_type: 'image_description',
+                image_url: '/assets/rfc-pores.png',
+                caption: '孔隙结构示意图',
+              },
+              {
+                title: 'RFC 孔隙结构示意图（重复检索）',
+                source_type: 'local_file',
+                document_id: 7,
+                chunk_id: 102,
+                chunk_type: 'image_description',
+                image_url: '/assets/rfc-pores.png',
+                caption: '孔隙结构示意图',
+              },
+            ],
+          },
+        }}
+        now={0}
+        onCitation={vi.fn()}
+        onRetry={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('region', { name: '本回答检索到的图片证据' })).toBeInTheDocument()
+    expect(screen.getAllByRole('img', { name: '孔隙结构示意图' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: '[1]' })).toBeInTheDocument()
+  })
 })

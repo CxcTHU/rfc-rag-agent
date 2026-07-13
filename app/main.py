@@ -36,16 +36,32 @@ from app.core.structured_logging import (
     reset_request_id,
     set_request_id,
 )
-from app.db.session import init_db
+from app.db.session import SessionLocal, init_db
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.services.retrieval.bm25_search import warm_bm25_corpus
 
 
 request_logger = logging.getLogger("rfc_rag_agent.request")
 
 
+def warm_retrieval_startup_caches() -> None:
+    """Build local retrieval indexes before the first user request arrives."""
+    if not get_settings().bm25_startup_warmup_enabled:
+        return
+    try:
+        with SessionLocal() as db:
+            warm_bm25_corpus(db)
+    except Exception as exc:
+        request_logger.warning(
+            "bm25_startup_warmup_failed error_type=%s",
+            type(exc).__name__,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_db()
+    warm_retrieval_startup_caches()
     yield
 
 

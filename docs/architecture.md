@@ -4933,3 +4933,41 @@ digest. Graph-eligible identities also include a short SHA-256 fingerprint of
 the local graph file, preventing reuse across plan or graph revisions. Local
 GraphRAG remains fail-open: missing or invalid graph data records bounded
 diagnostics and continues with keyword/vector evidence.
+
+## Phase 64 Mainstream-Agent Latency Addendum
+
+Phase 64 adds an opt-in B execution graph while preserving the Phase 63
+default graph as the frozen A reference:
+
+```text
+user question + bounded history
+-> deterministic Route-First classification
+   -> ordinary no-history text: fast
+   -> explicit relation/table/figure, follow-up, upload: complex
+-> optional unified identity/intent planner
+-> Harness-owned high-level retrieval dispatch
+-> BM25 + pgvector + only plan-approved optional channels
+-> real rerank + Dynamic-K evidence selection
+-> cited streaming final generation
+```
+
+When `AGENT_SHORT_LOOP_ENABLED` is true, the B path constructs and grounds
+one accepted high-level retrieval call instead of asking the final model to
+perform a second tool-selection round. A fast path may escalate once before
+final generation if evidence is insufficient. Complex paths can execute
+independent plan-approved retrieval channels through one bounded fan-out,
+using independent database sessions and the global
+`phase64_retrieval_max_inflight` limit. The Phase 63 A behavior remains
+available through the flags.
+
+The runtime records only safe latency fields: API preflight, planner,
+retrieval, rerank, first real answer token, final generation, connection reuse,
+and citation-repair counts/durations. It never stores prompt text, answer text,
+evidence text, provider payloads, hidden reasoning, or credentials in traces.
+BM25 startup warmup holds derived corpus state only, while request-result and
+semantic-evidence caches remain independently configured.
+
+The frontend displays real streaming state from the active run ID. Assistant
+results with image-description sources use the shared source model to render up
+to four de-duplicated inline image cards; cited cards preserve their source
+display index, and uncited retrieval-only cards are labelled accordingly.

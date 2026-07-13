@@ -2174,3 +2174,14 @@ execution outputs are restricted to tool names, plan fields, chunk IDs, counts,
 timings, booleans, and error categories. They exclude raw answers, raw API
 responses, provider payloads, complete evidence/chunks, hidden reasoning,
 credentials, restricted full text, and source document bytes.
+
+## Phase 64 Route-First Evaluation Boundary
+
+Phase 64 adds no external corpus or user profile. Its frozen-case and latency
+artifacts contain only case IDs/categories, safe queries, flags, hashes, counts,
+timings, route labels, and sanitized error or judge outcome labels. During an
+explicit blind judge run, A/B answer strings exist only in the evaluator process
+long enough to form an anonymous prompt and are then discarded; CSV/JSON output
+excludes prompts, answers, evidence text, provider payloads, raw judge reasons,
+credentials, and hidden reasoning. Final-provider floor probes likewise emit only
+success booleans and elapsed numeric timings.
