@@ -10,6 +10,17 @@
 - 本次授权范围包含本地收尾、Obsidian 阶段日志、Phase 64 提交/tag、GitHub
   推送、PR 与合并。
 
+## 新 Session 必读顺序
+
+1. `AGENT.MD`（长期宪法）。
+2. 本文件（现场快照）。
+3. `README.md`、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`。
+4. `task_plan.md`、`findings.md`、`progress.md`。
+5. 已结束阶段再读取 `docs/phase_reviews/phase-64.md` 及对应安全评测产物。
+
+本阶段未新增 `docs/decisions/ADR-xxx.md`：所有路径调整均 feature-gated 或配置可回退，
+不构成不可逆设计决定。
+
 ## 已验证结果
 
 - 后端：`python -m pytest -q` → `1479 passed, 1 skipped`。
