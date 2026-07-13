@@ -3,6 +3,8 @@
 > 状态：用户人工功能验收 PASS（2026-07-13）
 > 分支：`codex/phase-64-mainstream-agent-latency`
 > 冻结评审：[`docs/phase_reviews/phase-64.md`](../../docs/phase_reviews/phase-64.md)
+> 开发记录：[[阶段 64 - 开发记录]]
+> 收尾交接：[[阶段 64 - 收尾交接]]
 
 ## 目标
 
