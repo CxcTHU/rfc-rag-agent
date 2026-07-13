@@ -268,7 +268,7 @@ Expected: barrier, scope, semaphore, cache identity, and deterministic fusion te
 - Modify: `tests/test_evaluate_phase64_latency_ab.py`
 - Modify: `docs/data_sources.md`
 - Modify: `task_plan.md`, `findings.md`, `progress.md`, `handoff.md`
-- Modify: `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化.md`
+- Modify: `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化/01-开发记录.md`
 
 **Interfaces:**
 - `paired_bootstrap_lower_bound(deltas, seed=640013, samples=10000, alpha=0.05) -> float`.

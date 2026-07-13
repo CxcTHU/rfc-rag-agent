@@ -46,7 +46,7 @@ def test_b_trace_records_final_prompt_shape(monkeypatch, tmp_path) -> None:
 
 ### Task 2: Collect one real B profile and choose a ceiling
 
-**Files:** `data/evaluation/phase64_token_prompt_profile.json`, `findings.md`, `progress.md`, `handoff.md`, and `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化.md`.
+**Files:** `data/evaluation/phase64_token_prompt_profile.json`, `findings.md`, `progress.md`, `handoff.md`, and `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化/01-开发记录.md`.
 
 - [ ] **Step 1:** start an isolated B server with local `.env`, development auth settings, strict pgvector, four cold caches disabled, official rerank, and all B flags; do not print environment values.
 - [ ] **Step 2:** execute one frozen ordinary-text case with `chat_model="deepseek-v4-flash"` and persist only case ID, model, numeric prompt shape, numeric timings, route, status, and citation count.
@@ -77,7 +77,7 @@ def test_a_omits_token_budget(monkeypatch) -> None:
 
 ### Task 4: Re-run real B verification and work memory
 
-**Files:** `data/evaluation/phase64_token_budget_probe.json`, `task_plan.md`, `findings.md`, `progress.md`, `handoff.md`, and `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化.md`.
+**Files:** `data/evaluation/phase64_token_budget_probe.json`, `task_plan.md`, `findings.md`, `progress.md`, `handoff.md`, and `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化/01-开发记录.md`.
 
 - [ ] **Step 1:** execute the same serial B case before/after; save only case ID, model, aggregate prompt shape, route, citation count, status, and numeric latency fields. This is diagnostic evidence, not the release gate.
 - [ ] **Step 2:** run `python -m py_compile app/core/config.py app/services/agent/tool_calling_service.py`, `python -m pytest tests/test_phase64_short_loop.py tests/test_phase64_latency_trace.py tests/test_evaluate_phase64_latency_ab.py tests/test_health_details.py -q --tb=short`, and `git diff --check`; all must exit 0.

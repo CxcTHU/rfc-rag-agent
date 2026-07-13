@@ -47,7 +47,7 @@ def test_stream_usage_updates_trace_without_yielding_content() -> None:
 
 ### Task 2: Regression and real diagnostic probe
 
-**Files:** `data/evaluation/phase64_deepseek_cache_probe.json`, `findings.md`, `progress.md`, `handoff.md`, and `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化.md`.
+**Files:** `data/evaluation/phase64_deepseek_cache_probe.json`, `findings.md`, `progress.md`, `handoff.md`, and `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化/01-开发记录.md`.
 
 - [ ] **Step 1:** run `python -m pytest tests/test_chat_model_provider.py tests/test_phase64_http_stream_pool.py tests/test_phase64_short_loop.py -q --tb=short` and `git diff --check`.
 - [ ] **Step 2:** run two serial, same-case B requests with official rerank, Dynamic-K and Flash; retain only cache usage integers, model label, route, source count, citation count, and timing. Stop the temporary server afterward.
