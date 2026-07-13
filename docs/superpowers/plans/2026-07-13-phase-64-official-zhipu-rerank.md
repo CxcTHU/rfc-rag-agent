@@ -97,7 +97,7 @@ Expected: PASS。
 - Modify: `findings.md`
 - Modify: `progress.md`
 - Modify: `handoff.md`
-- Modify: `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化.md`
+- Modify: `obsidian-agent开发/阶段/阶段 64 - 主流 Agent 延迟优化/01-开发记录.md`
 
 - [ ] **Step 1: 运行定向回归**
 
