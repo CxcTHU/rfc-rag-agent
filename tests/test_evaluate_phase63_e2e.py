@@ -5,10 +5,22 @@ from pathlib import Path
 
 from scripts.evaluate_phase63_e2e import (
     OUTPUT_FIELDS,
+    collect_streamed_answer,
     evaluate_events,
     parse_sse_text,
     select_cases,
 )
+
+
+def test_phase63_e2e_output_keeps_safe_connection_reuse_diagnostics() -> None:
+    assert "provider_http_request_count" in OUTPUT_FIELDS
+    assert "provider_http_reused_connection_count" in OUTPUT_FIELDS
+    assert "provider_http_last_connection_reused" in OUTPUT_FIELDS
+
+
+def test_phase63_e2e_output_keeps_safe_selected_model_diagnostics() -> None:
+    assert "requested_chat_model" in OUTPUT_FIELDS
+    assert "observed_chat_model" in OUTPUT_FIELDS
 
 
 def test_phase63_e2e_requires_metadata_done_and_no_error() -> None:
@@ -197,6 +209,17 @@ def test_phase63_e2e_output_schema_excludes_response_content() -> None:
     }
 
     assert forbidden.isdisjoint(OUTPUT_FIELDS)
+
+
+def test_collect_streamed_answer_stays_out_of_the_persisted_schema() -> None:
+    events = parse_sse_text(
+        'event: token\ndata: {"text":"first "}\n\n'
+        'event: metadata\ndata: {}\n\n'
+        'event: token\ndata: {"text":"second"}\n\n'
+    )
+
+    assert collect_streamed_answer(events) == "first second"
+    assert "answer" not in OUTPUT_FIELDS
 
 
 def test_phase63_e2e_case_set_covers_real_routes_and_regression() -> None:

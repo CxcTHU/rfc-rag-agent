@@ -1,0 +1,32 @@
+{
+  "case_id": "e2e-text-02",
+  "method": "Three serial requests per B variant, fixed alternating order, same Dynamic-K/official-rerank/Flash/cold-cache contract.",
+  "constant_contract": {
+    "candidate_pool": 75,
+    "dynamic_k_selected_source_count": 12,
+    "reranker": "zhipu/rerank",
+    "selected_chat_model": "deepseek-v4-flash"
+  },
+  "variants": {
+    "no_token_budget": {
+      "runs": 3,
+      "final_prompt_estimated_input_tokens": 3631,
+      "final_prompt_budget_applied": false,
+      "citation_count_min": 8,
+      "final_model_ttft_ms": [12214.887, 8093.49, 7277.786],
+      "final_model_ttft_p50_ms": 8093.49,
+      "final_model_ttft_p95_proxy_ms": 12214.887
+    },
+    "token_budget_1664": {
+      "runs": 3,
+      "final_prompt_estimated_input_tokens": 1657,
+      "final_prompt_budget_applied": true,
+      "citation_count_min": 8,
+      "final_model_ttft_ms": [11163.188, 7213.902, 11028.534],
+      "final_model_ttft_p50_ms": 11028.534,
+      "final_model_ttft_p95_proxy_ms": 11163.188
+    }
+  },
+  "decision": "Do not enable the 1664 ceiling by default: it reduced estimated input units while increasing the three-run TTFT median. Keep aggregate tracing and the opt-in budget mechanism; require a new frozen A/B result before enabling any nonzero ceiling.",
+  "safety": "Aggregate numeric trace only; no prompt, source, answer, provider payload, or credential is recorded."
+}

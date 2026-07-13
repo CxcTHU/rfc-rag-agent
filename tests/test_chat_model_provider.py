@@ -1,4 +1,5 @@
 import io
+import http.client
 import json
 import urllib.error
 
@@ -19,6 +20,11 @@ from app.services.generation.chat_model import (
     parse_openai_compatible_stream,
     parse_openai_compatible_tool_response,
     split_streaming_text,
+)
+from app.services.observability.latency_trace import (
+    LatencyTrace,
+    reset_current_latency_trace,
+    set_current_latency_trace,
 )
 
 
@@ -344,12 +350,6 @@ def test_openai_compatible_provider_streams_delta_content(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     class FakeStreamResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb) -> None:
-            return None
-
         def __iter__(self):
             lines = [
                 b"data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n",
@@ -359,14 +359,25 @@ def test_openai_compatible_provider_streams_delta_content(monkeypatch) -> None:
             ]
             return iter(lines)
 
-    def fake_urlopen(request, timeout):
+        def mark_complete(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    def fake_open_sse(request, *, timeout, provider_name, model_name):
         captured["url"] = request.full_url
         captured["timeout"] = timeout
+        captured["provider_name"] = provider_name
+        captured["model_name"] = model_name
         captured["headers"] = dict(request.header_items())
         captured["payload"] = json.loads(request.data.decode("utf-8"))
         return FakeStreamResponse()
 
-    monkeypatch.setattr("app.services.generation.chat_model.urlopen_without_proxy", fake_urlopen)
+    monkeypatch.setattr(
+        "app.services.generation.chat_model.HTTP_JSON_CONNECTION_POOL.open_sse",
+        fake_open_sse,
+    )
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
         api_key="test-key",
@@ -642,12 +653,6 @@ def test_chat_provider_stream_retries_connection_error(monkeypatch) -> None:
     attempts = {"count": 0}
 
     class FakeStreamResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
         def __iter__(self):
             return iter(
                 [
@@ -657,14 +662,22 @@ def test_chat_provider_stream_retries_connection_error(monkeypatch) -> None:
                 ]
             )
 
-    def flaky_urlopen(request, timeout):
+        def mark_complete(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    def flaky_open_sse(request, *, timeout, provider_name, model_name):
+        del request, timeout, provider_name, model_name
         attempts["count"] += 1
         if attempts["count"] == 1:
             raise urllib.error.URLError("[SSL: UNEXPECTED_EOF_WHILE_READING]")
         return FakeStreamResponse()
 
     monkeypatch.setattr(
-        "app.services.generation.chat_model.urlopen_without_proxy", flaky_urlopen
+        "app.services.generation.chat_model.HTTP_JSON_CONNECTION_POOL.open_sse",
+        flaky_open_sse,
     )
     provider = OpenAICompatibleChatModelProvider(
         model_name="mimo-v2.5-pro",
@@ -686,9 +699,89 @@ def test_chat_provider_stream_retries_connection_error(monkeypatch) -> None:
     assert attempts["count"] == 2
 
 
+def test_chat_provider_stream_retries_remote_disconnect_before_first_token(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    class FakeStreamResponse:
+        def __iter__(self):
+            return iter(
+                [
+                    b"data: {\"choices\":[{\"delta\":{\"content\":\"Answer [1].\"}}]}\n\n",
+                    b"data: [DONE]\n\n",
+                ]
+            )
+
+        def mark_complete(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    def flaky_open_sse(request, *, timeout, provider_name, model_name):
+        del request, timeout, provider_name, model_name
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise http.client.RemoteDisconnected("peer closed before response")
+        return FakeStreamResponse()
+
+    monkeypatch.setattr(
+        "app.services.generation.chat_model.HTTP_JSON_CONNECTION_POOL.open_sse",
+        flaky_open_sse,
+    )
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="deepseek-v4-pro",
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+        retry_backoff_seconds=0,
+    )
+
+    assert list(provider.stream_generate([ChatMessage(role="user", content="What is RFC?")])) == [
+        "Answer [1]."
+    ]
+    assert attempts["count"] == 2
+
+
 def test_parse_openai_compatible_stream_rejects_invalid_json() -> None:
     with pytest.raises(RuntimeError, match="invalid JSON"):
         list(parse_openai_compatible_stream([b"data: {not-json}\n\n"]))
+
+
+def test_deepseek_stream_request_requests_usage_chunk_only_for_deepseek() -> None:
+    messages = [ChatMessage(role="user", content="What is RFC?")]
+    deepseek_request = OpenAICompatibleChatModelProvider(
+        model_name="deepseek-v4-flash",
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+    )._build_request(messages, stream=True)
+    regular_request = OpenAICompatibleChatModelProvider(
+        model_name="regular-model",
+        api_key="test-key",
+        base_url="https://example.test/v1",
+    )._build_request(messages, stream=True)
+
+    assert json.loads(deepseek_request.data)["stream_options"] == {"include_usage": True}
+    assert "stream_options" not in json.loads(regular_request.data)
+
+
+def test_stream_usage_updates_trace_without_yielding_content() -> None:
+    trace = LatencyTrace()
+    token = set_current_latency_trace(trace)
+    try:
+        chunks = list(
+            parse_openai_compatible_stream(
+                [
+                    b'data: {"choices": [], "usage": {"prompt_tokens": 20, "prompt_cache_hit_tokens": 12, "prompt_cache_miss_tokens": 8}}\n\n',
+                    b"data: [DONE]\n\n",
+                ]
+            )
+        )
+    finally:
+        reset_current_latency_trace(token)
+
+    assert chunks == []
+    assert trace.values["provider_prompt_tokens"] == 20
+    assert trace.values["provider_prompt_cache_hit_tokens"] == 12
+    assert trace.values["provider_prompt_cache_miss_tokens"] == 8
 
 
 def test_parse_openai_compatible_answer() -> None:

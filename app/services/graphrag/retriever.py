@@ -11,7 +11,7 @@ from app.services.graphrag.graph_search import (
     GraphSearchMatch,
     GraphSearchSummary,
     cap_graph_matches,
-    graph_search_matches,
+    graph_search_matches_with_count,
     matched_query_node_ids,
     normalize_relation_focus,
     record_graph_summary,
@@ -91,21 +91,24 @@ class GraphRetriever:
         with latency_timer("graph_search_latency_ms"):
             try:
                 graph = self._load_graph()
-                matches = graph_search_matches(
+                matches, candidate_chunk_count = graph_search_matches_with_count(
                     graph,
                     normalized_query,
                     max_hops=max_hops,
                     relation_focus=normalize_relation_focus(relation_focus),
+                    max_matches=max_matches,
                 )
-                capped_matches = cap_graph_matches(matches, max_matches)
-                candidates = [GraphCandidate.from_match(match) for match in capped_matches]
+                candidates = [
+                    GraphCandidate.from_match(match)
+                    for match in cap_graph_matches(matches, max_matches)
+                ]
                 summary = GraphSearchSummary(
                     available=True,
                     fallback=False,
                     matched_entity_count=len(
                         matched_query_node_ids(graph, normalized_query)
                     ),
-                    candidate_chunk_count=len(matches),
+                    candidate_chunk_count=candidate_chunk_count,
                     hop_count=max_hops,
                 )
             except (OSError, ValueError, RuntimeError) as exc:

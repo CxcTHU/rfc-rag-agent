@@ -1,0 +1,17 @@
+{
+  "case_id": "e2e-text-02",
+  "contract": {
+    "candidate_pool": 75,
+    "dynamic_k_max_results": 12,
+    "reranker": "zhipu/rerank",
+    "selected_chat_model": "deepseek-v4-flash"
+  },
+  "no_budget_prompt_shape": {
+    "final_prompt_character_count": 7182,
+    "final_prompt_cjk_character_count": 2195,
+    "final_prompt_estimated_input_tokens": 3631,
+    "final_prompt_history_character_count": 6,
+    "final_prompt_source_count": 12
+  },
+  "safety": "Aggregate numeric trace only; no prompt, source, answer, provider payload, or credential is recorded."
+}

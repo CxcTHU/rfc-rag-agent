@@ -31,6 +31,12 @@ LATENCY_FIELDS = (
     "retrieval_cache_lookup_latency_ms",
     "retrieval_cache_hydrate_latency_ms",
     "rerank_cache_lookup_latency_ms",
+    "request_preflight_latency_ms",
+    "context_assembly_latency_ms",
+    "retrieval_total_latency_ms",
+    "glm_rerank_latency_ms",
+    "final_generation_latency_ms",
+    "citation_validation_latency_ms",
 )
 
 
@@ -42,7 +48,11 @@ class LatencyTrace:
     def __post_init__(self) -> None:
         for field_name in LATENCY_FIELDS:
             self.values.setdefault(field_name, 0.0)
+        self.values.setdefault("time_to_first_progress_ms", None)
+        self.values.setdefault("time_to_first_answer_token_ms", None)
         self.values.setdefault("time_to_first_token_ms", None)
+        self.values.setdefault("planner_ttft_ms", None)
+        self.values.setdefault("final_model_ttft_ms", None)
         self.values.setdefault("time_to_final_ms", 0.0)
         self.values.setdefault("streaming_degraded", False)
         self.values.setdefault("streamed_token_count", 0)
@@ -60,6 +70,9 @@ class LatencyTrace:
         self.values.setdefault("provider_http_last_pool_key_hash", "")
         self.values.setdefault("provider_http_last_provider", "")
         self.values.setdefault("provider_http_last_model", "")
+        self.values.setdefault("provider_prompt_tokens", 0)
+        self.values.setdefault("provider_prompt_cache_hit_tokens", 0)
+        self.values.setdefault("provider_prompt_cache_miss_tokens", 0)
         self.values.setdefault("reranking_primary_health_status", "not_checked")
         self.values.setdefault("reranking_primary_health_error", "")
         self.values.setdefault("reranking_primary_health_cache_hit", False)
@@ -92,6 +105,9 @@ class LatencyTrace:
         self.values.setdefault("reranking_degradation_level", "")
         self.values.setdefault("reranking_error_type", "")
         self.values.setdefault("planner_model", "deterministic")
+        self.values.setdefault("planner_call_count", 0)
+        self.values.setdefault("final_generation_call_count", 0)
+        self.values.setdefault("total_model_call_count", 0)
         self.values.setdefault("retrieval_strategy", "none")
         self.values.setdefault("graph_search_available", False)
         self.values.setdefault("graph_search_fallback", False)
@@ -145,11 +161,33 @@ class LatencyTrace:
     def set_value(self, field_name: str, value: object) -> None:
         self.values[field_name] = value
 
-    def mark_first_token(self, started_at: float | None = None) -> None:
-        if self.values.get("time_to_first_token_ms") is not None:
+    @contextmanager
+    def span(self, field_name: str) -> Iterator[None]:
+        started = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.add_duration(field_name, (time.perf_counter() - started) * 1000.0)
+
+    def mark_progress(self) -> None:
+        if self.values.get("time_to_first_progress_ms") is not None:
+            return
+        self.values["time_to_first_progress_ms"] = round(
+            (time.perf_counter() - self.started_at) * 1000.0,
+            3,
+        )
+
+    def mark_answer_token(self, started_at: float | None = None) -> None:
+        if self.values.get("time_to_first_answer_token_ms") is not None:
             return
         start = self.started_at if started_at is None else started_at
-        self.values["time_to_first_token_ms"] = round((time.perf_counter() - start) * 1000.0, 3)
+        value = round((time.perf_counter() - start) * 1000.0, 3)
+        self.values["time_to_first_answer_token_ms"] = value
+        self.values["time_to_first_token_ms"] = value
+
+    def mark_first_token(self, started_at: float | None = None) -> None:
+        """Compatibility alias for callers that still use the old name."""
+        self.mark_answer_token(started_at=started_at)
 
     def finalize(self, *, iteration_count: int, tool_call_count: int) -> dict[str, object]:
         self.values["iteration_count"] = iteration_count

@@ -1,4 +1,5 @@
 import json
+import http.client
 import os
 import re
 import shutil
@@ -255,8 +256,11 @@ class OpenAICompatibleChatModelProvider:
         # Retry only covers connection establishment. Once tokens start
         # streaming we cannot safely retry without duplicating output.
         response = self._open_stream_with_retry(request)
-        with response:
+        try:
             yield from parse_openai_compatible_stream(response)
+            response.mark_complete()
+        finally:
+            response.close()
 
     def generate_with_tools(
         self,
@@ -332,7 +336,12 @@ class OpenAICompatibleChatModelProvider:
             is_last_attempt = attempt >= self.max_attempts
             self._trace_attempt(attempt)
             try:
-                return urlopen_without_proxy(request, timeout=self.timeout_seconds)
+                return HTTP_JSON_CONNECTION_POOL.open_sse(
+                    request,
+                    timeout=self.timeout_seconds,
+                    provider_name=self.provider_name,
+                    model_name=self.model_name,
+                )
             except TimeoutError as exc:
                 if is_last_attempt:
                     raise RuntimeError("Chat model stream request timed out") from exc
@@ -345,6 +354,9 @@ class OpenAICompatibleChatModelProvider:
             except urllib.error.URLError as exc:
                 if is_last_attempt:
                     raise RuntimeError(f"Chat model stream request failed: {exc.reason}") from exc
+            except http.client.HTTPException as exc:
+                if is_last_attempt:
+                    raise RuntimeError("Chat model stream request failed before response") from exc
             self._sleep_before_retry(attempt)
         # Defensive: the loop either returns or raises on the last attempt.
         raise RuntimeError("Chat model stream request failed after retries")
@@ -379,6 +391,8 @@ class OpenAICompatibleChatModelProvider:
             payload["tool_choice"] = "auto"
         if stream:
             payload["stream"] = True
+            if is_deepseek_endpoint(self.base_url):
+                payload["stream_options"] = {"include_usage": True}
         return urllib.request.Request(
             self._endpoint_url(),
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -676,9 +690,25 @@ def parse_openai_compatible_stream(response) -> Iterator[str]:
             payload = json.loads(data)
         except json.JSONDecodeError as exc:
             raise RuntimeError("Chat model stream response included invalid JSON") from exc
+        record_stream_usage(payload)
         content = extract_openai_delta_content(payload)
         if content:
             yield content
+
+
+def record_stream_usage(payload: dict[str, Any]) -> None:
+    trace = get_current_latency_trace()
+    usage = payload.get("usage")
+    if trace is None or not isinstance(usage, dict):
+        return
+    for usage_field, trace_field in (
+        ("prompt_tokens", "provider_prompt_tokens"),
+        ("prompt_cache_hit_tokens", "provider_prompt_cache_hit_tokens"),
+        ("prompt_cache_miss_tokens", "provider_prompt_cache_miss_tokens"),
+    ):
+        value = usage.get(usage_field)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            trace.set_value(trace_field, value)
 
 
 def decode_stream_line(raw_line: bytes | str) -> str:

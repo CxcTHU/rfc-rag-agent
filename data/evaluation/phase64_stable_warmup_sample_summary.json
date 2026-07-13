@@ -1,0 +1,46 @@
+{
+  "frozen_contract": {
+    "ok": true,
+    "violations": []
+  },
+  "gates": {
+    "blind_judge_non_regression": false,
+    "complex_functional_non_regression": true,
+    "fast_functional_non_regression": true,
+    "final_p95": true,
+    "first_token_p50": false,
+    "first_token_p95": false,
+    "frozen_contract": true,
+    "functional_non_regression": true,
+    "paired_real_e2e_rows": true
+  },
+  "gates_passed": false,
+  "judge_summary": {},
+  "metrics": {
+    "complex_phase63_functional_rate": 1.0,
+    "complex_phase64_functional_rate": 1.0,
+    "fast_phase63_functional_rate": 1.0,
+    "fast_phase64_functional_rate": 1.0,
+    "functional_rate_delta": 0.0,
+    "phase63_final_p95_ms": 51737.277,
+    "phase63_first_token_p50_ms": 26155.414,
+    "phase63_first_token_p95_ms": 41671.467,
+    "phase63_functional_rate": 1.0,
+    "phase63_retrieval_plus_glm_rerank_p95_ms": 4445.14,
+    "phase64_final_p95_ms": 25588.724,
+    "phase64_first_token_p50_ms": 11861.161,
+    "phase64_first_token_p95_ms": 18355.593,
+    "phase64_functional_rate": 1.0,
+    "phase64_retrieval_plus_glm_rerank_p95_ms": 4357.278
+  },
+  "paired_case_count": 4,
+  "paired_metrics": {
+    "critical_path_delta_p50_ms": 0.0,
+    "critical_path_delta_p95_ms": 1998.225,
+    "final_delta_p50_ms": -25062.15,
+    "final_delta_p95_ms": -10107.566,
+    "first_token_delta_p50_ms": -23315.874,
+    "first_token_delta_p95_ms": -10545.61
+  },
+  "validation_mode": "real_frozen_phase63_phase64_sse"
+}

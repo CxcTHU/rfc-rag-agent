@@ -72,6 +72,7 @@ def enable_tool_cache(monkeypatch, fake_redis: FakeRedis) -> None:
     monkeypatch.setenv("REDIS_URL", "redis://phase58i-test")
     monkeypatch.setenv("LAYERED_CACHE_NAMESPACE", "phase58i-test")
     monkeypatch.setenv("TOOL_RESULT_CACHE_ENABLED", "true")
+    monkeypatch.setenv("SEMANTIC_EVIDENCE_CACHE_ENABLED", "true")
     monkeypatch.setenv("RETRIEVAL_CANDIDATE_CACHE_ENABLED", "false")
     monkeypatch.setenv("RERANK_ORDER_CACHE_ENABLED", "false")
     get_settings.cache_clear()

@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.models import Chunk, Document
 from app.services.retrieval.embedding import EmbeddingProvider
+from app.services.retrieval.fanout_limiter import phase64_fanout_slot
 from app.core.config import get_settings
 from app.services.cache.layered_cache import (
     base_cache_identity,
@@ -42,6 +43,7 @@ from app.services.retrieval.runtime import (
     retrieval_plan_digest,
     set_current_retrieval_plan,
 )
+from app.services.retrieval.route_context import current_phase64_route_kind
 from app.services.retrieval.vector_search import VectorSearchResult
 from app.services.retrieval.vector_search import VectorSearchService
 
@@ -278,47 +280,76 @@ class HybridSearchService:
             channel_plan=channel_plan,
         )
         if sorted_results is None:
-            if self.parallel and not channel_plan["multichannel_enabled"]:
-                self._progress("正在并行检索关键词和向量候选证据")
-                keyword_results, vector_results = self._search_parallel(normalized_query, fetch_k)
-            else:
-                self._progress("正在检索关键词和向量候选证据")
-                keyword_results, vector_results = self._search_serial(normalized_query, fetch_k)
+            retrieval_started = time.perf_counter()
+            try:
+                if (
+                    self.settings.phase64_retrieval_fanout_enabled
+                    and channel_plan["multichannel_enabled"]
+                    and current_phase64_route_kind() == "complex"
+                ):
+                    self._progress("正在并行检索计划批准的候选证据")
+                    channel_results = self._search_eligible_channels_parallel(
+                        normalized_query,
+                        fetch_k,
+                        channel_plan,
+                    )
+                    self._progress("已获得候选证据，正在合并排序")
+                    sorted_results = self._fuse_multichannel_results(channel_results)
+                elif self.parallel and not channel_plan["multichannel_enabled"]:
+                    self._progress("正在并行检索关键词和向量候选证据")
+                    keyword_results, vector_results = self._search_parallel(normalized_query, fetch_k)
+                else:
+                    self._progress("正在检索关键词和向量候选证据")
+                    keyword_results, vector_results = self._search_serial(normalized_query, fetch_k)
 
-            self._progress("已获得候选证据，正在合并排序")
-            if channel_plan["multichannel_enabled"]:
-                channel_results: dict[str, list[BM25SearchResult] | list[VectorSearchResult] | list[HybridSearchResult]] = {
-                    "bm25": keyword_results,
-                    "vector": vector_results,
-                }
-                channel_results.update(self._optional_channel_results(normalized_query, fetch_k, channel_plan))
-                sorted_results = self._fuse_multichannel_results(channel_results)
-            else:
-                candidates: dict[int, _HybridCandidate] = {}
-                add_results(candidates, keyword_results, "bm25", max_result_score(keyword_results))
-                add_results(candidates, vector_results, "vector", max_result_score(vector_results))
+                if not (
+                    self.settings.phase64_retrieval_fanout_enabled
+                    and channel_plan["multichannel_enabled"]
+                    and current_phase64_route_kind() == "complex"
+                ):
+                    self._progress("已获得候选证据，正在合并排序")
+                if channel_plan["multichannel_enabled"] and not (
+                    self.settings.phase64_retrieval_fanout_enabled
+                    and current_phase64_route_kind() == "complex"
+                ):
+                    channel_results: dict[str, list[BM25SearchResult] | list[VectorSearchResult] | list[HybridSearchResult]] = {
+                        "bm25": keyword_results,
+                        "vector": vector_results,
+                    }
+                    channel_results.update(self._optional_channel_results(normalized_query, fetch_k, channel_plan))
+                    sorted_results = self._fuse_multichannel_results(channel_results)
+                elif not channel_plan["multichannel_enabled"]:
+                    candidates: dict[int, _HybridCandidate] = {}
+                    add_results(candidates, keyword_results, "bm25", max_result_score(keyword_results))
+                    add_results(candidates, vector_results, "vector", max_result_score(vector_results))
 
-                hybrid_results = [candidate_to_result(candidate, self) for candidate in candidates.values()]
-                sorted_results = sorted(
-                    hybrid_results,
-                    key=lambda item: (
-                        -item.score,
-                        source_type_rank(item.source_type),
-                        item.document_id,
-                        item.chunk_index,
-                    ),
+                    hybrid_results = [candidate_to_result(candidate, self) for candidate in candidates.values()]
+                    sorted_results = sorted(
+                        hybrid_results,
+                        key=lambda item: (
+                            -item.score,
+                            source_type_rank(item.source_type),
+                            item.document_id,
+                            item.chunk_index,
+                        ),
+                    )
+                    trace_channel_counts(
+                        enabled=["bm25", "vector"],
+                        eligible=["bm25", "vector"],
+                        counts={"bm25": len(keyword_results), "vector": len(vector_results)},
+                    )
+                self._store_retrieval_cache(
+                    normalized_query,
+                    sorted_results,
+                    fetch_k=fetch_k,
+                    channel_plan=channel_plan,
                 )
-                trace_channel_counts(
-                    enabled=["bm25", "vector"],
-                    eligible=["bm25", "vector"],
-                    counts={"bm25": len(keyword_results), "vector": len(vector_results)},
-                )
-            self._store_retrieval_cache(
-                normalized_query,
-                sorted_results,
-                fetch_k=fetch_k,
-                channel_plan=channel_plan,
-            )
+            finally:
+                if trace is not None:
+                    trace.add_duration(
+                        "retrieval_total_latency_ms",
+                        (time.perf_counter() - retrieval_started) * 1000.0,
+                    )
         trace_retrieval_candidates(normalized_query, sorted_results, fetch_k=fetch_k)
         selected = self._rerank_results(normalized_query, sorted_results, top_k=top_k)
         trace_required_channel_satisfaction(
@@ -476,6 +507,95 @@ class HybridSearchService:
             trace.add_duration("retrieval_cache_lookup_latency_ms", elapsed_ms)
             trace.add_duration("retrieval_cache_hydrate_latency_ms", hydrate_ms)
         return results
+
+    def _search_eligible_channels_parallel(
+        self,
+        query: str,
+        fetch_k: int,
+        channel_plan: dict[str, object],
+    ) -> dict[str, list[BM25SearchResult] | list[VectorSearchResult] | list[HybridSearchResult]]:
+        channel_order = [
+            channel
+            for channel in ("bm25", "vector", "graph", "table_text", "figure_caption")
+            if channel in channel_plan["eligible_channels"]
+        ]
+        if not channel_order:
+            return {}
+        bind = self.db.get_bind()
+        ThreadSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=bind)
+        trace = get_current_latency_trace()
+        hyde_vector_query = current_hyde_vector_query()
+
+        def run_channel(
+            channel: str,
+        ) -> list[BM25SearchResult] | list[VectorSearchResult] | list[HybridSearchResult]:
+            trace_token = set_current_latency_trace(trace)
+            hyde_token = set_current_hyde_vector_query(hyde_vector_query)
+            try:
+                with phase64_fanout_slot(self.settings.phase64_retrieval_max_inflight):
+                    with ThreadSessionLocal() as db:
+                        return self._search_eligible_channel(
+                            channel,
+                            query,
+                            fetch_k,
+                            db=db,
+                            channel_plan=channel_plan,
+                        )
+            finally:
+                reset_current_hyde_vector_query(hyde_token)
+                reset_current_latency_trace(trace_token)
+
+        max_workers = min(
+            max(1, int(self.settings.phase64_retrieval_max_workers)),
+            len(channel_order),
+        )
+        with ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix="phase64-retrieval",
+        ) as executor:
+            futures = {
+                channel: executor.submit(run_channel, channel)
+                for channel in channel_order
+            }
+            return {
+                channel: futures[channel].result()
+                for channel in channel_order
+            }
+
+    def _search_eligible_channel(
+        self,
+        channel: str,
+        query: str,
+        fetch_k: int,
+        *,
+        db: Session,
+        channel_plan: dict[str, object],
+    ) -> list[BM25SearchResult] | list[VectorSearchResult] | list[HybridSearchResult]:
+        if channel == "bm25":
+            with latency_timer("bm25_search_latency_ms"):
+                return BM25SearchService(db).search(query, top_k=fetch_k)
+        if channel == "vector":
+            return self._vector_search_service(db).search(
+                current_hyde_vector_query() or query,
+                top_k=fetch_k,
+            )
+        if channel == "graph":
+            return self._graph_channel_results(query, db=db, channel_plan=channel_plan)
+        if channel == "table_text":
+            return self._chunk_type_channel_results(
+                query,
+                chunk_type="table",
+                top_k=fetch_k,
+                db=db,
+            )
+        if channel == "figure_caption":
+            return self._chunk_type_channel_results(
+                query,
+                chunk_type="image_description",
+                top_k=fetch_k,
+                db=db,
+            )
+        raise ValueError(f"unsupported retrieval channel: {channel}")
 
     def _store_retrieval_cache(
         self,
@@ -903,7 +1023,7 @@ class HybridSearchService:
             return cached_results
         try:
             self._progress("正在重排候选证据")
-            with latency_timer("rerank_latency_ms"):
+            with latency_timer("rerank_latency_ms"), latency_timer("glm_rerank_latency_ms"):
                 reranked = self.reranking_provider.rerank(
                     query=query,
                     candidates=[rerank_candidate_text(result) for result in rerank_candidates],
@@ -1078,7 +1198,7 @@ class HybridSearchService:
             )
             return cached_results
         try:
-            with latency_timer("rerank_fallback_latency_ms"):
+            with latency_timer("rerank_fallback_latency_ms"), latency_timer("glm_rerank_latency_ms"):
                 reranked = self.reranking_fallback_provider.rerank(
                     query=query,
                     candidates=[rerank_candidate_text(result) for result in results],

@@ -256,61 +256,123 @@ def graph_search_matches(
     *,
     max_hops: int = 2,
     relation_focus: str | None = None,
+    max_matches: int | None = None,
 ) -> list[GraphSearchMatch]:
+    matches, _candidate_count = graph_search_matches_with_count(
+        graph,
+        query,
+        max_hops=max_hops,
+        relation_focus=relation_focus,
+        max_matches=max_matches,
+    )
+    return matches
+
+
+def graph_search_matches_with_count(
+    graph: nx.MultiDiGraph,
+    query: str,
+    *,
+    max_hops: int = 2,
+    relation_focus: str | None = None,
+    max_matches: int | None = None,
+) -> tuple[list[GraphSearchMatch], int]:
+    """Return bounded matches plus the count discovered before the output cap."""
     anchors = matched_query_node_ids(graph, query)
     if not anchors:
-        return []
+        return [], 0
     normalized_relation_focus = normalize_relation_focus(relation_focus)
-    undirected = graph.to_undirected()
     chunk_scores: dict[int, float] = defaultdict(float)
     chunk_nodes: dict[int, set[str]] = defaultdict(set)
     chunk_hops: dict[int, int] = {}
-    chunk_relation_types: dict[int, set[str]] = defaultdict(set)
-    chunk_relation_evidence: dict[int, set[str]] = defaultdict(set)
 
-    for anchor in anchors:
-        path_lengths = nx.single_source_shortest_path_length(
-            undirected,
-            anchor,
-            cutoff=max_hops,
-        )
-        for node_id, distance in path_lengths.items():
-            node_score = 1.0 / (1.0 + float(distance))
-            if not normalized_relation_focus:
-                for chunk_id in safe_ints(graph.nodes[node_id].get("chunk_ids") or ()):
-                    chunk_scores[chunk_id] += node_score
+    distances = bounded_undirected_distances(graph, anchors, max_hops=max_hops)
+    for node_id, distance in distances.items():
+        node_score = 1.0 / (1.0 + float(distance))
+        if not normalized_relation_focus:
+            for chunk_id in safe_ints(graph.nodes[node_id].get("chunk_ids") or ()):
+                chunk_scores[chunk_id] += node_score
+                if len(chunk_nodes[chunk_id]) < 8:
                     chunk_nodes[chunk_id].add(node_id)
-                    chunk_hops[chunk_id] = min(chunk_hops.get(chunk_id, max_hops), int(distance))
-            for _, target_id, attrs in graph.edges(node_id, data=True):
-                relation_type = str(attrs.get("type") or "")
-                if normalized_relation_focus and relation_type != normalized_relation_focus:
-                    continue
-                chunk_id = safe_int(attrs.get("source_chunk_id"))
-                if chunk_id is None:
-                    continue
-                chunk_scores[chunk_id] += node_score * 0.5
-                chunk_nodes[chunk_id].add(node_id)
                 chunk_hops[chunk_id] = min(chunk_hops.get(chunk_id, max_hops), int(distance))
-                if relation_type:
-                    chunk_relation_types[chunk_id].add(relation_type)
-                edge_text = graph_edge_evidence(graph, node_id, str(target_id), attrs)
-                if edge_text:
-                    chunk_relation_evidence[chunk_id].add(edge_text)
+        for _, _target_id, attrs in graph.edges(node_id, data=True):
+            relation_type = str(attrs.get("type") or "")
+            if normalized_relation_focus and relation_type != normalized_relation_focus:
+                continue
+            chunk_id = safe_int(attrs.get("source_chunk_id"))
+            if chunk_id is None:
+                continue
+            chunk_scores[chunk_id] += node_score * 0.5
+            if len(chunk_nodes[chunk_id]) < 8:
+                chunk_nodes[chunk_id].add(node_id)
+            chunk_hops[chunk_id] = min(chunk_hops.get(chunk_id, max_hops), int(distance))
 
-    return [
-        GraphSearchMatch(
-            chunk_id=chunk_id,
-            score=round(score, 6),
-            matched_node_ids=tuple(sorted(chunk_nodes[chunk_id])),
-            hop_count=chunk_hops.get(chunk_id, max_hops),
-            relation_types=tuple(sorted(chunk_relation_types.get(chunk_id, ()))),
-            relation_evidence=tuple(sorted(chunk_relation_evidence.get(chunk_id, ()))[:3]),
-        )
-        for chunk_id, score in sorted(
+    ranked_chunk_ids = [
+        chunk_id
+        for chunk_id, _score in sorted(
             chunk_scores.items(),
             key=lambda item: (-item[1], item[0]),
         )
     ]
+    candidate_count = len(ranked_chunk_ids)
+    if max_matches is not None:
+        ranked_chunk_ids = ranked_chunk_ids[: max(0, max_matches)]
+    selected_chunk_ids = set(ranked_chunk_ids)
+    chunk_relation_types: dict[int, set[str]] = defaultdict(set)
+    chunk_relation_evidence: dict[int, set[str]] = defaultdict(set)
+    for node_id in distances:
+        for _, target_id, attrs in graph.edges(node_id, data=True):
+            chunk_id = safe_int(attrs.get("source_chunk_id"))
+            if chunk_id not in selected_chunk_ids:
+                continue
+            relation_type = str(attrs.get("type") or "")
+            if normalized_relation_focus and relation_type != normalized_relation_focus:
+                continue
+            if relation_type:
+                chunk_relation_types[chunk_id].add(relation_type)
+            if len(chunk_relation_evidence[chunk_id]) >= 3:
+                continue
+            edge_text = graph_edge_evidence(graph, node_id, str(target_id), attrs)
+            if edge_text:
+                chunk_relation_evidence[chunk_id].add(edge_text)
+
+    return (
+        [
+            GraphSearchMatch(
+                chunk_id=chunk_id,
+                score=round(chunk_scores[chunk_id], 6),
+                matched_node_ids=tuple(sorted(chunk_nodes[chunk_id])),
+                hop_count=chunk_hops.get(chunk_id, max_hops),
+                relation_types=tuple(sorted(chunk_relation_types.get(chunk_id, ()))),
+                relation_evidence=tuple(sorted(chunk_relation_evidence.get(chunk_id, ()))[:3]),
+            )
+            for chunk_id in ranked_chunk_ids
+        ],
+        candidate_count,
+    )
+
+
+def bounded_undirected_distances(
+    graph: nx.MultiDiGraph,
+    anchors: list[str],
+    *,
+    max_hops: int,
+) -> dict[str, int]:
+    """Traverse local neighbors without constructing a full undirected graph copy."""
+    distances = {anchor: 0 for anchor in anchors}
+    frontier = list(distances)
+    for distance in range(1, max_hops + 1):
+        next_frontier: list[str] = []
+        for node_id in frontier:
+            for neighbor in (*graph.successors(node_id), *graph.predecessors(node_id)):
+                neighbor_id = str(neighbor)
+                if neighbor_id in distances:
+                    continue
+                distances[neighbor_id] = distance
+                next_frontier.append(neighbor_id)
+        if not next_frontier:
+            break
+        frontier = next_frontier
+    return distances
 
 
 def graph_edge_evidence(graph: nx.MultiDiGraph, node_id: str, target_id: str, attrs: dict[str, Any]) -> str:

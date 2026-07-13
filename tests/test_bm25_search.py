@@ -6,8 +6,10 @@ from app.db.session import create_sqlite_engine
 from app.services.retrieval.bm25_search import (
     BM25SearchService,
     clear_bm25_corpus_cache,
+    expand_bm25_query_terms,
     inverse_document_frequency,
     lexical_length,
+    warm_bm25_corpus,
 )
 
 
@@ -187,6 +189,43 @@ def test_bm25_reuses_normalized_corpus_until_database_changes(tmp_path, monkeypa
         seed_bm25_documents(db)
         BM25SearchService(db).search("rock filled concrete", top_k=2)
         BM25SearchService(db).search("compressive strength", top_k=2)
+
+    assert load_count == 1
+    clear_bm25_corpus_cache()
+
+
+def test_bm25_prefilter_keeps_only_documents_that_can_receive_a_score(tmp_path) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+
+    with TestingSessionLocal() as db:
+        seed_bm25_documents(db)
+        service = BM25SearchService(db)
+        corpus = service._list_documents()
+        candidates = service._candidate_documents(
+            corpus,
+            expand_bm25_query_terms("孔隙率会怎么影响抗压强度"),
+    )
+
+    assert len(candidates) < len(corpus)
+    assert "孔隙率与抗压性能" in [item.document_title for item in candidates]
+
+
+def test_bm25_warmup_builds_the_reusable_corpus_before_a_request(tmp_path, monkeypatch) -> None:
+    TestingSessionLocal = make_session(tmp_path)
+    clear_bm25_corpus_cache()
+    load_count = 0
+    original = BM25SearchService._load_documents
+
+    def counted_load(service: BM25SearchService):
+        nonlocal load_count
+        load_count += 1
+        return original(service)
+
+    monkeypatch.setattr(BM25SearchService, "_load_documents", counted_load)
+    with TestingSessionLocal() as db:
+        seed_bm25_documents(db)
+        assert warm_bm25_corpus(db) == 3
+        BM25SearchService(db).search("孔隙率 抗压", top_k=2)
 
     assert load_count == 1
     clear_bm25_corpus_cache()

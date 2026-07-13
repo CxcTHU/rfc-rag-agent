@@ -37,6 +37,7 @@ from app.services.agent.refusal_explainer import build_refusal_explanation
 from app.services.agent.service import AgentQueryResult
 from app.services.agent.tools import image_url_from_source_image_path, page_number_from_source_image_path
 from app.services.agent.tool_calling_service import ToolCallingAgentService
+from app.services.observability.latency_trace import LatencyTrace
 from app.services.agent.runtime_checkpoint import AgentRuntimeRunRepository
 from app.services.agentic.state import AgenticResult
 from app.services.conversation.history import (
@@ -287,32 +288,34 @@ def query_agent(
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
 ) -> AgentQueryResponse:
-    chat_model_provider = resolve_agent_chat_model_provider(request, chat_model_provider)
-    conversation_repository = ConversationRepository(db)
-    conversation_messages: list[Message] = []
-    conversation_history: list[str] = []
-    if request.conversation_id is not None:
-        conversation = conversation_repository.get_conversation(
-            request.conversation_id,
-            user_id=current_user.id if current_user is not None else None,
-        )
-        if conversation is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="conversation not found",
+    latency_trace = LatencyTrace()
+    with latency_trace.span("request_preflight_latency_ms"):
+        chat_model_provider = resolve_agent_chat_model_provider(request, chat_model_provider)
+        conversation_repository = ConversationRepository(db)
+        conversation_messages: list[Message] = []
+        conversation_history: list[str] = []
+        if request.conversation_id is not None:
+            conversation = conversation_repository.get_conversation(
+                request.conversation_id,
+                user_id=current_user.id if current_user is not None else None,
             )
-        conversation_messages = conversation_repository.list_messages(
-            request.conversation_id,
-            user_id=current_user.id if current_user is not None else None,
-        )
-        conversation_history = history_from_messages(conversation_messages)
-        log_event(
-            agent_logger,
-            "conversation_loaded",
-            conversation_id=request.conversation_id,
-            message_count=len(conversation_messages),
-            history_count=len(conversation_history),
-        )
+            if conversation is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="conversation not found",
+                )
+            conversation_messages = conversation_repository.list_messages(
+                request.conversation_id,
+                user_id=current_user.id if current_user is not None else None,
+            )
+            conversation_history = history_from_messages(conversation_messages)
+            log_event(
+                agent_logger,
+                "conversation_loaded",
+                conversation_id=request.conversation_id,
+                message_count=len(conversation_messages),
+                history_count=len(conversation_history),
+            )
 
     meta_response = build_agent_meta_response(
         question=request.question,
@@ -384,6 +387,7 @@ def query_agent(
             resume_policy=request.resume_policy,
             resume_run_id=request.resume_run_id,
             image_path=request.image_path,
+            latency_trace=latency_trace,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -415,32 +419,34 @@ def stream_query_agent(
     chat_model_provider: ChatModelProvider = Depends(get_agent_chat_model_provider),
     embedding_provider: EmbeddingProvider = Depends(get_agent_embedding_provider),
 ) -> StreamingResponse:
-    chat_model_provider = resolve_agent_chat_model_provider(request, chat_model_provider)
-    conversation_repository = ConversationRepository(db)
-    conversation_messages: list[Message] = []
-    conversation_history: list[str] = []
-    if request.conversation_id is not None:
-        conversation = conversation_repository.get_conversation(
-            request.conversation_id,
-            user_id=current_user.id if current_user is not None else None,
-        )
-        if conversation is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="conversation not found",
+    latency_trace = LatencyTrace()
+    with latency_trace.span("request_preflight_latency_ms"):
+        chat_model_provider = resolve_agent_chat_model_provider(request, chat_model_provider)
+        conversation_repository = ConversationRepository(db)
+        conversation_messages: list[Message] = []
+        conversation_history: list[str] = []
+        if request.conversation_id is not None:
+            conversation = conversation_repository.get_conversation(
+                request.conversation_id,
+                user_id=current_user.id if current_user is not None else None,
             )
-        conversation_messages = conversation_repository.list_messages(
-            request.conversation_id,
-            user_id=current_user.id if current_user is not None else None,
-        )
-        conversation_history = history_from_messages(conversation_messages)
-        log_event(
-            agent_logger,
-            "conversation_loaded",
-            conversation_id=request.conversation_id,
-            message_count=len(conversation_messages),
-            history_count=len(conversation_history),
-        )
+            if conversation is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="conversation not found",
+                )
+            conversation_messages = conversation_repository.list_messages(
+                request.conversation_id,
+                user_id=current_user.id if current_user is not None else None,
+            )
+            conversation_history = history_from_messages(conversation_messages)
+            log_event(
+                agent_logger,
+                "conversation_loaded",
+                conversation_id=request.conversation_id,
+                message_count=len(conversation_messages),
+                history_count=len(conversation_history),
+            )
 
     return StreamingResponse(
         stream_agent_query_events(
@@ -451,6 +457,7 @@ def stream_query_agent(
             conversation_history=conversation_history,
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
+            latency_trace=latency_trace,
         ),
         media_type="text/event-stream",
         headers={
@@ -469,7 +476,9 @@ def stream_agent_query_events(
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
+    latency_trace: LatencyTrace | None = None,
 ) -> Iterator[str]:
+    latency_trace = latency_trace or LatencyTrace()
     stream_started = time.perf_counter()
     try:
         summarize = True
@@ -507,6 +516,7 @@ def stream_agent_query_events(
                         conversation_history=conversation_history,
                         chat_model_provider=chat_model_provider,
                         embedding_provider=embedding_provider,
+                        latency_trace=latency_trace,
                     )
                     if streamed_token_count == 0:
                         for token in split_streaming_text(response.answer):
@@ -556,6 +566,7 @@ def stream_non_chitchat_agent_response(
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
+    latency_trace: LatencyTrace,
 ) -> Iterator[str | tuple[AgentQueryResponse, int]]:
     queue: Queue[tuple[str, Any]] = Queue()
 
@@ -572,6 +583,7 @@ def stream_non_chitchat_agent_response(
                 chat_model_provider=effective_chat_model_provider,
                 embedding_provider=embedding_provider,
                 event_sink=lambda event: queue.put(("agent_event", event)),
+                latency_trace=latency_trace,
             )
         except Exception as exc:  # noqa: BLE001 - forwarded to SSE error mapping.
             agent_logger.exception("stream_response_failed")
@@ -1128,6 +1140,7 @@ def build_agent_query_response(
     embedding_provider: EmbeddingProvider,
     planner_chat_provider: ChatModelProvider | None = None,
     event_sink=None,
+    latency_trace: LatencyTrace | None = None,
 ) -> AgentQueryResponse:
     log_agent_query_received(request, effective_mode="tool_calling_agent")
     result = ToolCallingAgentService(
@@ -1143,6 +1156,7 @@ def build_agent_query_response(
         resume_policy=request.resume_policy,
         resume_run_id=request.resume_run_id,
         image_path=request.image_path,
+        latency_trace=latency_trace,
     )
     response = agent_response_from_result(result)
     log_agent_response_event(response)

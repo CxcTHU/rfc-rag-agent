@@ -1,0 +1,26 @@
+{
+  "frozen_contract": {
+    "ok": true,
+    "violations": []
+  },
+  "gates": {
+    "final_p95": false,
+    "first_token_p50": false,
+    "first_token_p95": false,
+    "frozen_contract": true,
+    "functional_non_regression": false,
+    "paired_real_e2e_rows": true
+  },
+  "gates_passed": false,
+  "metrics": {
+    "functional_rate_delta": -0.0666,
+    "phase63_functional_rate": 0.5333,
+    "phase64_final_p95_ms": 80905.143,
+    "phase64_first_token_p50_ms": 19815.94,
+    "phase64_first_token_p95_ms": 73437.278,
+    "phase64_functional_rate": 0.4667,
+    "phase64_retrieval_plus_glm_rerank_p95_ms": 15292.304
+  },
+  "paired_case_count": 30,
+  "validation_mode": "real_frozen_phase63_phase64_sse"
+}

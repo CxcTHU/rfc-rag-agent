@@ -21,6 +21,11 @@ from app.services.agent.tools import (
 )
 from app.services.agent.react_actions import should_search_figures
 from app.services.agent.runtime import AgentRuntime, AgentRuntimeState
+from app.services.agent.route_first import (
+    choose_phase64_route,
+    enforce_phase64_route_intent_floor,
+    record_phase64_route,
+)
 from app.services.agent.evidence_identity import (
     build_evidence_query_identity,
     refine_evidence_query_identity_with_llm,
@@ -45,8 +50,10 @@ from app.services.generation.chat_model import (
     ChatToolCall,
     ChatToolDefinition,
     ChatToolFunction,
+    OpenAICompatibleChatModelProvider,
     ToolCallingChatModelResult,
     create_chat_model_provider,
+    is_deepseek_endpoint,
 )
 from app.services.observability.latency_trace import (
     LatencyTrace,
@@ -57,6 +64,10 @@ from app.services.observability.latency_trace import (
     set_current_latency_trace,
 )
 from app.services.retrieval.embedding import EmbeddingProvider
+from app.services.retrieval.route_context import (
+    reset_phase64_route_kind,
+    set_phase64_route_kind,
+)
 from app.services.retrieval.hybrid_search import (
     reset_current_hyde_vector_query,
     set_current_hyde_vector_query,
@@ -64,6 +75,7 @@ from app.services.retrieval.hybrid_search import (
 from app.services.retrieval.runtime import (
     build_retrieval_action,
     build_retrieval_plan,
+    retrieval_tool_for_action,
     retrieval_runtime_result_limit,
     reset_current_retrieval_plan,
     set_current_retrieval_plan,
@@ -95,6 +107,26 @@ agent_logger = logging.getLogger("rfc_rag_agent.agent")
 class ToolCallingRuntimeEvent:
     event: str
     payload: dict[str, object]
+
+
+@dataclass
+class FinalPromptShape:
+    character_count: int = 0
+    cjk_character_count: int = 0
+    source_count: int = 0
+    history_character_count: int = 0
+    estimated_input_tokens: int = 0
+    budget_applied: bool = False
+
+    def as_trace_values(self) -> dict[str, int]:
+        return {
+            "final_prompt_character_count": self.character_count,
+            "final_prompt_cjk_character_count": self.cjk_character_count,
+            "final_prompt_source_count": self.source_count,
+            "final_prompt_history_character_count": self.history_character_count,
+            "final_prompt_estimated_input_tokens": self.estimated_input_tokens,
+            "final_prompt_budget_applied": self.budget_applied,
+        }
 
 
 ToolCallingEventSink = Callable[[ToolCallingRuntimeEvent], None]
@@ -231,6 +263,7 @@ class ToolCallingAgentService:
         resume_policy: str = "auto",
         resume_run_id: str | None = None,
         image_path: str | None = None,
+        latency_trace: LatencyTrace | None = None,
     ) -> AgentQueryResult:
         normalized_question = question.strip()
         if not normalized_question:
@@ -248,18 +281,74 @@ class ToolCallingAgentService:
             question_summary=safe_text_summary(normalized_question, limit=80),
         )
 
-        runtime = AgentRuntime()
-        runtime_state = runtime.assemble(normalized_question, history=history)
+        latency_trace = latency_trace or LatencyTrace()
+        bind_user_question_cache_key(latency_trace, normalized_question)
+        bind_agent_conversation_cache_scope(latency_trace, conversation_id)
+        with latency_trace.span("context_assembly_latency_ms"):
+            runtime = AgentRuntime()
+            runtime_state = runtime.assemble(normalized_question, history=history)
         evidence_identity = build_evidence_query_identity(
             runtime_state.context.standalone_task or normalized_question,
             history=history,
         )
         settings = get_settings()
-        evidence_identity = refine_evidence_query_identity_with_llm(
-            runtime_state.context.standalone_task or normalized_question,
-            base_identity=evidence_identity,
-            provider=self.runtime_identity_provider,
-            history=history,
+        runtime_identity_provider = phase64_runtime_identity_provider(
+            self.runtime_identity_provider,
+            settings,
+        )
+        route_decision = None
+        route_first_enabled = (
+            settings.agent_short_loop_enabled and settings.phase64_route_first_enabled
+        )
+        if route_first_enabled:
+            route_started = time.perf_counter()
+            route_decision = choose_phase64_route(
+                normalized_question,
+                history=tuple(history or ()),
+                has_uploaded_image=bool(image_path),
+            )
+            record_phase64_route(
+                latency_trace,
+                route_decision,
+                elapsed_ms=(time.perf_counter() - route_started) * 1000.0,
+            )
+            latency_trace.set_value(
+                "phase64_execution_graph",
+                "phase64_fast" if route_decision.kind == "fast" else "phase64_complex",
+            )
+            if route_decision.kind == "complex":
+                evidence_identity = refine_evidence_query_identity_with_llm(
+                    runtime_state.context.standalone_task or normalized_question,
+                    base_identity=evidence_identity,
+                    provider=runtime_identity_provider,
+                    history=history,
+                    force=True,
+                    trace=latency_trace,
+                )
+        else:
+            evidence_identity = refine_evidence_query_identity_with_llm(
+                runtime_state.context.standalone_task or normalized_question,
+                base_identity=evidence_identity,
+                provider=runtime_identity_provider,
+                history=history,
+                force=settings.agent_short_loop_enabled,
+                trace=latency_trace,
+            )
+            latency_trace.set_value(
+                "phase64_execution_graph",
+                "phase64_complex" if settings.agent_short_loop_enabled else "phase63_a",
+            )
+        if route_decision is not None:
+            evidence_identity = replace(
+                evidence_identity,
+                retrieval_intent=enforce_phase64_route_intent_floor(
+                    evidence_identity.retrieval_intent,
+                    route_decision,
+                ),
+            )
+        latency_trace.set_value(
+            "total_model_call_count",
+            int(latency_trace.values.get("planner_call_count", 0)),
         )
         retrieval_plan = (
             build_retrieval_plan(
@@ -378,9 +467,6 @@ class ToolCallingAgentService:
         executed_tool_call_count = 0
         citation_repair_count = 0
         llm_call_count = 0
-        latency_trace = LatencyTrace()
-        bind_user_question_cache_key(latency_trace, normalized_question)
-        bind_agent_conversation_cache_scope(latency_trace, conversation_id)
         apply_evidence_identity_diagnostics(latency_trace, evidence_identity)
         if retrieval_plan is not None:
             for key, value in retrieval_plan.diagnostics().items():
@@ -408,6 +494,11 @@ class ToolCallingAgentService:
         apply_runtime_diagnostics(latency_trace, runtime_state)
         latency_token = set_current_latency_trace(latency_trace)
         retrieval_token = set_current_retrieval_plan(retrieval_plan)
+        phase64_route_token = set_phase64_route_kind(
+            route_decision.kind
+            if route_decision is not None
+            else ("complex" if settings.agent_short_loop_enabled else "legacy")
+        )
         hyde_token = None
 
         try:
@@ -589,7 +680,7 @@ class ToolCallingAgentService:
                 return resumed
 
             semantic_cached = None
-            if evidence_identity.safe_for_cache_reuse:
+            if settings.semantic_evidence_cache_enabled and evidence_identity.safe_for_cache_reuse:
                 semantic_cache_tool_name = semantic_cache_tool_for_identity(evidence_identity)
                 latency_trace.set_value("semantic_cache_tool_name", semantic_cache_tool_name)
                 semantic_cached = self.toolbox.lookup_semantic_evidence_cache(
@@ -639,15 +730,45 @@ class ToolCallingAgentService:
             latency_trace.set_value("semantic_cache_hit", False)
             latency_trace.set_value(
                 "semantic_cache_reason",
-                "miss" if evidence_identity.safe_for_cache_reuse else "identity_not_reusable",
+                (
+                    "miss"
+                    if settings.semantic_evidence_cache_enabled
+                    and evidence_identity.safe_for_cache_reuse
+                    else (
+                        "identity_not_reusable"
+                        if settings.semantic_evidence_cache_enabled
+                        else "disabled"
+                    )
+                ),
             )
-            hyde_query = generate_hyde_vector_query(
-                canonical_task=evidence_identity.canonical_query
-                or runtime_state.context.standalone_task
-                or normalized_question,
-                provider=self.runtime_identity_provider,
-                latency_trace=latency_trace,
-            )
+            if settings.agent_short_loop_enabled:
+                hyde_query = ""
+                if evidence_identity.hyde_passage:
+                    canonical_task = (
+                        evidence_identity.canonical_query
+                        or runtime_state.context.standalone_task
+                        or normalized_question
+                    )
+                    hyde_query = (
+                        f"{canonical_task}\n\nHypothetical evidence for vector retrieval only:\n"
+                        f"{evidence_identity.hyde_passage}"
+                    )
+                    latency_trace.set_value("hyde_generated", True)
+                    latency_trace.set_value("hyde_used_for_vector", True)
+                    latency_trace.set_value("hyde_reason", "unified_planner")
+                    latency_trace.set_value("hyde_model", evidence_identity.model_name)
+                else:
+                    latency_trace.set_value("hyde_generated", False)
+                    latency_trace.set_value("hyde_used_for_vector", False)
+                    latency_trace.set_value("hyde_reason", "planner_empty")
+            else:
+                hyde_query = generate_hyde_vector_query(
+                    canonical_task=evidence_identity.canonical_query
+                    or runtime_state.context.standalone_task
+                    or normalized_question,
+                    provider=runtime_identity_provider,
+                    latency_trace=latency_trace,
+                )
             if hyde_query:
                 hyde_token = set_current_hyde_vector_query(hyde_query)
 
@@ -665,6 +786,185 @@ class ToolCallingAgentService:
                     },
                 )
                 latency_trace.set_value("runtime_run_id", active_run.run_id)
+
+            final_answer_provider = phase64_final_answer_provider(
+                self.chat_model_provider,
+                settings,
+            )
+
+            if settings.agent_short_loop_enabled and not sources:
+                short_loop_result = self._execute_short_loop_retrieval(
+                    runtime=runtime,
+                    runtime_state=runtime_state,
+                    retrieval_action=retrieval_action,
+                    canonical_task=(
+                        evidence_identity.canonical_query
+                        or runtime_state.context.standalone_task
+                        or normalized_question
+                    ),
+                    default_query=normalized_question,
+                    event_sink=event_sink,
+                )
+                min_selected_sources = max(
+                    1,
+                    int(settings.phase64_fast_path_min_selected_sources),
+                )
+                if (
+                    route_decision is not None
+                    and route_decision.kind == "fast"
+                    and len(short_loop_result.sources) < min_selected_sources
+                ):
+                    latency_trace.set_value("phase64_fast_escalated", True)
+                    latency_trace.set_value(
+                        "phase64_fast_escalation_reason",
+                        "insufficient_selected_sources",
+                    )
+                    evidence_identity = refine_evidence_query_identity_with_llm(
+                        runtime_state.context.standalone_task or normalized_question,
+                        base_identity=evidence_identity,
+                        provider=runtime_identity_provider,
+                        history=history,
+                        force=True,
+                        trace=latency_trace,
+                    )
+                    retrieval_plan = (
+                        build_retrieval_plan(
+                            evidence_identity.retrieval_intent,
+                            evidence_identity.canonical_query
+                            or runtime_state.context.standalone_task
+                            or normalized_question,
+                            settings,
+                        )
+                        if settings.retrieval_runtime_enabled
+                        else None
+                    )
+                    retrieval_action = build_retrieval_action(evidence_identity.retrieval_intent)
+                    reset_current_retrieval_plan(retrieval_token)
+                    retrieval_token = set_current_retrieval_plan(retrieval_plan)
+                    reset_phase64_route_kind(phase64_route_token)
+                    phase64_route_token = set_phase64_route_kind("complex")
+                    latency_trace.set_value("phase64_execution_graph", "phase64_complex")
+                    latency_trace.set_value(
+                        "total_model_call_count",
+                        int(latency_trace.values.get("planner_call_count", 0)),
+                    )
+                    if evidence_identity.hyde_passage:
+                        canonical_task = (
+                            evidence_identity.canonical_query
+                            or runtime_state.context.standalone_task
+                            or normalized_question
+                        )
+                        hyde_query = (
+                            f"{canonical_task}\n\nHypothetical evidence for vector retrieval only:\n"
+                            f"{evidence_identity.hyde_passage}"
+                        )
+                        hyde_token = set_current_hyde_vector_query(hyde_query)
+                        latency_trace.set_value("hyde_generated", True)
+                        latency_trace.set_value("hyde_used_for_vector", True)
+                        latency_trace.set_value("hyde_reason", "fast_path_escalation")
+                        latency_trace.set_value("hyde_model", evidence_identity.model_name)
+                    short_loop_result = self._execute_short_loop_retrieval(
+                        runtime=runtime,
+                        runtime_state=runtime_state,
+                        retrieval_action=retrieval_action,
+                        canonical_task=(
+                            evidence_identity.canonical_query
+                            or runtime_state.context.standalone_task
+                            or normalized_question
+                        ),
+                        default_query=normalized_question,
+                        event_sink=event_sink,
+                    )
+                elif route_decision is not None and route_decision.kind == "fast":
+                    latency_trace.set_value("phase64_fast_escalated", False)
+                    latency_trace.set_value("phase64_fast_escalation_reason", "")
+                if short_loop_result.call.succeeded and short_loop_result.tool_name in ALLOWED_TOOL_NAMES:
+                    latency_trace.set_value(
+                        "retrieval_selected_count",
+                        len(short_loop_result.search_results),
+                    )
+                    latency_trace.set_value(
+                        "retrieval_selected_chunk_ids",
+                        [item.chunk_id for item in short_loop_result.search_results],
+                    )
+                executed_tool_call_count += 1
+                tool_calls.append(short_loop_result.call)
+                workflow_steps.append(short_loop_result.call)
+                runtime_state.evidence.add(
+                    tool_name=short_loop_result.tool_name,
+                    query=(
+                        evidence_identity.canonical_query
+                        or runtime_state.context.standalone_task
+                        or normalized_question
+                    ),
+                    result_count=len(short_loop_result.search_results),
+                    succeeded=short_loop_result.call.succeeded,
+                )
+                apply_runtime_diagnostics(latency_trace, runtime_state)
+                search_results = merge_search_results(
+                    search_results,
+                    short_loop_result.search_results,
+                )
+                sources = merge_sources(sources, short_loop_result.sources)
+                runtime_repository.persist_node(
+                    active_run,
+                    node="tool_execution_completed",
+                    state=runtime_checkpoint_state(
+                        runtime_state=runtime_state,
+                        workflow_steps=workflow_steps,
+                        tool_calls=tool_calls,
+                        sources=sources,
+                        latency_trace=latency_trace.values,
+                    ),
+                )
+                if not sources:
+                    refusal_reason = (
+                        short_loop_result.refusal_reason
+                        or short_loop_result.call.error
+                        or short_loop_result.call.output_summary
+                        or "No relevant evidence was found for the current question."
+                    )
+                    runtime_state.stop_reason = (
+                        "reranking_failed"
+                        if is_reranking_failure(short_loop_result.call)
+                        else "short_loop_evidence_not_found"
+                    )
+                    runtime_state.final_decision = "refuse"
+                    apply_runtime_diagnostics(latency_trace, runtime_state)
+                    runtime_repository.persist_node(
+                        active_run,
+                        node=runtime_state.stop_reason,
+                        state=runtime_checkpoint_state(
+                            runtime_state=runtime_state,
+                            workflow_steps=workflow_steps,
+                            tool_calls=tool_calls,
+                            sources=sources,
+                            latency_trace=latency_trace.values,
+                        ),
+                        status="failed",
+                    )
+                    return result_from_tool_calling_loop(
+                        question=normalized_question,
+                        answer=refusal_reason,
+                        tool_calls=tool_calls,
+                        workflow_steps=workflow_steps,
+                        search_results=search_results,
+                        sources=sources,
+                        citations=[],
+                        refused=True,
+                        refusal_reason=refusal_reason,
+                        llm_call_count=llm_call_count,
+                        repeated_query_count=repeated_query_count,
+                        near_duplicate_query_count=near_duplicate_query_count,
+                        skipped_tool_call_count=skipped_tool_call_count,
+                        executed_tool_call_count=executed_tool_call_count,
+                        citation_repair_count=citation_repair_count,
+                        runtime_state=runtime_state,
+                        latency_trace=latency_trace.finalize(
+                            iteration_count=len(workflow_steps),
+                            tool_call_count=len(tool_calls),
+                        ),
+                    )
 
             for iteration in range(1, max_iterations + 1):
                 streaming_final_generation = bool(sources)
@@ -687,19 +987,44 @@ class ToolCallingAgentService:
                 )
                 llm_started = time.perf_counter()
                 if streaming_final_generation:
+                    latency_trace.set_value(
+                        "final_generation_call_count",
+                        int(latency_trace.values["final_generation_call_count"]) + 1,
+                    )
+                    latency_trace.set_value(
+                        "total_model_call_count",
+                        int(latency_trace.values["total_model_call_count"]) + 1,
+                    )
                     answer_parts: list[str] = []
-                    if hasattr(self.chat_model_provider, "stream_generate"):
-                        for token_text in self.chat_model_provider.stream_generate(
-                            evidence_answer_messages(
+                    if hasattr(final_answer_provider, "stream_generate"):
+                        if settings.agent_short_loop_enabled:
+                            final_prompt_shape = FinalPromptShape()
+                            final_answer_messages = evidence_answer_messages(
+                                normalized_question,
+                                sources=sources,
+                                history=history,
+                                final_answer_strategy=self.final_answer_strategy,
+                                **phase64_final_prompt_budgets(settings),
+                                prompt_shape=final_prompt_shape,
+                            )
+                            for field_name, value in final_prompt_shape.as_trace_values().items():
+                                latency_trace.set_value(field_name, value)
+                        else:
+                            final_answer_messages = evidence_answer_messages(
                                 normalized_question,
                                 sources=sources,
                                 history=history,
                                 final_answer_strategy=self.final_answer_strategy,
                             )
-                        ):
+                        for token_text in final_answer_provider.stream_generate(final_answer_messages):
                             if not token_text:
                                 continue
-                            latency_trace.mark_first_token()
+                            if latency_trace.values.get("final_model_ttft_ms") is None:
+                                latency_trace.set_value(
+                                    "final_model_ttft_ms",
+                                    round((time.perf_counter() - llm_started) * 1000.0, 3),
+                                )
+                            latency_trace.mark_answer_token()
                             answer_parts.append(token_text)
                             latency_trace.set_value(
                                 "streamed_token_count",
@@ -722,6 +1047,10 @@ class ToolCallingAgentService:
                             tools,
                         )
                 else:
+                    latency_trace.set_value(
+                        "total_model_call_count",
+                        int(latency_trace.values["total_model_call_count"]) + 1,
+                    )
                     if not hasattr(self.chat_model_provider, "generate_with_tools"):
                         raise RuntimeError(
                             "chat model provider does not support tool calling"
@@ -732,7 +1061,9 @@ class ToolCallingAgentService:
                     )
                 llm_call_count += 1
                 llm_duration_ms = (time.perf_counter() - llm_started) * 1000.0
-                if not streaming_final_generation:
+                if streaming_final_generation:
+                    latency_trace.add_duration("final_generation_latency_ms", llm_duration_ms)
+                else:
                     latency_trace.add_duration("planner_latency_ms", llm_duration_ms)
 
                 if model_result.tool_calls:
@@ -1135,13 +1466,18 @@ class ToolCallingAgentService:
                 if model_result.content.strip():
                     latency_trace.add_duration("answer_latency_ms", llm_duration_ms)
                     allowed_source_ids = list(range(1, len(sources) + 1))
+                    citation_validation_started = time.perf_counter()
                     citations = extract_citations(
                         model_result.content,
                         allowed_source_ids,
                     )
+                    latency_trace.add_duration(
+                        "citation_validation_latency_ms",
+                        (time.perf_counter() - citation_validation_started) * 1000.0,
+                    )
                     answer_content = model_result.content
                     stream_token_emitter = getattr(
-                        self.chat_model_provider,
+                        final_answer_provider,
                         "emit_stream_token",
                         None,
                     )
@@ -1161,13 +1497,14 @@ class ToolCallingAgentService:
                         )
                     if sources and not citations:
                         repair_started = time.perf_counter()
-                        repair_result = self.chat_model_provider.generate(
+                        repair_result = final_answer_provider.generate(
                             citation_repair_messages(
                                 normalized_question,
                                 draft_answer=model_result.content,
                                 sources=sources,
                                 history=history,
                                 final_answer_strategy=self.final_answer_strategy,
+                                **phase64_final_prompt_budgets(settings),
                             )
                         )
                         citation_repair_count += 1
@@ -1328,8 +1665,51 @@ class ToolCallingAgentService:
         finally:
             if hyde_token is not None:
                 reset_current_hyde_vector_query(hyde_token)
+            reset_phase64_route_kind(phase64_route_token)
             reset_current_retrieval_plan(retrieval_token)
             reset_current_latency_trace(latency_token)
+
+    def _execute_short_loop_retrieval(
+        self,
+        *,
+        runtime: AgentRuntime,
+        runtime_state: AgentRuntimeState,
+        retrieval_action: Any,
+        canonical_task: str,
+        default_query: str,
+        event_sink: ToolCallingEventSink | None,
+    ) -> AgentToolResult:
+        """Run the Runtime-owned evidence action without a second model planner."""
+        tool_name = retrieval_tool_for_action(retrieval_action)
+        synthetic_call = ChatToolCall(
+            id="runtime-retrieval-1",
+            name=tool_name,
+            arguments={"query": canonical_task},
+        )
+        grounded_call, _ = runtime.ground_tool_call(
+            synthetic_call,
+            state=runtime_state,
+            default_query=default_query,
+        )
+        self._emit_tool_start(event_sink, grounded_call, iteration=1)
+        started = time.perf_counter()
+        tool_result = self._execute_tool_call(
+            tool_call=grounded_call,
+            default_query=default_query,
+            forbidden_tools=retrieval_action.forbidden_tools,
+        )
+        trace = get_current_latency_trace()
+        if trace is not None:
+            trace.add_duration(
+                "tool_latency_ms",
+                (time.perf_counter() - started) * 1000.0,
+            )
+        tool_result = replace(
+            tool_result,
+            call=replace(tool_result.call, step_id=grounded_call.id),
+        )
+        self._emit_tool_result(event_sink, tool_result.call, iteration=1)
+        return tool_result
 
     def _execute_tool_call(
         self,
@@ -1365,6 +1745,9 @@ class ToolCallingAgentService:
         event: str,
         payload: dict[str, object],
     ) -> None:
+        trace = get_current_latency_trace()
+        if trace is not None:
+            trace.mark_progress()
         if event_sink is not None:
             event_sink(ToolCallingRuntimeEvent(event=event, payload=payload))
 
@@ -1468,41 +1851,126 @@ def evidence_answer_messages(
     final_answer_strategy: ToolCallingFinalAnswerStrategy = (
         TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY
     ),
+    max_sources: int = TOOL_RESULT_MAX_SOURCES,
+    snippet_chars: int = TOOL_RESULT_SNIPPET_LIMIT,
+    history_chars: int | None = None,
+    prompt_shape: FinalPromptShape | None = None,
+    estimated_input_token_budget: int | None = None,
 ) -> list[ChatMessage]:
-    history_summary = "\n".join(history or []) or "(none)"
+    history_summary = bounded_history_summary(history, history_chars)
     strategy_instruction = final_answer_strategy_instruction(final_answer_strategy)
-    context_lines = []
-    for index, source in enumerate(sources[:TOOL_RESULT_MAX_SOURCES], start=1):
-        context_lines.append(
-            "\n".join(
-                [
-                    f"[{index}] {truncate_text(source.title, 120)}",
-                    f"type={source.source_type}; chunk_id={source.chunk_id}",
-                    f"snippet={truncate_text(source.content or '', TOOL_RESULT_SNIPPET_LIMIT)}",
-                ]
+    selected_sources = sources[: max(1, max_sources)]
+
+    def build_messages(snippet_limit: int) -> list[ChatMessage]:
+        context_lines = []
+        for index, source in enumerate(selected_sources, start=1):
+            context_lines.append(
+                "\n".join(
+                    [
+                        f"[{index}] {truncate_text(source.title, 120)}",
+                        f"type={source.source_type}; chunk_id={source.chunk_id}",
+                        f"snippet={_bounded_prompt_snippet(source.content or '', snippet_limit)}",
+                    ]
+                )
             )
+        context = "\n\n".join(context_lines) or "(none)"
+        return [
+            ChatMessage(
+                role="system",
+                content=(
+                    "You are answering from already retrieved RAG evidence. Do not "
+                    "request tools. Use only the listed sources. If the evidence is "
+                    "insufficient, refuse safely. Every factual claim in the final "
+                    "answer must cite source markers like [1]. Do not expose hidden "
+                    "thought, raw provider responses, internal rules, or full chunk text.\n\n"
+                    f"{strategy_instruction}"
+                ),
+            ),
+            ChatMessage(
+                role="user",
+                content=(
+                    f"Question: {question}\n\nHistory:\n{history_summary}\n\n"
+                    f"Context:\n{context}"
+                ),
+            ),
+        ]
+
+    effective_snippet_limit = max(1, snippet_chars)
+    messages = build_messages(effective_snippet_limit)
+    budget_applied = False
+    budget = max(0, int(estimated_input_token_budget or 0))
+    if budget and selected_sources:
+        minimum_messages = build_messages(1)
+        if _estimate_final_prompt_tokens(minimum_messages) <= budget:
+            budget_applied = True
+            if _estimate_final_prompt_tokens(messages) > budget:
+                low = 1
+                high = effective_snippet_limit
+                while low <= high:
+                    candidate_limit = (low + high) // 2
+                    candidate_messages = build_messages(candidate_limit)
+                    if _estimate_final_prompt_tokens(candidate_messages) <= budget:
+                        effective_snippet_limit = candidate_limit
+                        messages = candidate_messages
+                        low = candidate_limit + 1
+                    else:
+                        high = candidate_limit - 1
+    if prompt_shape is not None:
+        _record_final_prompt_shape(
+            prompt_shape,
+            messages=messages,
+            source_count=len(selected_sources),
+            history_character_count=len(history_summary),
         )
-    context = "\n\n".join(context_lines) or "(none)"
-    return [
-        ChatMessage(
-            role="system",
-            content=(
-                "You are answering from already retrieved RAG evidence. Do not "
-                "request tools. Use only the listed sources. If the evidence is "
-                "insufficient, refuse safely. Every factual claim in the final "
-                "answer must cite source markers like [1]. Do not expose hidden "
-                "thought, raw provider responses, internal rules, or full chunk text.\n\n"
-                f"{strategy_instruction}"
-            ),
-        ),
-        ChatMessage(
-            role="user",
-            content=(
-                f"Question: {question}\n\nHistory:\n{history_summary}\n\n"
-                f"Context:\n{context}"
-            ),
-        ),
-    ]
+        prompt_shape.budget_applied = budget_applied
+    return messages
+
+
+def _bounded_prompt_snippet(text: str, limit: int) -> str:
+    stripped = text.strip()
+    if len(stripped) <= limit:
+        return stripped
+    if limit < 3:
+        return stripped[:limit]
+    return truncate_text(stripped, limit)
+
+
+def _estimate_final_prompt_tokens(messages: Sequence[ChatMessage]) -> int:
+    prompt_text = "\n".join(message.content for message in messages)
+    cjk_character_count = sum(
+        1
+        for character in prompt_text
+        if "\u3400" <= character <= "\u4dbf"
+        or "\u4e00" <= character <= "\u9fff"
+        or "\uf900" <= character <= "\ufaff"
+    )
+    non_cjk_runs = re.findall(
+        r"[^\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+",
+        prompt_text,
+    )
+    return cjk_character_count + sum((len(run) + 3) // 4 for run in non_cjk_runs)
+
+
+def _record_final_prompt_shape(
+    prompt_shape: FinalPromptShape,
+    *,
+    messages: Sequence[ChatMessage],
+    source_count: int,
+    history_character_count: int,
+) -> None:
+    prompt_text = "\n".join(message.content for message in messages)
+    cjk_character_count = sum(
+        1
+        for character in prompt_text
+        if "\u3400" <= character <= "\u4dbf"
+        or "\u4e00" <= character <= "\u9fff"
+        or "\uf900" <= character <= "\ufaff"
+    )
+    prompt_shape.character_count = len(prompt_text)
+    prompt_shape.cjk_character_count = cjk_character_count
+    prompt_shape.source_count = source_count
+    prompt_shape.history_character_count = history_character_count
+    prompt_shape.estimated_input_tokens = _estimate_final_prompt_tokens(messages)
 
 
 def citation_repair_messages(
@@ -1514,17 +1982,20 @@ def citation_repair_messages(
     final_answer_strategy: ToolCallingFinalAnswerStrategy = (
         TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY
     ),
+    max_sources: int = TOOL_RESULT_MAX_SOURCES,
+    snippet_chars: int = TOOL_RESULT_SNIPPET_LIMIT,
+    history_chars: int | None = None,
 ) -> list[ChatMessage]:
-    history_summary = "\n".join(history or []) or "(none)"
+    history_summary = bounded_history_summary(history, history_chars)
     strategy_instruction = final_answer_strategy_instruction(final_answer_strategy)
     context_lines = []
-    for index, source in enumerate(sources[:TOOL_RESULT_MAX_SOURCES], start=1):
+    for index, source in enumerate(sources[:max(1, max_sources)], start=1):
         context_lines.append(
             "\n".join(
                 [
                     f"[{index}] {truncate_text(source.title, 120)}",
                     f"type={source.source_type}; chunk_id={source.chunk_id}",
-                    f"snippet={truncate_text(source.content or '', TOOL_RESULT_SNIPPET_LIMIT)}",
+                    f"snippet={truncate_text(source.content or '', max(1, snippet_chars))}",
                 ]
             )
         )
@@ -1550,6 +2021,72 @@ def citation_repair_messages(
             ),
         ),
     ]
+
+
+def bounded_history_summary(history: Sequence[str] | None, max_chars: int | None) -> str:
+    entries = [str(item) for item in (history or ()) if str(item)]
+    if max_chars is None:
+        return "\n".join(entries) or "(none)"
+    remaining = max(0, max_chars)
+    selected: list[str] = []
+    for entry in reversed(entries):
+        separator = 1 if selected else 0
+        if remaining <= separator:
+            break
+        available = remaining - separator
+        selected.append(entry[-available:])
+        remaining -= min(len(entry), available) + separator
+    return "\n".join(reversed(selected)) or "(none)"
+
+
+def phase64_final_prompt_budgets(settings: Any) -> dict[str, int]:
+    if not settings.agent_short_loop_enabled:
+        return {}
+    return {
+        "max_sources": max(1, int(settings.reranking_dynamic_max_results)),
+        "snippet_chars": max(1, int(settings.agent_final_snippet_chars)),
+        "history_chars": max(0, int(settings.agent_final_history_chars)),
+        "estimated_input_token_budget": max(
+            0, int(settings.agent_final_estimated_input_token_budget)
+        ),
+    }
+
+
+def phase64_final_answer_provider(
+    provider: ChatModelProvider,
+    settings: Any,
+) -> ChatModelProvider:
+    """Apply the Phase 64 output cap only to final answer generation."""
+    if not settings.agent_short_loop_enabled:
+        return provider
+    if isinstance(provider, OpenAICompatibleChatModelProvider):
+        route_provider = phase64_runtime_identity_provider(provider, settings)
+        assert isinstance(route_provider, OpenAICompatibleChatModelProvider)
+        return replace(
+            route_provider,
+            max_tokens=max(1, int(settings.agent_final_max_tokens)),
+        )
+    return provider
+
+
+def phase64_runtime_identity_provider(
+    provider: ChatModelProvider | None,
+    settings: Any,
+) -> ChatModelProvider | None:
+    """Use DeepSeek non-thinking mode for B-only structured planner requests."""
+    if not isinstance(provider, OpenAICompatibleChatModelProvider):
+        return provider
+    if not (
+        settings.agent_short_loop_enabled
+        and settings.phase64_route_first_enabled
+        and settings.phase64_final_non_thinking_enabled
+        and is_deepseek_endpoint(provider.base_url)
+        and provider.model_name.strip().casefold().startswith("deepseek-v4")
+    ):
+        return provider
+    extra_body = dict(provider.extra_body)
+    extra_body["thinking"] = {"type": "disabled"}
+    return replace(provider, extra_body=extra_body)
 
 
 def final_answer_strategy_instruction(

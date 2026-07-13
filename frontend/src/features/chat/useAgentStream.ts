@@ -51,8 +51,11 @@ export function useAgentStream(callbacks: AgentStreamCallbacks) {
 
   const patchRunState = useCallback((conversationId: number, runId: string, patch: Partial<AgentStreamRunState>) => {
     setRunStates((previous) => {
-      if (previous[conversationId]?.runId && previous[conversationId].runId !== runId) return previous
       const previousState = previous[conversationId]
+      const previousRunIsTerminal = previousState?.status === 'completed'
+        || previousState?.status === 'stopped'
+        || previousState?.status === 'error'
+      if (previousState?.runId && previousState.runId !== runId && !previousRunIsTerminal) return previous
       return {
         ...previous,
         [conversationId]: {
