@@ -14,6 +14,7 @@ class AgentQueryRequest(BaseModel):
     image_path: str | None = None
     resume_run_id: str | None = None
     resume_policy: str = "auto"
+    evaluation_run_namespace: str | None = Field(default=None, max_length=128)
 
     @field_validator("question")
     @classmethod
@@ -66,6 +67,20 @@ class AgentQueryRequest(BaseModel):
             return None
         normalized = value.strip()
         return normalized or None
+
+    @field_validator("evaluation_run_namespace")
+    @classmethod
+    def evaluation_namespace_is_safe(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if not normalized.startswith("phase65-") or not all(
+            char.isalnum() or char in "._-" for char in normalized
+        ):
+            raise ValueError("evaluation_run_namespace is invalid")
+        return normalized
 
     @field_validator("resume_policy")
     @classmethod

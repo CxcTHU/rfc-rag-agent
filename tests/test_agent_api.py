@@ -14,6 +14,7 @@ from app.api.agent import (
 import app.api.agent as agent_api_module
 from app.api.chat import get_chat_model_provider
 from app.api.chat import get_embedding_provider as get_chat_embedding_provider
+from app.core.config import get_settings
 from app.db.models import Base
 from app.db.repositories import (
     ChunkCreate,
@@ -736,36 +737,49 @@ def test_agent_api_returns_404_for_missing_conversation_id(tmp_path) -> None:
     assert response.json()["detail"] == "conversation not found"
 
 
-def test_agent_api_returns_503_when_chat_provider_times_out(tmp_path) -> None:
+def test_agent_api_returns_503_when_chat_provider_times_out(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("AGENT_RUN_COORDINATOR_ENABLED", "false")
+    get_settings.cache_clear()
     failing_provider = FailingChatModelProvider()
-    with make_test_client(tmp_path) as client:
-        app.dependency_overrides[get_agent_chat_model_provider] = lambda: failing_provider
-        response = client.post(
-            "/agent/query",
-            json={"question": "What affects filling capacity?", "top_k": 2},
-        )
+    try:
+        with make_test_client(tmp_path) as client:
+            app.dependency_overrides[get_agent_chat_model_provider] = lambda: failing_provider
+            response = client.post(
+                "/agent/query",
+                json={"question": "What affects filling capacity?", "top_k": 2},
+            )
+    finally:
+        get_settings.cache_clear()
 
     assert response.status_code == 503
     assert response.json()["detail"] == "chat model provider is unavailable or timed out"
     assert "sensitive" not in response.text
 
 
-def test_agent_api_retires_default_summary_path_with_controlled_503(tmp_path) -> None:
+def test_agent_api_retires_default_summary_path_with_controlled_503(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("AGENT_RUN_COORDINATOR_ENABLED", "false")
+    get_settings.cache_clear()
     partial_provider = AnswerThenFailSummaryProvider()
-    with make_test_client(tmp_path) as client:
-        app.dependency_overrides[get_agent_chat_model_provider] = lambda: partial_provider
-        conversation = client.post("/conversations", json={"title": "长对话"}).json()
-        seed_agent_conversation_messages(conversation["id"], count=16)
-        response = client.post(
-            "/agent/query",
-            json={
-                "question": "What affects filling capacity?",
-                "top_k": 2,
-                "conversation_id": conversation["id"],
-                "mode": "default",
-            },
-        )
-        messages_response = client.get(f"/conversations/{conversation['id']}/messages")
+    try:
+        with make_test_client(tmp_path) as client:
+            app.dependency_overrides[get_agent_chat_model_provider] = lambda: partial_provider
+            conversation = client.post("/conversations", json={"title": "长对话"}).json()
+            seed_agent_conversation_messages(conversation["id"], count=16)
+            response = client.post(
+                "/agent/query",
+                json={
+                    "question": "What affects filling capacity?",
+                    "top_k": 2,
+                    "conversation_id": conversation["id"],
+                    "mode": "default",
+                },
+            )
+            messages_response = client.get(f"/conversations/{conversation['id']}/messages")
+    finally:
+        get_settings.cache_clear()
 
     assert response.status_code == 503
     assert response.json()["detail"] == "chat model provider is unavailable or timed out"
@@ -904,7 +918,10 @@ def test_agent_api_explicit_tool_calling_agent_mode_uses_tool_loop(tmp_path) -> 
         "final_answer",
     ]
     assert payload["iteration_count"] == 2
-    assert payload["latency_trace"]["llm_call_count"] == 2
+    expected_llm_calls = (
+        1 if payload["latency_trace"].get("run_coordinator_enabled") is True else 2
+    )
+    assert payload["latency_trace"]["llm_call_count"] == expected_llm_calls
     assert payload["latency_trace"]["repeated_query_count"] == 0
     assert "tool_calling_agent" in payload["reasoning_summary"]
     serialized = response.text.casefold()

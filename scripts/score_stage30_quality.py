@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import sys
+import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +13,22 @@ from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+from scripts.phase65_gate_manifest import (
+    AgentGateManifest,
+    GitWorktreeIdentity,
+    canonical_phase65_scope,
+    load_manifest,
+    read_git_worktree_identity,
+    sha256_file,
+)
+from scripts.verify_phase65_test_receipt import (
+    PRODUCER,
+    PRODUCER_VERSION,
+    canonical_test_tree_sha256,
+    fingerprint_items,
+    load_bundle_test_receipt,
+)
 
 DEFAULT_RESULTS = ROOT / "data" / "evaluation" / "stage29_real_quality_results.csv"
 DEFAULT_SUMMARY = ROOT / "data" / "evaluation" / "stage29_real_quality_summary.csv"
@@ -28,6 +46,10 @@ SCORE_FIELDS = [
     "overall_score",
     "grade",
     "release_decision",
+    "historical_overall_score",
+    "evidence_status",
+    "evidence_reasons",
+    "manifest_run_id",
     "dimension_scores",
     "score_delta",
     "main_deductions",
@@ -100,6 +122,10 @@ class ScoringResult:
     overall_score: float
     grade: str
     release_decision: str
+    historical_overall_score: float | None
+    evidence_status: str
+    evidence_reasons: tuple[str, ...]
+    manifest_run_id: str
     score_delta: str
     deductions: list[Deduction]
     recommended_actions: list[str]
@@ -117,6 +143,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary", default=str(DEFAULT_SUMMARY))
     parser.add_argument("--weights", default=str(DEFAULT_WEIGHTS))
     parser.add_argument("--engineering-health", default=str(DEFAULT_HEALTH))
+    parser.add_argument(
+        "--agent-gate-manifest",
+        required=True,
+        help="Complete, safe Phase 65 AgentGateManifest JSON for this evidence run.",
+    )
+    parser.add_argument("--pytest-receipt-bundle", required=True)
     parser.add_argument("--scores-out", default=str(DEFAULT_SCORES))
     parser.add_argument("--summary-out", default=str(DEFAULT_SUMMARY_OUT))
     parser.add_argument("--deductions-out", default=str(DEFAULT_DEDUCTIONS))
@@ -143,6 +175,232 @@ def read_single_row(path: Path) -> dict[str, str]:
 
 def read_health(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+@dataclass(frozen=True)
+class EvidenceStatus:
+    status: str
+    reasons: tuple[str, ...]
+    manifest_run_id: str
+
+
+def load_verified_test_receipt(
+    receipt_path: Path,
+    inventory_path: Path,
+    *,
+    collection_receipt_path: Path | None = None,
+    repository_root: Path = ROOT,
+) -> dict[str, object]:
+    """Read only aggregate JUnit counts bound to a controlled source/test inventory."""
+    root = repository_root.resolve()
+    for path in (receipt_path, inventory_path):
+        try:
+            path.resolve().relative_to(root)
+        except ValueError as exc:
+            raise ValueError("test_receipt_path_outside_repository") from exc
+    try:
+        inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("test_inventory_invalid") from exc
+    paths = inventory.get("paths") if isinstance(inventory, dict) else None
+    if inventory.get("schema_version") != "stage30-test-inventory-v1" or not isinstance(paths, list) or not paths:
+        raise ValueError("test_inventory_invalid")
+    canonical_paths = sorted(
+        path.relative_to(root).as_posix()
+        for path in (root / "tests").rglob("test_*.py")
+        if path.is_file()
+    )
+    if paths != canonical_paths or len(set(paths)) != len(paths):
+        raise ValueError("test_inventory_not_canonical")
+    digest = hashlib.sha256()
+    for value in paths:
+        if not isinstance(value, str) or not value.endswith(".py"):
+            raise ValueError("test_inventory_invalid")
+        candidate = (root / value).resolve()
+        try:
+            relative = candidate.relative_to(root).as_posix()
+        except ValueError as exc:
+            raise ValueError("test_inventory_invalid") from exc
+        if not relative.startswith("tests/") or not candidate.is_file():
+            raise ValueError("test_inventory_invalid")
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(sha256_file(candidate).encode("ascii"))
+        digest.update(b"\n")
+    try:
+        root_element = ElementTree.parse(receipt_path).getroot()
+        tests = int(root_element.attrib["tests"])
+        failures = int(root_element.attrib.get("failures", "0"))
+        errors = int(root_element.attrib.get("errors", "0"))
+    except (OSError, ElementTree.ParseError, KeyError, ValueError) as exc:
+        raise ValueError("pytest_receipt_invalid") from exc
+    if (
+        root_element.tag.rsplit("}", 1)[-1] not in {"testsuite", "testsuites"}
+        or root_element.attrib.get("name") != "pytest"
+        or tests <= 0
+        or failures != 0
+        or errors != 0
+    ):
+        raise ValueError("pytest_receipt_invalid")
+    testcase_nodes = [node for node in root_element.iter() if node.tag.rsplit("}", 1)[-1] == "testcase"]
+    if len(testcase_nodes) != tests:
+        raise ValueError("pytest_receipt_incomplete")
+    module_paths: set[str] = set()
+    testcase_ids: set[tuple[str, str]] = set()
+    for testcase in testcase_nodes:
+        classname = testcase.attrib.get("classname", "")
+        name = testcase.attrib.get("name", "")
+        identity = (classname, name)
+        if not classname.startswith("tests.") or not name or identity in testcase_ids:
+            raise ValueError("pytest_receipt_incomplete")
+        testcase_ids.add(identity)
+        matches = [
+            path for path in canonical_paths
+            if classname == path.removesuffix(".py").replace("/", ".")
+            or classname.startswith(path.removesuffix(".py").replace("/", ".") + ".")
+        ]
+        if len(matches) != 1:
+            raise ValueError("pytest_receipt_incomplete")
+        module_paths.add(matches[0])
+    if module_paths != set(canonical_paths):
+        raise ValueError("pytest_receipt_incomplete")
+    if collection_receipt_path is not None:
+        try:
+            collection = json.loads(collection_receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError("pytest_collection_invalid") from exc
+        node_ids = collection.get("node_ids") if isinstance(collection, dict) else None
+        if (
+            not isinstance(collection, dict)
+            or collection.get("schema_version") != "phase65-test-receipt-v2"
+            or collection.get("producer") != PRODUCER
+            or collection.get("producer_version") != PRODUCER_VERSION
+            or collection.get("collection_command") != "python -m pytest --collect-only -q"
+            or collection.get("pytest_command") != "python -m pytest -q --junitxml=<temporary>"
+            or not isinstance(collection.get("pytest_executable"), str)
+            or not isinstance(collection.get("pytest_version"), str)
+            or not isinstance(node_ids, list)
+            or not node_ids
+            or len(set(node_ids)) != len(node_ids)
+            or not all(isinstance(node, str) and node.startswith("tests/") and "::" in node for node in node_ids)
+            or collection.get("inventory_sha256") != sha256_file(inventory_path)
+            or collection.get("test_tree_sha256") != canonical_test_tree_sha256(root, canonical_paths)
+            or collection.get("junit_sha256") != sha256_file(receipt_path)
+            or collection.get("node_ids_sha256") != fingerprint_items(sorted(node_ids))
+            or collection.get("node_count") != len(node_ids)
+        ):
+            raise ValueError("pytest_receipt_producer_invalid")
+        junit_node_ids = {
+            f"{testcase.attrib['classname'].replace('.', '/')}.py::{testcase.attrib['name']}"
+            for testcase in testcase_nodes
+        }
+        if junit_node_ids != set(node_ids) or len(junit_node_ids) != tests:
+            raise ValueError("pytest_collection_mismatch")
+    return {
+        "schema_version": "stage30-pytest-junit-v1",
+        "tests": tests,
+        "failures": failures,
+        "errors": errors,
+        "test_suite_sha256": digest.hexdigest(),
+        "receipt_sha256": sha256_file(receipt_path),
+    }
+
+
+def evaluate_evidence_status(
+    *,
+    health: dict[str, object],
+    manifest: AgentGateManifest | None,
+    test_suite_sha256: str | None,
+    test_receipt: dict[str, object] | None = None,
+    current_worktree_identity: GitWorktreeIdentity | None = None,
+    repository_root: Path = ROOT,
+) -> EvidenceStatus:
+    """Classify Stage 30 evidence without treating old receipts as current."""
+    if manifest is None:
+        return EvidenceStatus("blocked", ("manifest_unavailable",), "")
+    if not test_suite_sha256:
+        return EvidenceStatus("blocked", ("test_inventory_unavailable",), manifest.run_id)
+    if (
+        manifest.status != "complete"
+        or manifest.expected_rows <= 0
+        or manifest.completed_rows != manifest.expected_rows
+        or manifest.cache_policy != "cold"
+        or manifest.environment_class not in {"controlled_candidate", "controlled_production"}
+        or manifest.sanitized_errors
+        or not manifest.scoped_paths
+    ):
+        return EvidenceStatus("blocked", ("manifest_incomplete",), manifest.run_id)
+    try:
+        expected_scope = canonical_phase65_scope(repository_root)
+    except (OSError, ValueError):
+        return EvidenceStatus("blocked", ("manifest_scope_unavailable",), manifest.run_id)
+    if manifest.scoped_paths != expected_scope:
+        return EvidenceStatus("blocked", ("manifest_scope_incomplete",), manifest.run_id)
+    if not _verified_test_receipt(test_receipt, test_suite_sha256):
+        return EvidenceStatus("blocked", ("pytest_receipt_invalid",), manifest.run_id)
+    bundle_bindings = {
+        "manifest_run_id": manifest.run_id,
+        "manifest_base_commit": manifest.base_commit,
+        "manifest_tracked_patch_sha256": manifest.tracked_patch_sha256,
+        "manifest_scoped_content_sha256": manifest.scoped_content_sha256,
+        "manifest_scoped_paths": manifest.scoped_paths,
+    }
+    if any(field in test_receipt and test_receipt.get(field) != expected for field, expected in bundle_bindings.items()):
+        return EvidenceStatus("blocked", ("bundle_manifest_mismatch",), manifest.run_id)
+    embedded_manifest = test_receipt.get("manifest")
+    canonical_manifest = json.loads(json.dumps(manifest.to_safe_dict(), ensure_ascii=True, sort_keys=True))
+    if embedded_manifest is not None and embedded_manifest != canonical_manifest:
+        return EvidenceStatus("blocked", ("bundle_manifest_mismatch",), manifest.run_id)
+    receipt_fields = ("schema_version", "tests", "failures", "errors", "test_suite_sha256", "receipt_sha256")
+    if any(health.get(f"pytest_receipt_{field}") != test_receipt.get(field) for field in receipt_fields):
+        return EvidenceStatus("blocked", ("pytest_receipt_mismatch",), manifest.run_id)
+    try:
+        actual = current_worktree_identity or read_git_worktree_identity(repository_root, manifest.scoped_paths)
+    except (OSError, ValueError):
+        return EvidenceStatus("blocked", ("worktree_identity_unavailable",), manifest.run_id)
+    stale_reasons: list[str] = []
+    for field, expected, reason in (
+        ("base_commit", manifest.base_commit, "worktree_base_commit_mismatch"),
+        ("tracked_patch_sha256", manifest.tracked_patch_sha256, "worktree_tracked_patch_mismatch"),
+        ("scoped_content_sha256", manifest.scoped_content_sha256, "worktree_scoped_content_mismatch"),
+        ("scoped_paths", manifest.scoped_paths, "worktree_scoped_paths_mismatch"),
+    ):
+        if getattr(actual, field) != expected:
+            stale_reasons.append(reason)
+    if test_receipt.get("trust_level") == "local_integrity_only":
+        return EvidenceStatus("blocked", tuple(["local_integrity_only", *stale_reasons]), manifest.run_id)
+    if health.get("schema_version") != "stage30-engineering-health-v2":
+        stale_reasons.append("health_schema_stale")
+    expected_bindings = {
+        "manifest_run_id": manifest.run_id,
+        "base_commit": manifest.base_commit,
+        "tracked_patch_sha256": manifest.tracked_patch_sha256,
+        "test_suite_sha256": test_suite_sha256,
+    }
+    for field, expected in expected_bindings.items():
+        if health.get(field) != expected:
+            stale_reasons.append("test_fingerprint_mismatch" if field == "test_suite_sha256" else f"{field}_mismatch")
+    if stale_reasons:
+        return EvidenceStatus("stale", tuple(stale_reasons), manifest.run_id)
+    return EvidenceStatus("current", (), manifest.run_id)
+
+
+def _verified_test_receipt(receipt: dict[str, object] | None, expected_suite_sha256: str | None) -> bool:
+    if not isinstance(receipt, dict) or receipt.get("schema_version") != "stage30-pytest-junit-v1":
+        return False
+    tests, failures, errors = receipt.get("tests"), receipt.get("failures"), receipt.get("errors")
+    return (
+        isinstance(tests, int)
+        and not isinstance(tests, bool)
+        and tests > 0
+        and isinstance(failures, int)
+        and failures == 0
+        and isinstance(errors, int)
+        and errors == 0
+        and receipt.get("test_suite_sha256") == expected_suite_sha256
+        and isinstance(receipt.get("receipt_sha256"), str)
+        and len(str(receipt["receipt_sha256"])) == 64
+    )
 
 
 def parse_scalar(value: str) -> object:
@@ -477,6 +735,10 @@ def score_quality(
     run_id: str,
     run_at: str,
     previous_scores_path: Path,
+    manifest: AgentGateManifest | None = None,
+    test_suite_sha256: str | None = None,
+    test_receipt: dict[str, object] | None = None,
+    current_worktree_identity: GitWorktreeIdentity | None = None,
 ) -> ScoringResult:
     dimension_scores = {
         "retrieval_quality": score_retrieval(summary, config.weights["retrieval_quality"]),
@@ -491,16 +753,26 @@ def score_quality(
     deductions = build_deductions(rows, summary, health, config)
     overall = sum(dimension_scores.values())
     grade = grade_for_score(overall, config.grade_boundaries)
-    decision = release_decision(
+    computed_decision = release_decision(
         overall,
         dimension_scores["engineering_health"],
         deductions,
         config,
     )
+    evidence = evaluate_evidence_status(
+        health=health,
+        manifest=manifest,
+        test_suite_sha256=test_suite_sha256,
+        test_receipt=test_receipt,
+        current_worktree_identity=current_worktree_identity,
+    )
+    decision = computed_decision if evidence.status == "current" else "blocked"
     recommended_actions = sorted(
         {item.recommended_action for item in deductions}
         or {"Continue human review of the stage 30 score report before commit/tag/push."}
     )
+    if evidence.status != "current":
+        recommended_actions.append("Refresh Stage 30 evidence against the current Phase 65 manifest before release review.")
     return ScoringResult(
         run_id=run_id,
         run_at=run_at,
@@ -510,6 +782,10 @@ def score_quality(
         overall_score=overall,
         grade=grade,
         release_decision=decision,
+        historical_overall_score=overall if evidence.status != "current" else None,
+        evidence_status=evidence.status,
+        evidence_reasons=evidence.reasons,
+        manifest_run_id=evidence.manifest_run_id,
         score_delta=previous_score_delta(previous_scores_path, overall),
         deductions=deductions,
         recommended_actions=recommended_actions,
@@ -520,31 +796,60 @@ def format_score(value: float, digits: int = 2) -> str:
     return f"{value:.{digits}f}"
 
 
+def csv_safe(value: object) -> object:
+    """Prevent spreadsheet formula execution in every persisted CSV cell."""
+    if isinstance(value, str):
+        normalized = " ".join(value.replace("\r", " ").replace("\n", " ").replace("\t", " ").split())
+        if normalized.startswith(("=", "+", "-", "@")):
+            return f"'{normalized}"
+        return normalized
+    return value
+
+
+def csv_safe_row(row: dict[str, object]) -> dict[str, object]:
+    return {field: csv_safe(value) for field, value in row.items()}
+
+
 def write_scores(path: Path, result: ScoringResult, *, append: bool) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    row = {
+        "run_id": result.run_id,
+        "run_at": result.run_at,
+        "scoring_version": result.scoring_version,
+        "scoring_mode": result.scoring_mode,
+        "overall_score": format_score(result.overall_score),
+        "grade": result.grade,
+        "release_decision": result.release_decision,
+        "historical_overall_score": (
+            format_score(result.historical_overall_score)
+            if result.historical_overall_score is not None
+            else ""
+        ),
+        "evidence_status": result.evidence_status,
+        "evidence_reasons": "|".join(result.evidence_reasons),
+        "manifest_run_id": result.manifest_run_id,
+        "dimension_scores": json.dumps(result.dimension_scores, ensure_ascii=False, sort_keys=True),
+        "score_delta": result.score_delta,
+        "main_deductions": "; ".join(
+            f"{item.dimension}:{item.query_id}:{item.severity}" for item in result.deductions[:5]
+        ),
+        "recommended_actions": " | ".join(result.recommended_actions),
+    }
+    legacy_rows: list[dict[str, str]] = []
+    if append and path.exists() and path.stat().st_size:
+        with path.open("r", encoding="utf-8-sig", newline="") as file:
+            reader = csv.DictReader(file)
+            if reader.fieldnames != SCORE_FIELDS:
+                legacy_rows = list(reader)
+                append = False
     should_write_header = not append or not path.exists() or path.stat().st_size == 0
     mode = "a" if append else "w"
     with path.open(mode, encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=SCORE_FIELDS)
         if should_write_header:
             writer.writeheader()
-        writer.writerow(
-            {
-                "run_id": result.run_id,
-                "run_at": result.run_at,
-                "scoring_version": result.scoring_version,
-                "scoring_mode": result.scoring_mode,
-                "overall_score": format_score(result.overall_score),
-                "grade": result.grade,
-                "release_decision": result.release_decision,
-                "dimension_scores": json.dumps(result.dimension_scores, ensure_ascii=False, sort_keys=True),
-                "score_delta": result.score_delta,
-                "main_deductions": "; ".join(
-                    f"{item.dimension}:{item.query_id}:{item.severity}" for item in result.deductions[:5]
-                ),
-                "recommended_actions": " | ".join(result.recommended_actions),
-            }
-        )
+        writer.writerows(csv_safe_row({field: legacy.get(field, "") for field in SCORE_FIELDS}) for legacy in legacy_rows)
+        writer.writerow(csv_safe_row(row))
 
 
 def write_summary(path: Path, result: ScoringResult, config: ScoringConfig) -> None:
@@ -556,7 +861,7 @@ def write_summary(path: Path, result: ScoringResult, config: ScoringConfig) -> N
             weight = config.weights[dimension]
             normalized = score / weight if weight else 0
             writer.writerow(
-                {
+                csv_safe_row({
                     "run_id": result.run_id,
                     "dimension": dimension,
                     "weight": format_score(weight),
@@ -565,10 +870,10 @@ def write_summary(path: Path, result: ScoringResult, config: ScoringConfig) -> N
                     "normalized_score": format_score(normalized, digits=3),
                     "status": dimension_status(normalized),
                     "evidence": evidence_for_dimension(dimension),
-                }
+                })
             )
         writer.writerow(
-            {
+            csv_safe_row({
                 "run_id": result.run_id,
                 "dimension": "overall",
                 "weight": "100.00",
@@ -577,7 +882,7 @@ def write_summary(path: Path, result: ScoringResult, config: ScoringConfig) -> N
                 "normalized_score": format_score(result.overall_score / 100, digits=3),
                 "status": result.release_decision,
                 "evidence": f"grade={result.grade}; scoring_mode={result.scoring_mode}",
-            }
+            })
         )
 
 
@@ -605,7 +910,7 @@ def write_deductions(path: Path, result: ScoringResult) -> None:
     with path.open("w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=DEDUCTION_FIELDS)
         writer.writeheader()
-        writer.writerows(item.as_dict(result.run_id) for item in result.deductions)
+        writer.writerows(csv_safe_row(item.as_dict(result.run_id)) for item in result.deductions)
 
 
 def main() -> None:
@@ -614,6 +919,8 @@ def main() -> None:
     rows = read_rows(Path(args.results))
     summary = read_single_row(Path(args.summary))
     health = read_health(Path(args.engineering_health))
+    manifest = load_manifest(Path(args.agent_gate_manifest))
+    test_receipt = load_bundle_test_receipt(Path(args.pytest_receipt_bundle))
     run_id = args.run_id.strip() or f"stage30-{uuid4().hex[:12]}"
     run_at = datetime.now(timezone.utc).isoformat()
     result = score_quality(
@@ -624,6 +931,9 @@ def main() -> None:
         run_id=run_id,
         run_at=run_at,
         previous_scores_path=Path(args.scores_out),
+        manifest=manifest,
+        test_suite_sha256=str(test_receipt["test_suite_sha256"]),
+        test_receipt=test_receipt,
     )
     write_scores(Path(args.scores_out), result, append=not args.no_append)
     write_summary(Path(args.summary_out), result, config)

@@ -61,6 +61,7 @@ def test_high_level_tool_schemas_and_service_do_not_expose_top_k() -> None:
 
 
 def test_phase63_flag_keeps_model_owned_tool_selection_loop(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("AGENT_RUN_COORDINATOR_ENABLED", "false")
     monkeypatch.setenv("AGENT_SHORT_LOOP_ENABLED", "false")
     monkeypatch.setenv("SEMANTIC_EVIDENCE_CACHE_ENABLED", "false")
     get_settings.cache_clear()

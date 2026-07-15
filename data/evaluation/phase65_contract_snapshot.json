@@ -1,0 +1,13 @@
+{
+  "agent_request_schema_sha256": "4626ce7fa2a7446feb46361e5af80f3aabb923eb7b5d067abef3b368658b2bae",
+  "agent_response_schema_sha256": "cbf87c3ac1ff80416bed5a08ae80657bb0e4d0c38ee9b996ecd9d49809c4488c",
+  "checkpoint_schema_sha256": "1c5ff24dde9954da10d84d43ac1518e20be6d50ac043da980508bc619e3c2df9",
+  "runtime_event_names": [
+    "agent_step",
+    "tool_call_result",
+    "tool_call_start"
+  ],
+  "schema_version": "phase65-contract-v1",
+  "sse_fixture_sha256": "e685b21742681f708b441c2cf7c390f3d0257d495556e34b7a16150a7f242b8c",
+  "tool_schema_sha256": "03bfaed2be8479e1eba82367dae6c2844c50e4c816a61af7a612979629e420eb"
+}

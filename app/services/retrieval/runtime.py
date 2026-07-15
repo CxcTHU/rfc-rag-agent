@@ -35,39 +35,73 @@ SPECIALIZED_EVIDENCE_TOOLS: tuple[HighLevelEvidenceTool, ...] = (
     "search_tables",
 )
 
-RELATIONSHIP_TERMS = (
+CAUSAL_RELATIONSHIP_TERMS = (
+    "因果",
+    "依赖",
+    "影响",
+    "成因",
+    "原因",
+    "导致",
+    "作用",
+    "depends on",
+    "cause",
+    "causes",
+    "why",
+    "affect",
+    "influence",
+    "impact",
+)
+CROSS_RELATIONSHIP_TERMS = (
     "关系",
     "关联",
+    "联系",
+    "relationship",
+    "relate",
+)
+STANDARD_RELATIONSHIP_TERMS = (
     "引用",
     "遵循",
     "依据",
     "适用",
     "规定",
     "定义",
-    "因果",
-    "依赖",
-    "relationship",
-    "relate",
     "reference",
     "referenced",
     "applicable",
     "defined by",
     "defines",
-    "depends on",
-    "cause",
-    "causes",
-    "why",
-    "成因",
-    "原因",
+)
+RELATIONSHIP_TERMS = tuple(
+    dict.fromkeys(
+        (
+            *CAUSAL_RELATIONSHIP_TERMS,
+            *CROSS_RELATIONSHIP_TERMS,
+            *STANDARD_RELATIONSHIP_TERMS,
+        )
+    )
 )
 STANDARD_TERMS = ("标准", "规范", "gb/t", "gb ", "dl/t", "sl/t", "standard", "specification")
 VISUAL_TERMS = ("图片", "图示", "配图", "照片", "曲线", "figure", "image", "diagram", "photo", "curve")
 TABLE_TERMS = ("表格", "参数表", "数据表", "table", "tabulated", "parameter table")
 VISUAL_NEGATIONS = ("不要图片", "不需要图片", "只用文字", "text only", "no image", "without image")
-TABLE_NEGATIONS = ("不要表格", "不需要表格", "不用表格", "no table", "without table")
+TABLE_NEGATIONS = (
+    "不要表格",
+    "不需要表格",
+    "不用表格",
+    "不要引用表格",
+    "不引用表格",
+    "不用引用表格",
+    "no table",
+    "without table",
+    "no table citation",
+)
 RELATIONSHIP_NEGATIONS = (
     "不要关系分析",
+    "不要分析因果",
+    "不要分析因果关系",
     "不分析关系",
+    "不分析因果",
+    "不分析因果关系",
     "不分析实体关系",
     "不分析上下游关系",
     "无需关联",
@@ -167,6 +201,7 @@ class RetrievalPlan:
 class RetrievalAction:
     required_tool: HighLevelEvidenceTool | None = None
     forbidden_tools: tuple[HighLevelEvidenceTool, ...] = ()
+    tool_sequence: tuple[HighLevelEvidenceTool, ...] = ()
     reason: str = "implicit"
 
 
@@ -184,6 +219,7 @@ def build_retrieval_action(profile: RetrievalIntentProfile) -> RetrievalAction:
             forbidden_tools=tuple(
                 tool for tool in SPECIALIZED_EVIDENCE_TOOLS if tool != "search_tables"
             ),
+            tool_sequence=("search_tables", "hybrid_search_knowledge"),
             reason="explicit_table",
         )
     if normalized.visual_explicitness == "explicit":
@@ -192,6 +228,7 @@ def build_retrieval_action(profile: RetrievalIntentProfile) -> RetrievalAction:
             forbidden_tools=tuple(
                 tool for tool in SPECIALIZED_EVIDENCE_TOOLS if tool != "search_figures"
             ),
+            tool_sequence=("search_figures", "hybrid_search_knowledge"),
             reason="explicit_figure",
         )
     return RetrievalAction(
@@ -314,9 +351,17 @@ def deterministic_intent_profile(
     relationship_negative = relationship_signal == "negative"
     visual_match = visual_signal == "positive"
     table_match = table_signal == "positive"
-    relationship_match = relationship_signal == "positive"
     relationship_text = current_text if contains_any(current_text, RELATIONSHIP_TERMS) else history_text
     standard_match = contains_any(relationship_text, STANDARD_TERMS)
+    causal_match = contains_any(relationship_text, CAUSAL_RELATIONSHIP_TERMS)
+    cross_match = contains_any(relationship_text, CROSS_RELATIONSHIP_TERMS)
+    standard_relation_match = (
+        standard_match and contains_any(relationship_text, STANDARD_RELATIONSHIP_TERMS)
+    )
+    relationship_match = (
+        relationship_signal == "positive"
+        and (causal_match or cross_match or standard_relation_match)
+    )
     relationship_type = "standard_reference" if standard_match and relationship_match else (
         "cross_document" if relationship_match else "none"
     )

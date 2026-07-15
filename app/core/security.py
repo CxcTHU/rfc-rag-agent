@@ -144,6 +144,30 @@ def require_admin_when_auth_enabled(
     return current_user
 
 
+def require_authenticated_in_production(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> User | None:
+    if settings.app_env.strip().casefold() != "production":
+        return None
+    if not settings.auth_enabled:
+        return None
+    token = access_token_from_request(request, credentials)
+    if token is None:
+        raise auth_exception()
+    try:
+        payload = decode_access_token(token, settings=settings)
+        user_id = int(payload["sub"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise auth_exception() from exc
+    current_user = UserRepository(db).get_by_id(user_id)
+    if current_user is None or not current_user.is_active:
+        raise auth_exception()
+    return current_user
+
+
 def require_admin_in_production(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),

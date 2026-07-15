@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     runtime_identity_model_temperature: float = 0.0
     runtime_identity_model_timeout_seconds: float = 10.0
     agent_short_loop_enabled: bool = False
+    agent_run_coordinator_enabled: bool = True
     phase64_route_first_enabled: bool = False
     phase64_execution_graph_schema: str = "phase64-route-first-v1"
     phase64_fast_path_min_selected_sources: int = 2
@@ -76,6 +77,21 @@ class Settings(BaseSettings):
     agent_final_history_chars: int = 1000
     agent_final_max_tokens: int = 1200
     agent_final_estimated_input_token_budget: int = 0
+    # Phase 65 live A/B must remain blocked unless an operator has verified that
+    # the selected provider returns one complete usage/cost receipt per request.
+    # This is intentionally opt-in: generic OpenAI-compatible responses do not
+    # promise a provider-supplied cost field.
+    phase65_cold_run_receipts_enabled: bool = False
+    phase65_provider_usage_receipts_verified: bool = False
+    # Semicolon-delimited safe receipts, for example
+    # ``chat=sha256:<identity>;runtime_identity=sha256:<identity>``. Each
+    # identity is derived from a configured provider/model pair and is never a
+    # URL, credential, prompt, or provider payload.
+    phase65_provider_usage_receipt_inventory: str = ""
+    # Optional non-secret operator lane label. The raw label is never returned
+    # by health endpoints; only its hash contributes to endpoint identity so
+    # two controlled local lanes can be distinguished without leaking URLs.
+    phase65_endpoint_identity_label: str = ""
 
     judge_model_provider: str = ""
     judge_model_name: str = ""

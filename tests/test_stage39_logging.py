@@ -86,7 +86,10 @@ def test_agent_logging_contract_uses_safe_events_and_not_sensitive_fields() -> N
     tool_calling = (
         ROOT / "app" / "services" / "agent" / "tool_calling_service.py"
     ).read_text(encoding="utf-8")
-    combined = agent_api + "\n" + tool_calling
+    tool_executor = (
+        ROOT / "app" / "services" / "agent" / "tool_executor.py"
+    ).read_text(encoding="utf-8")
+    combined = agent_api + "\n" + tool_calling + "\n" + tool_executor
 
     for event in [
         "query_received",

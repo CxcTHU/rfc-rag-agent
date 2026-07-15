@@ -1,0 +1,659 @@
+{
+  "bounded_load_completed_requests": 80,
+  "bounded_load_failed_requests": 0,
+  "bounded_load_max_inflight_observed": 8,
+  "cancelled_work_leak_count": 0,
+  "case_count": 80,
+  "cases": [
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_invalid",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_timeout",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "optional_channel_timeout",
+      "runtime_boundary": "retrieval_runtime/optional_channel",
+      "safe_category": "optional_channel_failed",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "required_evidence_missing",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "required_evidence_missing",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "rerank_failure",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "reranking_failed",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "checkpoint_write_failure",
+      "runtime_boundary": "run_coordinator/checkpoint_repository",
+      "safe_category": "checkpoint_write_failed",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "deadline",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "deadline_exhausted",
+      "stop_reason": "deadline_exhausted"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "cancel",
+      "runtime_boundary": "run_coordinator/pre_tool_gate",
+      "safe_category": "client_stream_aborted",
+      "stop_reason": "cancelled"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "completed_tool_replay",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "completed_tool_replay_prevented",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_invalid",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_timeout",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "optional_channel_timeout",
+      "runtime_boundary": "retrieval_runtime/optional_channel",
+      "safe_category": "optional_channel_failed",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "required_evidence_missing",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "required_evidence_missing",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "rerank_failure",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "reranking_failed",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "checkpoint_write_failure",
+      "runtime_boundary": "run_coordinator/checkpoint_repository",
+      "safe_category": "checkpoint_write_failed",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "deadline",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "deadline_exhausted",
+      "stop_reason": "deadline_exhausted"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "cancel",
+      "runtime_boundary": "run_coordinator/pre_tool_gate",
+      "safe_category": "client_stream_aborted",
+      "stop_reason": "cancelled"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "completed_tool_replay",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "completed_tool_replay_prevented",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_invalid",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_timeout",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "optional_channel_timeout",
+      "runtime_boundary": "retrieval_runtime/optional_channel",
+      "safe_category": "optional_channel_failed",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "required_evidence_missing",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "required_evidence_missing",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "rerank_failure",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "reranking_failed",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "checkpoint_write_failure",
+      "runtime_boundary": "run_coordinator/checkpoint_repository",
+      "safe_category": "checkpoint_write_failed",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "deadline",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "deadline_exhausted",
+      "stop_reason": "deadline_exhausted"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "cancel",
+      "runtime_boundary": "run_coordinator/pre_tool_gate",
+      "safe_category": "client_stream_aborted",
+      "stop_reason": "cancelled"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "completed_tool_replay",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "completed_tool_replay_prevented",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_invalid",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_timeout",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "optional_channel_timeout",
+      "runtime_boundary": "retrieval_runtime/optional_channel",
+      "safe_category": "optional_channel_failed",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "required_evidence_missing",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "required_evidence_missing",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "rerank_failure",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "reranking_failed",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "checkpoint_write_failure",
+      "runtime_boundary": "run_coordinator/checkpoint_repository",
+      "safe_category": "checkpoint_write_failed",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "deadline",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "deadline_exhausted",
+      "stop_reason": "deadline_exhausted"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "cancel",
+      "runtime_boundary": "run_coordinator/pre_tool_gate",
+      "safe_category": "client_stream_aborted",
+      "stop_reason": "cancelled"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "completed_tool_replay",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "completed_tool_replay_prevented",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_invalid",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_timeout",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "optional_channel_timeout",
+      "runtime_boundary": "retrieval_runtime/optional_channel",
+      "safe_category": "optional_channel_failed",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "required_evidence_missing",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "required_evidence_missing",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "rerank_failure",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "reranking_failed",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "checkpoint_write_failure",
+      "runtime_boundary": "run_coordinator/checkpoint_repository",
+      "safe_category": "checkpoint_write_failed",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "deadline",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "deadline_exhausted",
+      "stop_reason": "deadline_exhausted"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "cancel",
+      "runtime_boundary": "run_coordinator/pre_tool_gate",
+      "safe_category": "client_stream_aborted",
+      "stop_reason": "cancelled"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "completed_tool_replay",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "completed_tool_replay_prevented",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_invalid",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_timeout",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "optional_channel_timeout",
+      "runtime_boundary": "retrieval_runtime/optional_channel",
+      "safe_category": "optional_channel_failed",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "required_evidence_missing",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "required_evidence_missing",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "rerank_failure",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "reranking_failed",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "checkpoint_write_failure",
+      "runtime_boundary": "run_coordinator/checkpoint_repository",
+      "safe_category": "checkpoint_write_failed",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "deadline",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "deadline_exhausted",
+      "stop_reason": "deadline_exhausted"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "cancel",
+      "runtime_boundary": "run_coordinator/pre_tool_gate",
+      "safe_category": "client_stream_aborted",
+      "stop_reason": "cancelled"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "completed_tool_replay",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "completed_tool_replay_prevented",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_invalid",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_timeout",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "optional_channel_timeout",
+      "runtime_boundary": "retrieval_runtime/optional_channel",
+      "safe_category": "optional_channel_failed",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "required_evidence_missing",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "required_evidence_missing",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "rerank_failure",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "reranking_failed",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "checkpoint_write_failure",
+      "runtime_boundary": "run_coordinator/checkpoint_repository",
+      "safe_category": "checkpoint_write_failed",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "deadline",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "deadline_exhausted",
+      "stop_reason": "deadline_exhausted"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "cancel",
+      "runtime_boundary": "run_coordinator/pre_tool_gate",
+      "safe_category": "client_stream_aborted",
+      "stop_reason": "cancelled"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "completed_tool_replay",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "completed_tool_replay_prevented",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_invalid",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_timeout",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "optional_channel_timeout",
+      "runtime_boundary": "retrieval_runtime/optional_channel",
+      "safe_category": "optional_channel_failed",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "required_evidence_missing",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "required_evidence_missing",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "rerank_failure",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "reranking_failed",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "checkpoint_write_failure",
+      "runtime_boundary": "run_coordinator/checkpoint_repository",
+      "safe_category": "checkpoint_write_failed",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "deadline",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "deadline_exhausted",
+      "stop_reason": "deadline_exhausted"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "cancel",
+      "runtime_boundary": "run_coordinator/pre_tool_gate",
+      "safe_category": "client_stream_aborted",
+      "stop_reason": "cancelled"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "completed_tool_replay",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "completed_tool_replay_prevented",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_invalid",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "planner_timeout",
+      "runtime_boundary": "planning_policy/run_coordinator",
+      "safe_category": "deterministic_fallback",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "optional_channel_timeout",
+      "runtime_boundary": "retrieval_runtime/optional_channel",
+      "safe_category": "optional_channel_failed",
+      "stop_reason": null
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "required_evidence_missing",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "required_evidence_missing",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "rerank_failure",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "reranking_failed",
+      "stop_reason": "insufficient_evidence"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "checkpoint_write_failure",
+      "runtime_boundary": "run_coordinator/checkpoint_repository",
+      "safe_category": "checkpoint_write_failed",
+      "stop_reason": "checkpoint_unavailable"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "deadline",
+      "runtime_boundary": "run_coordinator/tool_executor/evidence_state_machine",
+      "safe_category": "deadline_exhausted",
+      "stop_reason": "deadline_exhausted"
+    },
+    {
+      "cancelled_work_leak_count": 0,
+      "completed_tool_replay_count": 0,
+      "fault": "cancel",
+      "runtime_boundary": "run_coordinator/pre_tool_gate",
+      "safe_category": "client_stream_aborted",
+      "stop_reason": "cancelled"
+    }
+  ],
+  "completed_tool_replay_count": 0,
+  "configured_concurrency": 8,
+  "configured_requests": 80,
+  "execution_mode": "bounded_module_boundary_injection",
+  "gate": "pass",
+  "runtime_injected_case_count": 80,
+  "runtime_injection_coverage": "core_runtime_faults",
+  "schema_version": "phase65-fault-matrix-v1",
+  "unclassified_errors": 0,
+  "unique_fault_count": 9
+}

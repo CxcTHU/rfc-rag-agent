@@ -5,7 +5,11 @@ This document records the deployment path for the Phase 44 production shape. It 
 ## Target
 
 - Runtime: Docker Compose.
-- Services: FastAPI app and PostgreSQL.
+- Services: FastAPI app, PostgreSQL, and Redis Stack.
+- Production app networking: the app service uses the CPU host network namespace
+  so outbound model/provider traffic follows the host egress path instead of
+  Docker bridge/NAT. PostgreSQL and Redis remain containerized but bind only to
+  `127.0.0.1`.
 - Database: PostgreSQL 16 in production, SQLite still available for local development.
 - Auth: enabled in production with bcrypt password hashes and JWT bearer tokens.
 - Cloud server: the initialized CPU Ubuntu server is a smoke-test target before user verification, not a CI or full-test prerequisite.
@@ -27,7 +31,7 @@ This document records the deployment path for the Phase 44 production shape. It 
 ```text
 POSTGRES_PASSWORD=<strong database password>
 REDIS_PASSWORD=<strong redis password>
-REDIS_URL=redis://:<url-encoded redis password>@redis:6379/0
+REDIS_URL=redis://:<url-encoded redis password>@127.0.0.1:${REDIS_HOST_PORT:-16379}/0
 JWT_SECRET_KEY=<long random jwt secret>
 APP_PORT=8000
 ```
@@ -46,15 +50,17 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
 
 The app container runs `alembic upgrade head` before starting Uvicorn.
+Because the production app uses host networking, Uvicorn listens directly on
+`${APP_PORT}` and provider calls leave through the CPU host network stack.
 
 ## Smoke Checks
 
 ```bash
-curl http://127.0.0.1:8000/health
-curl -X POST http://127.0.0.1:8000/auth/register \
+curl http://127.0.0.1:${APP_PORT:-8000}/health
+curl -X POST http://127.0.0.1:${APP_PORT:-8000}/auth/register \
   -H "Content-Type: application/json" \
   -d '{"username":"smoke_user","email":"smoke@example.com","password":"replace-with-local-password"}'
-curl -X POST http://127.0.0.1:8000/auth/login \
+curl -X POST http://127.0.0.1:${APP_PORT:-8000}/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username_or_email":"smoke_user","password":"replace-with-local-password"}'
 ```

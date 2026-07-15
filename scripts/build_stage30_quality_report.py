@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import html
 import json
 import sys
 from pathlib import Path
@@ -9,12 +10,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from scripts.phase65_gate_manifest import AgentGateManifest, load_manifest
+from scripts.score_stage30_quality import evaluate_evidence_status, load_verified_test_receipt
+from scripts.verify_phase65_test_receipt import load_bundle_test_receipt
+
 DEFAULT_SCORES = ROOT / "data" / "evaluation" / "stage30_quality_scores.csv"
 DEFAULT_SUMMARY = ROOT / "data" / "evaluation" / "stage30_quality_summary.csv"
 DEFAULT_DEDUCTIONS = ROOT / "data" / "evaluation" / "stage30_quality_deductions.csv"
 DEFAULT_HEALTH = ROOT / "data" / "evaluation" / "stage30_engineering_health.json"
 DEFAULT_MARKDOWN = ROOT / "docs" / "stage30_quality_score_report.md"
 DEFAULT_HTML = ROOT / "app" / "frontend" / "quality_report.html"
+ALLOWED_RELEASE_DECISIONS = frozenset(("pass", "review_required", "blocked"))
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,6 +29,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary", default=str(DEFAULT_SUMMARY))
     parser.add_argument("--deductions", default=str(DEFAULT_DEDUCTIONS))
     parser.add_argument("--engineering-health", default=str(DEFAULT_HEALTH))
+    parser.add_argument("--agent-gate-manifest", required=True)
+    parser.add_argument("--pytest-receipt-bundle", required=True)
     parser.add_argument("--markdown-out", default=str(DEFAULT_MARKDOWN))
     parser.add_argument("--html-out", default=str(DEFAULT_HTML))
     return parser.parse_args()
@@ -47,6 +55,78 @@ def latest_score(scores: list[dict[str, str]]) -> dict[str, str]:
     return scores[-1]
 
 
+def _display_score(score: dict[str, str], health: dict[str, object]) -> dict[str, str]:
+    safe = {key: "" if value is None else str(value) for key, value in score.items()}
+    safe["trust_level"] = safe.get("trust_level") or str(health.get("trust_level") or "unknown")
+    status = safe.get("evidence_status") or str(health.get("evidence_status") or "stale")
+    safe["evidence_status"] = status if status in {"current", "stale", "blocked"} else "blocked"
+    if safe.get("release_decision") not in ALLOWED_RELEASE_DECISIONS:
+        safe["release_decision"] = "blocked"
+    if safe["evidence_status"] != "current":
+        safe["historical_overall_score"] = safe.get("historical_overall_score") or safe.get("overall_score", "")
+        safe["historical_grade"] = safe.get("historical_grade") or safe.get("grade", "")
+        safe["overall_score"] = "历史评分"
+        safe["grade"] = "历史等级"
+        safe["release_decision"] = "blocked"
+    return safe
+
+
+def markdown_safe(value: object) -> str:
+    text = "" if value is None else " ".join(str(value).replace("\r", " ").replace("\n", " ").replace("\t", " ").split())
+    if text.startswith(("=", "+", "-", "@")):
+        text = f"'{text}"
+    return (
+        text.replace("\\", "\\\\")
+        .replace("`", "\\`")
+        .replace("|", "\\|")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def validated_report_score(
+    score: dict[str, str],
+    *,
+    health: dict[str, object],
+    manifest: AgentGateManifest | None,
+    test_receipt: dict[str, object] | None,
+) -> dict[str, str]:
+    """Revalidate evidence; a historical score CSV is never an authority."""
+    suite_hash = test_receipt.get("test_suite_sha256") if isinstance(test_receipt, dict) else None
+    evidence = evaluate_evidence_status(
+        health=health,
+        manifest=manifest,
+        test_suite_sha256=suite_hash if isinstance(suite_hash, str) else None,
+        test_receipt=test_receipt,
+    )
+    validated = dict(score)
+    validated["evidence_status"] = evidence.status
+    validated["evidence_reasons"] = "|".join(evidence.reasons)
+    validated["manifest_run_id"] = evidence.manifest_run_id
+    if evidence.status != "current":
+        validated["historical_overall_score"] = validated.get("historical_overall_score") or validated.get("overall_score", "")
+        validated["historical_grade"] = validated.get("historical_grade") or validated.get("grade", "")
+        validated["release_decision"] = "blocked"
+    return validated
+
+
+def render_report(*, evidence_status: str, release_decision: str) -> str:
+    """Render a banner that does not upgrade historical evidence to current."""
+    if evidence_status == "current" and release_decision in ALLOWED_RELEASE_DECISIONS:
+        return (
+            '<p class="hero-copy">当前发布门禁：<strong id="release-decision">'
+            f"{release_decision.upper()}</strong></p>"
+        )
+    return (
+        '<p class="hero-copy evidence-historical" id="release-decision">'
+        "历史评分，不可作为当前发布门禁。本地完整性证据，不是可信执行证明；需要 CI/可信 runner 证明</p>"
+    )
+
+
 def write_markdown(
     path: Path,
     score: dict[str, str],
@@ -54,6 +134,11 @@ def write_markdown(
     deductions: list[dict[str, str]],
     health: dict[str, object],
 ) -> None:
+    score = _display_score(score, health)
+    score = {key: markdown_safe(value) for key, value in score.items()}
+    health = {key: markdown_safe(value) for key, value in health.items()}
+    summary_rows = [{key: markdown_safe(value) for key, value in row.items()} for row in summary_rows]
+    deductions = [{key: markdown_safe(value) for key, value in row.items()} for row in deductions]
     lines = [
         "# 阶段 30 质量评分报告：RAG 质量评分体系与诚实决策门禁",
         "",
@@ -61,12 +146,16 @@ def write_markdown(
         "",
         "## 总览",
         "",
-        f"- run_id：`{score.get('run_id', '')}`",
-        f"- scoring_version：`{score.get('scoring_version', '')}`",
-        f"- scoring_mode：`{score.get('scoring_mode', '')}`",
+        f"- run_id：{score.get('run_id', '')}",
+        f"- scoring_version：{score.get('scoring_version', '')}",
+        f"- scoring_mode：{score.get('scoring_mode', '')}",
         f"- overall_score：{score.get('overall_score', '')}",
         f"- grade：{score.get('grade', '')}",
         f"- release_decision：{score.get('release_decision', '')}",
+        f"- historical_overall_score：{score.get('historical_overall_score', '') or 'n/a'}",
+        f"- evidence_status：{score.get('evidence_status', health.get('evidence_status', 'stale'))}",
+        f"- evidence_reasons：{score.get('evidence_reasons', health.get('evidence_reasons', '')) or 'n/a'}",
+        f"- manifest_run_id：{score.get('manifest_run_id', health.get('manifest_run_id', '')) or 'n/a'}",
         f"- score_delta：{score.get('score_delta', '') or 'n/a'}",
         "",
         "## 维度分",
@@ -115,6 +204,9 @@ def write_markdown(
             "## Engineering Health",
             "",
             f"- full_tests_status：{health.get('full_tests_status', '')}",
+            f"- evidence_status：{score.get('evidence_status', health.get('evidence_status', 'stale'))}",
+            f"- evidence_reasons：{score.get('evidence_reasons', health.get('evidence_reasons', ''))}",
+            f"- manifest_run_id：{score.get('manifest_run_id', health.get('manifest_run_id', ''))}",
             f"- quality_report_smoke：{health.get('quality_report_smoke', '')}",
             f"- chunk_count：{health.get('chunk_count', '')}",
             f"- embedding_count：{health.get('embedding_count', '')}",
@@ -132,6 +224,7 @@ def write_markdown(
             "",
             "## 边界",
             "",
+            "- 本地完整性证据，不是可信执行证明；当前发布需要 CI 或可信 runner 证明。",
             "- 默认评分为 `deterministic_rule_based`，不调用真实模型。",
             "- `rule_based_context_answer_quality` 不是 faithfulness、answer relevancy 或 groundedness。",
             "- 可选 LLM-as-Judge 只在手动模式单独输出，不进入 CI 门禁。",
@@ -149,13 +242,19 @@ def write_html(
     deductions: list[dict[str, str]],
     health: dict[str, object],
 ) -> None:
+    score = _display_score(score, health)
+    evidence_status = score["evidence_status"]
+    release_banner = render_report(
+        evidence_status=evidence_status,
+        release_decision=str(score.get("release_decision", "")),
+    )
     payload = {
         "score": score,
         "summary": summary_rows,
         "deductions": deductions,
         "engineering_health": health,
     }
-    safe_payload = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
+    safe_payload = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     content = f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -171,18 +270,27 @@ def write_html(
         <p class="eyebrow">只读质量评分报告</p>
         <h1>阶段 30 RAG 质量评分与诚实门禁</h1>
         <p class="hero-copy">总分、等级、发布建议、维度分、扣分项和人工复核队列。默认规则评分，不调用真实模型。</p>
-        <p class="hero-copy">当前结论：<strong id="release-decision">{score.get('release_decision', '')}</strong></p>
+        {release_banner}
       </div>
       <a class="secondary-link" href="/">返回工作台</a>
     </section>
     <section class="panel">
       <h2>总览</h2>
       <div class="metric-grid">
-        <div><span>Overall</span><strong id="overall-score">{score.get('overall_score', '')}</strong></div>
-        <div><span>Grade</span><strong id="grade">{score.get('grade', '')}</strong></div>
-        <div><span>Mode</span><strong id="scoring-mode">{score.get('scoring_mode', '')}</strong></div>
-        <div><span>Run</span><strong id="run-id">{score.get('run_id', '')}</strong></div>
+        <div><span>Overall</span><strong id="overall-score">{html.escape(score.get('overall_score', ''), quote=True)}</strong></div>
+        <div><span>Grade</span><strong id="grade">{html.escape(score.get('grade', ''), quote=True)}</strong></div>
+        <div><span>Mode</span><strong id="scoring-mode">{html.escape(score.get('scoring_mode', ''), quote=True)}</strong></div>
+        <div><span>Run</span><strong id="run-id">{html.escape(score.get('run_id', ''), quote=True)}</strong></div>
       </div>
+    </section>
+    <section class="panel">
+      <h2>证据状态</h2>
+      <ul class="compact-list">
+        <li>evidence_status：{html.escape(score.get('evidence_status', ''), quote=True)}</li>
+        <li>evidence_reasons：{html.escape(score.get('evidence_reasons', ''), quote=True)}</li>
+        <li>manifest_run_id：{html.escape(score.get('manifest_run_id', ''), quote=True)}</li>
+        <li>trust_level：{html.escape(score.get('trust_level', ''), quote=True)}</li>
+      </ul>
     </section>
     <section class="panel">
       <h2>筛选与导出</h2>
@@ -227,6 +335,7 @@ def write_html(
     <section class="panel">
       <h2>边界</h2>
       <ul class="compact-list">
+        <li>本地完整性证据，不是可信执行证明；需要 CI/可信 runner 证明。</li>
         <li>默认评分是 deterministic_rule_based，不调用真实 API。</li>
         <li>rule_based_context_answer_quality 不是 faithfulness、answer relevancy 或 groundedness。</li>
         <li>阶段 30 完成后停在人工核验前；当前不执行 git add、commit、tag、push 或 PR。</li>
@@ -265,13 +374,17 @@ def write_html(
         a.href = url; a.download = name; a.click();
         URL.revokeObjectURL(url);
       }}
+      function csvSafe(value) {{
+        var text = (value == null ? "" : String(value)).replace(/[\r\n\t]/g, " ").trim();
+        return /^[=+\\-@]/.test(text) ? "'" + text : text;
+      }}
       document.getElementById("export-json").addEventListener("click", function () {{
         download("stage30_quality_report.json", "application/json", JSON.stringify(payload, null, 2));
       }});
       document.getElementById("export-csv").addEventListener("click", function () {{
         var header = ["run_id","dimension","weight","score","max_score","normalized_score","status","evidence"];
         var csv = [header.join(",")].concat(rows.map(function (r) {{
-          return header.map(function (key) {{ return '"' + String(r[key] || "").replace(/"/g, '""') + '"'; }}).join(",");
+          return header.map(function (key) {{ return '"' + csvSafe(r[key]).replace(/"/g, '""') + '"'; }}).join(",");
         }})).join("\\n");
         download("stage30_quality_summary.csv", "text/csv", csv);
       }});
@@ -293,7 +406,12 @@ def main() -> None:
     summary_rows = read_rows(Path(args.summary))
     deductions = read_rows(Path(args.deductions))
     health = read_json(Path(args.engineering_health))
-    score = latest_score(scores)
+    score = validated_report_score(
+        latest_score(scores),
+        health=health,
+        manifest=load_manifest(Path(args.agent_gate_manifest)),
+        test_receipt=load_bundle_test_receipt(Path(args.pytest_receipt_bundle)),
+    )
     write_markdown(Path(args.markdown_out), score, summary_rows, deductions, health)
     write_html(Path(args.html_out), score, summary_rows, deductions, health)
     print(f"stage30 quality report built score={score.get('overall_score', '')} grade={score.get('grade', '')}")

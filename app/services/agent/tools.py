@@ -596,6 +596,7 @@ class AgentToolbox:
         if cached is not None:
             return cached
 
+        vector_error: str | None = None
         try:
             candidate_count = max(
                 FIGURE_VECTOR_MIN_CANDIDATES,
@@ -606,21 +607,47 @@ class AgentToolbox:
                 self.embedding_provider,
             ).search(search_query, top_k=candidate_count)
         except (RuntimeError, ValueError) as exc:
-            return failed_tool_result(tool_name, query, exc)
+            matches = []
+            vector_error = str(exc)
+
+        try:
+            keyword_matches = KeywordSearchService(self.db).search(
+                query=search_query,
+                top_k=candidate_count,
+            )
+        except ValueError:
+            keyword_matches = []
 
         candidate_items: list[tuple[float, VectorIndexEntry, int | None, str]] = []
         fallback_candidate_items: list[tuple[float, VectorIndexEntry, int | None, str]] = []
         seen_document_pages: set[tuple[int, int | None]] = set()
         seen_image_urls: set[str] = set()
+        seen_candidate_chunk_ids: set[int] = set()
         skipped_low_score = 0
         skipped_quality = 0
         skipped_specific_mismatch = 0
         generic_visual_fallback_allowed = query_allows_generic_figure_fallback(search_query)
-        for match in matches:
-            entry = vector_entry_from_vector_result(match)
+        candidate_entries: list[tuple[float, VectorIndexEntry]] = [
+            (match.score, vector_entry_from_vector_result(match)) for match in matches
+        ]
+        candidate_entries.extend(
+            (
+                keyword_figure_relevance_score(match.score),
+                vector_entry_from_keyword_result(match),
+            )
+            for match in keyword_matches
+            if match.chunk_type == "image_description"
+        )
+        if not candidate_entries and vector_error:
+            return failed_tool_result(tool_name, query, RuntimeError(vector_error))
+
+        for score, entry in candidate_entries:
+            if entry.chunk_id in seen_candidate_chunk_ids:
+                continue
+            seen_candidate_chunk_ids.add(entry.chunk_id)
             if entry.chunk_type != "image_description":
                 continue
-            if match.score < MIN_IMAGE_RELEVANCE_SCORE:
+            if score < MIN_IMAGE_RELEVANCE_SCORE:
                 skipped_low_score += 1
                 continue
             image_url = image_url_from_source_image_path(entry.source_image_path)
@@ -638,10 +665,10 @@ class AgentToolbox:
             ):
                 skipped_specific_mismatch += 1
                 if generic_visual_fallback_allowed:
-                    fallback_candidate_items.append((match.score, entry, page_number, image_url))
+                    fallback_candidate_items.append((score, entry, page_number, image_url))
                 continue
             adjusted_score = adjusted_figure_relevance_score(
-                match.score,
+                score,
                 specific_match_count=specific_match_count,
             )
             candidate_items.append((adjusted_score, entry, page_number, image_url))
@@ -690,6 +717,8 @@ class AgentToolbox:
             f"returned {len(figure_results)} figure results; "
             f"threshold={MIN_IMAGE_RELEVANCE_SCORE:.2f}; "
             f"vector_backend={current_vector_search_backend()}; "
+            f"vector_candidates={len(matches)}; "
+            f"keyword_candidates={len(keyword_matches)}; "
             f"skipped_low_score={skipped_low_score}; "
             f"skipped_quality={skipped_quality}; "
             f"skipped_specific_mismatch={skipped_specific_mismatch}; "
@@ -951,15 +980,24 @@ class AgentToolbox:
         query: str,
         top_k: int,
     ) -> AgentToolResult | None:
+        trace = get_current_latency_trace()
         if tool_name not in {"search_knowledge", "hybrid_search_knowledge", "search_tables", "search_figures"}:
             return None
         if tool_name == "search_tables" and get_settings().table_rag_enabled:
             return None
         cache = get_configured_layered_cache("tool")
         if cache is None:
+            if trace is not None:
+                trace.set_value("tool_result_cache_hit", False)
+                trace.set_value("tool_result_cache_backend", "disabled")
+                trace.set_value("tool_result_cache_reason", "disabled")
             return None
         lookup = cache.lookup(self._tool_cache_identity(tool_name, query, top_k))
         if not lookup.hit or lookup.payload is None:
+            if trace is not None:
+                trace.set_value("tool_result_cache_hit", False)
+                trace.set_value("tool_result_cache_backend", lookup.backend)
+                trace.set_value("tool_result_cache_reason", lookup.reason)
             return None
         payload = lookup.payload.get("payload", {})
         chunk_ids = payload.get("chunk_ids")
@@ -1014,6 +1052,10 @@ class AgentToolbox:
         refusal_reason = payload.get("refusal_reason") if isinstance(payload.get("refusal_reason"), str) else None
         restore_tool_cache_retrieval_diagnostics(payload)
         _trace_tool_cache_selected_results(tool_name, search_results)
+        if trace is not None:
+            trace.set_value("tool_result_cache_hit", True)
+            trace.set_value("tool_result_cache_backend", lookup.backend)
+            trace.set_value("tool_result_cache_reason", lookup.reason)
         return AgentToolResult(
             tool_name=tool_name,
             call=AgentToolCallRecord(
@@ -1354,6 +1396,30 @@ def vector_entry_from_vector_result(result: VectorSearchResult) -> VectorIndexEn
         caption=result.caption,
         page_number=result.page_number,
     )
+
+
+def vector_entry_from_keyword_result(result: KeywordSearchResult) -> VectorIndexEntry:
+    return VectorIndexEntry(
+        document_id=result.document_id,
+        document_title=result.document_title,
+        source_type=result.source_type,
+        source_path=result.source_path,
+        file_name=result.file_name,
+        chunk_id=result.chunk_id,
+        chunk_index=result.chunk_index,
+        content=result.content,
+        heading_path=result.heading_path,
+        chunk_type=result.chunk_type,
+        source_image_path=result.source_image_path,
+        caption=result.caption,
+        page_number=result.page_number,
+    )
+
+
+def keyword_figure_relevance_score(score: float) -> float:
+    if score <= 0:
+        return 0.0
+    return min(1.0, max(MIN_IMAGE_RELEVANCE_SCORE, score))
 
 
 def search_item_from_chunk(

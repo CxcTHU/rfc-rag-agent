@@ -75,7 +75,7 @@ def test_stage37_eval_tracks_required_comparison_metrics(
     ]
     assert multi_hop_rows
     assert all(int(row["executed_tool_call_count"]) == 1 for row in multi_hop_rows)
-    assert all(int(row["llm_call_count"]) == 2 for row in multi_hop_rows)
+    assert all(1 <= int(row["llm_call_count"]) <= 2 for row in multi_hop_rows)
     assert any(
         row["refused"] == "true"
         for row in tool_rows

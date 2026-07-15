@@ -1,4 +1,5 @@
 import json
+import math
 import http.client
 import os
 import re
@@ -238,9 +239,12 @@ class OpenAICompatibleChatModelProvider:
             raise ValueError("messages must not be empty")
 
         request = self._build_request(messages, stream=False)
-        response_data = self._request_with_retry(request)
-
-        answer = parse_openai_compatible_answer(response_data)
+        try:
+            response_data = self._request_with_retry(request)
+            answer = parse_openai_compatible_answer(response_data)
+        except Exception:
+            record_provider_usage_exception()
+            raise
         return ChatModelResult(
             answer=answer,
             provider=self.provider_name,
@@ -255,11 +259,15 @@ class OpenAICompatibleChatModelProvider:
         request = self._build_request(messages, stream=True)
         # Retry only covers connection establishment. Once tokens start
         # streaming we cannot safely retry without duplicating output.
-        response = self._open_stream_with_retry(request)
+        response, receipt_count_before_request = self._open_stream_with_retry(request)
         try:
             yield from parse_openai_compatible_stream(response)
             response.mark_complete()
+        except Exception:
+            record_provider_usage_exception()
+            raise
         finally:
+            finalize_provider_stream_usage(receipt_count_before_request)
             response.close()
 
     def generate_with_tools(
@@ -279,8 +287,12 @@ class OpenAICompatibleChatModelProvider:
             )
 
         request = self._build_request(messages, stream=False, tools=tools)
-        response_data = self._request_with_retry(request)
-        content, tool_calls = parse_openai_compatible_tool_response(response_data)
+        try:
+            response_data = self._request_with_retry(request)
+            content, tool_calls = parse_openai_compatible_tool_response(response_data)
+        except Exception:
+            record_provider_usage_exception()
+            raise
         return ToolCallingChatModelResult(
             content=content,
             tool_calls=tool_calls,
@@ -300,17 +312,20 @@ class OpenAICompatibleChatModelProvider:
             is_last_attempt = attempt >= self.max_attempts
             self._trace_attempt(attempt)
             try:
+                record_provider_usage_request_started()
                 if is_deepseek_endpoint(self.base_url):
-                    return request_deepseek_with_curl(
+                    response_data = request_deepseek_with_curl(
                         request,
                         timeout_seconds=self.timeout_seconds,
                     )
-                response_data = request_json_without_proxy(
-                    request,
-                    timeout=self.timeout_seconds,
-                    provider_name=self.provider_name,
-                    model_name=self.model_name,
-                )
+                else:
+                    response_data = request_json_without_proxy(
+                        request,
+                        timeout=self.timeout_seconds,
+                        provider_name=self.provider_name,
+                        model_name=self.model_name,
+                    )
+                record_provider_usage_response(response_data)
                 return response_data
             except TimeoutError as exc:
                 if is_last_attempt:
@@ -336,12 +351,15 @@ class OpenAICompatibleChatModelProvider:
             is_last_attempt = attempt >= self.max_attempts
             self._trace_attempt(attempt)
             try:
-                return HTTP_JSON_CONNECTION_POOL.open_sse(
+                receipt_count_before_request = provider_usage_receipt_count()
+                record_provider_usage_request_started()
+                response = HTTP_JSON_CONNECTION_POOL.open_sse(
                     request,
                     timeout=self.timeout_seconds,
                     provider_name=self.provider_name,
                     model_name=self.model_name,
                 )
+                return response, receipt_count_before_request
             except TimeoutError as exc:
                 if is_last_attempt:
                     raise RuntimeError("Chat model stream request timed out") from exc
@@ -696,19 +714,149 @@ def parse_openai_compatible_stream(response) -> Iterator[str]:
             yield content
 
 
-def record_stream_usage(payload: dict[str, Any]) -> None:
+def record_provider_usage_request_started() -> None:
+    """Record a provider request before a transport can send it.
+
+    A transport failure therefore cannot be hidden by a later complete receipt.
+    This count is deliberately independent from HTTP success telemetry: a request
+    may be billable even if a connection or response fails afterwards.
+    """
     trace = get_current_latency_trace()
-    usage = payload.get("usage")
-    if trace is None or not isinstance(usage, dict):
+    if trace is None:
+        return
+    trace.set_value(
+        "provider_usage_request_count",
+        int(trace.values.get("provider_usage_request_count", 0)) + 1,
+    )
+    _sync_provider_usage_receipt_state(trace)
+
+
+def provider_usage_receipt_count() -> int:
+    trace = get_current_latency_trace()
+    if trace is None:
+        return 0
+    return int(trace.values.get("provider_usage_receipt_count", 0))
+
+
+def record_provider_usage_response(payload: object) -> None:
+    """Require one complete usage receipt for a non-stream provider response."""
+    _record_provider_usage_payload(payload, usage_required=True)
+
+
+def record_stream_usage(payload: dict[str, Any]) -> None:
+    """Record an optional SSE usage frame without treating ordinary deltas as errors."""
+    if "usage" not in payload:
+        return
+    _record_provider_usage_payload(payload, usage_required=True)
+
+
+def finalize_provider_stream_usage(receipt_count_before_request: int) -> None:
+    """Fail closed unless this SSE request emitted exactly one full usage receipt."""
+    trace = get_current_latency_trace()
+    if trace is None:
+        return
+    receipt_count_after = int(trace.values.get("provider_usage_receipt_count", 0))
+    if receipt_count_after != receipt_count_before_request + 1:
+        trace.set_value("provider_usage_incomplete_seen", True)
+    _sync_provider_usage_receipt_state(trace)
+
+
+def record_provider_usage_exception() -> None:
+    """Invalidate a receipt when a provider response cannot be consumed safely."""
+    trace = get_current_latency_trace()
+    if trace is None:
+        return
+    trace.set_value("provider_usage_incomplete_seen", True)
+    _sync_provider_usage_receipt_state(trace)
+
+
+def _record_provider_usage_payload(payload: object, *, usage_required: bool) -> None:
+    trace = get_current_latency_trace()
+    if trace is None:
+        return
+    usage = payload.get("usage") if isinstance(payload, dict) else None
+    if not isinstance(usage, dict):
+        if usage_required:
+            trace.set_value("provider_usage_incomplete_seen", True)
+        _sync_provider_usage_receipt_state(trace)
         return
     for usage_field, trace_field in (
-        ("prompt_tokens", "provider_prompt_tokens"),
         ("prompt_cache_hit_tokens", "provider_prompt_cache_hit_tokens"),
         ("prompt_cache_miss_tokens", "provider_prompt_cache_miss_tokens"),
     ):
         value = usage.get(usage_field)
         if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
             trace.set_value(trace_field, value)
+    input_tokens = _usage_number(usage, "prompt_tokens", "input_tokens")
+    output_tokens = _usage_number(usage, "completion_tokens", "output_tokens")
+    reported_cost = _usage_number(usage, "cost", "total_cost")
+    has_usage_receipt_field = any(
+        field_name in usage
+        for field_name in (
+            "prompt_tokens",
+            "input_tokens",
+            "completion_tokens",
+            "output_tokens",
+            "cost",
+            "total_cost",
+        )
+    )
+    complete_receipt = (
+        input_tokens is not None and output_tokens is not None and reported_cost is not None
+    )
+    if input_tokens is not None:
+        trace.set_value(
+            "provider_prompt_tokens",
+            _accumulate_usage(trace.values.get("provider_prompt_tokens"), input_tokens),
+        )
+    if output_tokens is not None:
+        trace.set_value(
+            "provider_completion_tokens",
+            _accumulate_usage(trace.values.get("provider_completion_tokens"), output_tokens),
+        )
+    if reported_cost is not None:
+        trace.set_value(
+            "provider_estimated_cost",
+            _accumulate_usage(trace.values.get("provider_estimated_cost"), reported_cost),
+        )
+    if complete_receipt:
+        trace.set_value(
+            "provider_usage_receipt_count",
+            int(trace.values.get("provider_usage_receipt_count", 0)) + 1,
+        )
+    elif has_usage_receipt_field:
+        trace.set_value("provider_usage_incomplete_seen", True)
+    _sync_provider_usage_receipt_state(trace)
+
+
+def _sync_provider_usage_receipt_state(trace) -> None:
+    request_count = int(trace.values.get("provider_usage_request_count", 0))
+    receipt_count = int(trace.values.get("provider_usage_receipt_count", 0))
+    trace.set_value(
+        "provider_usage_receipt_complete",
+        request_count > 0
+        and receipt_count == request_count
+        and trace.values.get("provider_usage_incomplete_seen") is False,
+    )
+
+
+def _usage_number(usage: dict[str, Any], *field_names: str) -> float | None:
+    for field_name in field_names:
+        value = usage.get(field_name)
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+            and value >= 0
+        ):
+            return float(value)
+    return None
+
+
+def _accumulate_usage(current: object, increment: float) -> int | float:
+    base = float(current) if isinstance(current, (int, float)) and not isinstance(current, bool) else 0.0
+    value = base + increment
+    return int(value) if value.is_integer() else value
 
 
 def decode_stream_line(raw_line: bytes | str) -> str:

@@ -227,6 +227,41 @@ def test_phase63_current_explicit_visual_request_overrides_historical_negative()
     assert "figure" in profile.required_evidence_types
 
 
+def test_phase63_negative_table_citation_request_keeps_text_route() -> None:
+    profile = deterministic_intent_profile("不要引用表格解释堆石混凝土配合比设计原则")
+    action = build_retrieval_action(profile)
+
+    assert profile.table_explicitness == "negative"
+    assert profile.relationship_explicitness == "none"
+    assert "table" not in profile.required_evidence_types
+    assert "relationship" not in profile.required_evidence_types
+    assert action.required_tool is None
+    assert action.forbidden_tools == ("search_figures", "search_tables")
+
+
+def test_phase63_applicable_conditions_alone_do_not_require_graph() -> None:
+    profile = deterministic_intent_profile(
+        "综合比较堆石混凝土的技术优势适用条件质量风险和控制措施"
+    )
+    plan = build_retrieval_plan(profile, "safe synthetic query", Settings())
+
+    assert profile.relationship_explicitness == "none"
+    assert "relationship" not in profile.required_evidence_types
+    assert plan.graph_requirement == "disabled"
+
+
+def test_phase63_negative_causal_instruction_disables_graph() -> None:
+    profile = deterministic_intent_profile(
+        "不要分析因果关系只给出堆石混凝土质量检测项目清单"
+    )
+    plan = build_retrieval_plan(profile, "safe synthetic query", Settings())
+
+    assert profile.relationship_explicitness == "negative"
+    assert profile.relationship_intent == 0.0
+    assert "relationship" not in profile.required_evidence_types
+    assert plan.graph_requirement == "disabled"
+
+
 @pytest.mark.parametrize(
     ("query", "required_tool", "forbidden_tools"),
     [

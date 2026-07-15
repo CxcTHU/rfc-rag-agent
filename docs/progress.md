@@ -4818,3 +4818,216 @@ safe evidence is under `data/evaluation/phase64_*`, with corresponding
 evaluators under `scripts/`. The next latency phase should measure cold
 first-token end-to-end, load a versioned lexical snapshot built at corpus
 update time, and only then make an authorized final-model service decision.
+
+## Latest Status: 2026-07-15 Phase 65 Agent Gate / Runtime Modularization
+
+Phase 65 is in active development in the main workspace. The trusted gate,
+Runtime modularization, endpoint readiness, topology, fault matrix, recovery
+smoke, and bounded judged smoke plumbing have been implemented with safe
+artifacts only. Baseline is treated as completed evidence per user direction;
+do not rerun the full 90-row baseline unless explicitly requested.
+
+The latest candidate targeted correction fixed `phase64-followup-02`, where
+the tool route was correct but visual follow-up figure recall returned zero
+results. `search_figures` now supplements vector candidates with keyword
+`image_description` candidates while preserving quality, dedupe, and
+specific-vs-generic visual filters. The corrected candidate 30×1 artifact is
+30/30 `ok=True`, and the reuse-baseline paired projection is baseline 30/30 +
+candidate 30/30.
+
+Strict Phase 65 acceptance is still blocked, not passed. The corrected paired
+summary records `evaluator_sha256_mismatch`, because it combines an older
+baseline manifest with a targeted candidate correction. Formal full A/B,
+holdout, and human acceptance remain outstanding.
+
+The acceptance summary now distinguishes a missing paired summary from a
+present-but-blocked paired summary. Reviewer holdout mode has also been
+corrected to require true baseline/candidate A/B lanes with distinct endpoints;
+when `--runs` is omitted, holdout defaults to one A/B observation per case.
+Holdout blind judging is now part of the safe holdout receipt: executing
+holdout with `--execute-blind-judge` writes safe judge rows and a judge summary,
+and final acceptance requires that judge summary before the holdout gate can
+pass.
+
+Update: a fail-closed baseline reuse waiver has been added for the user-approved
+decision not to rerun the completed baseline. The waiver artifact is
+`output/phase65/baseline-reuse-waiver-30x1-corrected.json`; it passes only when
+the paired summary is blocked solely by `evaluator_sha256_mismatch` and the
+baseline/candidate 30×1 rows are aligned, all ok, and free of safe receipt
+errors. The refreshed acceptance summary records the waiver as an explicit
+substitution for paired execution preflight and paired full gate, while keeping
+those components visibly blocked rather than presenting them as a formal full
+A/B pass. Current required blockers are now limited to reviewer holdout evidence
+and human acceptance.
+
+Update: the missing reviewer holdout evidence is now represented by an explicit
+blocked receipt instead of a missing artifact. Because no private holdout case
+set is available in the workspace, `output/phase65/holdout-blocked-missing-private-cases.json`
+records `private_holdout_cases_missing` and `holdout_case_count=0` without
+calling providers or storing prompts, answers, evidence text, or raw payloads.
+The refreshed acceptance summary now reports `holdout_gate=blocked`; the
+remaining required blockers are `holdout_gate_not_pass` and
+`human_acceptance_missing`.
+
+Update: human acceptance is now represented by an explicit pending review
+packet instead of a missing artifact. `output/phase65/human-acceptance-pending-packet.json`
+records the acceptance summary hash, the current failed-required list, a review
+checklist, and the required user action without storing prompts, answers,
+evidence text, raw provider payloads, or secrets. The refreshed acceptance
+summary now reports `human_acceptance=blocked`; the remaining required blockers
+are `holdout_gate_not_pass` and `human_acceptance_not_pass`.
+
+Update: a human acceptance recorder has been added. It converts only an explicit
+`pass` or `fail` decision plus checklist confirmation into a safe receipt, and
+it rejects `pass` while any non-human gate remains open. The current attempted
+pass is correctly blocked with `cannot_pass_with_open_non_human_gates`, because
+the reviewer holdout gate is still not passed.
+
+Update: a private holdout intake helper has been added. It writes a header-only
+template and a safe intake packet for `phase65_private_holdout_cases.csv`; the
+template is intentionally not executable evidence and validation requires at
+least twelve unique reviewer cases with non-empty questions. The real private
+holdout case file is still absent, so the holdout gate remains blocked.
+
+Update: a Phase 65 closeout audit has been added as the single safe summary for
+release readiness. `output/phase65/closeout-audit.json` currently reports
+`ready_for_closeout=false` with remaining blockers `holdout_gate_not_pass` and
+`human_acceptance_not_pass`.
+
+Update: the private holdout validator now rejects overlap with the public/frozen
+Phase 64 latency cases by default. This prevents reusing public baseline cases
+as reviewer holdout evidence.
+
+Update: the evaluator holdout path now enforces the same public/frozen overlap
+guard directly. `--mode holdout` passes `--cases` as the exclusion set to
+`validate_holdout_cases`, so bypassing the intake helper cannot turn Phase 64
+public cases into private reviewer holdout evidence.
+
+Update: holdout acceptance now also requires explicit public/frozen overlap
+proof. Evaluator-generated holdout summaries include the excluded case-set
+count and hash, and the acceptance summary will not pass a holdout gate that
+lacks that proof, even if its A/B rows and judge summary otherwise look clean.
+
+Update: holdout acceptance now also requires real-execution proof. A passing
+holdout summary must declare `execution_mode=real_api` and show at least one
+baseline/candidate observation per holdout case; dry-run summaries remain
+blocked evidence.
+
+Update: human acceptance pass records are now bound to the current pre-human
+acceptance summary hash. A pass record signed against an older packet or older
+evidence state cannot be reused after the non-human gate evidence changes.
+
+Update: the human acceptance recorder now enforces that binding at signing
+time. A `pass` decision must provide the current acceptance summary, and the
+recorder rejects stale packet/current-summary mismatches before writing any pass
+record.
+
+Update: direct human-acceptance pass has been removed as a release bypass.
+Human pass now has to come from a hash-bound `phase65-human-acceptance-record-v1`;
+the old `--human-acceptance pass` path no longer passes the human gate.
+
+Update: closeout audit now requires the human acceptance artifact to be a real
+accepted `phase65-human-acceptance-record-v1`; a generic or pending packet with
+`gate=pass` is not sufficient for release closeout.
+
+Update: closeout audit now also verifies that the accepted human record matches
+the human receipt hash recorded by the acceptance summary, preventing a
+different accepted record from being swapped in during closeout.
+
+Update: closeout audit now also verifies that the passed holdout intake
+validation matches the holdout case-set hash recorded by the acceptance summary,
+preventing a different private holdout set from being swapped in during
+closeout.
+
+Update: closeout audit now validates the internal structure of a passing
+acceptance summary. A minimal handwritten `gate=pass` artifact is blocked unless
+it carries the expected pass components and paired evidence or explicit baseline
+reuse substitution state.
+
+Update: closeout audit now rechecks the private holdout intake case count. A
+passed validation packet still remains blocked at closeout if
+`holdout_case_count` is below the twelve-case reviewer-holdout floor.
+
+Update: human acceptance now requires recorder-shaped receipt fields. A
+minimal accepted summary is no longer enough; both the acceptance summary and
+closeout audit require `decision=pass`, checklist confirmation,
+`open_non_human_gate_count=0`, a reviewer label, and the appropriate summary
+hash binding.
+
+Update: closeout audit now rechecks the private holdout intake public-overlap
+result. A passed validation packet remains blocked at closeout if
+`excluded_case_overlap_count` is not zero.
+
+Update: holdout acceptance now requires the evaluator-generated
+`phase65-holdout-summary-v1` schema. Older or handwritten holdout summaries
+with pass-looking fields remain blocked unless they carry the expected schema
+version.
+
+Update: closeout audit now rechecks the private holdout intake column contract.
+A validation packet remains blocked at closeout unless `required_columns`
+exactly matches the Phase 65 holdout template fields.
+
+Update: holdout acceptance now requires A/B lane completeness proof. The
+holdout summary must show both `baseline_ab_row_count` and
+`candidate_ab_row_count` equal to `holdout_case_count`; total executed A/B rows
+alone are no longer sufficient.
+
+Update: holdout acceptance now also binds each A/B lane to the same holdout
+case set. `baseline_ab_case_set_sha256` and `candidate_ab_case_set_sha256`
+must both match `holdout_case_set_sha256`.
+
+Update: closeout now repeats that lane case-set binding check against the
+acceptance summary. A pass-looking closeout summary must carry both
+`baseline_ab_case_set_sha256` and `candidate_ab_case_set_sha256`, and both must
+match `holdout_case_set_sha256`; otherwise `components.acceptance_summary` stays
+blocked.
+
+Update: holdout blind-judge summaries now have their own schema and receipt
+binding. `summarize_judge_rows()` emits `phase65-judge-summary-v1` and a
+`receipt_contract_sha256` when a judge receipt contract is available. Acceptance
+requires that schema, expected-pair count, case-set hash, receipt-contract hash,
+and the four judge lower bounds before `holdout_gate` can pass.
+
+Update: closeout now also requires the acceptance summary to preserve the
+holdout blind-judge receipt contract hash. A pass-looking summary must include
+`holdout_judge_receipt_contract_sha256`; otherwise closeout keeps
+`components.acceptance_summary` blocked.
+
+Update: closeout now also binds reviewer holdout case count across acceptance
+and intake validation. A pass-looking closeout requires the acceptance summary's
+`holdout_case_count` to match
+`phase65-holdout-intake-validation-v1.holdout_case_count`.
+
+Update: closeout now also requires reviewer holdout real-execution proof in the
+acceptance summary. A pass-looking summary must carry
+`holdout_execution_mode=real_api`, enough executed A/B rows, and complete
+baseline/candidate lane row counts for the holdout case count.
+
+Update: closeout now also requires the acceptance summary to preserve
+public/frozen overlap exclusion proof for reviewer holdout. A pass-looking
+summary must carry `holdout_excluded_case_count` and
+`holdout_excluded_case_set_sha256`; otherwise closeout keeps
+`components.acceptance_summary` blocked.
+
+Update: Phase 65 private holdout is now executable evidence rather than a
+missing-file blocker. A 12-case private holdout CSV has been created and
+validated with zero public/frozen case-id overlap. The real baseline/candidate
+holdout run completed 24/24 A/B rows with valid cold-cache receipts, but the
+holdout gate remains blocked because blind-judge receipt coverage is only 5/12
+and the observed judge lower bounds do not prove candidate non-regression or
+superiority. Current acceptance and closeout therefore remain blocked on
+`holdout_gate_not_pass` and `human_acceptance_not_pass`.
+
+Update: the Phase 65 holdout evaluator now maps reviewer-intake `question`
+fields into the executor's required `query` field, retries blind-judge calls up
+to three times, and bounds transient judge input length for provider stability.
+No prompts, answers, raw provider responses, hidden reasoning, tokens, or
+secrets are persisted.
+
+Update: the user has manually accepted the Runtime / Tool-calling decomposition
+work itself as PASS. This acceptance covers the split from the old
+`tool_calling_service.py` main loop into RunCoordinator, ToolExecutor,
+EvidenceStateMachine, FinalAnswerController, CheckpointRepository,
+PlanningPolicy, RuntimeEventBus, and the final-result assembler. It does not
+close Phase 65 overall: end-to-end latency proof, holdout/judge evidence, and
+final closeout acceptance remain separate gates.

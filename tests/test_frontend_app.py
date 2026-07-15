@@ -184,6 +184,9 @@ def test_quality_report_is_served_read_only() -> None:
     assert 'id="risk-queue"' in response.text
     assert 'id="export-csv"' in response.text
     assert 'id="export-json"' in response.text
+    assert '"trust_level":"local_integrity_only"' in response.text
+    assert "historical_overall_score" not in response.text
+    assert '"/quality-report/export.csv"' in response.text
 
 
 def test_quality_report_data_json_is_read_only() -> None:
@@ -193,13 +196,14 @@ def test_quality_report_data_json_is_read_only() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert isinstance(payload, list)
-    if payload:
-        assert {"dimension", "weight", "score", "status"}.issubset(payload[0].keys())
-        serialized = response.text.lower()
-        assert "api_key" not in serialized
-        assert "bearer" not in serialized
-        assert "raw_response" not in serialized
+    assert payload["release_decision"] == "blocked"
+    assert payload["evidence_status"] == "stale"
+    assert payload["summary"] == []
+    serialized = response.text.lower()
+    assert "api_key" not in serialized
+    assert "bearer" not in serialized
+    assert "raw_response" not in serialized
+    assert '"release_decision":"pass"' not in serialized
 
 
 def test_quality_review_workbench_is_served_read_only() -> None:
@@ -302,7 +306,9 @@ def test_quality_report_export_csv_download() -> None:
     assert response.status_code == 200
     assert "text/csv" in response.headers["content-type"]
     assert "stage30_quality_summary.csv" in response.headers.get("content-disposition", "")
-    assert "dimension" in response.text
+    assert "release_decision" in response.text
+    assert "blocked" in response.text
+    assert "pass" not in response.text.lower()
 
 
 def test_favicon_request_does_not_404() -> None:

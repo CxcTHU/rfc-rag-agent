@@ -7,10 +7,26 @@ class HealthResponse(BaseModel):
     environment: str
 
 
+class Phase65ModelInventoryItem(BaseModel):
+    path: str
+    identity_sha256: str | None = None
+    configured: bool
+    usage_receipt_verified: bool
+
+
 class RetrievalContractHealthResponse(HealthResponse):
     """Safe retrieval identity used to freeze an external A/B evaluation."""
 
     corpus_fingerprint: str
+    index_fingerprint_sha256: str
+    cold_run_receipts_supported: bool
+    endpoint_identity_sha256: str
+    phase65_model_inventory: list[Phase65ModelInventoryItem]
+    chat_model_provider: str
+    chat_model_name: str
+    embedding_provider: str
+    embedding_model_name: str
+    embedding_dimension: int
     document_count: int
     chunk_count: int
     retrieval_runtime_enabled: bool
