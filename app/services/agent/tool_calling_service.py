@@ -4,9 +4,11 @@ import json
 import logging
 import re
 import time
+import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Literal
+from types import SimpleNamespace
+from typing import Any, Literal, cast
 
 from sqlalchemy.orm import Session
 
@@ -21,22 +23,49 @@ from app.services.agent.tools import (
 )
 from app.services.agent.react_actions import should_search_figures
 from app.services.agent.runtime import AgentRuntime, AgentRuntimeState
-from app.services.agent.route_first import (
-    choose_phase64_route,
-    enforce_phase64_route_intent_floor,
-    record_phase64_route,
+from app.services.agent.runtime_events import (
+    RuntimeEventBus,
+    RuntimeEventName,
+    ToolCallingRuntimeEvent,
+    publish_tool_call_result,
+    project_tool_calling_event,
 )
-from app.services.agent.evidence_identity import (
-    build_evidence_query_identity,
-    refine_evidence_query_identity_with_llm,
+from app.services.agent.planning_policy import (
+    PlanningPolicy,
+    PlanningRequest,
+    phase64_runtime_identity_provider,
 )
-from app.core.config import get_settings
-from app.services.agent.runtime_checkpoint import (
+from app.services.agent.run_coordinator import (
+    RunCoordinator,
+    build_final_answer_request,
+)
+from app.services.agent.evidence_state_machine import EvidenceStateMachine
+from app.services.agent.final_answer_controller import FinalAnswerController
+from app.services.agent.final_result_assembler import (
+    build_final_generation_failure_result,
+    build_pre_tool_refusal_result,
+    build_tool_calling_result,
+)
+from app.services.agent.checkpoint_repository import (
     AgentRuntimeRunRepository,
+    CheckpointRepository,
+    CheckpointSnapshot,
     decide_resume,
+    is_explicit_continue,
     load_runtime_state,
     runtime_resume_diagnostics,
 )
+from app.services.agent.runtime_contracts import (
+    CoordinatorRequest,
+    FinalAnswerRequest,
+    FinalAnswerOutcome,
+    PreToolGateDecision,
+    RunBudget,
+    RuntimeStopReason,
+    ToolExecutionRequest,
+)
+from app.services.agent.tool_executor import ALLOWED_TOOL_NAMES, ToolExecutor
+from app.core.config import get_settings
 from app.core.structured_logging import log_event, safe_text_summary
 from app.services.brain.workflow import (
     RESPONSIBILITY_REFUSAL_ANSWER,
@@ -53,7 +82,6 @@ from app.services.generation.chat_model import (
     OpenAICompatibleChatModelProvider,
     ToolCallingChatModelResult,
     create_chat_model_provider,
-    is_deepseek_endpoint,
 )
 from app.services.observability.latency_trace import (
     LatencyTrace,
@@ -73,9 +101,6 @@ from app.services.retrieval.hybrid_search import (
     set_current_hyde_vector_query,
 )
 from app.services.retrieval.runtime import (
-    build_retrieval_action,
-    build_retrieval_plan,
-    retrieval_tool_for_action,
     retrieval_runtime_result_limit,
     reset_current_retrieval_plan,
     set_current_retrieval_plan,
@@ -84,9 +109,6 @@ from app.services.retrieval.runtime import (
 
 TOOL_CALLING_DEFAULT_MAX_ITERATIONS = 3
 TOOL_CALLING_HARD_MAX_ITERATIONS = 3
-ALLOWED_TOOL_NAMES = frozenset(
-    {"hybrid_search_knowledge", "search_figures", "search_tables"}
-)
 TOOL_RESULT_SNIPPET_LIMIT = 900
 TOOL_RESULT_MAX_SOURCES = 8
 TOOL_CALLING_MAX_EXECUTED_TOOLS_PER_ITERATION = 1
@@ -101,12 +123,6 @@ TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY: ToolCallingFinalAnswerStrategy = (
     "structured_final_answer"
 )
 agent_logger = logging.getLogger("rfc_rag_agent.agent")
-
-
-@dataclass(frozen=True)
-class ToolCallingRuntimeEvent:
-    event: str
-    payload: dict[str, object]
 
 
 @dataclass
@@ -130,6 +146,7 @@ class FinalPromptShape:
 
 
 ToolCallingEventSink = Callable[[ToolCallingRuntimeEvent], None]
+InternalToolCallingEventSink = ToolCallingEventSink | RuntimeEventBus
 
 
 def create_runtime_identity_provider() -> ChatModelProvider | None:
@@ -162,6 +179,489 @@ def create_runtime_identity_provider() -> ChatModelProvider | None:
         )
     except ValueError:
         return None
+
+
+def build_tool_calling_pre_tool_gate_decision(
+    *,
+    question: str,
+    runtime_state: AgentRuntimeState,
+    resume_should_resume: bool,
+    latency_trace: LatencyTrace,
+) -> PreToolGateDecision:
+    responsibility_gate = evaluate_responsibility_gate(question)
+    if responsibility_gate.triggered:
+        return PreToolGateDecision(
+            action="return",
+            result=build_pre_tool_refusal_result(
+                question=question,
+                answer=RESPONSIBILITY_REFUSAL_ANSWER,
+                refusal_reason=responsibility_gate.refusal_reason,
+                gate_name="responsibility_gate",
+                output_summary="refused=True responsibility_gate",
+                reasoning_summary=(
+                    "tool_calling_agent refused before tool loop via responsibility_gate."
+                ),
+                latency_trace=latency_trace,
+            ),
+            stop_reason="invalid_request",
+            final_decision="refuse",
+            sanitized_detail="responsibility_gate_triggered",
+        )
+
+    topic_gate_query = " ".join(
+        [
+            runtime_state.context.standalone_task or question,
+            *runtime_state.context.history,
+        ]
+    )
+    if not resume_should_resume and not has_topic_anchor(topic_gate_query):
+        return PreToolGateDecision(
+            action="return",
+            result=build_pre_tool_refusal_result(
+                question=question,
+                answer="当前问题缺少项目资料库的领域锚点，无法基于堆石混凝土资料可靠回答。",
+                refusal_reason="Question appears off-topic: no domain anchor was found.",
+                gate_name="off_topic_gate",
+                output_summary="refused=True off_topic",
+                reasoning_summary=(
+                    "tool_calling_agent refused before tool loop via off_topic_gate."
+                ),
+                latency_trace=latency_trace,
+            ),
+            stop_reason="invalid_request",
+            final_decision="refuse",
+            sanitized_detail="off_topic",
+        )
+
+    return PreToolGateDecision(action="continue")
+
+
+def build_tool_calling_resume_gate_decision(
+    *,
+    question: str,
+    resume_decision: object,
+    chat_model_provider: ChatModelProvider,
+    history: Sequence[str] | None,
+    final_answer_strategy: ToolCallingFinalAnswerStrategy,
+    runtime_state: AgentRuntimeState,
+    latency_trace: LatencyTrace,
+) -> PreToolGateDecision:
+    run = getattr(resume_decision, "run", None)
+    if not getattr(resume_decision, "should_resume", False) or run is None:
+        return PreToolGateDecision(action="continue")
+
+    result = result_from_runtime_checkpoint(
+        question=question,
+        run_state=load_runtime_state(run),
+        chat_model_provider=chat_model_provider,
+        history=history,
+        final_answer_strategy=final_answer_strategy,
+        runtime_state=runtime_state,
+        latency_trace=latency_trace,
+    )
+    return PreToolGateDecision(
+        action="return",
+        result=result,
+        stop_reason="checkpoint_unavailable" if result.refused else "completed",
+        final_decision="refuse" if result.refused else "answer",
+        sanitized_detail=(
+            "resume_checkpoint_without_sources"
+            if result.refused
+            else "runtime_resume_completed"
+        ),
+        citations=tuple(result.citations),
+    )
+
+
+def build_tool_calling_semantic_cache_gate_decision(
+    *,
+    question: str,
+    settings: object,
+    evidence_identity: object,
+    toolbox: AgentToolbox,
+    chat_model_provider: ChatModelProvider,
+    history: Sequence[str] | None,
+    final_answer_strategy: ToolCallingFinalAnswerStrategy,
+    runtime_state: AgentRuntimeState,
+    latency_trace: LatencyTrace,
+    runtime_event_bus: RuntimeEventBus,
+    workflow_steps: list[AgentToolCallRecord],
+    tool_calls: list[AgentToolCallRecord],
+) -> PreToolGateDecision:
+    if not (
+        getattr(settings, "semantic_evidence_cache_enabled", False)
+        and getattr(evidence_identity, "safe_for_cache_reuse", False)
+    ):
+        return PreToolGateDecision(action="continue")
+
+    semantic_cache_tool_name = semantic_cache_tool_for_identity(evidence_identity)
+    latency_trace.set_value("semantic_cache_tool_name", semantic_cache_tool_name)
+    semantic_cached = toolbox.lookup_semantic_evidence_cache(
+        getattr(evidence_identity, "canonical_query", None)
+        or runtime_state.context.standalone_task
+        or question,
+        top_k=retrieval_runtime_result_limit(
+            semantic_cache_tool_name,
+            settings,
+        ),
+        tool_name=semantic_cache_tool_name,
+    )
+    if semantic_cached is None or not semantic_cached.search_results:
+        return PreToolGateDecision(action="continue")
+
+    latency_trace.set_value("semantic_cache_hit", True)
+    latency_trace.set_value("semantic_cache_reason", "tool_result_cache_hit")
+    latency_trace.set_value("hyde_generated", False)
+    latency_trace.set_value("hyde_used_for_vector", False)
+    latency_trace.set_value("hyde_reason", "semantic_cache_hit")
+    workflow_steps.append(semantic_cached.call)
+    tool_calls.append(semantic_cached.call)
+    runtime_state.evidence.add(
+        tool_name=semantic_cached.tool_name,
+        query=getattr(evidence_identity, "canonical_query", None)
+        or runtime_state.context.standalone_task
+        or question,
+        result_count=len(semantic_cached.search_results),
+        succeeded=semantic_cached.call.succeeded,
+    )
+    runtime_state.set_stop_reason("semantic_evidence_cache_hit")
+    runtime_state.final_decision = "answer"
+    apply_runtime_diagnostics(latency_trace, runtime_state)
+    publish_tool_call_result(
+        runtime_event_bus,
+        iteration=1,
+        record=semantic_cached.call,
+        selected_count=len(semantic_cached.search_results),
+    )
+    result = result_from_cached_evidence(
+        question=question,
+        search_results=list(semantic_cached.search_results),
+        sources=list(semantic_cached.sources),
+        tool_calls=tool_calls,
+        workflow_steps=workflow_steps,
+        chat_model_provider=chat_model_provider,
+        history=history,
+        final_answer_strategy=final_answer_strategy,
+        runtime_state=runtime_state,
+        latency_trace=latency_trace,
+    )
+    return PreToolGateDecision(
+        action="return",
+        result=result,
+        stop_reason="insufficient_evidence" if result.refused else "completed",
+        final_decision="refuse" if result.refused else "answer",
+        sanitized_detail=(
+            "cached_evidence_without_citations"
+            if result.refused
+            else "semantic_evidence_cache_hit"
+        ),
+        citations=tuple(result.citations),
+        citation_repair_count=int(result.latency_trace.get("citation_repair_count", 0) or 0),
+    )
+
+
+def build_tool_calling_combined_pre_tool_gate_decision(
+    *,
+    question: str,
+    runtime_state: AgentRuntimeState,
+    latency_trace: LatencyTrace,
+    run_pre_tool_gate: bool = True,
+    resume_should_resume: bool = False,
+    run_resume_gate: bool = False,
+    resume_decision: object | None = None,
+    chat_model_provider: ChatModelProvider | None = None,
+    history: Sequence[str] | None = None,
+    final_answer_strategy: ToolCallingFinalAnswerStrategy = (
+        TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY
+    ),
+    run_semantic_cache_gate: bool = False,
+    settings: object | None = None,
+    evidence_identity: object | None = None,
+    toolbox: AgentToolbox | None = None,
+    runtime_event_bus: RuntimeEventBus | None = None,
+    workflow_steps: list[AgentToolCallRecord] | None = None,
+    tool_calls: list[AgentToolCallRecord] | None = None,
+) -> PreToolGateDecision:
+    if run_pre_tool_gate:
+        decision = build_tool_calling_pre_tool_gate_decision(
+            question=question,
+            runtime_state=runtime_state,
+            resume_should_resume=resume_should_resume,
+            latency_trace=latency_trace,
+        )
+        if decision.action == "return":
+            return decision
+
+    if run_resume_gate:
+        if resume_decision is None or chat_model_provider is None:
+            raise ValueError("resume gate requires resume_decision and chat_model_provider")
+        decision = build_tool_calling_resume_gate_decision(
+            question=question,
+            resume_decision=resume_decision,
+            chat_model_provider=chat_model_provider,
+            history=history,
+            final_answer_strategy=final_answer_strategy,
+            runtime_state=runtime_state,
+            latency_trace=latency_trace,
+        )
+        if decision.action == "return":
+            return decision
+
+    if run_semantic_cache_gate:
+        if (
+            settings is None
+            or evidence_identity is None
+            or toolbox is None
+            or chat_model_provider is None
+            or runtime_event_bus is None
+            or workflow_steps is None
+            or tool_calls is None
+        ):
+            raise ValueError("semantic cache gate dependencies are required")
+        decision = build_tool_calling_semantic_cache_gate_decision(
+            question=question,
+            settings=settings,
+            evidence_identity=evidence_identity,
+            toolbox=toolbox,
+            chat_model_provider=chat_model_provider,
+            history=history,
+            final_answer_strategy=final_answer_strategy,
+            runtime_state=runtime_state,
+            latency_trace=latency_trace,
+            runtime_event_bus=runtime_event_bus,
+            workflow_steps=workflow_steps,
+            tool_calls=tool_calls,
+        )
+        if decision.action == "return":
+            return decision
+
+    return PreToolGateDecision(action="continue")
+
+
+class ToolCallingCoordinatorGateAdapter:
+    """Callable adapter that lets RunCoordinator reuse service-owned gates."""
+
+    def __init__(
+        self,
+        *,
+        run_pre_tool_gate: bool = True,
+        run_resume_gate: bool = False,
+        run_semantic_cache_gate: bool = False,
+        resume_decision: object | None = None,
+        chat_model_provider: ChatModelProvider | None = None,
+        final_answer_strategy: ToolCallingFinalAnswerStrategy = (
+            TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY
+        ),
+        settings: object | None = None,
+        toolbox: AgentToolbox | None = None,
+        runtime_event_bus: RuntimeEventBus | None = None,
+        workflow_steps: list[AgentToolCallRecord] | None = None,
+        tool_calls: list[AgentToolCallRecord] | None = None,
+        resume_completion_recorder: Callable[[object], None] | None = None,
+        defer_required_tool_gates: bool = True,
+    ) -> None:
+        self.run_pre_tool_gate = run_pre_tool_gate
+        self.run_resume_gate = run_resume_gate
+        self.run_semantic_cache_gate = run_semantic_cache_gate
+        self.resume_decision = resume_decision
+        self.chat_model_provider = chat_model_provider
+        self.final_answer_strategy = final_answer_strategy
+        self.settings = settings
+        self.toolbox = toolbox
+        self.runtime_event_bus = runtime_event_bus
+        self.workflow_steps = workflow_steps
+        self.tool_calls = tool_calls
+        self.resume_completion_recorder = resume_completion_recorder
+        self.defer_required_tool_gates = defer_required_tool_gates
+
+    def __call__(
+        self,
+        request: CoordinatorRequest,
+        planning: object,
+        run: object,
+    ) -> PreToolGateDecision:
+        del run
+        runtime_state = getattr(planning, "runtime_state", None)
+        if runtime_state is None:
+            raise ValueError("planning.runtime_state is required for pre-tool gates")
+        required_tool = getattr(getattr(planning, "action", None), "required_tool", None)
+        required_tool_preflight_pending = bool(str(required_tool or "").strip())
+        if self.defer_required_tool_gates and required_tool_preflight_pending and (
+            self.run_resume_gate or self.run_semantic_cache_gate
+        ):
+            request.latency_trace.set_value(
+                "run_coordinator_pre_tool_gate_skip_reason",
+                "required_tool_preflight_priority",
+            )
+            request.latency_trace.set_value(
+                "run_coordinator_required_tool_preflight",
+                str(required_tool),
+            )
+        decision = build_tool_calling_combined_pre_tool_gate_decision(
+            question=request.question,
+            runtime_state=runtime_state,
+            latency_trace=request.latency_trace,
+            run_pre_tool_gate=self.run_pre_tool_gate,
+            resume_should_resume=bool(
+                getattr(self.resume_decision, "should_resume", False)
+            ),
+            run_resume_gate=self.run_resume_gate
+            and not (
+                self.defer_required_tool_gates
+                and required_tool_preflight_pending
+            ),
+            resume_decision=self.resume_decision,
+            chat_model_provider=self.chat_model_provider,
+            history=request.history,
+            final_answer_strategy=self.final_answer_strategy,
+            run_semantic_cache_gate=self.run_semantic_cache_gate
+            and not (
+                self.defer_required_tool_gates
+                and required_tool_preflight_pending
+            ),
+            settings=self.settings,
+            evidence_identity=getattr(planning, "identity", None),
+            toolbox=self.toolbox,
+            runtime_event_bus=self.runtime_event_bus,
+            workflow_steps=self.workflow_steps,
+            tool_calls=self.tool_calls,
+        )
+        if (
+            decision.action == "return"
+            and decision.sanitized_detail
+            in {"runtime_resume_completed", "resume_checkpoint_without_sources"}
+            and self.resume_completion_recorder is not None
+            and getattr(self.resume_decision, "run", None) is not None
+        ):
+            self.resume_completion_recorder(getattr(self.resume_decision, "run"))
+        return decision
+
+
+class ToolCallingFinalAnswerFacade:
+    """RunCoordinator-facing final answer adapter preserving service result shape."""
+
+    def __init__(
+        self,
+        *,
+        chat_model_provider: ChatModelProvider,
+    ) -> None:
+        self._chat_model_provider = chat_model_provider
+
+    def generate(self, request: FinalAnswerRequest) -> FinalAnswerOutcome:
+        return FinalAnswerController(
+            self._chat_model_provider,
+            answer_messages=evidence_answer_messages,
+            repair_messages=citation_repair_messages,
+            citation_extractor=extract_citations,
+        ).generate(request)
+
+    def refuse(self, request: FinalAnswerRequest) -> FinalAnswerOutcome:
+        stop_detail = request.runtime_state.stop_reason
+        if not stop_detail or stop_detail == "not_stopped":
+            stop_detail = "insufficient_evidence"
+            request.runtime_state.set_stop_reason(stop_detail)
+        request.runtime_state.final_decision = "refuse"
+        stop_reason = request.runtime_state.normalized_stop_reason or "insufficient_evidence"
+        if stop_reason not in RuntimeStopReason.__args__:
+            stop_reason = "insufficient_evidence"
+        refusal_reason = runtime_refusal_message_for_request(request, stop_detail)
+        workflow_steps = list(request.workflow_steps)
+        workflow_steps.append(
+            AgentToolCallRecord(
+                tool_name="final_answer",
+                input_summary="run coordinator refusal",
+                output_summary=refusal_reason,
+                succeeded=False,
+                error=refusal_reason,
+                step_id="final",
+            )
+        )
+        result = build_tool_calling_result(
+            question=request.question,
+            answer=refusal_reason,
+            tool_calls=list(request.tool_calls),
+            workflow_steps=workflow_steps,
+            search_results=list(request.search_results),
+            sources=list(request.sources),
+            citations=[],
+            refused=True,
+            refusal_reason=refusal_reason,
+            llm_call_count=0,
+            repeated_query_count=0,
+            near_duplicate_query_count=0,
+            skipped_tool_call_count=0,
+            executed_tool_call_count=len(request.tool_calls),
+            citation_repair_count=0,
+            runtime_state=request.runtime_state,
+            latency_trace=request.latency_trace.finalize(
+                iteration_count=len(workflow_steps),
+                tool_call_count=len(request.tool_calls),
+            ),
+        )
+        return FinalAnswerController.outcome_from_result(
+            result=result,
+            citations=(),
+            citation_repair_count=0,
+            stop_reason=stop_reason,
+        )
+
+
+def runtime_refusal_message(stop_detail: str) -> str:
+    """Return a bounded user-facing refusal reason without leaking raw internals."""
+
+    if stop_detail == "deadline_exhausted":
+        return (
+            "Runtime deadline was exhausted before enough reliable evidence could "
+            "be assembled."
+        )
+    if stop_detail == "reranking_failed":
+        return (
+            "Evidence reranking failed, so the agent refused to answer without "
+            "reliable ranked sources."
+        )
+    if stop_detail == "required_evidence_missing":
+        return "Required evidence was not found in the available project sources."
+    if stop_detail == "completed_tool_replay_prevented":
+        return (
+            "Runtime checkpoint recovery prevented a duplicate completed tool "
+            "execution, so the agent refused instead of replaying retrieval."
+        )
+    if stop_detail == "tool_budget_exhausted":
+        return (
+            "Runtime tool budget was exhausted before enough reliable evidence "
+            "could be assembled."
+        )
+    if stop_detail == "tool_execution_failed":
+        return (
+            "Tool execution failed before the agent could assemble valid "
+            "tool-backed citations."
+        )
+    if stop_detail in {"evidence_exhausted", "insufficient_evidence"}:
+        return "Runtime evidence state refused final generation due to insufficient evidence."
+    return "Runtime evidence state refused final generation."
+
+
+def runtime_refusal_message_for_request(
+    request: FinalAnswerRequest,
+    stop_detail: str,
+) -> str:
+    """Return refusal text, preserving safe legacy tool-failure details when useful."""
+    if stop_detail == "reranking_failed":
+        for record in reversed((*request.workflow_steps, *request.tool_calls)):
+            error = str(getattr(record, "error", "") or "").strip()
+            if error and (
+                "rerank" in error.lower()
+                or "重排序" in error
+                or "重排" in error
+            ):
+                return error
+    if stop_detail == "required_evidence_missing":
+        refusal_reason = str(
+            request.latency_trace.values.get("runtime_tool_refusal_reason", "") or ""
+        ).strip()
+        if refusal_reason:
+            return refusal_reason
+    return runtime_refusal_message(stop_detail)
 
 
 def generate_hyde_vector_query(
@@ -264,6 +764,7 @@ class ToolCallingAgentService:
         resume_run_id: str | None = None,
         image_path: str | None = None,
         latency_trace: LatencyTrace | None = None,
+        evaluation_run_namespace: str | None = None,
     ) -> AgentQueryResult:
         normalized_question = question.strip()
         if not normalized_question:
@@ -283,93 +784,72 @@ class ToolCallingAgentService:
 
         latency_trace = latency_trace or LatencyTrace()
         bind_user_question_cache_key(latency_trace, normalized_question)
-        bind_agent_conversation_cache_scope(latency_trace, conversation_id)
-        with latency_trace.span("context_assembly_latency_ms"):
-            runtime = AgentRuntime()
-            runtime_state = runtime.assemble(normalized_question, history=history)
-        evidence_identity = build_evidence_query_identity(
-            runtime_state.context.standalone_task or normalized_question,
-            history=history,
+        bind_agent_conversation_cache_scope(
+            latency_trace,
+            conversation_id,
+            evaluation_run_namespace=evaluation_run_namespace,
         )
+        runtime_event_bus = RuntimeEventBus(
+            run_id=uuid.uuid4().hex,
+            trace=latency_trace,
+        )
+        if event_sink is not None:
+            legacy_event_sink = event_sink
+            runtime_event_bus.subscribe(
+                lambda runtime_event: legacy_event_sink(
+                    project_tool_calling_event(runtime_event)
+                )
+            )
         settings = get_settings()
+        if settings.agent_run_coordinator_enabled:
+            if image_path is None:
+                return self._query_with_run_coordinator(
+                    question=normalized_question,
+                    max_tool_calls=max_tool_calls,
+                    history=history,
+                    conversation_id=conversation_id,
+                    resume_policy=resume_policy,
+                    resume_run_id=resume_run_id,
+                    image_path=image_path,
+                    latency_trace=latency_trace,
+                    runtime_event_bus=runtime_event_bus,
+                    settings=settings,
+                )
+            latency_trace.set_value("run_coordinator_enabled", False)
+            latency_trace.set_value(
+                "run_coordinator_skip_reason",
+                "uploaded_image_uses_legacy_multimodal_path",
+            )
+        else:
+            latency_trace.set_value("run_coordinator_enabled", False)
+            latency_trace.set_value("run_coordinator_skip_reason", "disabled")
+        runtime_event_sink: InternalToolCallingEventSink = runtime_event_bus
+        tool_executor = ToolExecutor(self.toolbox, event_bus=runtime_event_bus)
+        planning_trace_token = set_current_latency_trace(latency_trace)
+        try:
+            planning_policy = PlanningPolicy(self.runtime_identity_provider)
+            planning = planning_policy.plan(
+                PlanningRequest(
+                    question=normalized_question,
+                    history=tuple(history or ()),
+                    image_path=image_path,
+                    trace=latency_trace,
+                )
+            )
+        finally:
+            reset_current_latency_trace(planning_trace_token)
+        runtime = AgentRuntime()
+        runtime_state = planning.runtime_state
+        evidence_identity = planning.identity
+        route_decision = planning.route
+        retrieval_plan = planning.plan
+        retrieval_action = planning.action
         runtime_identity_provider = phase64_runtime_identity_provider(
             self.runtime_identity_provider,
             settings,
         )
-        route_decision = None
-        route_first_enabled = (
-            settings.agent_short_loop_enabled and settings.phase64_route_first_enabled
-        )
-        if route_first_enabled:
-            route_started = time.perf_counter()
-            route_decision = choose_phase64_route(
-                normalized_question,
-                history=tuple(history or ()),
-                has_uploaded_image=bool(image_path),
-            )
-            record_phase64_route(
-                latency_trace,
-                route_decision,
-                elapsed_ms=(time.perf_counter() - route_started) * 1000.0,
-            )
-            latency_trace.set_value(
-                "phase64_execution_graph",
-                "phase64_fast" if route_decision.kind == "fast" else "phase64_complex",
-            )
-            if route_decision.kind == "complex":
-                evidence_identity = refine_evidence_query_identity_with_llm(
-                    runtime_state.context.standalone_task or normalized_question,
-                    base_identity=evidence_identity,
-                    provider=runtime_identity_provider,
-                    history=history,
-                    force=True,
-                    trace=latency_trace,
-                )
-        else:
-            evidence_identity = refine_evidence_query_identity_with_llm(
-                runtime_state.context.standalone_task or normalized_question,
-                base_identity=evidence_identity,
-                provider=runtime_identity_provider,
-                history=history,
-                force=settings.agent_short_loop_enabled,
-                trace=latency_trace,
-            )
-            latency_trace.set_value(
-                "phase64_execution_graph",
-                "phase64_complex" if settings.agent_short_loop_enabled else "phase63_a",
-            )
-        if route_decision is not None:
-            evidence_identity = replace(
-                evidence_identity,
-                retrieval_intent=enforce_phase64_route_intent_floor(
-                    evidence_identity.retrieval_intent,
-                    route_decision,
-                ),
-            )
-        latency_trace.set_value(
-            "total_model_call_count",
-            int(latency_trace.values.get("planner_call_count", 0)),
-        )
-        retrieval_plan = (
-            build_retrieval_plan(
-                evidence_identity.retrieval_intent,
-                evidence_identity.canonical_query
-                or runtime_state.context.standalone_task
-                or normalized_question,
-                settings,
-            )
-            if settings.retrieval_runtime_enabled
-            else None
-        )
-        retrieval_action = build_retrieval_action(evidence_identity.retrieval_intent)
-        if evidence_identity.safe_for_cache_reuse and evidence_identity.canonical_query:
-            runtime_state.context = replace(
-                runtime_state.context,
-                standalone_task=evidence_identity.canonical_query,
-                contextualized=True,
-                contextualization_source=evidence_identity.source,
-            )
         runtime_repository = AgentRuntimeRunRepository(self.db)
+        checkpoint_repository = CheckpointRepository(runtime_repository)
         resume_decision = decide_resume(
             repository=runtime_repository,
             conversation_id=conversation_id,
@@ -379,72 +859,34 @@ class ToolCallingAgentService:
             resume_run_id=resume_run_id,
         )
 
-        responsibility_gate = evaluate_responsibility_gate(normalized_question)
-        if responsibility_gate.triggered:
-            log_event(
-                agent_logger,
-                "refusal_triggered",
-                mode="tool_calling_agent",
-                refusal_category="responsibility_gate_triggered",
-                source_count=0,
-                citation_count=0,
-                tool_call_count=0,
-            )
-            return AgentQueryResult(
-                question=normalized_question,
-                answer=RESPONSIBILITY_REFUSAL_ANSWER,
-                tool_calls=[],
-                refused=True,
-                refusal_reason=responsibility_gate.refusal_reason,
-                reasoning_summary="tool_calling_agent refused before tool loop via responsibility_gate.",
-                mode="tool_calling_agent",
-                workflow_steps=[
-                    AgentToolCallRecord(
-                        tool_name="responsibility_gate",
-                        input_summary=truncate_text(normalized_question),
-                        output_summary="refused=True responsibility_gate",
-                        succeeded=True,
-                    )
-                ],
-                iteration_count=1,
-            )
-
-        topic_gate_query = " ".join(
-            [
-                runtime_state.context.standalone_task or normalized_question,
-                *runtime_state.context.history,
-            ]
+        pre_tool_gate = build_tool_calling_combined_pre_tool_gate_decision(
+            question=normalized_question,
+            runtime_state=runtime_state,
+            resume_should_resume=resume_decision.should_resume,
+            latency_trace=latency_trace,
+            run_pre_tool_gate=True,
+            run_resume_gate=False,
+            run_semantic_cache_gate=False,
         )
-        if not resume_decision.should_resume and not has_topic_anchor(topic_gate_query):
+        if pre_tool_gate.action == "return":
             log_event(
                 agent_logger,
                 "refusal_triggered",
                 mode="tool_calling_agent",
-                refusal_category="off_topic",
+                refusal_category=pre_tool_gate.sanitized_detail,
                 source_count=0,
                 citation_count=0,
                 tool_call_count=0,
             )
-            return AgentQueryResult(
-                question=normalized_question,
-                answer="当前问题缺少项目资料库的领域锚点，无法基于堆石混凝土资料可靠回答。",
-                tool_calls=[],
-                refused=True,
-                refusal_reason="Question appears off-topic: no domain anchor was found.",
-                reasoning_summary="tool_calling_agent refused before tool loop via off_topic_gate.",
-                mode="tool_calling_agent",
-                workflow_steps=[
-                    AgentToolCallRecord(
-                        tool_name="off_topic_gate",
-                        input_summary=truncate_text(normalized_question),
-                        output_summary="refused=True off_topic",
-                        succeeded=True,
-                    )
-                ],
-                iteration_count=1,
-            )
+            if pre_tool_gate.result is None:
+                raise RuntimeError("pre-tool gate return decision did not include a result")
+            return pre_tool_gate.result
 
         max_iterations = min(max_tool_calls, TOOL_CALLING_HARD_MAX_ITERATIONS)
+        run_budget = RunBudget(
+            max_tool_calls=max_tool_calls,
+            max_iterations=max_iterations,
+        )
         messages = tool_calling_messages(
             normalized_question,
             history=history,
@@ -467,28 +909,6 @@ class ToolCallingAgentService:
         executed_tool_call_count = 0
         citation_repair_count = 0
         llm_call_count = 0
-        apply_evidence_identity_diagnostics(latency_trace, evidence_identity)
-        if retrieval_plan is not None:
-            for key, value in retrieval_plan.diagnostics().items():
-                latency_trace.set_value(key, value)
-            plan_fallback = retrieval_plan.intent_source != "llm"
-            latency_trace.set_value("retrieval_plan_fallback", plan_fallback)
-            latency_trace.set_value(
-                "retrieval_plan_fallback_reason",
-                evidence_identity.reason if plan_fallback else "",
-            )
-        else:
-            latency_trace.set_value("retrieval_runtime_mode", "legacy")
-            latency_trace.set_value("retrieval_plan_digest", "legacy")
-        latency_trace.set_value("retrieval_required_tool", retrieval_action.required_tool or "")
-        latency_trace.set_value("retrieval_forbidden_tools", list(retrieval_action.forbidden_tools))
-        latency_trace.set_value("retrieval_action_reason", retrieval_action.reason)
-        latency_trace.set_value(
-            "canonical_task",
-            evidence_identity.canonical_query
-            or runtime_state.context.standalone_task
-            or normalized_question,
-        )
         for key, value in runtime_resume_diagnostics(resume_decision).items():
             latency_trace.set_value(key, value)
         apply_runtime_diagnostics(latency_trace, runtime_state)
@@ -530,7 +950,7 @@ class ToolCallingAgentService:
                 )
                 apply_runtime_diagnostics(latency_trace, runtime_state)
                 self._emit(
-                    event_sink,
+                    runtime_event_sink,
                     "tool_call_start",
                     {
                         "iteration": 1,
@@ -539,8 +959,12 @@ class ToolCallingAgentService:
                         "input_summary": image_call.input_summary,
                     },
                 )
-                self._emit_tool_result(event_sink, image_call, iteration=1)
-                return result_from_tool_calling_loop(
+                publish_tool_call_result(
+                    runtime_event_bus,
+                    iteration=1,
+                    record=image_call,
+                )
+                return outcome_from_tool_calling_loop(
                     question=normalized_question,
                     answer="" if image_tool_result.refused else (image_tool_result.answer or ""),
                     tool_calls=tool_calls,
@@ -561,43 +985,32 @@ class ToolCallingAgentService:
                         iteration_count=1,
                         tool_call_count=1,
                     ),
+                    stop_reason=(
+                        "insufficient_evidence"
+                        if image_tool_result.refused
+                        else "completed"
+                    ),
                     image_analysis=image_tool_result.image_analysis,
-                )
+                ).result
 
             if retrieval_action.required_tool is not None:
                 preflight_query = (
                     runtime_state.context.standalone_task or normalized_question
                 )
                 preflight_tool_name = retrieval_action.required_tool
-                self._emit(
-                    event_sink,
-                    "tool_call_start",
-                    {
-                        "iteration": 1,
-                        "step_id": f"runtime-{preflight_tool_name}",
-                        "tool_name": preflight_tool_name,
-                        "input_summary": f"query={truncate_text(preflight_query)}",
-                    },
-                )
                 preflight_started = time.perf_counter()
-                if preflight_tool_name == "search_figures":
-                    preflight_result = self.toolbox.search_figures(
-                        preflight_query,
-                        top_k=retrieval_runtime_result_limit("search_figures", settings),
+                preflight_result = tool_executor.execute(
+                    ToolExecutionRequest(
+                        call=ChatToolCall(
+                            id=f"runtime-{preflight_tool_name}",
+                            name=preflight_tool_name,
+                            arguments={"query": preflight_query},
+                        ),
+                        default_query=preflight_query,
+                        iteration=1,
                     )
-                    figure_search_executed = True
-                else:
-                    preflight_result = self.toolbox.search_tables(
-                        preflight_query,
-                        top_k=retrieval_runtime_result_limit("search_tables", settings),
-                    )
-                preflight_result = replace(
-                    preflight_result,
-                    call=replace(
-                        preflight_result.call,
-                        step_id=f"runtime-{preflight_tool_name}",
-                    ),
-                )
+                ).result
+                figure_search_executed = preflight_tool_name == "search_figures"
                 latency_trace.add_duration(
                     "tool_latency_ms",
                     (time.perf_counter() - preflight_started) * 1000.0,
@@ -626,16 +1039,15 @@ class ToolCallingAgentService:
                         [item.chunk_id for item in preflight_result.search_results],
                     )
                 apply_runtime_diagnostics(latency_trace, runtime_state)
-                self._emit_tool_result(event_sink, preflight_result.call, iteration=1)
                 if not preflight_result.search_results:
                     refusal_reason = (
                         preflight_result.refusal_reason
                         or f"No relevant {preflight_tool_name} evidence was found."
                     )
-                    runtime_state.stop_reason = "required_asset_evidence_not_found"
+                    runtime_state.set_stop_reason("required_asset_evidence_not_found")
                     runtime_state.final_decision = "refuse"
                     apply_runtime_diagnostics(latency_trace, runtime_state)
-                    return result_from_tool_calling_loop(
+                    return outcome_from_tool_calling_loop(
                         question=normalized_question,
                         answer=refusal_reason,
                         tool_calls=tool_calls,
@@ -656,77 +1068,44 @@ class ToolCallingAgentService:
                             iteration_count=len(workflow_steps),
                             tool_call_count=len(tool_calls),
                         ),
+                        stop_reason="insufficient_evidence",
+                    ).result
+
+            post_preflight_gate = build_tool_calling_combined_pre_tool_gate_decision(
+                question=normalized_question,
+                runtime_state=runtime_state,
+                latency_trace=latency_trace,
+                run_pre_tool_gate=False,
+                resume_should_resume=resume_decision.should_resume,
+                run_resume_gate=True,
+                resume_decision=resume_decision,
+                chat_model_provider=self.chat_model_provider,
+                history=history,
+                final_answer_strategy=self.final_answer_strategy,
+                run_semantic_cache_gate=True,
+                settings=settings,
+                evidence_identity=evidence_identity,
+                toolbox=self.toolbox,
+                runtime_event_bus=runtime_event_bus,
+                workflow_steps=workflow_steps,
+                tool_calls=tool_calls,
+            )
+            if post_preflight_gate.action == "return":
+                if resume_decision.should_resume and resume_decision.run is not None:
+                    checkpoint_repository.persist_state(
+                        resume_decision.run,
+                        node="final_answer_completed",
+                        state={
+                            **load_runtime_state(resume_decision.run),
+                            "resume_completed": True,
+                        },
+                        status="completed",
                     )
-
-            if resume_decision.should_resume and resume_decision.run is not None:
-                resumed = result_from_runtime_checkpoint(
-                    question=normalized_question,
-                    run_state=load_runtime_state(resume_decision.run),
-                    chat_model_provider=self.chat_model_provider,
-                    history=history,
-                    final_answer_strategy=self.final_answer_strategy,
-                    runtime_state=runtime_state,
-                    latency_trace=latency_trace,
-                )
-                runtime_repository.persist_node(
-                    resume_decision.run,
-                    node="final_answer_completed",
-                    state={
-                        **load_runtime_state(resume_decision.run),
-                        "resume_completed": True,
-                    },
-                    status="completed",
-                )
-                return resumed
-
-            semantic_cached = None
-            if settings.semantic_evidence_cache_enabled and evidence_identity.safe_for_cache_reuse:
-                semantic_cache_tool_name = semantic_cache_tool_for_identity(evidence_identity)
-                latency_trace.set_value("semantic_cache_tool_name", semantic_cache_tool_name)
-                semantic_cached = self.toolbox.lookup_semantic_evidence_cache(
-                    evidence_identity.canonical_query
-                    or runtime_state.context.standalone_task
-                    or normalized_question,
-                    top_k=retrieval_runtime_result_limit(
-                        semantic_cache_tool_name,
-                        settings,
-                    ),
-                    tool_name=semantic_cache_tool_name,
-                )
-            if semantic_cached is not None and semantic_cached.search_results:
-                latency_trace.set_value("semantic_cache_hit", True)
-                latency_trace.set_value("semantic_cache_reason", "tool_result_cache_hit")
-                latency_trace.set_value("hyde_generated", False)
-                latency_trace.set_value("hyde_used_for_vector", False)
-                latency_trace.set_value("hyde_reason", "semantic_cache_hit")
-                workflow_steps.append(semantic_cached.call)
-                tool_calls.append(semantic_cached.call)
-                search_results = list(semantic_cached.search_results)
-                sources = list(semantic_cached.sources)
-                runtime_state.evidence.add(
-                    tool_name=semantic_cached.tool_name,
-                    query=evidence_identity.canonical_query
-                    or runtime_state.context.standalone_task
-                    or normalized_question,
-                    result_count=len(semantic_cached.search_results),
-                    succeeded=semantic_cached.call.succeeded,
-                )
-                runtime_state.stop_reason = "semantic_evidence_cache_hit"
-                runtime_state.final_decision = "answer"
-                apply_runtime_diagnostics(latency_trace, runtime_state)
-                self._emit_tool_result(event_sink, semantic_cached.call, iteration=1)
-                return result_from_cached_evidence(
-                    question=normalized_question,
-                    search_results=search_results,
-                    sources=sources,
-                    tool_calls=tool_calls,
-                    workflow_steps=workflow_steps,
-                    chat_model_provider=self.chat_model_provider,
-                    history=history,
-                    final_answer_strategy=self.final_answer_strategy,
-                    runtime_state=runtime_state,
-                    latency_trace=latency_trace,
-                )
+                if post_preflight_gate.result is None:
+                    raise RuntimeError(
+                        "post-preflight gate return decision did not include a result"
+                    )
+                return post_preflight_gate.result
             latency_trace.set_value("semantic_cache_hit", False)
             latency_trace.set_value(
                 "semantic_cache_reason",
@@ -774,7 +1153,7 @@ class ToolCallingAgentService:
 
             active_run = None
             if conversation_id is not None:
-                active_run = runtime_repository.create_run(
+                active_run = checkpoint_repository.start(
                     conversation_id=conversation_id,
                     question=normalized_question,
                     canonical_task=evidence_identity.canonical_query
@@ -793,7 +1172,7 @@ class ToolCallingAgentService:
             )
 
             if settings.agent_short_loop_enabled and not sources:
-                short_loop_result = self._execute_short_loop_retrieval(
+                short_loop_outcome = tool_executor.execute_short_loop(
                     runtime=runtime,
                     runtime_state=runtime_state,
                     retrieval_action=retrieval_action,
@@ -803,8 +1182,10 @@ class ToolCallingAgentService:
                         or normalized_question
                     ),
                     default_query=normalized_question,
-                    event_sink=event_sink,
+                    iteration=1,
                 )
+                latency_trace.add_duration("tool_latency_ms", short_loop_outcome.elapsed_ms)
+                short_loop_result = short_loop_outcome.result
                 min_selected_sources = max(
                     1,
                     int(settings.phase64_fast_path_min_selected_sources),
@@ -819,35 +1200,22 @@ class ToolCallingAgentService:
                         "phase64_fast_escalation_reason",
                         "insufficient_selected_sources",
                     )
-                    evidence_identity = refine_evidence_query_identity_with_llm(
-                        runtime_state.context.standalone_task or normalized_question,
-                        base_identity=evidence_identity,
-                        provider=runtime_identity_provider,
-                        history=history,
-                        force=True,
-                        trace=latency_trace,
+                    planning = planning_policy.escalate_fast_route(
+                        PlanningRequest(
+                            question=normalized_question,
+                            history=tuple(history or ()),
+                            image_path=image_path,
+                            trace=latency_trace,
+                        ),
+                        planning,
                     )
-                    retrieval_plan = (
-                        build_retrieval_plan(
-                            evidence_identity.retrieval_intent,
-                            evidence_identity.canonical_query
-                            or runtime_state.context.standalone_task
-                            or normalized_question,
-                            settings,
-                        )
-                        if settings.retrieval_runtime_enabled
-                        else None
-                    )
-                    retrieval_action = build_retrieval_action(evidence_identity.retrieval_intent)
+                    evidence_identity = planning.identity
+                    retrieval_plan = planning.plan
+                    retrieval_action = planning.action
                     reset_current_retrieval_plan(retrieval_token)
                     retrieval_token = set_current_retrieval_plan(retrieval_plan)
                     reset_phase64_route_kind(phase64_route_token)
                     phase64_route_token = set_phase64_route_kind("complex")
-                    latency_trace.set_value("phase64_execution_graph", "phase64_complex")
-                    latency_trace.set_value(
-                        "total_model_call_count",
-                        int(latency_trace.values.get("planner_call_count", 0)),
-                    )
                     if evidence_identity.hyde_passage:
                         canonical_task = (
                             evidence_identity.canonical_query
@@ -863,7 +1231,7 @@ class ToolCallingAgentService:
                         latency_trace.set_value("hyde_used_for_vector", True)
                         latency_trace.set_value("hyde_reason", "fast_path_escalation")
                         latency_trace.set_value("hyde_model", evidence_identity.model_name)
-                    short_loop_result = self._execute_short_loop_retrieval(
+                    short_loop_outcome = tool_executor.execute_short_loop(
                         runtime=runtime,
                         runtime_state=runtime_state,
                         retrieval_action=retrieval_action,
@@ -873,8 +1241,10 @@ class ToolCallingAgentService:
                             or normalized_question
                         ),
                         default_query=normalized_question,
-                        event_sink=event_sink,
+                        iteration=2,
                     )
+                    latency_trace.add_duration("tool_latency_ms", short_loop_outcome.elapsed_ms)
+                    short_loop_result = short_loop_outcome.result
                 elif route_decision is not None and route_decision.kind == "fast":
                     latency_trace.set_value("phase64_fast_escalated", False)
                     latency_trace.set_value("phase64_fast_escalation_reason", "")
@@ -906,7 +1276,7 @@ class ToolCallingAgentService:
                     short_loop_result.search_results,
                 )
                 sources = merge_sources(sources, short_loop_result.sources)
-                runtime_repository.persist_node(
+                checkpoint_repository.persist_state(
                     active_run,
                     node="tool_execution_completed",
                     state=runtime_checkpoint_state(
@@ -918,20 +1288,31 @@ class ToolCallingAgentService:
                     ),
                 )
                 if not sources:
+                    evidence_decision = EvidenceStateMachine(
+                        required_tool=retrieval_action.required_tool,
+                        result_count=0,
+                        rerank_failed=is_reranking_failure(short_loop_result.call),
+                        escalation_count=(
+                            planning.escalation_count
+                            if route_decision is not None and route_decision.kind == "fast"
+                            else 1
+                        ),
+                        budget=run_budget,
+                    ).decide()
                     refusal_reason = (
                         short_loop_result.refusal_reason
                         or short_loop_result.call.error
                         or short_loop_result.call.output_summary
                         or "No relevant evidence was found for the current question."
                     )
-                    runtime_state.stop_reason = (
+                    runtime_state.set_stop_reason(
                         "reranking_failed"
-                        if is_reranking_failure(short_loop_result.call)
+                        if evidence_decision.sanitized_detail == "reranking_failed"
                         else "short_loop_evidence_not_found"
                     )
                     runtime_state.final_decision = "refuse"
                     apply_runtime_diagnostics(latency_trace, runtime_state)
-                    runtime_repository.persist_node(
+                    checkpoint_repository.persist_state(
                         active_run,
                         node=runtime_state.stop_reason,
                         state=runtime_checkpoint_state(
@@ -943,7 +1324,7 @@ class ToolCallingAgentService:
                         ),
                         status="failed",
                     )
-                    return result_from_tool_calling_loop(
+                    return outcome_from_tool_calling_loop(
                         question=normalized_question,
                         answer=refusal_reason,
                         tool_calls=tool_calls,
@@ -964,12 +1345,13 @@ class ToolCallingAgentService:
                             iteration_count=len(workflow_steps),
                             tool_call_count=len(tool_calls),
                         ),
-                    )
+                        stop_reason="insufficient_evidence",
+                    ).result
 
             for iteration in range(1, max_iterations + 1):
                 streaming_final_generation = bool(sources)
                 self._emit(
-                    event_sink,
+                    runtime_event_sink,
                     "agent_step",
                     {
                         "iteration": iteration,
@@ -986,6 +1368,7 @@ class ToolCallingAgentService:
                     },
                 )
                 llm_started = time.perf_counter()
+                streamed_by_controller = False
                 if streaming_final_generation:
                     latency_trace.set_value(
                         "final_generation_call_count",
@@ -995,43 +1378,58 @@ class ToolCallingAgentService:
                         "total_model_call_count",
                         int(latency_trace.values["total_model_call_count"]) + 1,
                     )
-                    answer_parts: list[str] = []
                     if hasattr(final_answer_provider, "stream_generate"):
+                        final_prompt_shape = None
                         if settings.agent_short_loop_enabled:
                             final_prompt_shape = FinalPromptShape()
-                            final_answer_messages = evidence_answer_messages(
-                                normalized_question,
-                                sources=sources,
-                                history=history,
-                                final_answer_strategy=self.final_answer_strategy,
-                                **phase64_final_prompt_budgets(settings),
-                                prompt_shape=final_prompt_shape,
-                            )
-                            for field_name, value in final_prompt_shape.as_trace_values().items():
-                                latency_trace.set_value(field_name, value)
+                            prompt_budgets = phase64_final_prompt_budgets(settings)
                         else:
-                            final_answer_messages = evidence_answer_messages(
-                                normalized_question,
+                            prompt_budgets = {}
+                        try:
+                            streamed = FinalAnswerController(
+                                final_answer_provider,
+                                answer_messages=evidence_answer_messages,
+                                repair_messages=citation_repair_messages,
+                                citation_extractor=extract_citations,
+                            ).stream_final_evidence(
+                                question=normalized_question,
                                 sources=sources,
                                 history=history,
-                                final_answer_strategy=self.final_answer_strategy,
+                                strategy=self.final_answer_strategy,
+                                trace=latency_trace,
+                                prompt_budgets=prompt_budgets,
+                                token_emitter=getattr(
+                                    final_answer_provider,
+                                    "emit_stream_token",
+                                    None,
+                                ),
+                                prompt_shape=final_prompt_shape,
+                                emit_answer_tokens=False,
                             )
-                        for token_text in final_answer_provider.stream_generate(final_answer_messages):
-                            if not token_text:
-                                continue
-                            if latency_trace.values.get("final_model_ttft_ms") is None:
-                                latency_trace.set_value(
-                                    "final_model_ttft_ms",
-                                    round((time.perf_counter() - llm_started) * 1000.0, 3),
-                                )
-                            latency_trace.mark_answer_token()
-                            answer_parts.append(token_text)
-                            latency_trace.set_value(
-                                "streamed_token_count",
-                                int(latency_trace.values["streamed_token_count"]) + 1,
+                        except (RuntimeError, ValueError) as exc:
+                            latency_trace.add_duration(
+                                "final_generation_latency_ms",
+                                (time.perf_counter() - llm_started) * 1000.0,
                             )
+                            return result_from_final_generation_failure(
+                                question=normalized_question,
+                                sources=sources,
+                                search_results=search_results,
+                                tool_calls=tool_calls,
+                                workflow_steps=workflow_steps,
+                                llm_call_count=llm_call_count + 1,
+                                repeated_query_count=repeated_query_count,
+                                near_duplicate_query_count=near_duplicate_query_count,
+                                skipped_tool_call_count=skipped_tool_call_count,
+                                executed_tool_call_count=executed_tool_call_count,
+                                citation_repair_count=citation_repair_count,
+                                runtime_state=runtime_state,
+                                latency_trace=latency_trace,
+                                error=exc,
+                            )
+                        streamed_by_controller = True
                         model_result = ToolCallingChatModelResult(
-                            content="".join(answer_parts),
+                            content=streamed.answer,
                             tool_calls=[],
                             provider=self.chat_model_provider.provider_name,
                             model_name=self.chat_model_provider.model_name,
@@ -1061,7 +1459,7 @@ class ToolCallingAgentService:
                     )
                 llm_call_count += 1
                 llm_duration_ms = (time.perf_counter() - llm_started) * 1000.0
-                if streaming_final_generation:
+                if streaming_final_generation and not streamed_by_controller:
                     latency_trace.add_duration("final_generation_latency_ms", llm_duration_ms)
                 else:
                     latency_trace.add_duration("planner_latency_ms", llm_duration_ms)
@@ -1123,10 +1521,10 @@ class ToolCallingAgentService:
                                     ),
                                 )
                             )
-                            self._emit_tool_result(
-                                event_sink,
-                                repeated_record,
+                            publish_tool_call_result(
+                                runtime_event_bus,
                                 iteration=iteration,
+                                record=repeated_record,
                             )
                             continue
 
@@ -1155,24 +1553,22 @@ class ToolCallingAgentService:
                                     ),
                                 )
                             )
-                            self._emit_tool_result(
-                                event_sink,
-                                skipped_record,
+                            publish_tool_call_result(
+                                runtime_event_bus,
                                 iteration=iteration,
+                                record=skipped_record,
                             )
                             continue
 
-                        self._emit_tool_start(event_sink, tool_call, iteration)
                         tool_started = time.perf_counter()
-                        tool_result = self._execute_tool_call(
-                            tool_call=tool_call,
-                            default_query=normalized_question,
-                            forbidden_tools=retrieval_action.forbidden_tools,
-                        )
-                        tool_result = replace(
-                            tool_result,
-                            call=replace(tool_result.call, step_id=tool_call.id),
-                        )
+                        tool_result = tool_executor.execute(
+                            ToolExecutionRequest(
+                                call=tool_call,
+                                default_query=normalized_question,
+                                forbidden_tools=tuple(retrieval_action.forbidden_tools),
+                                iteration=iteration,
+                            )
+                        ).result
                         if tool_result.call.succeeded and tool_result.tool_name in ALLOWED_TOOL_NAMES:
                             latency_trace.set_value(
                                 "retrieval_selected_count",
@@ -1208,12 +1604,7 @@ class ToolCallingAgentService:
                                 safe_tool_result_payload(tool_result, sources),
                             )
                         )
-                        self._emit_tool_result(
-                            event_sink,
-                            tool_result.call,
-                            iteration=iteration,
-                        )
-                        runtime_repository.persist_node(
+                        checkpoint_repository.persist_state(
                             active_run,
                             node="tool_execution_completed",
                             state=runtime_checkpoint_state(
@@ -1224,12 +1615,21 @@ class ToolCallingAgentService:
                                 latency_trace=latency_trace.values,
                             ),
                         )
-                        if is_reranking_failure(tool_result.call):
+                        evidence_decision = EvidenceStateMachine(
+                            required_tool=retrieval_action.required_tool,
+                            result_count=len(sources),
+                            rerank_failed=is_reranking_failure(tool_result.call),
+                            escalation_count=1,
+                            budget=run_budget,
+                        ).decide()
+                        if evidence_decision.action == "refuse" and is_reranking_failure(
+                            tool_result.call
+                        ):
                             refusal_reason = tool_result.call.error or tool_result.call.output_summary
-                            runtime_state.stop_reason = "reranking_failed"
+                            runtime_state.set_stop_reason("reranking_failed")
                             runtime_state.final_decision = "refuse"
                             apply_runtime_diagnostics(latency_trace, runtime_state)
-                            runtime_repository.persist_node(
+                            checkpoint_repository.persist_state(
                                 active_run,
                                 node="reranking_failed",
                                 state=runtime_checkpoint_state(
@@ -1241,7 +1641,7 @@ class ToolCallingAgentService:
                                 ),
                                 status="failed",
                             )
-                            return result_from_tool_calling_loop(
+                            return outcome_from_tool_calling_loop(
                                 question=normalized_question,
                                 answer=refusal_reason,
                                 tool_calls=tool_calls,
@@ -1262,7 +1662,8 @@ class ToolCallingAgentService:
                                     iteration_count=len(workflow_steps),
                                     tool_call_count=len(tool_calls),
                                 ),
-                            )
+                                stop_reason="insufficient_evidence",
+                            ).result
                         if (
                             tool_result.tool_name == "search_figures"
                             and tool_result.refused
@@ -1273,10 +1674,10 @@ class ToolCallingAgentService:
                                 tool_result.refusal_reason
                                 or "No relevant figure evidence was found for the current question."
                             )
-                            runtime_state.stop_reason = "figure_evidence_not_found"
+                            runtime_state.set_stop_reason("figure_evidence_not_found")
                             runtime_state.final_decision = "refuse"
                             apply_runtime_diagnostics(latency_trace, runtime_state)
-                            runtime_repository.persist_node(
+                            checkpoint_repository.persist_state(
                                 active_run,
                                 node="figure_evidence_not_found",
                                 state=runtime_checkpoint_state(
@@ -1288,7 +1689,7 @@ class ToolCallingAgentService:
                                 ),
                                 status="failed",
                             )
-                            return result_from_tool_calling_loop(
+                            return outcome_from_tool_calling_loop(
                                 question=normalized_question,
                                 answer=refusal_reason,
                                 tool_calls=tool_calls,
@@ -1309,7 +1710,8 @@ class ToolCallingAgentService:
                                     iteration_count=len(workflow_steps),
                                     tool_call_count=len(tool_calls),
                                 ),
-                            )
+                                stop_reason="insufficient_evidence",
+                            ).result
                         previous_tool_queries.append(normalized_tool_query)
                         if tool_result.tool_name == "search_figures":
                             figure_search_executed = True
@@ -1321,13 +1723,17 @@ class ToolCallingAgentService:
                             and not any(source.image_url for source in sources)
                         ):
                             figure_query = runtime_state.context.standalone_task or normalized_question
-                            figure_result = self.toolbox.search_figures(
-                                figure_query,
-                                top_k=retrieval_runtime_result_limit(
-                                    "search_figures",
-                                    settings,
-                                ),
-                            )
+                            figure_result = tool_executor.execute(
+                                ToolExecutionRequest(
+                                    call=ChatToolCall(
+                                        id=f"{tool_call.id}-figure-fallback",
+                                        name="search_figures",
+                                        arguments={"query": figure_query},
+                                    ),
+                                    default_query=figure_query,
+                                    iteration=iteration,
+                                )
+                            ).result
                             if figure_result.call.succeeded:
                                 latency_trace.set_value(
                                     "retrieval_selected_count",
@@ -1354,71 +1760,34 @@ class ToolCallingAgentService:
                                 figure_result.search_results,
                             )
                             sources = merge_sources(sources, figure_result.sources)
-                            self._emit_tool_result(
-                                event_sink,
-                                figure_result.call,
-                                iteration=iteration,
-                            )
 
                     if (
                         sources
                         and iteration_executed_tool_count == 0
                         and iteration_skipped_tool_count > 0
                     ):
-                        llm_started = time.perf_counter()
-                        evidence_result = self.chat_model_provider.generate(
-                            evidence_answer_messages(
-                                normalized_question,
-                                sources=sources,
-                                history=history,
-                                final_answer_strategy=self.final_answer_strategy,
-                            )
+                        generated = FinalAnswerController(
+                            self.chat_model_provider,
+                            answer_messages=evidence_answer_messages,
+                            repair_messages=citation_repair_messages,
+                            citation_extractor=extract_citations,
+                        ).generate_final_evidence(
+                            question=normalized_question,
+                            sources=sources,
+                            history=history,
+                            strategy=self.final_answer_strategy,
+                            trace=latency_trace,
+                            prompt_budgets={},
                         )
-                        llm_call_count += 1
-                        answer_duration_ms = (time.perf_counter() - llm_started) * 1000.0
-                        latency_trace.add_duration(
-                            "answer_latency_ms",
-                            answer_duration_ms,
-                        )
-                        allowed_source_ids = list(range(1, len(sources) + 1))
-                        citations = extract_citations(
-                            evidence_result.answer,
-                            allowed_source_ids,
-                        )
-                        answer_content = evidence_result.answer
-                        if not citations:
-                            repair_started = time.perf_counter()
-                            repair_result = self.chat_model_provider.generate(
-                                citation_repair_messages(
-                                    normalized_question,
-                                    draft_answer=evidence_result.answer,
-                                    sources=sources,
-                                    history=history,
-                                    final_answer_strategy=self.final_answer_strategy,
-                                )
-                            )
-                            citation_repair_count += 1
-                            llm_call_count += 1
-                            latency_trace.add_duration(
-                                "answer_latency_ms",
-                                (time.perf_counter() - repair_started) * 1000.0,
-                            )
-                            latency_trace.add_duration(
-                                "citation_repair_latency_ms",
-                                (time.perf_counter() - repair_started) * 1000.0,
-                            )
-                            repair_citations = extract_citations(
-                                repair_result.answer,
-                                allowed_source_ids,
-                            )
-                            if repair_citations:
-                                answer_content = repair_result.answer
-                                citations = repair_citations
+                        llm_call_count += generated.llm_call_count
+                        citation_repair_count += generated.citation_repair_count
+                        answer_content = generated.answer
+                        citations = list(generated.citations)
                         if citations:
-                            runtime_state.stop_reason = "evidence_convergence"
+                            runtime_state.set_stop_reason("evidence_convergence")
                             runtime_state.final_decision = "answer"
                             apply_runtime_diagnostics(latency_trace, runtime_state)
-                            runtime_repository.persist_node(
+                            checkpoint_repository.persist_state(
                                 active_run,
                                 node="final_answer_completed",
                                 state=runtime_checkpoint_state(
@@ -1439,7 +1808,7 @@ class ToolCallingAgentService:
                                     step_id="final",
                                 )
                             )
-                            return result_from_tool_calling_loop(
+                            return outcome_from_tool_calling_loop(
                                 question=normalized_question,
                                 answer=answer_content,
                                 tool_calls=tool_calls,
@@ -1460,70 +1829,33 @@ class ToolCallingAgentService:
                                     iteration_count=len(workflow_steps),
                                     tool_call_count=len(tool_calls),
                                 ),
-                            )
+                                stop_reason="completed",
+                            ).result
                     continue
 
                 if model_result.content.strip():
                     latency_trace.add_duration("answer_latency_ms", llm_duration_ms)
-                    allowed_source_ids = list(range(1, len(sources) + 1))
-                    citation_validation_started = time.perf_counter()
-                    citations = extract_citations(
-                        model_result.content,
-                        allowed_source_ids,
-                    )
-                    latency_trace.add_duration(
-                        "citation_validation_latency_ms",
-                        (time.perf_counter() - citation_validation_started) * 1000.0,
-                    )
                     answer_content = model_result.content
-                    stream_token_emitter = getattr(
-                        final_answer_provider,
-                        "emit_stream_token",
-                        None,
-                    )
-                    if (
-                        sources
-                        and not citations
-                        and streaming_final_generation
-                        and callable(stream_token_emitter)
-                    ):
-                        citation_suffix = "\n\n证据引用：[1]"
-                        stream_token_emitter(citation_suffix)
-                        answer_content += citation_suffix
-                        citations = [1]
-                        latency_trace.set_value(
-                            "streamed_token_count",
-                            int(latency_trace.values["streamed_token_count"]) + 1,
+                    citations: list[int] = []
+                    if sources:
+                        validated = FinalAnswerController(
+                            final_answer_provider,
+                            answer_messages=evidence_answer_messages,
+                            repair_messages=citation_repair_messages,
+                            citation_extractor=extract_citations,
+                        ).validate_model_content(
+                            question=normalized_question,
+                            draft_answer=model_result.content,
+                            sources=sources,
+                            history=history,
+                            strategy=self.final_answer_strategy,
+                            trace=latency_trace,
+                            prompt_budgets=phase64_final_prompt_budgets(settings),
                         )
-                    if sources and not citations:
-                        repair_started = time.perf_counter()
-                        repair_result = final_answer_provider.generate(
-                            citation_repair_messages(
-                                normalized_question,
-                                draft_answer=model_result.content,
-                                sources=sources,
-                                history=history,
-                                final_answer_strategy=self.final_answer_strategy,
-                                **phase64_final_prompt_budgets(settings),
-                            )
-                        )
-                        citation_repair_count += 1
-                        llm_call_count += 1
-                        latency_trace.add_duration(
-                            "answer_latency_ms",
-                            (time.perf_counter() - repair_started) * 1000.0,
-                        )
-                        latency_trace.add_duration(
-                            "citation_repair_latency_ms",
-                            (time.perf_counter() - repair_started) * 1000.0,
-                        )
-                        repair_citations = extract_citations(
-                            repair_result.answer,
-                            allowed_source_ids,
-                        )
-                        if repair_citations:
-                            answer_content = repair_result.answer
-                            citations = repair_citations
+                        answer_content = validated.answer
+                        citations = list(validated.citations)
+                        citation_repair_count += validated.citation_repair_count
+                        llm_call_count += validated.llm_call_count
                     if not sources or not citations:
                         refusal_reason = (
                             "Tool-calling model returned final content without valid "
@@ -1539,10 +1871,10 @@ class ToolCallingAgentService:
                                 step_id="final",
                             )
                         )
-                        runtime_state.stop_reason = "final_content_without_citations"
+                        runtime_state.set_stop_reason("final_content_without_citations")
                         runtime_state.final_decision = "refuse"
                         apply_runtime_diagnostics(latency_trace, runtime_state)
-                        runtime_repository.persist_node(
+                        checkpoint_repository.persist_state(
                             active_run,
                             node="final_answer_failed",
                             state=runtime_checkpoint_state(
@@ -1554,7 +1886,7 @@ class ToolCallingAgentService:
                             ),
                             status="failed",
                         )
-                        return result_from_tool_calling_loop(
+                        return outcome_from_tool_calling_loop(
                             question=normalized_question,
                             answer=refusal_reason,
                             tool_calls=tool_calls,
@@ -1575,12 +1907,13 @@ class ToolCallingAgentService:
                                 iteration_count=len(workflow_steps),
                                 tool_call_count=len(tool_calls),
                             ),
-                        )
+                            stop_reason="insufficient_evidence",
+                        ).result
 
-                    runtime_state.stop_reason = "model_final_answer"
+                    runtime_state.set_stop_reason("model_final_answer")
                     runtime_state.final_decision = "answer"
                     apply_runtime_diagnostics(latency_trace, runtime_state)
-                    runtime_repository.persist_node(
+                    checkpoint_repository.persist_state(
                         active_run,
                         node="final_answer_completed",
                         state=runtime_checkpoint_state(
@@ -1601,7 +1934,7 @@ class ToolCallingAgentService:
                             step_id="final",
                         )
                     )
-                    return result_from_tool_calling_loop(
+                    return outcome_from_tool_calling_loop(
                         question=normalized_question,
                         answer=answer_content,
                         tool_calls=tool_calls,
@@ -1622,13 +1955,14 @@ class ToolCallingAgentService:
                             iteration_count=len(workflow_steps),
                             tool_call_count=len(tool_calls),
                         ),
-                    )
+                        stop_reason="completed",
+                    ).result
 
             refusal_reason = "Tool-calling iteration limit reached."
-            runtime_state.stop_reason = "iteration_limit"
+            runtime_state.set_stop_reason("iteration_limit")
             runtime_state.final_decision = "refuse"
             apply_runtime_diagnostics(latency_trace, runtime_state)
-            runtime_repository.persist_node(
+            checkpoint_repository.persist_state(
                 active_run,
                 node="iteration_limit",
                 state=runtime_checkpoint_state(
@@ -1640,7 +1974,7 @@ class ToolCallingAgentService:
                 ),
                 status="failed",
             )
-            return result_from_tool_calling_loop(
+            return outcome_from_tool_calling_loop(
                 question=normalized_question,
                 answer=refusal_reason,
                 tool_calls=tool_calls,
@@ -1661,7 +1995,8 @@ class ToolCallingAgentService:
                     iteration_count=len(workflow_steps),
                     tool_call_count=len(tool_calls),
                 ),
-            )
+                stop_reason="tool_budget_exhausted",
+            ).result
         finally:
             if hyde_token is not None:
                 reset_current_hyde_vector_query(hyde_token)
@@ -1669,140 +2004,249 @@ class ToolCallingAgentService:
             reset_current_retrieval_plan(retrieval_token)
             reset_current_latency_trace(latency_token)
 
-    def _execute_short_loop_retrieval(
+    def _query_with_run_coordinator(
         self,
         *,
-        runtime: AgentRuntime,
-        runtime_state: AgentRuntimeState,
-        retrieval_action: Any,
-        canonical_task: str,
-        default_query: str,
-        event_sink: ToolCallingEventSink | None,
-    ) -> AgentToolResult:
-        """Run the Runtime-owned evidence action without a second model planner."""
-        tool_name = retrieval_tool_for_action(retrieval_action)
-        synthetic_call = ChatToolCall(
-            id="runtime-retrieval-1",
-            name=tool_name,
-            arguments={"query": canonical_task},
-        )
-        grounded_call, _ = runtime.ground_tool_call(
-            synthetic_call,
-            state=runtime_state,
-            default_query=default_query,
-        )
-        self._emit_tool_start(event_sink, grounded_call, iteration=1)
-        started = time.perf_counter()
-        tool_result = self._execute_tool_call(
-            tool_call=grounded_call,
-            default_query=default_query,
-            forbidden_tools=retrieval_action.forbidden_tools,
-        )
-        trace = get_current_latency_trace()
-        if trace is not None:
-            trace.add_duration(
-                "tool_latency_ms",
-                (time.perf_counter() - started) * 1000.0,
+        question: str,
+        max_tool_calls: int,
+        history: Sequence[str] | None,
+        conversation_id: int | None,
+        resume_policy: str,
+        resume_run_id: str | None,
+        image_path: str | None,
+        latency_trace: LatencyTrace,
+        runtime_event_bus: RuntimeEventBus,
+        settings: object,
+    ) -> AgentQueryResult:
+        max_iterations = min(max_tool_calls, TOOL_CALLING_HARD_MAX_ITERATIONS)
+        planning_policy = PlanningPolicy(self.runtime_identity_provider)
+        planning_trace_token = set_current_latency_trace(latency_trace)
+        try:
+            planning = planning_policy.plan(
+                PlanningRequest(
+                    question=question,
+                    history=tuple(history or ()),
+                    image_path=image_path,
+                    trace=latency_trace,
+                )
             )
-        tool_result = replace(
-            tool_result,
-            call=replace(tool_result.call, step_id=grounded_call.id),
+        finally:
+            reset_current_latency_trace(planning_trace_token)
+        runtime_state = planning.runtime_state
+        early_gate = build_tool_calling_combined_pre_tool_gate_decision(
+            question=question,
+            runtime_state=runtime_state,
+            resume_should_resume=(
+                resume_policy != "never"
+                and conversation_id is not None
+                and is_explicit_continue(question)
+            ),
+            latency_trace=latency_trace,
+            run_pre_tool_gate=True,
+            run_resume_gate=False,
+            run_semantic_cache_gate=False,
         )
-        self._emit_tool_result(event_sink, tool_result.call, iteration=1)
-        return tool_result
+        if early_gate.action == "return":
+            log_event(
+                agent_logger,
+                "refusal_triggered",
+                mode="tool_calling_agent",
+                refusal_category=early_gate.sanitized_detail,
+                source_count=0,
+                citation_count=0,
+                tool_call_count=0,
+            )
+            if early_gate.result is None:
+                raise RuntimeError("pre-tool gate return decision did not include a result")
+            early_gate.result.latency_trace["run_coordinator_enabled"] = True
+            early_gate.result.latency_trace["run_coordinator_skip_reason"] = ""
+            return early_gate.result
+        runtime_repository = AgentRuntimeRunRepository(self.db)
+        checkpoint_repository = CheckpointRepository(runtime_repository)
+        resume_decision = decide_resume(
+            repository=runtime_repository,
+            conversation_id=conversation_id,
+            question=question,
+            history=tuple(history or ()),
+            resume_policy=resume_policy,
+            resume_run_id=resume_run_id,
+        )
+        effective_resume_run_id = resume_run_id
+        resumed_run = getattr(resume_decision, "run", None)
+        if (
+            not effective_resume_run_id
+            and getattr(resume_decision, "should_resume", False)
+            and resumed_run is not None
+        ):
+            effective_resume_run_id = str(getattr(resumed_run, "run_id", "") or "") or None
+        for key, value in runtime_resume_diagnostics(resume_decision).items():
+            latency_trace.set_value(key, value)
 
-    def _execute_tool_call(
-        self,
-        *,
-        tool_call: ChatToolCall,
-        default_query: str,
-        forbidden_tools: Sequence[str] = (),
-    ) -> AgentToolResult:
-        if tool_call.name not in ALLOWED_TOOL_NAMES:
-            return failed_tool_call_result(
-                tool_call.name,
-                "unsupported tool",
-                f"Tool {tool_call.name} is not allowed.",
-            )
-        if tool_call.name in forbidden_tools:
-            return failed_tool_call_result(
-                tool_call.name,
-                "forbidden tool",
-                f"Tool {tool_call.name} is forbidden by explicit user intent.",
+        def record_resume_completed(run: object) -> None:
+            checkpoint_repository.persist_state(
+                run,
+                node="final_answer_completed",
+                state={
+                    **load_runtime_state(run),
+                    "resume_completed": True,
+                },
+                status="completed",
             )
 
-        query = tool_query_from_call(tool_call, default_query=default_query)
-        requested_top_k = retrieval_runtime_result_limit(tool_call.name)
-        if tool_call.name == "search_figures":
-            return self.toolbox.search_figures(query, top_k=requested_top_k)
-        if tool_call.name == "search_tables":
-            return self.toolbox.search_tables(query, top_k=requested_top_k)
-        return self.toolbox.hybrid_search_knowledge(query, top_k=requested_top_k)
+        workflow_steps: list[AgentToolCallRecord] = []
+        tool_calls: list[AgentToolCallRecord] = []
+
+        def build_service_final_request(
+            request: CoordinatorRequest,
+            planning: object,
+            tool_outcome: object,
+            evidence: object,
+        ) -> FinalAnswerRequest:
+            final_request = build_final_answer_request(
+                request,
+                planning,
+                tool_outcome,
+                evidence,
+            )
+            return replace(
+                final_request,
+                strategy=self.final_answer_strategy,
+                prompt_budgets=phase64_final_prompt_budgets(settings),
+            )
+
+        def build_service_hyde_query(
+            request: CoordinatorRequest,
+            planning: object,
+        ) -> str:
+            identity = getattr(planning, "identity", None)
+            runtime_state = getattr(planning, "runtime_state", None)
+            canonical_task = (
+                str(getattr(identity, "canonical_query", "") or "").strip()
+                or str(getattr(planning, "canonical_task", "") or "").strip()
+                or str(
+                    getattr(getattr(runtime_state, "context", None), "standalone_task", "")
+                    or ""
+                ).strip()
+                or request.question
+            )
+            hyde_passage = str(getattr(identity, "hyde_passage", "") or "").strip()
+            if hyde_passage:
+                request.latency_trace.set_value("hyde_generated", True)
+                request.latency_trace.set_value("hyde_used_for_vector", True)
+                request.latency_trace.set_value("hyde_reason", "unified_planner")
+                request.latency_trace.set_value(
+                    "hyde_model",
+                    str(getattr(identity, "model_name", "") or ""),
+                )
+                return (
+                    f"{canonical_task}\n\n"
+                    "Hypothetical evidence for vector retrieval only:\n"
+                    f"{hyde_passage}"
+                )
+            if getattr(settings, "agent_short_loop_enabled", False):
+                request.latency_trace.set_value("hyde_generated", False)
+                request.latency_trace.set_value("hyde_used_for_vector", False)
+                request.latency_trace.set_value("hyde_reason", "planner_empty")
+                return ""
+            return generate_hyde_vector_query(
+                canonical_task=canonical_task,
+                provider=phase64_runtime_identity_provider(
+                    self.runtime_identity_provider,
+                    settings,
+                ),
+                latency_trace=request.latency_trace,
+            )
+
+        coordinator = RunCoordinator(
+            planning_policy=SimpleNamespace(
+                plan=lambda *_args, **_kwargs: planning,
+                escalate_fast_route=planning_policy.escalate_fast_route,
+            ),
+            checkpoints=checkpoint_repository,
+            tool_executor=ToolExecutor(self.toolbox, event_bus=runtime_event_bus),
+            evidence_machine=EvidenceStateMachine,
+            final_answers=ToolCallingFinalAnswerFacade(
+                chat_model_provider=phase64_final_answer_provider(
+                    self.chat_model_provider,
+                    settings,
+                ),
+            ),
+            final_request_builder=build_service_final_request,
+            pre_tool_gate=ToolCallingCoordinatorGateAdapter(
+                run_pre_tool_gate=False,
+                run_resume_gate=True,
+                run_semantic_cache_gate=True,
+                resume_decision=resume_decision,
+                chat_model_provider=self.chat_model_provider,
+                final_answer_strategy=self.final_answer_strategy,
+                settings=settings,
+                toolbox=self.toolbox,
+                runtime_event_bus=runtime_event_bus,
+                workflow_steps=workflow_steps,
+                tool_calls=tool_calls,
+                resume_completion_recorder=record_resume_completed,
+            ),
+            post_preflight_gate=ToolCallingCoordinatorGateAdapter(
+                run_pre_tool_gate=False,
+                run_resume_gate=True,
+                run_semantic_cache_gate=True,
+                resume_decision=resume_decision,
+                chat_model_provider=self.chat_model_provider,
+                final_answer_strategy=self.final_answer_strategy,
+                settings=settings,
+                toolbox=self.toolbox,
+                runtime_event_bus=runtime_event_bus,
+                workflow_steps=workflow_steps,
+                tool_calls=tool_calls,
+                resume_completion_recorder=record_resume_completed,
+                defer_required_tool_gates=False,
+            ),
+            hyde_query_builder=build_service_hyde_query,
+        )
+        token_emitter = getattr(self.chat_model_provider, "emit_stream_token", None)
+        if getattr(self.chat_model_provider, "stream_generate_emits_tokens", False):
+            token_emitter = None
+
+        result = coordinator.run(
+            CoordinatorRequest(
+                question=question,
+                budget=RunBudget(
+                    max_tool_calls=max_tool_calls,
+                    max_iterations=max_iterations,
+                ),
+                history=tuple(history or ()),
+                event_sink=cast(Any, runtime_event_bus),
+                conversation_id=conversation_id,
+                resume_policy=cast(Any, resume_policy),
+                resume_run_id=effective_resume_run_id,
+                image_path=image_path,
+                latency_trace=latency_trace,
+                token_emitter=token_emitter,
+            )
+        )
+        if isinstance(result, AgentQueryResult):
+            result.latency_trace["run_coordinator_enabled"] = True
+            result.latency_trace["run_coordinator_skip_reason"] = ""
+        return result
 
     def _emit(
         self,
-        event_sink: ToolCallingEventSink | None,
+        event_sink: InternalToolCallingEventSink | None,
         event: str,
         payload: dict[str, object],
     ) -> None:
+        if isinstance(event_sink, RuntimeEventBus):
+            event_sink.emit(
+                stage="planning" if event == "agent_step" else "retrieval",
+                name=cast(RuntimeEventName, event),
+                payload=payload,
+            )
+            return
         trace = get_current_latency_trace()
         if trace is not None:
             trace.mark_progress()
         if event_sink is not None:
             event_sink(ToolCallingRuntimeEvent(event=event, payload=payload))
-
-    def _emit_tool_start(
-        self,
-        event_sink: ToolCallingEventSink | None,
-        tool_call: ChatToolCall,
-        iteration: int,
-    ) -> None:
-        self._emit(
-            event_sink,
-            "tool_call_start",
-            {
-                "iteration": iteration,
-                "step_id": tool_call.id,
-                "tool_name": tool_call.name,
-                "input_summary": safe_tool_input_summary(tool_call),
-            },
-        )
-
-    def _emit_tool_result(
-        self,
-        event_sink: ToolCallingEventSink | None,
-        record: AgentToolCallRecord,
-        iteration: int,
-    ) -> None:
-        log_event(
-            agent_logger,
-            "tool_call_executed",
-            mode="tool_calling_agent",
-            iteration=iteration,
-            tool_name=record.tool_name,
-            succeeded=record.succeeded,
-            output_summary=record.output_summary,
-        )
-        trace = get_current_latency_trace()
-        selected_count = (
-            int(trace.values.get("retrieval_selected_count", 0) or 0)
-            if trace is not None and record.tool_name in ALLOWED_TOOL_NAMES
-            else 0
-        )
-        self._emit(
-            event_sink,
-            "tool_call_result",
-            {
-                "iteration": iteration,
-                "step_id": record.step_id,
-                "tool_name": record.tool_name,
-                "observation_summary": record.output_summary,
-                "succeeded": record.succeeded,
-                "skipped": bool(record.error and "skipped" in record.error),
-                "selected_count": selected_count,
-            },
-        )
-
 
 def tool_calling_messages(
     question: str,
@@ -2067,26 +2511,6 @@ def phase64_final_answer_provider(
             max_tokens=max(1, int(settings.agent_final_max_tokens)),
         )
     return provider
-
-
-def phase64_runtime_identity_provider(
-    provider: ChatModelProvider | None,
-    settings: Any,
-) -> ChatModelProvider | None:
-    """Use DeepSeek non-thinking mode for B-only structured planner requests."""
-    if not isinstance(provider, OpenAICompatibleChatModelProvider):
-        return provider
-    if not (
-        settings.agent_short_loop_enabled
-        and settings.phase64_route_first_enabled
-        and settings.phase64_final_non_thinking_enabled
-        and is_deepseek_endpoint(provider.base_url)
-        and provider.model_name.strip().casefold().startswith("deepseek-v4")
-    ):
-        return provider
-    extra_body = dict(provider.extra_body)
-    extra_body["thinking"] = {"type": "disabled"}
-    return replace(provider, extra_body=extra_body)
 
 
 def final_answer_strategy_instruction(
@@ -2383,6 +2807,41 @@ def failed_tool_call_result(
     )
 
 
+def result_from_final_generation_failure(
+    *,
+    question: str,
+    sources: list[AgentSourceReference],
+    search_results: list[AgentSearchItem],
+    tool_calls: list[AgentToolCallRecord],
+    workflow_steps: list[AgentToolCallRecord],
+    llm_call_count: int,
+    repeated_query_count: int,
+    near_duplicate_query_count: int,
+    skipped_tool_call_count: int,
+    executed_tool_call_count: int,
+    citation_repair_count: int,
+    runtime_state: AgentRuntimeState,
+    latency_trace: LatencyTrace,
+    error: Exception,
+) -> AgentQueryResult:
+    return build_final_generation_failure_result(
+        question=question,
+        sources=sources,
+        search_results=search_results,
+        tool_calls=tool_calls,
+        workflow_steps=workflow_steps,
+        llm_call_count=llm_call_count,
+        repeated_query_count=repeated_query_count,
+        near_duplicate_query_count=near_duplicate_query_count,
+        skipped_tool_call_count=skipped_tool_call_count,
+        executed_tool_call_count=executed_tool_call_count,
+        citation_repair_count=citation_repair_count,
+        runtime_state=runtime_state,
+        latency_trace=latency_trace,
+        error=error,
+    )
+
+
 def result_from_tool_calling_loop(
     *,
     question: str,
@@ -2404,29 +2863,7 @@ def result_from_tool_calling_loop(
     latency_trace: dict[str, object],
     image_analysis: dict[str, object] | None = None,
 ) -> AgentQueryResult:
-    latency_trace = dict(latency_trace)
-    if runtime_state is not None:
-        latency_trace.update(runtime_state.diagnostics())
-    latency_trace["llm_call_count"] = llm_call_count
-    latency_trace["repeated_query_count"] = repeated_query_count
-    latency_trace["near_duplicate_query_count"] = near_duplicate_query_count
-    latency_trace["skipped_tool_call_count"] = skipped_tool_call_count
-    latency_trace["executed_tool_call_count"] = executed_tool_call_count
-    latency_trace["citation_repair_count"] = citation_repair_count
-    log_event(
-        agent_logger,
-        "refusal_triggered" if refused else "answer_generated",
-        mode="tool_calling_agent",
-        refused=refused,
-        source_count=len(sources),
-        citation_count=len(citations),
-        tool_call_count=len(tool_calls),
-        executed_tool_call_count=executed_tool_call_count,
-        skipped_tool_call_count=skipped_tool_call_count,
-        citation_repair_count=citation_repair_count,
-        latency_ms=latency_trace.get("total_latency_ms"),
-    )
-    return AgentQueryResult(
+    return build_tool_calling_result(
         question=question,
         answer=answer,
         tool_calls=tool_calls,
@@ -2435,20 +2872,66 @@ def result_from_tool_calling_loop(
         citations=citations,
         refused=refused,
         refusal_reason=refusal_reason,
-        reasoning_summary=(
-            "tool_calling_agent "
-            f"llm_calls={llm_call_count}; "
-            f"tool_calls={len(tool_calls)}; "
-            f"executed_tool_call_count={executed_tool_call_count}; "
-            f"skipped_tool_call_count={skipped_tool_call_count}; "
-            f"citation_repair_count={citation_repair_count}; "
-            f"repeated_query_count={repeated_query_count}"
-        ),
-        mode="tool_calling_agent",
         workflow_steps=workflow_steps,
-        iteration_count=len(workflow_steps),
+        llm_call_count=llm_call_count,
+        repeated_query_count=repeated_query_count,
+        near_duplicate_query_count=near_duplicate_query_count,
+        skipped_tool_call_count=skipped_tool_call_count,
+        executed_tool_call_count=executed_tool_call_count,
+        citation_repair_count=citation_repair_count,
+        runtime_state=runtime_state,
         latency_trace=latency_trace,
         image_analysis=image_analysis,
+    )
+
+
+def outcome_from_tool_calling_loop(
+    *,
+    question: str,
+    answer: str,
+    tool_calls: list[AgentToolCallRecord],
+    workflow_steps: list[AgentToolCallRecord],
+    search_results: list[AgentSearchItem],
+    sources: list[AgentSourceReference],
+    citations: list[int],
+    refused: bool,
+    refusal_reason: str | None,
+    llm_call_count: int,
+    repeated_query_count: int,
+    near_duplicate_query_count: int,
+    skipped_tool_call_count: int,
+    executed_tool_call_count: int,
+    citation_repair_count: int,
+    runtime_state: AgentRuntimeState | None = None,
+    latency_trace: dict[str, object],
+    stop_reason: RuntimeStopReason,
+    image_analysis: dict[str, object] | None = None,
+) -> FinalAnswerOutcome:
+    result = result_from_tool_calling_loop(
+        question=question,
+        answer=answer,
+        tool_calls=tool_calls,
+        workflow_steps=workflow_steps,
+        search_results=search_results,
+        sources=sources,
+        citations=citations,
+        refused=refused,
+        refusal_reason=refusal_reason,
+        llm_call_count=llm_call_count,
+        repeated_query_count=repeated_query_count,
+        near_duplicate_query_count=near_duplicate_query_count,
+        skipped_tool_call_count=skipped_tool_call_count,
+        executed_tool_call_count=executed_tool_call_count,
+        citation_repair_count=citation_repair_count,
+        runtime_state=runtime_state,
+        latency_trace=latency_trace,
+        image_analysis=image_analysis,
+    )
+    return FinalAnswerController.outcome_from_result(
+        result=result,
+        citations=citations,
+        citation_repair_count=citation_repair_count,
+        stop_reason=stop_reason,
     )
 
 
@@ -2488,15 +2971,6 @@ def apply_runtime_diagnostics(
         latency_trace.set_value(key, value)
 
 
-def apply_evidence_identity_diagnostics(
-    latency_trace: LatencyTrace,
-    evidence_identity: Any,
-) -> None:
-    diagnostics = evidence_identity.diagnostics()
-    for key, value in diagnostics.items():
-        latency_trace.set_value(key, value)
-
-
 def semantic_cache_tool_for_identity(evidence_identity: Any) -> str:
     intent_key = str(getattr(evidence_identity, "intent_key", "") or "")
     if intent_key == "visual_evidence":
@@ -2514,17 +2988,14 @@ def runtime_checkpoint_state(
     sources: list[AgentSourceReference],
     latency_trace: dict[str, object],
 ) -> dict[str, object]:
-    return {
-        "runtime_context": runtime_state.diagnostics(),
-        "workflow_steps": [tool_call_record_to_dict(item) for item in workflow_steps[:20]],
-        "tool_calls": [tool_call_record_to_dict(item) for item in tool_calls[:20]],
-        "sources": [source_reference_to_dict(item) for item in sources[:12]],
-        "source_chunk_ids": [
-            int(source.chunk_id)
-            for source in sources[:50]
-            if isinstance(source.chunk_id, int)
-        ],
-        "latency_trace": {
+    snapshot = CheckpointSnapshot(
+        workflow_steps=tuple(tool_call_record_to_dict(item) for item in workflow_steps),
+        tool_calls=tuple(tool_call_record_to_dict(item) for item in tool_calls),
+        sources=tuple(source_reference_to_dict(item) for item in sources),
+        completed_tool_ids=tuple(
+            item.step_id for item in tool_calls if item.succeeded and item.step_id
+        ),
+        safe_trace={
             key: value
             for key, value in latency_trace.items()
             if key
@@ -2539,6 +3010,19 @@ def runtime_checkpoint_state(
                 "runtime_run_id",
             }
         },
+    ).to_json_dict()
+    return {
+        "runtime_context": runtime_state.diagnostics(),
+        "workflow_steps": snapshot["workflow_steps"],
+        "tool_calls": snapshot["tool_calls"],
+        "sources": snapshot["sources"],
+        "completed_tool_ids": snapshot["completed_tool_ids"],
+        "source_chunk_ids": [
+            int(source.chunk_id)
+            for source in sources[:50]
+            if isinstance(source.chunk_id, int)
+        ],
+        "latency_trace": snapshot["safe_trace"],
     }
 
 
@@ -2549,6 +3033,7 @@ def tool_call_record_to_dict(record: AgentToolCallRecord) -> dict[str, object]:
         "output_summary": truncate_text(record.output_summary, 180),
         "succeeded": record.succeeded,
         "error": truncate_text(record.error or "", 180) or None,
+        "step_id": record.step_id,
     }
 
 
@@ -2613,73 +3098,22 @@ def result_from_cached_evidence(
     runtime_state: AgentRuntimeState,
     latency_trace: LatencyTrace,
 ) -> AgentQueryResult:
-    llm_started = time.perf_counter()
-    evidence_result = chat_model_provider.generate(
-        evidence_answer_messages(
-            question,
-            sources=sources,
-            history=history,
-            final_answer_strategy=final_answer_strategy,
-        )
-    )
-    latency_trace.add_duration("answer_latency_ms", (time.perf_counter() - llm_started) * 1000.0)
-    allowed_source_ids = list(range(1, len(sources) + 1))
-    citations = extract_citations(evidence_result.answer, allowed_source_ids)
-    answer_content = evidence_result.answer
-    llm_call_count = 1
-    citation_repair_count = 0
-    if not citations:
-        repair_started = time.perf_counter()
-        repair_result = chat_model_provider.generate(
-            citation_repair_messages(
-                question,
-                draft_answer=evidence_result.answer,
-                sources=sources,
-                history=history,
-                final_answer_strategy=final_answer_strategy,
-            )
-        )
-        citation_repair_count = 1
-        llm_call_count += 1
-        latency_trace.add_duration("answer_latency_ms", (time.perf_counter() - repair_started) * 1000.0)
-        latency_trace.add_duration("citation_repair_latency_ms", (time.perf_counter() - repair_started) * 1000.0)
-        repair_citations = extract_citations(repair_result.answer, allowed_source_ids)
-        if repair_citations:
-            answer_content = repair_result.answer
-            citations = repair_citations
-    if citations:
-        runtime_state.final_decision = "answer"
-        runtime_state.stop_reason = "semantic_evidence_cache_hit"
-        refused = False
-        refusal_reason = None
-    else:
-        runtime_state.final_decision = "refuse"
-        runtime_state.stop_reason = "cached_evidence_without_citations"
-        refused = True
-        refusal_reason = "Cached evidence answer did not include valid citations."
-    apply_runtime_diagnostics(latency_trace, runtime_state)
-    return result_from_tool_calling_loop(
+    return FinalAnswerController(
+        chat_model_provider,
+        answer_messages=evidence_answer_messages,
+        repair_messages=citation_repair_messages,
+        citation_extractor=extract_citations,
+    ).from_cached_evidence(
         question=question,
-        answer=answer_content,
-        tool_calls=tool_calls,
-        workflow_steps=workflow_steps,
         search_results=search_results,
         sources=sources,
-        citations=citations,
-        refused=refused,
-        refusal_reason=refusal_reason,
-        llm_call_count=llm_call_count,
-        repeated_query_count=0,
-        near_duplicate_query_count=0,
-        skipped_tool_call_count=0,
-        executed_tool_call_count=0,
-        citation_repair_count=citation_repair_count,
+        tool_calls=tool_calls,
+        workflow_steps=workflow_steps,
+        history=history,
+        strategy=final_answer_strategy,
         runtime_state=runtime_state,
-        latency_trace=latency_trace.finalize(
-            iteration_count=len(workflow_steps),
-            tool_call_count=len(tool_calls),
-        ),
-    )
+        latency_trace=latency_trace,
+    ).result
 
 
 def result_from_runtime_checkpoint(
@@ -2723,79 +3157,20 @@ def result_from_runtime_checkpoint(
     latency_trace.set_value("runtime_resumed", True)
     latency_trace.set_value("runtime_skipped_completed_nodes", ["tool_execution"])
     latency_trace.set_value("executed_tool_call_count", 0)
-    if not sources:
-        runtime_state.stop_reason = "resume_checkpoint_without_sources"
-        runtime_state.final_decision = "refuse"
-        apply_runtime_diagnostics(latency_trace, runtime_state)
-        return result_from_tool_calling_loop(
-            question=question,
-            answer="Runtime checkpoint did not contain reusable source evidence.",
-            tool_calls=[],
-            workflow_steps=workflow_steps,
-            search_results=[],
-            sources=[],
-            citations=[],
-            refused=True,
-            refusal_reason="Runtime checkpoint did not contain reusable source evidence.",
-            llm_call_count=0,
-            repeated_query_count=0,
-            near_duplicate_query_count=0,
-            skipped_tool_call_count=0,
-            executed_tool_call_count=0,
-            citation_repair_count=0,
-            runtime_state=runtime_state,
-            latency_trace=latency_trace.finalize(
-                iteration_count=len(workflow_steps),
-                tool_call_count=0,
-            ),
-        )
-
-    llm_started = time.perf_counter()
-    evidence_result = chat_model_provider.generate(
-        evidence_answer_messages(
-            question,
-            sources=sources,
-            history=history,
-            final_answer_strategy=final_answer_strategy,
-        )
-    )
-    latency_trace.add_duration("answer_latency_ms", (time.perf_counter() - llm_started) * 1000.0)
-    allowed_source_ids = list(range(1, len(sources) + 1))
-    citations = extract_citations(evidence_result.answer, allowed_source_ids)
-    runtime_state.stop_reason = "runtime_resume_completed"
-    runtime_state.final_decision = "answer" if citations else "refuse"
-    apply_runtime_diagnostics(latency_trace, runtime_state)
-    workflow_steps.append(
-        AgentToolCallRecord(
-            tool_name="final_answer",
-            input_summary="runtime resume",
-            output_summary=truncate_text(evidence_result.answer),
-            succeeded=bool(citations),
-            error=None if citations else "checkpoint answer missing citations",
-        )
-    )
-    return result_from_tool_calling_loop(
+    return FinalAnswerController(
+        chat_model_provider,
+        answer_messages=evidence_answer_messages,
+        repair_messages=citation_repair_messages,
+        citation_extractor=extract_citations,
+    ).from_checkpoint(
         question=question,
-        answer=evidence_result.answer if citations else "Runtime checkpoint evidence could not produce cited answer.",
-        tool_calls=[],
-        workflow_steps=workflow_steps,
-        search_results=[],
         sources=sources,
-        citations=citations,
-        refused=not bool(citations),
-        refusal_reason=None if citations else "Runtime checkpoint evidence could not produce cited answer.",
-        llm_call_count=1,
-        repeated_query_count=0,
-        near_duplicate_query_count=0,
-        skipped_tool_call_count=0,
-        executed_tool_call_count=0,
-        citation_repair_count=0,
+        workflow_steps=workflow_steps,
+        history=history,
+        strategy=final_answer_strategy,
         runtime_state=runtime_state,
-        latency_trace=latency_trace.finalize(
-            iteration_count=len(workflow_steps),
-            tool_call_count=0,
-        ),
-    )
+        latency_trace=latency_trace,
+    ).result
 
 
 def optional_str(value: object) -> str | None:

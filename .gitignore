@@ -37,6 +37,10 @@ data/app.sqlite*.backup*
 data/app.sqlite-journal.backup*
 *.pid
 
+# Phase 65 reviewer-controlled holdout inputs are local and never committed.
+data/evaluation/phase65_private_holdout*.csv
+data/evaluation/phase65_private_holdout*.yaml
+
 # Phase 46 runtime/staging artifacts
 data/evaluation/phase46_redescribe_staging/
 data/evaluation/phase46_redescribe_staging_resume*/
@@ -83,11 +87,14 @@ obsidian-agent开发/*
 obsidian-agent开发/阶段/阶段 [0-9] - *
 obsidian-agent开发/阶段/阶段 [1-5][0-9] - *
 obsidian-agent开发/阶段/阶段 6[0-3]*
+!obsidian-agent开发/阶段/阶段 65 - Agent 真实质量门禁与 Runtime 模块化/
+!obsidian-agent开发/阶段/阶段 65 - Agent 真实质量门禁与 Runtime 模块化/**
 
 # Local AI agent tool configs (Claude Code / Codex) — keep local-only
 .claude/
 .codex/
 .playwright-mcp/
+.superpowers/
 
 # OS/editor
 .DS_Store

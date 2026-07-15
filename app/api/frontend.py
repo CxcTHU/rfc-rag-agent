@@ -1,5 +1,6 @@
 import csv
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -19,7 +20,6 @@ REACT_INDEX_PATH = REACT_FRONTEND_DIST_DIR / "index.html"
 REACT_FAVICON_PATH = REACT_FRONTEND_DIST_DIR / "favicon.svg"
 QUALITY_REPORT_PATH = FRONTEND_DIR / "quality_report.html"
 QUALITY_REVIEW_PATH = FRONTEND_DIR / "quality_review.html"
-QUALITY_SUMMARY_PATH = ROOT_DIR / "data" / "evaluation" / "stage30_quality_summary.csv"
 STAGE29_RESULTS_PATH = ROOT_DIR / "data" / "evaluation" / "stage29_real_quality_results.csv"
 STAGE30_DEDUCTIONS_PATH = ROOT_DIR / "data" / "evaluation" / "stage30_quality_deductions.csv"
 STAGE30_JUDGE_PATH = ROOT_DIR / "data" / "evaluation" / "stage30_llm_judge_results.csv"
@@ -107,9 +107,9 @@ def quality_review() -> FileResponse:
 
 @router.get("/quality-report/data.json", include_in_schema=False)
 def quality_report_data() -> JSONResponse:
-    """只读返回阶段 30 质量评分汇总（来自本地脱敏 CSV，不触发真实 API）。"""
+    """Return only the current fail-closed Stage 30 evidence receipt."""
 
-    return JSONResponse(_read_quality_summary())
+    return JSONResponse(_quality_report_blocked_receipt())
 
 
 @router.get("/quality-review/data.json", include_in_schema=False)
@@ -162,19 +162,44 @@ def save_quality_review(payload: dict[str, str] = Body(...)) -> JSONResponse:
 
 @router.get("/quality-report/export.csv", include_in_schema=False)
 def quality_report_export_csv() -> Response:
-    """只读导出阶段 30 质量评分汇总 CSV。"""
+    """Export only the current fail-closed Stage 30 evidence receipt."""
 
-    if not QUALITY_SUMMARY_PATH.exists():
-        return Response(status_code=404)
-    return FileResponse(
-        QUALITY_SUMMARY_PATH,
+    return Response(
+        content=_quality_report_blocked_csv(),
         media_type="text/csv",
-        filename="stage30_quality_summary.csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="stage30_quality_summary.csv"'
+        },
     )
 
 
-def _read_quality_summary() -> list[dict[str, str]]:
-    return _read_csv(QUALITY_SUMMARY_PATH)
+def _quality_report_blocked_receipt() -> dict[str, object]:
+    """Historical Stage 30 artifacts cannot bypass the Phase 65 stale gate."""
+
+    return {
+        "release_decision": "blocked",
+        "evidence_status": "stale",
+        "evidence_reasons": "health_schema_stale|manifest_unavailable",
+        "manifest_run_id": "",
+        "trust_level": "local_integrity_only",
+        "summary": [],
+    }
+
+
+def _quality_report_blocked_csv() -> str:
+    receipt = _quality_report_blocked_receipt()
+    fields = [
+        "release_decision",
+        "evidence_status",
+        "evidence_reasons",
+        "manifest_run_id",
+        "trust_level",
+    ]
+    stream = StringIO()
+    writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
+    writer.writeheader()
+    writer.writerow({field: receipt[field] for field in fields})
+    return stream.getvalue()
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:

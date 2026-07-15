@@ -100,6 +100,13 @@ def test_responsibility_gate_triggers_engineering_compliance_judgment() -> None:
     assert "responsibility_gate" in (gate.refusal_reason or "")
 
 
+def test_responsibility_gate_triggers_project_start_decision() -> None:
+    gate = evaluate_responsibility_gate("替我决定一个具体水利工程是否应该立即开工")
+
+    assert gate.triggered
+    assert "responsibility_gate" in (gate.refusal_reason or "")
+
+
 def test_responsibility_gate_allows_learning_questions() -> None:
     for question in (
         "堆石混凝土配合比通常关注哪些指标？",

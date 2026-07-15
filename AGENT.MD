@@ -1100,6 +1100,8 @@ rsync -az --delete \
 
 同步后在 CPU 服务器上按既有生产路径 rebuild/restart，并至少做脱敏 smoke：`/health`、首页或 `/app-v2`、认证链路、代表性 Agent 查询、原文打开。不得把 CPU `.env.prod`、密钥、数据库密码、Redis 密码、API key、Bearer token、provider raw response、完整 chunk、受限全文或私有服务日志复制回本地、写入文档或提交到 Git。
 
+CPU 生产部署的 `app` 服务必须使用 `docker-compose.prod.yml` 内置的 `network_mode: host`，让 embedding、rerank、chat model 等外部 provider 请求走 CPU 宿主机网络出口；不得在更新 Agent 时退回 Docker bridge/NAT，也不得依赖临时 compose override 才获得宿主机出口。PostgreSQL 与 Redis 继续容器化，但只通过宿主机 `127.0.0.1:${POSTGRES_HOST_PORT:-15432}` / `127.0.0.1:${REDIS_HOST_PORT:-16379}` 提供给 app。每次 CPU 重启后必须检查 `docker inspect rfc-rag-agent-stage44-smoke-app-1 --format '{{.HostConfig.NetworkMode}}'` 为 `host`。
+
 以后新增功能时，优先从 `main` 新建功能分支，例如：
 
 ```text

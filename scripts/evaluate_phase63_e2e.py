@@ -5,7 +5,7 @@ import csv
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from urllib import error, request
 
 
@@ -148,6 +148,16 @@ def evaluate_events(
                 tool_names.append(value)
                 if item.get("succeeded") is True:
                     succeeded_tool_names.append(value)
+    metadata_steps = metadata.get("workflow_steps")
+    if isinstance(metadata_steps, list):
+        for item in metadata_steps:
+            if not isinstance(item, dict):
+                continue
+            value = item.get("tool_name") or item.get("name")
+            if isinstance(value, str) and value:
+                tool_names.append(value)
+                if item.get("succeeded") is True:
+                    succeeded_tool_names.append(value)
     tool_names = list(dict.fromkeys(tool_names))
     succeeded_tool_names = list(dict.fromkeys(succeeded_tool_names))
     trace = metadata.get("latency_trace")
@@ -169,6 +179,9 @@ def evaluate_events(
         and payload.get("succeeded") is True
     ]
     live_selected_count = live_selected_values[-1] if live_selected_values else 0
+    count_contract_expected = expected_tool == "hybrid_search_knowledge"
+    if not count_contract_expected and live_selected_values:
+        selected_count = live_selected_count
     lexical_backend = str(trace.get("lexical_search_backend", ""))
     vector_backend = str(trace.get("vector_search_backend", ""))
     vector_degraded = bool(trace.get("vector_search_degraded", False))
@@ -189,6 +202,7 @@ def evaluate_events(
     has_metadata = "metadata" in event_names
     has_done = "done" in event_names
     tool_ok = expected_tool in succeeded_tool_names
+    gate_expected = expected_tool.endswith("_gate")
     graph_ok = (
         expected_graph_requirement in {"", "any"}
         or (
@@ -215,11 +229,12 @@ def evaluate_events(
         error_category = "unexpected_graph_route"
     elif (
         enforce_runtime_contract
+        and not gate_expected
         and expected_tool == "hybrid_search_knowledge"
         and lexical_backend != "bm25"
     ):
         error_category = "unexpected_lexical_backend"
-    elif enforce_runtime_contract and not (
+    elif enforce_runtime_contract and not gate_expected and not (
         vector_backend == "pgvector_hnsw" and not vector_degraded
     ) and not (
         allow_vector_fallback
@@ -227,9 +242,9 @@ def evaluate_events(
         and vector_degraded
     ):
         error_category = "vector_backend_degraded"
-    elif enforce_runtime_contract and not true_streaming:
+    elif enforce_runtime_contract and not gate_expected and not true_streaming:
         error_category = "streaming_degraded"
-    elif enforce_runtime_contract and not counts_match:
+    elif enforce_runtime_contract and not gate_expected and count_contract_expected and not counts_match:
         error_category = "retrieval_count_mismatch"
     elif not citations_ok:
         error_category = "insufficient_citations"
@@ -272,6 +287,15 @@ def evaluate_events(
         "planner_call_count": trace.get("planner_call_count", 0),
         "final_generation_call_count": trace.get("final_generation_call_count", 0),
         "final_model_ttft_ms": trace.get("final_model_ttft_ms", 0.0),
+        # Provider usage receipts are aggregate numbers only; no prompt, answer,
+        # request payload, or token text is retained by the evaluator.
+        "input_tokens": trace.get("provider_prompt_tokens"),
+        "output_tokens": trace.get("provider_completion_tokens"),
+        "estimated_cost": trace.get("provider_estimated_cost"),
+        "provider_usage_receipt_complete": trace.get("provider_usage_receipt_complete"),
+        "provider_usage_request_count": trace.get("provider_usage_request_count", 0),
+        "provider_usage_receipt_count": trace.get("provider_usage_receipt_count", 0),
+        "cold_cache_receipt": trace.get("evaluation_cold_cache_receipt"),
         "citation_repair_count": trace.get("citation_repair_count", 0),
         "citation_repair_latency_ms": trace.get("citation_repair_latency_ms", 0.0),
         "refused": bool(metadata.get("refused", False)),
@@ -283,6 +307,36 @@ def request_headers(token: str) -> dict[str, str]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
+
+
+def case_history(case: Mapping[str, str]) -> list[str]:
+    raw_history = str(case.get("history") or case.get("history_json") or "").strip()
+    if not raw_history:
+        return []
+    try:
+        parsed = json.loads(raw_history)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [item.strip() for item in parsed if isinstance(item, str) and item.strip()]
+
+
+def set_stream_read_timeout(
+    response: Any,
+    *,
+    deadline_monotonic: float,
+    now: float | None = None,
+) -> float:
+    """Bound the next SSE socket read by the remaining total request deadline."""
+    remaining = deadline_monotonic - (time.perf_counter() if now is None else now)
+    if remaining <= 0:
+        raise TimeoutError("agent_stream_total_deadline_exhausted")
+    socket = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+    if socket is None or not callable(getattr(socket, "settimeout", None)):
+        raise TimeoutError("agent_stream_total_deadline_unenforceable")
+    socket.settimeout(remaining)
+    return remaining
 
 
 def post_json(
@@ -312,11 +366,13 @@ def execute_case(
     keep_conversation: bool,
     capture_answer: bool = False,
     chat_model: str | None = None,
+    evaluation_run_namespace: str | None = None,
 ) -> dict[str, object]:
     started = time.perf_counter()
     conversation_id: int | None = None
     http_status = 0
     first_token_ms = 0.0
+    deadline_monotonic = started + timeout_seconds
     events: list[tuple[str, dict[str, Any]]] = []
     transport_error = ""
     try:
@@ -331,8 +387,13 @@ def execute_case(
             "question": case["query"],
             "conversation_id": conversation_id,
         }
+        history = case_history(case)
+        if history:
+            payload["history"] = history
         if chat_model:
             payload["chat_model"] = chat_model
+        if evaluation_run_namespace:
+            payload["evaluation_run_namespace"] = evaluation_run_namespace
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         call = request.Request(
             f"{base_url.rstrip('/')}/agent/query/stream",
@@ -343,7 +404,11 @@ def execute_case(
         with request.urlopen(call, timeout=timeout_seconds) as response:
             http_status = int(response.status)
             block: list[str] = []
-            for raw_line in response:
+            while True:
+                set_stream_read_timeout(response, deadline_monotonic=deadline_monotonic)
+                raw_line = response.readline()
+                if not raw_line:
+                    break
                 line = raw_line.decode("utf-8").rstrip("\r\n")
                 if line:
                     block.append(line)

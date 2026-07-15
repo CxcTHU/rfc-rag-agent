@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 import uuid
 from contextlib import contextmanager
@@ -39,6 +40,10 @@ LATENCY_FIELDS = (
     "citation_validation_latency_ms",
 )
 
+PHASE65_CACHE_ISOLATION_VERSION = "phase65-cache-isolation-v1"
+PHASE65_COLD_CACHE_RECEIPT_VERSION = "phase65-cold-cache-receipt-v1"
+_PHASE65_NAMESPACE = re.compile(r"^phase65-[A-Za-z0-9._-]{1,120}$")
+
 
 @dataclass
 class LatencyTrace:
@@ -71,6 +76,12 @@ class LatencyTrace:
         self.values.setdefault("provider_http_last_provider", "")
         self.values.setdefault("provider_http_last_model", "")
         self.values.setdefault("provider_prompt_tokens", 0)
+        self.values.setdefault("provider_completion_tokens", None)
+        self.values.setdefault("provider_estimated_cost", None)
+        self.values.setdefault("provider_usage_receipt_complete", False)
+        self.values.setdefault("provider_usage_request_count", 0)
+        self.values.setdefault("provider_usage_receipt_count", 0)
+        self.values.setdefault("provider_usage_incomplete_seen", False)
         self.values.setdefault("provider_prompt_cache_hit_tokens", 0)
         self.values.setdefault("provider_prompt_cache_miss_tokens", 0)
         self.values.setdefault("reranking_primary_health_status", "not_checked")
@@ -88,9 +99,14 @@ class LatencyTrace:
         self.values.setdefault("tool_result_cache_backend", "disabled")
         self.values.setdefault("tool_result_cache_reason", "not_checked")
         self.values.setdefault("tool_result_cache_saved_ms", 0.0)
+        self.values.setdefault("rerank_cache_primary_hit", False)
+        self.values.setdefault("rerank_cache_primary_reason", "not_checked")
         self.values.setdefault("semantic_cache_hit", False)
         self.values.setdefault("semantic_cache_reason", "not_checked")
         self.values.setdefault("agent_cache_scope", "")
+        self.values.setdefault("evaluation_run_namespace_sha256", "")
+        self.values.setdefault("evaluation_request_binding_sha256", "")
+        self.values.setdefault("evaluation_cache_isolation_version", "")
         self.values.setdefault("canonical_task", "")
         self.values.setdefault("hyde_generated", False)
         self.values.setdefault("hyde_used_for_vector", False)
@@ -193,6 +209,9 @@ class LatencyTrace:
         self.values["iteration_count"] = iteration_count
         self.values["tool_call_count"] = tool_call_count
         self.values["time_to_final_ms"] = round((time.perf_counter() - self.started_at) * 1000.0, 3)
+        receipt = phase65_cold_cache_receipt(self)
+        if receipt is not None:
+            self.values["evaluation_cold_cache_receipt"] = receipt
         return dict(self.values)
 
 
@@ -205,14 +224,67 @@ def bind_user_question_cache_key(trace: LatencyTrace, question: str) -> None:
     trace.set_value("user_question_cache_key", stable_text_cache_key(question))
 
 
-def bind_agent_conversation_cache_scope(trace: LatencyTrace, conversation_id: int | None) -> None:
+def bind_agent_conversation_cache_scope(
+    trace: LatencyTrace,
+    conversation_id: int | None,
+    *,
+    evaluation_run_namespace: str | None = None,
+) -> None:
     """Scope short-lived retrieval/evidence caches to one chat session.
 
     A missing conversation id means the request is not tied to a durable session;
     use a per-request scope so it cannot reuse another request/session's evidence.
     """
-    scope = f"conversation:{conversation_id}" if conversation_id is not None else f"request:{uuid.uuid4().hex}"
+    namespace = (evaluation_run_namespace or "").strip()
+    if namespace:
+        if not _PHASE65_NAMESPACE.fullmatch(namespace):
+            raise ValueError("evaluation_run_namespace is invalid")
+        namespace_sha256 = hashlib.sha256(namespace.encode("utf-8")).hexdigest()
+        binding_material = f"{namespace_sha256}:{uuid.uuid4().hex}"
+        trace.set_value("evaluation_run_namespace_sha256", namespace_sha256)
+        trace.set_value(
+            "evaluation_request_binding_sha256",
+            hashlib.sha256(binding_material.encode("utf-8")).hexdigest(),
+        )
+        trace.set_value("evaluation_cache_isolation_version", PHASE65_CACHE_ISOLATION_VERSION)
+        scope = f"evaluation:{PHASE65_CACHE_ISOLATION_VERSION}:{namespace_sha256}"
+    else:
+        scope = f"conversation:{conversation_id}" if conversation_id is not None else f"request:{uuid.uuid4().hex}"
     trace.set_value("agent_cache_scope", scope)
+
+
+def phase65_cold_cache_receipt(trace: LatencyTrace) -> dict[str, object] | None:
+    """Return an answer-free cache-isolation receipt for a Phase 65 run only."""
+    namespace_sha256 = trace.values.get("evaluation_run_namespace_sha256")
+    request_binding_sha256 = trace.values.get("evaluation_request_binding_sha256")
+    isolation_version = trace.values.get("evaluation_cache_isolation_version")
+    if not (
+        isinstance(namespace_sha256, str)
+        and re.fullmatch(r"[0-9a-f]{64}", namespace_sha256)
+        and isinstance(request_binding_sha256, str)
+        and re.fullmatch(r"[0-9a-f]{64}", request_binding_sha256)
+        and isolation_version == PHASE65_CACHE_ISOLATION_VERSION
+    ):
+        return None
+    # A route may legitimately bypass a cache layer altogether.  With the
+    # evaluation-specific scope already bound above, an unconsulted layer
+    # cannot reuse another run's result; only a recorded hit invalidates cold
+    # execution evidence.
+    cache_miss_confirmed = all(
+        trace.values.get(hit_field) is not True
+        for hit_field in (
+            "retrieval_cache_hit",
+            "rerank_cache_primary_hit",
+            "tool_result_cache_hit",
+        )
+    )
+    return {
+        "schema_version": PHASE65_COLD_CACHE_RECEIPT_VERSION,
+        "namespace_sha256": namespace_sha256,
+        "request_binding_sha256": request_binding_sha256,
+        "isolation_version": PHASE65_CACHE_ISOLATION_VERSION,
+        "cache_miss_confirmed": cache_miss_confirmed,
+    }
 
 
 def active_agent_cache_scope() -> str:

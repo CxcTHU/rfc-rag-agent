@@ -6,8 +6,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+from app.core.security import password_hash
 from app.db.models import Base
-from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository
+from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository, UserCreate, UserRepository
 from app.db.session import create_sqlite_engine, get_db
 from app.main import app
 from app.services.retrieval.faiss_index import FaissIndexMetadata, write_metadata
@@ -86,6 +87,35 @@ def write_complete_faiss_metadata(tmp_path) -> None:
     )
 
 
+def create_user_token(client: TestClient, tmp_path, *, role: str) -> str:
+    override_get_db = app.dependency_overrides[get_db]
+    db_generator = override_get_db()
+    db = next(db_generator)
+    try:
+        UserRepository(db).create_user(
+            UserCreate(
+                username=f"{role}_health_user",
+                email=f"{role}_health_user@example.com",
+                password_hash=password_hash("health-contract-password"),
+                role=role,
+            )
+        )
+    finally:
+        try:
+            next(db_generator)
+        except StopIteration:
+            pass
+    login = client.post(
+        "/auth/login",
+        json={
+            "username_or_email": f"{role}_health_user",
+            "password": "health-contract-password",
+        },
+    )
+    assert login.status_code == 200
+    return str(login.json()["access_token"])
+
+
 def test_health_details_reports_local_diagnostics_without_secrets(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     write_complete_faiss_metadata(tmp_path)
@@ -149,6 +179,11 @@ def test_retrieval_contract_health_is_safe_and_content_free(tmp_path, monkeypatc
     monkeypatch.setenv("RERANKING_ENABLED", "true")
     monkeypatch.setenv("RERANKING_PROVIDER", "zhipu")
     monkeypatch.setenv("RERANKING_MODEL_NAME", "rerank")
+    monkeypatch.setenv("CHAT_MODEL_PROVIDER", "test-chat")
+    monkeypatch.setenv("CHAT_MODEL_NAME", "test-chat-model")
+    monkeypatch.setenv("EMBEDDING_PROVIDER", "test-embedding")
+    monkeypatch.setenv("EMBEDDING_MODEL_NAME", "test-embedding-model")
+    monkeypatch.setenv("EMBEDDING_DIMENSION", "64")
     monkeypatch.setenv("SEMANTIC_EVIDENCE_CACHE_ENABLED", "false")
     get_settings.cache_clear()
 
@@ -160,6 +195,14 @@ def test_retrieval_contract_health_is_safe_and_content_free(tmp_path, monkeypatc
     assert payload["document_count"] == 1
     assert payload["chunk_count"] == 2
     assert len(payload["corpus_fingerprint"]) == 64
+    assert len(payload["endpoint_identity_sha256"]) == 64
+    assert len(payload["index_fingerprint_sha256"]) == 64
+    assert payload["cold_run_receipts_supported"] is False
+    assert payload["chat_model_provider"]
+    assert payload["chat_model_name"]
+    assert payload["embedding_provider"]
+    assert payload["embedding_model_name"]
+    assert payload["embedding_dimension"] > 0
     assert payload["agent_short_loop_enabled"] is False
     assert payload["phase64_route_first_enabled"] is False
     assert payload["phase64_retrieval_fanout_enabled"] is False
@@ -173,3 +216,29 @@ def test_retrieval_contract_health_is_safe_and_content_free(tmp_path, monkeypatc
     serialized = json.dumps(payload, ensure_ascii=False)
     assert "Thermal control reduces hydration heat" not in serialized
     assert "Filling capacity depends on flowability" not in serialized
+    assert "api_key" not in serialized.casefold()
+    assert "base_url" not in serialized.casefold()
+
+
+def test_retrieval_contract_allows_authenticated_non_admin_in_production(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("JWT_SECRET_KEY", "phase65-health-contract-test-secret")
+    get_settings.cache_clear()
+
+    with make_test_client(tmp_path) as client:
+        unauthenticated = client.get("/health/retrieval-contract")
+        token = create_user_token(client, tmp_path, role="user")
+        authenticated = client.get(
+            "/health/retrieval-contract",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        details = client.get(
+            "/health/details",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert unauthenticated.status_code == 401
+    assert authenticated.status_code == 200
+    assert details.status_code == 403

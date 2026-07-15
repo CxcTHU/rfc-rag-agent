@@ -37,7 +37,10 @@ from app.services.agent.refusal_explainer import build_refusal_explanation
 from app.services.agent.service import AgentQueryResult
 from app.services.agent.tools import image_url_from_source_image_path, page_number_from_source_image_path
 from app.services.agent.tool_calling_service import ToolCallingAgentService
-from app.services.observability.latency_trace import LatencyTrace
+from app.services.observability.latency_trace import (
+    LatencyTrace,
+    bind_agent_conversation_cache_scope,
+)
 from app.services.agent.runtime_checkpoint import AgentRuntimeRunRepository
 from app.services.agentic.state import AgenticResult
 from app.services.conversation.history import (
@@ -326,6 +329,11 @@ def query_agent(
         conversation_messages=conversation_messages,
     )
     if meta_response is not None:
+        finalize_early_agent_response(
+            response=meta_response,
+            request=request,
+            latency_trace=latency_trace,
+        )
         persist_agent_conversation_messages(
             repository=conversation_repository,
             conversation_id=request.conversation_id,
@@ -349,6 +357,11 @@ def query_agent(
             detail="chat model provider is unavailable or timed out",
         ) from exc
     if followup_response is not None:
+        finalize_early_agent_response(
+            response=followup_response,
+            request=request,
+            latency_trace=latency_trace,
+        )
         persist_agent_conversation_messages(
             repository=conversation_repository,
             conversation_id=request.conversation_id,
@@ -361,6 +374,11 @@ def query_agent(
     chitchat = detect_chitchat(request.question)
     if chitchat is not None:
         response = agent_response_from_chitchat(request.question, chitchat)
+        finalize_early_agent_response(
+            response=response,
+            request=request,
+            latency_trace=latency_trace,
+        )
         persist_agent_conversation_messages(
             repository=conversation_repository,
             conversation_id=request.conversation_id,
@@ -388,6 +406,7 @@ def query_agent(
             resume_run_id=request.resume_run_id,
             image_path=request.image_path,
             latency_trace=latency_trace,
+            evaluation_run_namespace=request.evaluation_run_namespace,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -520,18 +539,27 @@ def stream_agent_query_events(
                     )
                     if streamed_token_count == 0:
                         for token in split_streaming_text(response.answer):
-                            mark_response_first_token(response, stream_started)
+                            mark_response_stream_token(response, stream_started)
                             yield sse_event("token", {"text": token})
+                        mark_response_stream_complete(response, stream_started)
 
         if meta_response is not None or followup_response is not None:
             for token in split_streaming_text(response.answer):
-                mark_response_first_token(response, stream_started)
+                mark_response_stream_token(response, stream_started)
                 yield sse_event("token", {"text": token})
+            mark_response_stream_complete(response, stream_started)
         elif chitchat is not None:
             for token in split_streaming_text(response.answer):
-                mark_response_first_token(response, stream_started)
+                mark_response_stream_token(response, stream_started)
                 yield sse_event("token", {"text": token})
+            mark_response_stream_complete(response, stream_started)
 
+        if meta_response is not None or followup_response is not None or chitchat is not None:
+            finalize_early_agent_response(
+                response=response,
+                request=request,
+                latency_trace=latency_trace,
+            )
         persist_agent_conversation_messages(
             repository=conversation_repository,
             conversation_id=request.conversation_id,
@@ -1157,6 +1185,7 @@ def build_agent_query_response(
         resume_run_id=request.resume_run_id,
         image_path=request.image_path,
         latency_trace=latency_trace,
+        evaluation_run_namespace=request.evaluation_run_namespace,
     )
     response = agent_response_from_result(result)
     log_agent_response_event(response)
@@ -1202,6 +1231,8 @@ def sse_event(event: str, payload: dict[str, object]) -> str:
 
 
 class QueueStreamingChatModelProvider:
+    stream_generate_emits_tokens = True
+
     def __init__(
         self,
         *,
@@ -1593,12 +1624,52 @@ def attach_chat_model_metadata(
     return response
 
 
+def finalize_early_agent_response(
+    *,
+    response: AgentQueryResponse,
+    request: AgentQueryRequest,
+    latency_trace: LatencyTrace,
+) -> AgentQueryResponse:
+    if request.evaluation_run_namespace:
+        bind_agent_conversation_cache_scope(
+            latency_trace,
+            conversation_id=request.conversation_id,
+            evaluation_run_namespace=request.evaluation_run_namespace,
+        )
+    response.latency_trace = latency_trace.finalize(
+        iteration_count=response.iteration_count,
+        tool_call_count=len(response.tool_calls),
+    )
+    return response
+
+
 def mark_response_first_token(response: AgentQueryResponse, stream_started: float) -> None:
     if not response.latency_trace:
         response.latency_trace = {}
     if response.latency_trace.get("time_to_first_token_ms") is not None:
         return
     response.latency_trace["time_to_first_token_ms"] = round(
+        (time.perf_counter() - stream_started) * 1000.0,
+        3,
+    )
+
+
+def mark_response_stream_token(response: AgentQueryResponse, stream_started: float) -> None:
+    mark_response_first_token(response, stream_started)
+    if not response.latency_trace:
+        response.latency_trace = {}
+    response.latency_trace["streamed_token_count"] = int(
+        response.latency_trace.get("streamed_token_count", 0) or 0
+    ) + 1
+
+
+def mark_response_stream_complete(
+    response: AgentQueryResponse,
+    stream_started: float,
+) -> None:
+    if not response.latency_trace:
+        response.latency_trace = {}
+    response.latency_trace["time_to_final_ms"] = round(
         (time.perf_counter() - stream_started) * 1000.0,
         3,
     )

@@ -534,6 +534,69 @@ def test_search_figures_relaxes_specific_filter_for_contextual_visual_followup(
     assert "specific_filter_relaxed=true" in result.call.output_summary
 
 
+def test_search_figures_uses_keyword_image_fallback_for_contextual_visual_followup(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    write_test_image(tmp_path / "data" / "images" / "43" / "page8_img1.png")
+    TestingSessionLocal = make_session(tmp_path)
+
+    class EmptyVectorSearchService:
+        def __init__(self, db, embedding_provider) -> None:
+            pass
+
+        def search(self, query: str, top_k: int) -> list[VectorSearchResult]:
+            return []
+
+    class KeywordImageSearchService:
+        def __init__(self, db) -> None:
+            pass
+
+        def search(self, query: str, top_k: int) -> list[KeywordSearchResult]:
+            return [
+                KeywordSearchResult(
+                    document_id=43,
+                    document_title="RFC Failure Mode Visual Evidence",
+                    source_type="local_file",
+                    source_path="failure-mode.pdf",
+                    file_name="failure-mode.pdf",
+                    chunk_id=430,
+                    chunk_index=0,
+                    content="堆石混凝土 破坏形态 图片 裂缝扩展 视觉证据",
+                    heading_path="Figures",
+                    score=0.72,
+                    chunk_type="image_description",
+                    source_image_path="data/images/43/page8_img1.png",
+                    caption="图8 堆石混凝土破坏形态",
+                    page_number=8,
+                )
+            ]
+
+    monkeypatch.setattr(
+        "app.services.agent.tools.VectorSearchService",
+        EmptyVectorSearchService,
+    )
+    monkeypatch.setattr(
+        "app.services.agent.tools.KeywordSearchService",
+        KeywordImageSearchService,
+    )
+
+    with TestingSessionLocal() as db:
+        toolbox = make_toolbox(db)
+        result = toolbox.search_figures(
+            "堆石混凝土常见破坏形态有哪些 图片 图示 视觉证据 figure image",
+            top_k=2,
+        )
+
+    assert result.tool_name == "search_figures"
+    assert result.call.succeeded
+    assert not result.refused
+    assert result.figure_results
+    assert result.figure_results[0].chunk_id == 430
+    assert "keyword_candidates=1" in result.call.output_summary
+
+
 def test_search_figures_rejects_generic_curve_for_stress_strain_query() -> None:
     generic_curve = VectorIndexEntry(
         chunk_id=1,

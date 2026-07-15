@@ -8,6 +8,7 @@ from app.services.agent.evidence_identity import (
     EvidenceQueryIdentity,
     build_evidence_query_identity,
 )
+from app.services.agent.runtime_contracts import RuntimeFinalDecision, RuntimeStopReason
 from app.services.generation.chat_model import ChatToolCall
 from app.services.observability.latency_trace import get_current_latency_trace
 
@@ -53,6 +54,9 @@ DETAIL_FOLLOWUP_TERMS = (
     "\u89e3\u91ca",
     "\u8bf4\u660e",
     "\u8865\u5145",
+    "\u54ea\u4e9b",
+    "\u54ea\u4e9b\u7814\u7a76",
+    "\u7814\u7a76",
     "\u7b2c\u4e8c\u70b9",
     "\u4e0b\u4e00\u70b9",
     "continue",
@@ -151,7 +155,14 @@ class AgentRuntimeState:
     evidence: EvidenceState = field(default_factory=EvidenceState)
     tool_argument_rewrites: list[ToolArgumentGrounding] = field(default_factory=list)
     stop_reason: str = "not_stopped"
-    final_decision: str = "pending"
+    normalized_stop_reason: RuntimeStopReason | None = None
+    final_decision: RuntimeFinalDecision = "pending"
+
+    def set_stop_reason(self, detail: str) -> None:
+        """Preserve legacy diagnostics while exposing a closed coordinator reason."""
+
+        self.stop_reason = detail
+        self.normalized_stop_reason = _normalize_stop_reason(detail)
 
     def record_grounding(self, grounding: ToolArgumentGrounding) -> None:
         if grounding.rewrite_applied:
@@ -183,8 +194,38 @@ class AgentRuntimeState:
             "runtime_evidence_attempts": self.evidence.diagnostics(),
             "runtime_evidence_counts": self.evidence.counts_by_type(),
             "runtime_stop_reason": self.stop_reason,
+            "runtime_normalized_stop_reason": self.normalized_stop_reason or "not_stopped",
             "runtime_final_decision": self.final_decision,
         }
+
+
+def _normalize_stop_reason(detail: str) -> RuntimeStopReason:
+    if detail in {
+        "semantic_evidence_cache_hit",
+        "evidence_convergence",
+        "model_final_answer",
+        "runtime_resume_completed",
+    }:
+        return "completed"
+    if detail in {
+        "required_asset_evidence_not_found",
+        "short_loop_evidence_not_found",
+        "reranking_failed",
+        "figure_evidence_not_found",
+        "final_content_without_citations",
+        "cached_evidence_without_citations",
+        "resume_checkpoint_without_sources",
+    }:
+        return "insufficient_evidence"
+    if detail in {"iteration_limit", "tool_budget_exhausted"}:
+        return "tool_budget_exhausted"
+    if detail == "deadline_exhausted":
+        return "deadline_exhausted"
+    if detail == "completed_tool_replay_prevented":
+        return "checkpoint_unavailable"
+    if detail == "not_stopped":
+        return "internal_error"
+    return "internal_error"
 
 
 class AgentRuntime:
