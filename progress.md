@@ -1136,3 +1136,81 @@
   `tests/test_evaluate_phase65_agent_gate.py tests/test_phase65_holdout_intake.py
   tests/test_phase65_acceptance_summary.py tests/test_phase65_closeout_audit.py
   tests/test_judge_phase65_agent_gate.py -q` 为 `106 passed`。未暂存/提交。
+
+- 2026-07-15 Codex 完成 Phase66 Tool Calling Runtime 真正瘦身的本地实现验证：
+  `tool_calling_service.py` 缩到 233 行，`ToolCallingAgentService.query` 缩到 64 行，
+  `run_coordinator.py` 缩到 90 行，满足 `tool_calling_service.py <= 260 lines`、
+  `ToolCallingAgentService.query <= 80 lines`、`run_coordinator.py <= 120 lines`。生产
+  `agent_run_coordinator_enabled` flag 已 deleted，回退策略明确为 rollback through Git。生产工具库存固定为
+  `hybrid_search_knowledge`、`search_tables`、`search_figures`、`analyze_user_image`。验证收据：
+  `output/phase66/final/runtime-structure.json`、`output/phase66/final/fault-matrix.json`、
+  `output/phase66/final/runtime-recovery.json`、`output/phase66/evaluation/summary.json`、
+  `output/phase66/evaluation/review-packet.md`。全量后端 `1897 passed, 1 skipped`，前端 unit/lint/build
+  passed，compileall passed，结构 snapshot `--check` passed。fresh Phase66 evaluator 当前为
+  `review_required`，human acceptance 为 `human_acceptance_pending`；未暂存、未提交、未 tag、未 push。
+- 2026-07-15 Codex 继续补齐 Phase66 evaluator 收据门禁：
+  `scripts/evaluate_phase66_runtime_convergence.py --collect` 不再是未实现占位，而是要求显式
+  `--observations` Phase66 receipt；`--merge` 会检查 30 text + 4 image 配对覆盖，且 B 的 completion、
+  answer_accuracy、citation_correctness、overall 不得低于 A。TDD 红灯先失败于缺 `collect_results`，实现后
+  `tests/test_evaluate_phase66_runtime_convergence.py -q` 为 `8 passed`；CLI smoke 使用
+  `output/phase66/evaluation/collect-smoke-observations.json` 输出 `review_required`，证明不完整收据不会伪装成
+  pass。刷新后的 `output/phase66/evaluation/summary.json` 仍为 `review_required`，等待真实 A/B observation
+  文件与人工验收。
+- 2026-07-15 Codex 为 Phase66 evaluator 增加 HTTP observation 采集入口：
+  新增 `data/evaluation/phase66_runtime_convergence_cases.csv`，包含 30 个 text case 和 4 个 image case；
+  `--collect-http` 会向 `/agent/query` POST case，并只落盘安全字段：case_id、modality、HTTP status、工具名、
+  citation/source/tool 计数、refused、elapsed_ms、error_category、completion_score，不落盘 prompt、answer、
+  source text、provider payload、token 或凭据。TDD 红灯先失败于缺 `collect_http_observations`，实现后
+  `tests/test_evaluate_phase66_runtime_convergence.py -q` 为 `12 passed`；不可达端口 full smoke 生成
+  30 text + 4 image observation，`failed_case_count=34`、`unknown_error_count=0`、status=`review_required`，
+  证明完整覆盖但失败的 observation 不会被标成 collected/pass。Phase66/evaluator focused 回归为
+  `69 passed`，结构 gate 与 `git diff --check` 通过。
+- 2026-07-15 Codex 采集 Phase66 本地 deterministic A/B runtime observation：
+  创建 baseline worktree `G:\Codex\program\rfc-rag-agent-phase66-baseline`（detached `be23e215`），为
+  A/B 各复制独立 SQLite，避免共享 `data/app.sqlite` 时的 `database is locked`。A 在 `127.0.0.1:8768`，
+  B 在 `127.0.0.1:8769`，均显式关闭 auth/pgvector/rerank/BM25 warmup 并使用 deterministic
+  chat/embedding/runtime_identity/vision provider。A/B query smoke 均成功。随后运行
+  `--collect-http`：A 与 B 都完成 30 text + 4 image，`failed_case_count=0`、`unknown_error_count=0`；
+  `--merge` 生成 `output/phase66/evaluation/summary.json`，其中 `paired_text_cases=30`、
+  `paired_image_cases=4`，但 status 仍为 `review_required`、reason=`missing_phase66_quality_metrics`，
+  因为当前 observation 只证明 runtime completion，不包含 answer_accuracy/citation_correctness/overall/judge
+  指标。observation 文件敏感词扫描未命中 answer/source text/prompt/token/Authorization/Bearer；8768/8769
+  自启服务已停止。
+- 2026-07-15 Codex 更正 Phase66 A/B 验收边界：
+  上述 SQLite A/B 只能作为本地隔离 runtime smoke，不能作为阶段 66 final acceptance。原因是主流/生产型
+  Agent 证据应靠近实际 PostgreSQL/pgvector 拓扑；SQLite 会掩盖或改变 pgvector 检索、事务/锁行为、
+  索引、迁移和真实语料一致性。后续 Phase66 最终质量/运行时 gate 应切换到 PostgreSQL/pgvector A/B；
+  SQLite 结果仅保留为“服务可跑通且 evaluator 安全落盘”的辅助证据。
+- 2026-07-15 Codex 为 Phase66 evaluator 增加内存态 judge 质量收据：
+  `--collect-http --judge` 会在收到 `/agent/query` 响应后，把 answer/source/citation/refusal 仅作为内存请求发送给
+  `/agent/judge`，observation 只落盘 `answer_accuracy_score`、`citation_correctness_score`、`overall_score`、
+  `judge_status` 与安全错误类别，不落盘 answer/source/prompt/provider payload。TDD 新增测试确认敏感 answer/source
+  被送入 fake judge 但不会写入 `observations.json`；judge 失败会计入 `judge_failed_count` 并保持
+  `review_required`。验证：`tests/test_evaluate_phase66_runtime_convergence.py -q` 为 `14 passed`；
+  Phase66/evaluator focused 为 `71 passed`；结构 gate 与 `git diff --check` 通过。当前尚未获得真实
+  judge-backed A/B quality packet，因此 `output/phase66/evaluation/summary.json` 仍为 `review_required`。
+- 2026-07-16 Codex 补齐 Phase66 PostgreSQL/pgvector final evidence：
+  本机 dev PG 容器 `rfc-rag-postgres-dev` 使用 pgvector `0.8.3`，源库 `rfc_rag_dev` 具备
+  `documents=1153`、`chunks=51738`、`chunk_embeddings=74067`、`embedding_vector rows=42051`。
+  为避免 SQLite smoke 被误当 final evidence，创建独立 PG clone：
+  `rfc_rag_phase66_a_20260716` 与 `rfc_rag_phase66_b_20260716`。baseline A（`be23e215`）跑
+  A 库，candidate B 跑 B 库，服务端口 `8780/8781`；PG runtime-only A/B 均完成
+  30 text + 4 image，`failed_case_count=0`、`unknown_error_count=0`，但因缺 judge metrics 仍
+  `review_required`。随后按 TDD 修复 evaluator：judge payload 在内存态裁剪到
+  `/agent/judge` schema 上限（answer <= 8000、sources <= 12、source content <= 1200、citations <= 50），
+  并对 transient judge HTTP 429/5xx 最多重试 3 次；`tests/test_evaluate_phase66_runtime_convergence.py -q`
+  更新为 `16 passed`。fixed PG judge-backed A/B 输出到
+  `output/phase66/evaluation_pg_judge_fixed/`：A summary `overall=0.8264705882352942`、
+  `answer_accuracy=0.7676470588235295`、`citation_correctness=0.6867647058823529`、
+  `judge_failed_count=0`；B summary `overall=0.870343137254902`、
+  `answer_accuracy=0.7948529411764705`、`citation_correctness=0.7823529411764706`、
+  `judge_failed_count=0`。merge summary 为 `status=passed`、`paired_text_cases=30`、
+  `paired_image_cases=4`、reason=`phase66_pairing_quality_non_regression`。安全扫描未命中
+  Authorization/Bearer/api_key/provider payload/sensitive answer/source 样例；8780/8781 已停止。
+- 2026-07-16 Codex 阶段 66 收口同步授权：
+  用户要求严格按 `AGENT.MD / AGENTS.md` 执行本地 Git、GitHub PR/merge 与 Obsidian 阶段文件同步。
+  本次收口范围是 Phase66 Tool Calling 真正瘦身、统一 coordinator 链路、PG/pgvector judge-backed
+  非回归证据、固定常用 Agent 回归集、默认 Flash 修正、纯图检索延迟修复以及拒答展示策略修复。
+  不重跑完整高成本 baseline，不提交 `output/` 运行产物，不提交 `.env`、密钥、provider raw response、
+  raw answer、reasoning_content、完整 chunk 或私有日志。阶段 66 可进入 commit/PR/merge；Phase65
+  holdout/judge 总门禁仍是独立事项，不随 Phase66 收口自动变为 pass。

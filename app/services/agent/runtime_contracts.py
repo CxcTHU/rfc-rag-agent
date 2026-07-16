@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from app.services.agent.runtime import AgentRuntimeState
     from app.services.agent.service import AgentQueryResult
-    from app.services.agent.tools import (
+    from app.services.agent.tool_models import (
         AgentSearchItem,
         AgentSourceReference,
         AgentToolCallRecord,
@@ -72,6 +72,7 @@ class ToolExecutionRequest:
     iteration: int = 1
     completed_tool_ids: frozenset[str] = frozenset()
     deadline_monotonic: float | None = None
+    image_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -114,3 +115,36 @@ class FinalAnswerOutcome:
     citations: tuple[int, ...]
     citation_repair_count: int
     stop_reason: RuntimeStopReason
+
+
+@dataclass(frozen=True)
+class EvidenceEvaluationRequest:
+    planning: object
+    outcome: object
+    budget: RunBudget | None
+    cancelled: bool
+    deadline_exhausted: bool
+
+
+@dataclass(frozen=True)
+class CheckpointSession:
+    run_id: str
+    checkpoint_id: str
+    resumed: bool
+
+
+@dataclass(frozen=True)
+class CancellationState:
+    cancelled: bool = False
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class CoordinatorOutcome:
+    result: AgentQueryResult | None
+    stop_reason: RuntimeStopReason
+    final_decision: RuntimeFinalDecision
+    citations: tuple[int, ...]
+    citation_repair_count: int
+    checkpoint_session: CheckpointSession | None
+    cancelled: bool

@@ -348,8 +348,11 @@ def test_agent_toolbox_hybrid_search_surfaces_reranking_failure(tmp_path, monkey
 
 
 def test_agent_toolbox_table_and_figure_tools_use_vector_search_service() -> None:
-    table_source = inspect.getsource(AgentToolbox.search_tables)
-    figure_source = inspect.getsource(AgentToolbox.search_figures)
+    from app.services.agent.tool_adapters.figure_search import FigureSearchAdapter
+    from app.services.agent.tool_adapters.table_search import TableSearchAdapter
+
+    table_source = inspect.getsource(TableSearchAdapter.search)
+    figure_source = inspect.getsource(FigureSearchAdapter.search)
 
     assert "VectorSearchService" in table_source
     assert "VectorSearchService" in figure_source

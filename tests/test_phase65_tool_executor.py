@@ -4,13 +4,48 @@ from app.services.agent.runtime_contracts import ToolExecutionRequest
 from app.services.agent.runtime_events import RuntimeEventBus
 from app.services.retrieval.runtime import RetrievalAction
 from app.services.agent.tool_executor import ToolExecutor
+from app.services.agent.tool_contracts import (
+    AnalyzeUserImageArguments,
+    RetrievalArguments,
+    ToolArguments,
+    ToolExecutionContext,
+)
 from app.services.agent.tools import AgentToolCallRecord, AgentToolResult
 from app.services.generation.chat_model import ChatToolCall
+
+
+class RecordingAdapter:
+    def __init__(self, owner: "RecordingToolbox", tool_name: str) -> None:
+        self.owner = owner
+        self.tool_name = tool_name
+
+    def execute(
+        self,
+        arguments: ToolArguments,
+        context: ToolExecutionContext,
+    ) -> AgentToolResult:
+        if isinstance(arguments, RetrievalArguments):
+            return self.owner._result(
+                self.tool_name,
+                arguments.query,
+                arguments.top_k or 0,
+            )
+        if isinstance(arguments, AnalyzeUserImageArguments):
+            return self.owner._result(
+                self.tool_name,
+                arguments.question,
+                0,
+            )
+        raise TypeError("unsupported arguments")
 
 
 class RecordingToolbox:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, int]] = []
+        self._hybrid_adapter = RecordingAdapter(self, "hybrid_search_knowledge")
+        self._figure_adapter = RecordingAdapter(self, "search_figures")
+        self._table_adapter = RecordingAdapter(self, "search_tables")
+        self._user_image_adapter = RecordingAdapter(self, "analyze_user_image")
 
     def search_figures(self, query: str, *, top_k: int) -> AgentToolResult:
         return self._result("search_figures", query, top_k)
@@ -41,7 +76,7 @@ def tool_call(name: str, *, call_id: str = "tool-1") -> ChatToolCall:
 def test_executor_rejects_unknown_tool_without_calling_toolbox() -> None:
     toolbox = RecordingToolbox()
 
-    outcome = ToolExecutor(toolbox).execute(
+    outcome = ToolExecutor.for_toolbox(toolbox).execute(
         ToolExecutionRequest(call=tool_call("delete_source"), default_query="q")
     )
 
@@ -53,7 +88,7 @@ def test_executor_rejects_unknown_tool_without_calling_toolbox() -> None:
 def test_executor_does_not_repeat_a_completed_tool_call_after_resume() -> None:
     toolbox = RecordingToolbox()
 
-    outcome = ToolExecutor(toolbox).execute(
+    outcome = ToolExecutor.for_toolbox(toolbox).execute(
         ToolExecutionRequest(
             call=tool_call("search_tables"),
             default_query="q",
@@ -72,7 +107,7 @@ def test_executor_preserves_required_tool_result_and_event_order() -> None:
     bus = RuntimeEventBus(run_id="run-1")
     bus.subscribe(received.append)
 
-    outcome = ToolExecutor(toolbox, event_bus=bus).execute(
+    outcome = ToolExecutor.for_toolbox(toolbox, event_bus=bus).execute(
         ToolExecutionRequest(call=tool_call("search_tables"), default_query="q", iteration=2)
     )
 
@@ -94,7 +129,7 @@ def test_executor_runs_short_loop_with_grounded_runtime_call() -> None:
     received = []
     bus.subscribe(received.append)
 
-    outcome = ToolExecutor(toolbox, event_bus=bus).execute_short_loop(
+    outcome = ToolExecutor.for_toolbox(toolbox, event_bus=bus).execute_short_loop(
         runtime=PassthroughRuntime(),
         runtime_state=object(),
         retrieval_action=RetrievalAction(required_tool="search_tables"),
@@ -113,7 +148,7 @@ def test_short_loop_propagates_iteration_and_completed_tool_guard() -> None:
     received = []
     bus.subscribe(received.append)
 
-    outcome = ToolExecutor(toolbox, event_bus=bus).execute_short_loop(
+    outcome = ToolExecutor.for_toolbox(toolbox, event_bus=bus).execute_short_loop(
         runtime=PassthroughRuntime(),
         runtime_state=object(),
         retrieval_action=RetrievalAction(required_tool="search_tables"),

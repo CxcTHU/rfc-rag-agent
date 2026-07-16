@@ -67,15 +67,15 @@ class Settings(BaseSettings):
     runtime_identity_model_temperature: float = 0.0
     runtime_identity_model_timeout_seconds: float = 10.0
     agent_short_loop_enabled: bool = False
-    agent_run_coordinator_enabled: bool = True
+    agent_default_chat_model: str = "deepseek-v4-flash"
     phase64_route_first_enabled: bool = False
     phase64_execution_graph_schema: str = "phase64-route-first-v1"
     phase64_fast_path_min_selected_sources: int = 2
-    phase64_final_non_thinking_enabled: bool = False
+    phase64_final_non_thinking_enabled: bool = True
     bm25_startup_warmup_enabled: bool = True
     agent_final_snippet_chars: int = 320
     agent_final_history_chars: int = 1000
-    agent_final_max_tokens: int = 1200
+    agent_final_max_tokens: int = 600
     agent_final_estimated_input_token_budget: int = 0
     # Phase 65 live A/B must remain blocked unless an operator has verified that
     # the selected provider returns one complete usage/cost receipt per request.

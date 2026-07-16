@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -218,6 +219,114 @@ def test_coordinator_passes_completed_tool_ids_from_checkpoint() -> None:
         frozenset({"runtime-retrieval-0"}),
         frozenset({"runtime-retrieval-0", "runtime-retrieval-1"}),
     ]
+
+
+def test_coordinator_records_tool_execution_latency_breakdown() -> None:
+    trace = LatencyTrace()
+    elapsed_by_tool = {
+        "search_figures": 12000.0,
+        "hybrid_search_knowledge": 2200.0,
+    }
+    planning = SimpleNamespace(
+        plan=lambda _: SimpleNamespace(
+            action=SimpleNamespace(
+                required_tool="search_figures",
+                forbidden_tools=(),
+                tool_sequence=("search_figures", "hybrid_search_knowledge"),
+            ),
+            canonical_task="图示证据",
+        )
+    )
+    checkpoints = SimpleNamespace(
+        start=lambda *_: "run-1",
+        persist_state=lambda *_args, **_kwargs: None,
+        completed_tool_ids=lambda *_: frozenset(),
+        complete=lambda *_: None,
+    )
+
+    def execute(request):
+        tool_name = request.call.name
+        return SimpleNamespace(
+            elapsed_ms=elapsed_by_tool[tool_name],
+            result=SimpleNamespace(
+                tool_name=tool_name,
+                call=AgentToolCallRecord(
+                    tool_name=tool_name,
+                    input_summary=tool_name,
+                    output_summary="ok",
+                    succeeded=True,
+                ),
+                search_results=["result"],
+                sources=["source"],
+            ),
+        )
+
+    coordinator = RunCoordinator(
+        planning_policy=planning,
+        checkpoints=checkpoints,
+        tool_executor=SimpleNamespace(execute=execute),
+        evidence_machine=SimpleNamespace(evaluate=lambda **_: SimpleNamespace(action="answer")),
+        final_answers=SimpleNamespace(generate=lambda _: SimpleNamespace(result="final-result")),
+        final_request_builder=lambda *args: "final-request",
+    )
+
+    assert coordinator.run(_request_with_trace(trace)) == "final-result"
+    assert trace.values["tool_execution_latency_ms"] == 14200.0
+    assert trace.values["tool_latency_ms"] == 14200.0
+    assert trace.values["search_figures_latency_ms"] == 12000.0
+    assert trace.values["hybrid_search_knowledge_latency_ms"] == 2200.0
+
+
+def test_coordinator_skips_hybrid_supplement_for_pure_figure_lookup() -> None:
+    executed_tools: list[str] = []
+    planning = SimpleNamespace(
+        plan=lambda _: SimpleNamespace(
+            action=SimpleNamespace(
+                required_tool="search_figures",
+                forbidden_tools=(),
+                tool_sequence=("search_figures", "hybrid_search_knowledge"),
+            ),
+            canonical_task="figure evidence",
+        )
+    )
+    checkpoints = SimpleNamespace(
+        start=lambda *_: "run-1",
+        persist_state=lambda *_args, **_kwargs: None,
+        completed_tool_ids=lambda *_: frozenset(),
+        complete=lambda *_: None,
+    )
+
+    def execute(request):
+        executed_tools.append(request.call.name)
+        return SimpleNamespace(
+            elapsed_ms=1.0,
+            result=SimpleNamespace(
+                tool_name=request.call.name,
+                call=AgentToolCallRecord(
+                    tool_name=request.call.name,
+                    input_summary=request.call.name,
+                    output_summary="ok",
+                    succeeded=True,
+                ),
+                search_results=["result"],
+                sources=["source"],
+            ),
+        )
+
+    coordinator = RunCoordinator(
+        planning_policy=planning,
+        checkpoints=checkpoints,
+        tool_executor=SimpleNamespace(execute=execute),
+        evidence_machine=SimpleNamespace(evaluate=lambda **_: SimpleNamespace(action="answer")),
+        final_answers=SimpleNamespace(generate=lambda _: SimpleNamespace(result="final-result")),
+        final_request_builder=lambda *args: "final-request",
+    )
+    request = _request_with_trace(LatencyTrace())
+    request = replace(request, question="请展示相关图片证据")
+
+    assert coordinator.run(request) == "final-result"
+    assert executed_tools == ["search_figures"]
+    assert request.latency_trace.values["runtime_tool_sequence_optimized"] is True
 
 
 def test_coordinator_uses_existing_checkpoint_run_for_explicit_resume_id() -> None:
@@ -824,6 +933,159 @@ def test_coordinator_sequence_keeps_required_tool_missing_fail_closed() -> None:
 
     assert coordinator.run(_request()) == "refused-result"
     assert executed == ["search_figures", "hybrid_search_knowledge"]
+
+
+def test_coordinator_uploaded_image_plus_knowledge_runs_image_then_hybrid() -> None:
+    executed: list[str] = []
+    final_requests: list[FinalAnswerRequest] = []
+    image_call = AgentToolCallRecord(
+        tool_name="analyze_user_image",
+        input_summary="image_path=<user_upload>",
+        output_summary="image described",
+        succeeded=True,
+        step_id="runtime-retrieval-1",
+    )
+    hybrid_call = AgentToolCallRecord(
+        tool_name="hybrid_search_knowledge",
+        input_summary="query=任务",
+        output_summary="selected=1",
+        succeeded=True,
+        step_id="runtime-retrieval-2",
+    )
+    planning = SimpleNamespace(
+        plan=lambda _: SimpleNamespace(
+            action=SimpleNamespace(required_tool=None, forbidden_tools=(), tool_sequence=()),
+            canonical_task="任务",
+            runtime_state=AgentRuntimeState(context=RuntimeContext(current_query="任务")),
+        )
+    )
+
+    def execute(request):
+        executed.append(request.call.name)
+        if request.call.name == "analyze_user_image":
+            return SimpleNamespace(
+                result=SimpleNamespace(
+                    tool_name="analyze_user_image",
+                    call=image_call,
+                    answer="图片显示堆石混凝土相关现象。",
+                    search_results=[],
+                    sources=[],
+                ),
+                elapsed_ms=1.0,
+                error_category=None,
+            )
+        return SimpleNamespace(
+            result=SimpleNamespace(
+                tool_name="hybrid_search_knowledge",
+                call=hybrid_call,
+                search_results=["text-result"],
+                sources=["text-source"],
+            ),
+            elapsed_ms=1.0,
+            error_category=None,
+        )
+
+    def generate(request: FinalAnswerRequest):
+        final_requests.append(request)
+        return SimpleNamespace(result="final-result", citations=(1,), stop_reason="completed")
+
+    coordinator = RunCoordinator(
+        planning_policy=planning,
+        checkpoints=SimpleNamespace(
+            start=lambda *_: "run-1",
+            persist_state=lambda *_args, **_kwargs: None,
+            completed_tool_ids=lambda *_: frozenset(),
+            complete=lambda *_: None,
+        ),
+        tool_executor=SimpleNamespace(execute=execute),
+        evidence_machine=SimpleNamespace(evaluate=lambda **_: SimpleNamespace(action="answer")),
+        final_answers=SimpleNamespace(generate=generate),
+    )
+    request = replace(
+        _request(),
+        question="请结合知识库判断这张图是否能支撑 RFC 施工或质量问题。",
+        image_path="uploads/user/image.png",
+        budget=RunBudget(max_tool_calls=2, max_iterations=2),
+    )
+
+    assert coordinator.run(request) == "final-result"
+    assert executed == ["analyze_user_image", "hybrid_search_knowledge"]
+    assert final_requests
+    assert final_requests[0].tool_calls == (image_call, hybrid_call)
+    assert final_requests[0].sources == ("text-source",)
+
+
+def test_coordinator_uploaded_image_plus_figure_lookup_runs_image_then_figures() -> None:
+    executed: list[str] = []
+    planning = SimpleNamespace(
+        plan=lambda _: SimpleNamespace(
+            action=SimpleNamespace(required_tool=None, forbidden_tools=(), tool_sequence=()),
+            canonical_task="任务",
+            runtime_state=AgentRuntimeState(context=RuntimeContext(current_query="任务")),
+        )
+    )
+
+    def execute(request):
+        executed.append(request.call.name)
+        if request.call.name == "analyze_user_image":
+            return SimpleNamespace(
+                result=SimpleNamespace(
+                    tool_name="analyze_user_image",
+                    call=AgentToolCallRecord(
+                        tool_name="analyze_user_image",
+                        input_summary="image_path=<user_upload>",
+                        output_summary="image described",
+                        succeeded=True,
+                        step_id=request.call.id,
+                    ),
+                    answer="图片描述。",
+                    search_results=[],
+                    sources=[],
+                ),
+                elapsed_ms=1.0,
+                error_category=None,
+            )
+        return SimpleNamespace(
+            result=SimpleNamespace(
+                tool_name="search_figures",
+                call=AgentToolCallRecord(
+                    tool_name="search_figures",
+                    input_summary="query=任务",
+                    output_summary="selected=1",
+                    succeeded=True,
+                    step_id=request.call.id,
+                ),
+                search_results=["figure-result"],
+                sources=["figure-source"],
+                figure_results=["figure-result"],
+            ),
+            elapsed_ms=1.0,
+            error_category=None,
+        )
+
+    coordinator = RunCoordinator(
+        planning_policy=planning,
+        checkpoints=SimpleNamespace(
+            start=lambda *_: "run-1",
+            persist_state=lambda *_args, **_kwargs: None,
+            completed_tool_ids=lambda *_: frozenset(),
+            complete=lambda *_: None,
+        ),
+        tool_executor=SimpleNamespace(execute=execute),
+        evidence_machine=SimpleNamespace(evaluate=lambda **_: SimpleNamespace(action="answer")),
+        final_answers=SimpleNamespace(
+            generate=lambda _: SimpleNamespace(result="final-result", citations=(1,), stop_reason="completed")
+        ),
+    )
+    request = replace(
+        _request(),
+        question="请寻找与这张图相似或相关的资料图片证据。",
+        image_path="uploads/user/image.png",
+        budget=RunBudget(max_tool_calls=2, max_iterations=2),
+    )
+
+    assert coordinator.run(request) == "final-result"
+    assert executed == ["analyze_user_image", "search_figures"]
 
 
 def test_coordinator_event_sink_accepts_runtime_event_callable() -> None:

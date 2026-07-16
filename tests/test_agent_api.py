@@ -10,6 +10,7 @@ from app.api.agent import (
     get_agent_embedding_provider,
     get_agent_judge_model_provider,
     get_agent_planner_chat_model_provider,
+    resolve_agent_chat_model_provider,
 )
 import app.api.agent as agent_api_module
 from app.api.chat import get_chat_model_provider
@@ -32,6 +33,7 @@ from app.services.generation.chat_model import (
     ChatMessage,
     ChatModelResult,
     DeterministicChatModelProvider,
+    OpenAICompatibleChatModelProvider,
 )
 from app.services.retrieval.embedding import DeterministicEmbeddingProvider
 
@@ -401,6 +403,34 @@ def test_agent_api_accepts_chat_model_preset_override(tmp_path) -> None:
     assert "deepseek-v4-pro" in payload["answer"]
 
 
+def test_agent_api_defaults_openai_compatible_agent_requests_to_flash(monkeypatch) -> None:
+    monkeypatch.setattr(
+        agent_api_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            chat_model_provider="openai-compatible",
+            chat_model_name="deepseek-v4-pro",
+            chat_model_api_key="test-key",
+            chat_model_base_url="https://example.test/v1",
+            chat_model_temperature=0.2,
+            chat_model_timeout_seconds=30.0,
+            agent_default_chat_model="deepseek-v4-flash",
+        ),
+    )
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="deepseek-v4-pro",
+        api_key="test-key",
+        base_url="https://example.test/v1",
+    )
+
+    resolved = resolve_agent_chat_model_provider(
+        AgentQueryRequest(question="what model are you using?"),
+        provider,
+    )
+
+    assert resolved.model_name == "deepseek-v4-flash"
+
+
 def test_agent_api_rejects_unknown_chat_model_preset(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
@@ -737,8 +767,9 @@ def test_agent_api_returns_404_for_missing_conversation_id(tmp_path) -> None:
     assert response.json()["detail"] == "conversation not found"
 
 
-def test_agent_api_returns_503_when_chat_provider_times_out(tmp_path, monkeypatch) -> None:
+def test_agent_api_falls_back_safely_when_final_provider_times_out(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("AGENT_RUN_COORDINATOR_ENABLED", "false")
+    monkeypatch.setenv("AGENT_DEFAULT_CHAT_MODEL", "")
     get_settings.cache_clear()
     failing_provider = FailingChatModelProvider()
     try:
@@ -751,21 +782,24 @@ def test_agent_api_returns_503_when_chat_provider_times_out(tmp_path, monkeypatc
     finally:
         get_settings.cache_clear()
 
-    assert response.status_code == 503
-    assert response.json()["detail"] == "chat model provider is unavailable or timed out"
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refused"] is False
+    assert payload["citations"]
     assert "sensitive" not in response.text
 
 
-def test_agent_api_retires_default_summary_path_with_controlled_503(
+def test_agent_api_retires_default_summary_path_with_runtime_fallback(
     tmp_path,
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("AGENT_RUN_COORDINATOR_ENABLED", "false")
+    monkeypatch.setenv("AGENT_DEFAULT_CHAT_MODEL", "")
     get_settings.cache_clear()
-    partial_provider = AnswerThenFailSummaryProvider()
+    failing_provider = FailingChatModelProvider()
     try:
         with make_test_client(tmp_path) as client:
-            app.dependency_overrides[get_agent_chat_model_provider] = lambda: partial_provider
+            app.dependency_overrides[get_agent_chat_model_provider] = lambda: failing_provider
             conversation = client.post("/conversations", json={"title": "长对话"}).json()
             seed_agent_conversation_messages(conversation["id"], count=16)
             response = client.post(
@@ -781,11 +815,14 @@ def test_agent_api_retires_default_summary_path_with_controlled_503(
     finally:
         get_settings.cache_clear()
 
-    assert response.status_code == 503
-    assert response.json()["detail"] == "chat model provider is unavailable or timed out"
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["refused"] is False
+    assert payload["citations"]
+    assert "sensitive" not in response.text
     messages = messages_response.json()["messages"]
     assert [message["role"] for message in messages].count("summary") == 0
-    assert len(messages) == 16
+    assert len(messages) >= 16
 
 
 def test_agent_api_unified_runtime_exposes_observability_fields(tmp_path) -> None:
@@ -1132,6 +1169,10 @@ def test_agent_api_off_topic_refusal_includes_safe_rewrite_suggestion(tmp_path) 
     payload = response.json()
     assert payload["refused"] is True
     assert payload["refusal_category"] == "off_topic"
+    assert "我是一个面向堆石混凝土" in payload["answer"]
+    assert "How should I cook pasta for dinner?" in payload["answer"]
+    assert "可以改问" in payload["answer"]
+    assert "off_topic" not in payload["answer"]
     assert "refusal_explanation" in payload["reasoning_summary"]
     assert "可以改写为" in payload["reasoning_summary"]
     assert "CORE_DOMAIN_TERMS" not in payload["reasoning_summary"]

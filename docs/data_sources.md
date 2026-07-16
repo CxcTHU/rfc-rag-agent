@@ -1,5 +1,32 @@
 # 数据来源登记
 
+## Phase 66 Tool Calling Runtime Evaluation Data Boundary
+
+Phase 66 adds no external corpus, crawler, PDF, source registry entry, model
+weight, embedding rebuild, or user-profile data. It adds runtime/evaluation
+metadata for Tool Calling slimming and a fixed common Agent regression suite.
+
+New committed evaluation inputs are:
+
+```text
+data/evaluation/phase66_runtime_convergence_cases.csv
+data/evaluation/agent_regression_cases.csv
+```
+
+These files contain case ids, short user-facing test questions, expected tool
+contracts, refusal expectations, minimum citation/source floors, latency
+budgets, and local test image paths. They are evaluation contracts, not corpus
+sources.
+
+Generated Phase 66 outputs under `output/phase66/` remain local runtime
+receipts and are not committed. They may contain only safe metadata such as
+case ids, HTTP status, tool names, source/citation counts, refusal flags,
+elapsed timings, judge numeric scores, and sanitized error categories. They
+must not store prompts beyond the committed case set, answer text, source text,
+provider raw responses, `raw_response`, `reasoning_content`, hidden reasoning,
+API keys, bearer tokens, authorization headers, full chunks, restricted full
+text, raw uploaded image bytes, or private service logs.
+
 ## Phase 62 Frontend Engineering Data Boundary
 
 Phase 62 不新增外部语料、爬虫、PDF、来源登记记录、模型权重、数据库表或后端内容源。Library 继续只读取既有 `/documents`；没有新增 `/sources` 登记页签。

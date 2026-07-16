@@ -4971,3 +4971,33 @@ The frontend displays real streaming state from the active run ID. Assistant
 results with image-description sources use the shared source model to render up
 to four de-duplicated inline image cards; cited cards preserve their source
 display index, and uncited retrieval-only cards are labelled accordingly.
+
+## Phase 66 Tool Calling Runtime Addendum
+
+Phase 66 removes the last production runtime fork inside the Tool Calling
+surface. Text and image requests now share the same coordinator-owned route:
+
+```text
+user text -> ToolCallingAgentService -> RunCoordinator -> ToolExecutor -> registry adapters
+uploaded image -> ToolCallingAgentService -> RunCoordinator -> analyze_user_image
+```
+
+`ToolCallingAgentService` is now a thin API/service facade. It owns request
+entry, streaming callbacks, and compatibility exports; prompt assembly,
+pre-tool gates, tool-call composition, result merging, runtime support, and
+coordinator support live in focused modules. `RunCoordinator` owns the actual
+loop, and `ToolExecutor` dispatches through the typed registry instead of a
+hard-coded allowlist.
+
+The model-visible production tool inventory is exactly four tools:
+
+- `hybrid_search_knowledge`
+- `search_tables`
+- `search_figures`
+- `analyze_user_image`
+
+The old `agent_run_coordinator_enabled` production switch has been deleted.
+Rollback is rollback through Git, not by carrying two online Tool Calling
+implementations. Final local structure gates recorded
+`tool_calling_service.py <= 260 lines`, `ToolCallingAgentService.query <= 80
+lines`, and `run_coordinator.py <= 120 lines`.

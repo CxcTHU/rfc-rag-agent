@@ -83,12 +83,24 @@ def resolve_agent_chat_model_provider(
 ) -> ChatModelProvider:
     """Return the request-selected chat model provider when a safe preset is set."""
 
-    if not request.chat_model:
-        return default_provider
     settings = get_settings()
+    selected_model = request.chat_model
+    if not selected_model:
+        default_agent_model = str(
+            getattr(settings, "agent_default_chat_model", "")
+        ).strip()
+        if (
+            not default_agent_model
+            or str(default_provider.provider_name).strip().casefold()
+            in {"", "deterministic", "fake", "local"}
+        ):
+            return default_provider
+        selected_model = default_agent_model
+    if selected_model == default_provider.model_name:
+        return default_provider
     return create_chat_model_provider(
         provider_name=settings.chat_model_provider,
-        model_name=request.chat_model,
+        model_name=selected_model,
         api_key=settings.chat_model_api_key,
         base_url=settings.chat_model_base_url,
         temperature=settings.chat_model_temperature,
@@ -1525,7 +1537,11 @@ def refusal_category_from_refusal(
     normalized_reason = (refusal_reason or "").casefold()
     if responsibility_gate_triggered or "responsibility_gate" in normalized_reason:
         return "responsibility_gate_triggered"
-    if "off-topic" in normalized_reason or "no domain anchor" in normalized_reason:
+    if (
+        "off-topic" in normalized_reason
+        or "off_topic" in normalized_reason
+        or "no domain anchor" in normalized_reason
+    ):
         return "off_topic"
     if (
         "tool execution failed" in normalized_reason

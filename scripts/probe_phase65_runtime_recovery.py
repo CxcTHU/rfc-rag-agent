@@ -15,6 +15,7 @@ import urllib.request
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -314,7 +315,7 @@ def synthetic_checkpoint_inserter(*, database_url: str) -> CheckpointInserter:
                     "VALUES (:conversation_id,:run_id,'stopped','stopped',"
                     "'tool_execution_completed',:resume_token_hash,:request_question,"
                     ":canonical_task,:state_json,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,"
-                    "CURRENT_TIMESTAMP + INTERVAL '1 hour')"
+                    ":expires_at)"
                 ),
                 {
                     "conversation_id": conversation_id,
@@ -323,6 +324,7 @@ def synthetic_checkpoint_inserter(*, database_url: str) -> CheckpointInserter:
                     "request_question": "继续",
                     "canonical_task": "phase65 runtime recovery smoke",
                     "state_json": json.dumps(state, ensure_ascii=False, sort_keys=True),
+                    "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
                 },
             )
         return run_id

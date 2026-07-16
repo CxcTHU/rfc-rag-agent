@@ -5,40 +5,137 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import replace
-from typing import Any, Protocol
+from collections.abc import Collection
+from typing import Protocol
 
+from pydantic import ValidationError
+
+from app.services.agent.tool_contracts import (
+    AnalyzeUserImageArguments,
+    RetrievalArguments,
+    ToolAdapter,
+    ToolArguments,
+    ToolExecutionContext,
+)
 from app.services.agent.runtime_contracts import ToolExecutionOutcome, ToolExecutionRequest
 from app.services.agent.runtime_events import RuntimeEventBus, publish_tool_call_result
-from app.services.agent.tools import AgentToolCallRecord, AgentToolResult, truncate_text
+from app.services.agent.tool_models import AgentToolCallRecord, AgentToolResult
+from app.services.agent.tool_registry import (
+    ToolRegistry,
+    UnsupportedToolError,
+    tool_registry_from_adapters,
+)
+from app.services.agent.tools import truncate_text
 from app.core.structured_logging import log_event
 from app.services.generation.chat_model import ChatToolCall
-from app.services.retrieval.runtime import retrieval_runtime_result_limit
 from app.services.retrieval.runtime import retrieval_tool_for_action
 
 
-ALLOWED_TOOL_NAMES = frozenset(
-    {"hybrid_search_knowledge", "search_figures", "search_tables"}
-)
 agent_logger = logging.getLogger("rfc_rag_agent.agent")
 
 
-class RetrievalToolbox(Protocol):
-    def hybrid_search_knowledge(self, query: str, *, top_k: int) -> AgentToolResult: ...
+class ToolboxAdapters(Protocol):
+    _hybrid_adapter: ToolAdapter
+    _figure_adapter: ToolAdapter
+    _table_adapter: ToolAdapter
+    _user_image_adapter: ToolAdapter
 
-    def search_figures(self, query: str, *, top_k: int) -> AgentToolResult: ...
 
-    def search_tables(self, query: str, *, top_k: int) -> AgentToolResult: ...
+class GroundingRuntime(Protocol):
+    def ground_tool_call(
+        self,
+        call: ChatToolCall,
+        *,
+        state: object,
+        default_query: str,
+    ) -> tuple[ChatToolCall, object]:
+        ...
+
+
+class RetrievalActionLike(Protocol):
+    forbidden_tools: Collection[str]
+
+
+class ToolboxMethodAdapter:
+    def __init__(
+        self,
+        toolbox: object,
+        *,
+        tool_name: str,
+        method_name: str,
+        default_top_k: int,
+    ) -> None:
+        self._toolbox = toolbox
+        self._tool_name = tool_name
+        self._method_name = method_name
+        self._default_top_k = default_top_k
+
+    def execute(
+        self,
+        arguments: ToolArguments,
+        context: ToolExecutionContext,
+    ) -> AgentToolResult:
+        method = getattr(self._toolbox, self._method_name)
+        if isinstance(arguments, AnalyzeUserImageArguments):
+            return method(
+                arguments.image_path,
+                arguments.question,
+                top_k=self._default_top_k,
+            )
+        if isinstance(arguments, RetrievalArguments):
+            return method(
+                arguments.query,
+                top_k=arguments.top_k or self._default_top_k,
+            )
+        raise TypeError(f"unsupported arguments for {self._tool_name}")
 
 
 class ToolExecutor:
     def __init__(
         self,
-        toolbox: RetrievalToolbox,
+        registry: ToolRegistry,
         *,
         event_bus: RuntimeEventBus | None = None,
     ) -> None:
-        self._toolbox = toolbox
+        self._registry = registry
         self._event_bus = event_bus
+
+    @classmethod
+    def for_toolbox(
+        cls,
+        toolbox: ToolboxAdapters,
+        *,
+        event_bus: RuntimeEventBus | None = None,
+    ) -> ToolExecutor:
+        return cls(
+            tool_registry_from_adapters(
+                hybrid_search=ToolboxMethodAdapter(
+                    toolbox,
+                    tool_name="hybrid_search_knowledge",
+                    method_name="hybrid_search_knowledge",
+                    default_top_k=8,
+                ),
+                figure_search=ToolboxMethodAdapter(
+                    toolbox,
+                    tool_name="search_figures",
+                    method_name="search_figures",
+                    default_top_k=4,
+                ),
+                table_search=ToolboxMethodAdapter(
+                    toolbox,
+                    tool_name="search_tables",
+                    method_name="search_tables",
+                    default_top_k=8,
+                ),
+                user_image_analysis=ToolboxMethodAdapter(
+                    toolbox,
+                    tool_name="analyze_user_image",
+                    method_name="analyze_user_image",
+                    default_top_k=4,
+                ),
+            ),
+            event_bus=event_bus,
+        )
 
     def execute(self, request: ToolExecutionRequest) -> ToolExecutionOutcome:
         started = time.perf_counter()
@@ -54,7 +151,9 @@ class ToolExecutor:
                 "tool call already completed in the resumed runtime",
                 skipped_completed_tool=True,
             )
-        if request.call.name not in ALLOWED_TOOL_NAMES:
+        try:
+            spec = self._registry.require(request.call.name)
+        except UnsupportedToolError:
             return self._failed_outcome(
                 request,
                 "unsupported_tool",
@@ -67,9 +166,27 @@ class ToolExecutor:
                 f"Tool {request.call.name} is forbidden by explicit user intent.",
             )
 
-        query = tool_query_from_call(request)
-        self._emit_start(request, query)
-        result = self._dispatch(request.call.name, query)
+        raw_arguments = raw_tool_arguments(request, default_top_k=spec.default_result_limit)
+        try:
+            arguments = self._registry.validate_arguments(spec.name, raw_arguments)
+        except ValidationError as exc:
+            return self._failed_outcome(
+                request,
+                "invalid_tool_arguments",
+                f"Invalid arguments for {request.call.name}: {exc.errors()[0]['msg']}",
+            )
+
+        self._emit_start(request)
+        result = spec.adapter.execute(
+            arguments,
+            ToolExecutionContext(
+                run_id="",
+                step_id=request.call.id,
+                iteration=request.iteration,
+                deadline_monotonic=request.deadline_monotonic,
+                cancelled=False,
+            ),
+        )
         result = replace(result, call=replace(result.call, step_id=request.call.id))
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         self._emit_result(request, result)
@@ -84,9 +201,9 @@ class ToolExecutor:
     def execute_short_loop(
         self,
         *,
-        runtime: Any,
-        runtime_state: Any,
-        retrieval_action: Any,
+        runtime: GroundingRuntime,
+        runtime_state: object,
+        retrieval_action: RetrievalActionLike,
         canonical_task: str,
         default_query: str,
         iteration: int = 1,
@@ -114,14 +231,6 @@ class ToolExecutor:
                 deadline_monotonic=deadline_monotonic,
             )
         )
-
-    def _dispatch(self, tool_name: str, query: str) -> AgentToolResult:
-        requested_top_k = retrieval_runtime_result_limit(tool_name)
-        if tool_name == "search_figures":
-            return self._toolbox.search_figures(query, top_k=requested_top_k)
-        if tool_name == "search_tables":
-            return self._toolbox.search_tables(query, top_k=requested_top_k)
-        return self._toolbox.hybrid_search_knowledge(query, top_k=requested_top_k)
 
     def _failed_outcome(
         self,
@@ -152,7 +261,7 @@ class ToolExecutor:
             skipped_completed_tool=skipped_completed_tool,
         )
 
-    def _emit_start(self, request: ToolExecutionRequest, query: str) -> None:
+    def _emit_start(self, request: ToolExecutionRequest) -> None:
         if self._event_bus is None:
             return
         self._event_bus.emit(
@@ -162,7 +271,7 @@ class ToolExecutor:
                 "iteration": request.iteration,
                 "step_id": request.call.id,
                 "tool_name": request.call.name,
-                "input_summary": f"query={truncate_text(query)}",
+                "input_summary": safe_tool_input_summary(request),
             },
         )
 
@@ -193,7 +302,29 @@ def tool_query_from_call(request: ToolExecutionRequest) -> str:
     return request.default_query
 
 
+def raw_tool_arguments(
+    request: ToolExecutionRequest,
+    *,
+    default_top_k: int,
+) -> dict[str, object]:
+    raw = dict(request.call.arguments)
+    if request.call.name == "analyze_user_image":
+        raw.setdefault("question", request.default_query)
+        if request.image_path is not None:
+            raw.setdefault("image_path", request.image_path)
+        return raw
+
+    raw.setdefault("query", tool_query_from_call(request))
+    raw.setdefault("top_k", default_top_k)
+    return raw
+
+
 def safe_tool_input_summary(request: ToolExecutionRequest) -> str:
+    if request.call.name == "analyze_user_image":
+        question = request.call.arguments.get("question")
+        if not isinstance(question, str) or not question.strip():
+            question = request.default_query
+        return f"question={truncate_text(question)}; image_path=<user_upload>"
     return f"query={truncate_text(tool_query_from_call(request))}"
 
 

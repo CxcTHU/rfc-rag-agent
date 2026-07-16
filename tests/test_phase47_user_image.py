@@ -381,9 +381,13 @@ def test_agent_toolbox_analyze_user_image_returns_concise_answer(tmp_path, monke
 
     assert result.refused is False
     assert result.answer is not None
-    assert result.answer.startswith("图片分析要点：")
     assert "User-uploaded image analysis" not in result.answer
-    assert len(result.answer) <= 520
+    assert result.search_results == []
+    assert result.sources == []
+    assert result.image_analysis is not None
+    assert result.image_analysis["related_text_count"] == 0
+    assert result.image_analysis["similar_figure_count"] == 0
+    assert "text_results=0" in result.call.output_summary
 
 
 def test_react_agent_image_analysis_returns_after_single_tool_call(tmp_path, monkeypatch) -> None:

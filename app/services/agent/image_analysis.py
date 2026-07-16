@@ -130,7 +130,7 @@ class UserImageAnalyzer:
         self.figure_top_k = figure_top_k
         self.image_min_score = image_min_score
 
-    def analyze(self, image_path: str | Path, user_question: str) -> ImageAnalysisResult:
+    def describe(self, image_path: str | Path, user_question: str) -> ImageAnalysisResult:
         normalized_question = user_question.strip()
         if not normalized_question:
             raise ValueError("user_question must not be empty")
@@ -168,6 +168,21 @@ class UserImageAnalyzer:
                 fused_context=IMAGE_OUT_OF_SCOPE_REFUSAL,
             )
 
+        return ImageAnalysisResult(
+            image_description=image_description,
+            domain_relevance=relevance,
+            vision_provider=provider_name,
+            vision_model=model_name,
+            is_test_vision=False,
+        )
+
+    def analyze(self, image_path: str | Path, user_question: str) -> ImageAnalysisResult:
+        description = self.describe(image_path, user_question)
+        if description.domain_relevance != "in_scope":
+            return description
+
+        normalized_question = user_question.strip()
+        image_description = description.image_description
         retrieval_query = build_image_retrieval_query(
             image_description=image_description,
             user_question=normalized_question,
@@ -202,10 +217,10 @@ class UserImageAnalyzer:
         )
         return ImageAnalysisResult(
             image_description=image_description,
-            domain_relevance=relevance,
-            vision_provider=provider_name,
-            vision_model=model_name,
-            is_test_vision=False,
+            domain_relevance=description.domain_relevance,
+            vision_provider=description.vision_provider,
+            vision_model=description.vision_model,
+            is_test_vision=description.is_test_vision,
             related_text_chunks=related_text_chunks,
             similar_figures=similar_figures,
             search_results=[*related_text_chunks, *figure_items],

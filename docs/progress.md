@@ -5031,3 +5031,59 @@ EvidenceStateMachine, FinalAnswerController, CheckpointRepository,
 PlanningPolicy, RuntimeEventBus, and the final-result assembler. It does not
 close Phase 65 overall: end-to-end latency proof, holdout/judge evidence, and
 final closeout acceptance remain separate gates.
+
+Update: Phase 66 Tool Calling Runtime slimming is locally implementation
+verified. The true production route is now one path through
+`ToolCallingAgentService -> RunCoordinator -> ToolExecutor -> registry
+adapters`; uploaded images enter the same coordinator through
+`analyze_user_image`. The old `agent_run_coordinator_enabled` flag is deleted,
+so rollback is rollback through Git rather than a hidden runtime fork. Final
+size gates passed: `tool_calling_service.py <= 260 lines` (233),
+`ToolCallingAgentService.query <= 80 lines` (64), and
+`run_coordinator.py <= 120 lines` (90). Receipts:
+`output/phase66/final/runtime-structure.json`,
+`output/phase66/final/fault-matrix.json`,
+`output/phase66/final/runtime-recovery.json`,
+`output/phase66/evaluation/summary.json`, and
+`output/phase66/evaluation/review-packet.md`. The fresh evaluator remains
+`review_required`, and human acceptance is `human_acceptance_pending`. The
+evaluator now supports explicit Phase 66 observation receipts through
+`--collect --observations ...`, can generate safe HTTP observations through
+`--collect-http --cases data/evaluation/phase66_runtime_convergence_cases.csv`,
+and enforces complete 30 text + 4 image pairing in `--merge`; no real paired
+A/B observation set has been accepted yet.
+
+Update: Phase 66 now has a local deterministic A/B runtime-observation packet.
+Baseline A (`be23e215`) and candidate B were started on local ports with
+separate SQLite copies and deterministic providers. `--collect-http` completed
+30 text + 4 image observations in both lanes with no failed or unknown cases.
+`--merge` wrote `paired_text_cases=30` and `paired_image_cases=4`, but final
+status remains `review_required` because quality/judge metrics are missing.
+
+Boundary correction: the SQLite packet is only an isolated runtime smoke, not
+final Phase 66 acceptance evidence. Final quality/runtime evidence should use
+the production-like PostgreSQL/pgvector topology so retrieval, locking,
+transactions, indexes, migrations, and corpus parity are actually exercised.
+
+Update: the Phase 66 evaluator now has an optional in-memory judge collection
+path. `--collect-http --judge` calls `/agent/judge` without persisting answer
+or source text, and writes only numeric quality scores plus safe judge status.
+
+Update: Phase 66 now has PostgreSQL/pgvector-backed judge evidence. Two
+isolated local PostgreSQL clones from `rfc_rag_dev` were used for baseline A
+and candidate B. The evaluator now trims in-memory judge payloads to API limits
+and retries transient judge HTTP failures. The fixed PG judge-backed packet in
+`output/phase66/evaluation_pg_judge_fixed/` completed 30 text + 4 image cases
+per lane with no query failures, no unknown errors, and no judge failures.
+Merge status is `passed`: A overall `0.8264705882352942`, B overall
+`0.870343137254902`, reason `phase66_pairing_quality_non_regression`.
+
+Update: the user authorized Phase 66 closeout synchronization on 2026-07-16.
+The accepted scope is Tool Calling runtime slimming, the single
+`ToolCallingAgentService -> RunCoordinator -> ToolExecutor -> registry adapters`
+path for text and uploaded images, the fixed common Agent regression suite, the
+default Flash correction, pure figure latency repair, and the user-facing
+refusal-answer strategy. This authorization allows local commit, GitHub PR, and
+merge after checks pass. It does not claim that the broader Phase 65
+holdout/judge gate has passed, and it does not replace a future formal
+high-cost latency release gate.
