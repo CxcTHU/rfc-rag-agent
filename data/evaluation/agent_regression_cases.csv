@@ -1,0 +1,35 @@
+case_id,suite,modality,question,image_path,intent_category,expected_tools,forbidden_tools,expected_refusal,expected_min_sources,expected_min_citations,latency_budget_ms,notes
+agent_reg_text_001,agent_common_v1,text,请说明堆石混凝土 RFC 相比常规混凝土筑坝工法的主要优势。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,fast RFC overview with citations
+agent_reg_text_002,agent_common_v1,text,请总结 RFC 施工中自密实混凝土填充堆石空隙时的质量控制点。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,construction quality control
+agent_reg_text_003,agent_common_v1,text,请根据知识库说明 RFC 温控或绝热温升研究通常关注哪些工程风险。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,thermal risk retrieval
+agent_reg_text_004,agent_common_v1,text,请追踪 GB/T 50080 与混凝土拌合物性能试验之间的关系。,,standard_text,hybrid_search_knowledge,,false,2,1,20000,standard relation
+agent_reg_text_005,agent_common_v1,text,请比较 GB/T 50080 与 GB/T 50081 在混凝土性能试验对象上的区别。,,standard_text,hybrid_search_knowledge,,false,2,1,20000,standard comparison
+agent_reg_text_006,agent_common_v1,text,请说明骨料或堆石材料性质如何影响 RFC 力学性能。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,material properties
+agent_reg_text_007,agent_common_v1,text,请检索包含 cement silica fume water aggregate 的 concrete mix proportion 表格并概括用途。,,table_lookup,search_tables,search_figures,false,1,1,22000,table retrieval
+agent_reg_text_008,agent_common_v1,text,请从资料表格中列出堆石混凝土配合比参数。,,table_lookup,search_tables,search_figures,false,1,1,22000,table parameter extraction
+agent_reg_text_009,agent_common_v1,text,请说明表格检索证据和普通文本证据在回答配合比问题时的区别。,,table_explanation,search_tables|hybrid_search_knowledge,search_figures,false,2,1,26000,table plus text explanation
+agent_reg_text_010,agent_common_v1,text,请展示堆石混凝土破坏形态的图片作为证据。,,pure_figure_lookup,search_figures,hybrid_search_knowledge,false,1,1,14000,pure figure lookup should stay slim
+agent_reg_text_011,agent_common_v1,text,请检索与大坝裂缝或混凝土缺陷图示相关的图片证据。,,pure_figure_lookup,search_figures,hybrid_search_knowledge,false,1,1,14000,pure figure lookup should stay slim
+agent_reg_text_012,agent_common_v1,text,请说明图像证据在 RFC 质量审查中的适用边界。,,figure_explanation,search_figures|hybrid_search_knowledge,,false,2,1,32000,explanatory visual question may use both tools
+agent_reg_text_013,agent_common_v1,text,彩票号码明天应该买什么。,,off_topic_refusal,,hybrid_search_knowledge|search_tables|search_figures,true,0,0,6000,domain refusal
+agent_reg_text_014,agent_common_v1,text,请预测某支股票下周涨跌并给出投资建议。,,off_topic_refusal,,hybrid_search_knowledge|search_tables|search_figures,true,0,0,6000,financial advice refusal
+agent_reg_text_015,agent_common_v1,text,帮我写一段和水工混凝土无关的娱乐八卦。,,off_topic_refusal,,hybrid_search_knowledge|search_tables|search_figures,true,0,0,6000,off-topic refusal
+agent_reg_text_016,agent_common_v1,text,请再次说明 RFC 的优势但不要使用图片。,,text_only_constraint,hybrid_search_knowledge,search_figures,false,3,2,18000,text only no figure
+agent_reg_text_017,agent_common_v1,text,不要表格只用文字说明 RFC 施工质量控制要点。,,text_only_constraint,hybrid_search_knowledge,search_tables,false,3,2,18000,text only no table
+agent_reg_text_018,agent_common_v1,text,请用资料说明堆石混凝土和自密实混凝土之间的关系。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,concept relation
+agent_reg_text_019,agent_common_v1,text,请说明 RFC 研究中试件强度测试通常怎样引用标准。,,standard_text,hybrid_search_knowledge,,false,2,1,20000,strength testing standard
+agent_reg_text_020,agent_common_v1,text,请给出堆石混凝土施工过程的主要风险和监测要点。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,construction monitoring
+agent_reg_text_021,agent_common_v1,text,请用一句话总结 RFC 的工程价值并给出引用。,,citation_contract,hybrid_search_knowledge,,false,2,1,16000,short answer still cited
+agent_reg_text_022,agent_common_v1,text,请解释为什么 RFC 问答需要可追溯引用。,,citation_contract,hybrid_search_knowledge,,false,2,1,18000,citation rationale
+agent_reg_text_023,agent_common_v1,text,请说明图表证据不足时系统应该如何处理。,,safe_insufficiency,hybrid_search_knowledge,,false,1,1,18000,insufficient evidence policy
+agent_reg_text_024,agent_common_v1,text,请说明检索不到可靠证据时是否应该拒答。,,safe_insufficiency,hybrid_search_knowledge,,false,1,1,18000,reliable evidence refusal policy
+agent_reg_text_025,agent_common_v1,text,请概括 RFC 与传统大体积混凝土温控问题的联系。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,thermal control relation
+agent_reg_text_026,agent_common_v1,text,请说明自密实混凝土流动性对 RFC 填充效果的影响。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,flowability effect
+agent_reg_text_027,agent_common_v1,text,请列出 RFC 质量评价中常见的材料参数。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,quality material parameters
+agent_reg_text_028,agent_common_v1,text,请说明图像描述证据和原始图片证据的区别。,,figure_explanation,search_figures|hybrid_search_knowledge,,false,2,1,32000,image evidence distinction
+agent_reg_text_029,agent_common_v1,text,请用中文回答 RFC 施工质量控制的三个要点。,,knowledge_text,hybrid_search_knowledge,,false,3,2,18000,Chinese concise answer
+agent_reg_text_030,agent_common_v1,text,请用英文简要解释 rock-filled concrete 的 core idea。,,knowledge_text,hybrid_search_knowledge,,false,2,1,18000,English answer
+agent_reg_image_001,agent_common_v1,image,请描述这张用户上传图片是否与 RFC 或混凝土工程相关。,data/user_uploads/2026-06-20/512f4df6505c435f835a7ddbeee4670a.png,user_image_only,analyze_user_image,,false,0,0,30000,user image description
+agent_reg_image_002,agent_common_v1,image,请结合知识库判断这张图是否能支撑 RFC 施工或质量问题。,data/user_uploads/2026-06-20/c0a8591d94984d9faf2ba35233a7849c.png,user_image_plus_hybrid,analyze_user_image|hybrid_search_knowledge,,false,1,1,45000,user image plus KB
+agent_reg_image_003,agent_common_v1,image,请寻找与这张图相似或相关的资料图片证据。,data/user_uploads/2026-06-20/363216cafd334ea5bc48069ad46c87be.png,user_image_plus_figure,analyze_user_image|search_figures,,false,1,1,45000,user image plus figure search
+agent_reg_image_004,agent_common_v1,image,如果这张图无法可靠判断工程相关性请安全拒答。,data/user_uploads/2026-07-08/f0339352cc51403083fa95b9e09e4be8.png,user_image_safe_failure,analyze_user_image,,true,0,0,30000,user image safe refusal

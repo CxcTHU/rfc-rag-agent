@@ -13,6 +13,24 @@
   和 `latency_trace.py` 已承担部分支持能力，但请求生命周期与多项策略仍集中在
   `ToolCallingAgentService.query()`。
 
+## Phase 66 发现
+
+- Phase 65 的模块化方向正确，但 `tool_calling_service.py` 仍承担过多编排、prompt、gate、merge
+  与兼容职责；阶段 66 已把这些职责继续外移，让主服务成为薄门面。
+- 生产 `agent_run_coordinator_enabled` 这类双路径开关会让后续 agent 接班时误判真实入口；阶段 66
+  已将其 deleted，并明确 rollback through Git。
+- 当前主流 agent 工程方向更接近“一个 coordinator + typed tool registry + adapter ports”，而不是
+  在服务层保留多套 loop。阶段 66 的四工具库存为 `hybrid_search_knowledge`、`search_tables`、
+  `search_figures`、`analyze_user_image`。
+- 本地结构与回归验证已通过：`tool_calling_service.py <= 260 lines`、
+  `ToolCallingAgentService.query <= 80 lines`、`run_coordinator.py <= 120 lines`。早期 SQLite
+  runtime smoke 仍只能视为辅助证据，不能作为 final acceptance。
+- PostgreSQL/pgvector judge-backed A/B 质量包已通过：A/B 各 30 text + 4 image，query/judge failure
+  均为 0，B overall `0.870343137254902` 高于 A overall `0.8264705882352942`。用户于
+  2026-07-16 授权阶段 66 收口同步。
+- Phase66 仍不能被夸大为广义 latency release gate：常用回归集已建立并暴露过 contract
+  violations，纯图检索和 Flash 默认修复只是定向收敛；Phase65 holdout/judge 总门禁仍独立。
+
 ## 当前门禁可信度
 
 - Phase 64 的完整 30-case × 3、A/B 共 180 次冷链路请求和盲评未运行。

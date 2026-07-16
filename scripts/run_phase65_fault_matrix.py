@@ -228,7 +228,7 @@ def _execute_runtime_case(fault: str) -> dict[str, object]:
     checkpoints = _InjectedCheckpoints(fault)
     finals = _InjectedFinalAnswers()
     planning = _InjectedPlanningPolicy(fault)
-    executor = ToolExecutor(_InjectedToolbox(fault))
+    executor = ToolExecutor.for_toolbox(_InjectedToolbox(fault))
     coordinator = RunCoordinator(
         planning_policy=planning,
         checkpoints=checkpoints,
@@ -380,6 +380,16 @@ class _InjectedToolbox:
     def search_tables(self, query: str, *, top_k: int) -> AgentToolResult:
         del top_k
         return _tool_result("search_tables", query, selected_count=1)
+
+    def analyze_user_image(
+        self,
+        image_path: str,
+        question: str,
+        *,
+        top_k: int,
+    ) -> AgentToolResult:
+        del image_path, top_k
+        return _tool_result("analyze_user_image", question, selected_count=1)
 
 
 class _InjectedFinalAnswers:

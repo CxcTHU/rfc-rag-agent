@@ -239,6 +239,17 @@ def test_phase63_negative_table_citation_request_keeps_text_route() -> None:
     assert action.forbidden_tools == ("search_figures", "search_tables")
 
 
+def test_phase63_negative_image_instruction_with_use_verb_keeps_text_route() -> None:
+    profile = deterministic_intent_profile("请再次说明 RFC 的优势但不要使用图片")
+    action = build_retrieval_action(profile)
+
+    assert profile.visual_explicitness == "negative"
+    assert profile.visual_intent == 0.0
+    assert "figure" not in profile.required_evidence_types
+    assert action.required_tool is None
+    assert "search_figures" in action.forbidden_tools
+
+
 def test_phase63_applicable_conditions_alone_do_not_require_graph() -> None:
     profile = deterministic_intent_profile(
         "综合比较堆石混凝土的技术优势适用条件质量风险和控制措施"

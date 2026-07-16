@@ -1,5 +1,40 @@
 # RFC-RAG-Agent
 
+## Phase 66 Tool Calling Runtime Slimming（收口同步已授权）
+
+Phase 66 completes the real Tool Calling slimming pass requested after the
+Phase 65 modularization review. The production path is now a single coordinator
+route for text and uploaded-image requests:
+
+```text
+user text -> ToolCallingAgentService -> RunCoordinator -> ToolExecutor -> registry adapters
+uploaded image -> ToolCallingAgentService -> RunCoordinator -> analyze_user_image
+```
+
+The old production `agent_run_coordinator_enabled` switch is deleted. Runtime
+rollback is therefore rollback through Git rather than a second live code path.
+The model-visible production tool inventory remains intentionally small:
+`hybrid_search_knowledge`, `search_tables`, `search_figures`, and
+`analyze_user_image`.
+
+Local slimming gates passed:
+
+- `tool_calling_service.py <= 260 lines`（actual 233）
+- `ToolCallingAgentService.query <= 80 lines`（actual 64）
+- `run_coordinator.py <= 120 lines`（actual 90）
+
+Verification receipts are under `output/phase66/final/` and
+`output/phase66/evaluation/`. Backend tests, frontend unit/lint/build, fault
+matrix, runtime recovery, and final structure snapshot passed locally. The
+initial fresh evaluator and SQLite A/B packet were kept as `review_required`
+evidence only. Final acceptance evidence uses the PostgreSQL/pgvector-backed
+judge packet in `output/phase66/evaluation_pg_judge_fixed/`: 30 text + 4 image
+cases per lane completed with no query or judge failures, and candidate B
+improved overall quality versus baseline A (`0.870343137254902` vs
+`0.8264705882352942`). The user authorized Phase 66 closeout synchronization on
+2026-07-16. This does not claim a broad latency release gate; high-cost full
+baseline reruns were intentionally not repeated.
+
 ## Phase 64 Mainstream-Agent Latency（功能人工验收 PASS）
 
 Phase 64 adds a feature-gated Route-First / short-agent-loop candidate above

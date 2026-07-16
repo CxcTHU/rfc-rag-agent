@@ -83,7 +83,18 @@ RELATIONSHIP_TERMS = tuple(
 STANDARD_TERMS = ("标准", "规范", "gb/t", "gb ", "dl/t", "sl/t", "standard", "specification")
 VISUAL_TERMS = ("图片", "图示", "配图", "照片", "曲线", "figure", "image", "diagram", "photo", "curve")
 TABLE_TERMS = ("表格", "参数表", "数据表", "table", "tabulated", "parameter table")
-VISUAL_NEGATIONS = ("不要图片", "不需要图片", "只用文字", "text only", "no image", "without image")
+VISUAL_NEGATIONS = (
+    "不要图片",
+    "不要使用图片",
+    "不要用图片",
+    "不使用图片",
+    "不用图片",
+    "不需要图片",
+    "只用文字",
+    "text only",
+    "no image",
+    "without image",
+)
 TABLE_NEGATIONS = (
     "不要表格",
     "不需要表格",

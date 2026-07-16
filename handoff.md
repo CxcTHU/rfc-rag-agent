@@ -1,6 +1,23 @@
 # 现场快照
 
-更新时间：2026-07-14
+更新时间：2026-07-16
+
+## Phase 66 收口状态
+
+- 当前授权动作：用户要求按 `AGENT.MD / AGENTS.md` 执行阶段 66 本地 Git、GitHub PR/merge 与
+  Obsidian 阶段文件同步。
+- 收口范围：Tool Calling Runtime 真正瘦身、文本/上传图片统一 coordinator 链路、typed tool
+  registry/adapters、固定常用 Agent 回归集、默认 Flash 修正、纯图检索延迟修复、拒答展示策略修复。
+- 质量证据：PostgreSQL/pgvector judge-backed A/B packet 已通过；A/B 各 30 text + 4 image，
+  query/judge failure 均为 0，B overall `0.870343137254902`，A overall
+  `0.8264705882352942`。
+- 验收边界：这不是 Phase65 holdout/judge 总门禁通过，也不是完整高成本 latency release gate；
+  SQLite A/B 仅为 runtime smoke，不作为 final evidence。
+- 安全边界：不要提交 `output/`、`.env`、密钥/token、provider raw response、raw answer、
+  `reasoning_content`、完整 chunk、私有日志或原始上传图片。
+- 下一步：仅暂存 Phase66 相关代码、测试、文档与
+  `obsidian-agent开发/阶段/阶段 66 - Tool Calling Runtime 真正瘦身/` 四类文件，运行必要检查后
+  commit、push、创建 PR 到 `main`，检查通过再 merge。
 
 ## 工作区
 

@@ -60,7 +60,7 @@ def test_high_level_tool_schemas_and_service_do_not_expose_top_k() -> None:
     assert "top_k" not in inspect.signature(ToolCallingAgentService.query).parameters
 
 
-def test_phase63_flag_keeps_model_owned_tool_selection_loop(tmp_path, monkeypatch) -> None:
+def test_retired_run_coordinator_flag_keeps_runtime_owned_tool_selection(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("AGENT_RUN_COORDINATOR_ENABLED", "false")
     monkeypatch.setenv("AGENT_SHORT_LOOP_ENABLED", "false")
     monkeypatch.setenv("SEMANTIC_EVIDENCE_CACHE_ENABLED", "false")
@@ -77,8 +77,8 @@ def test_phase63_flag_keeps_model_owned_tool_selection_loop(tmp_path, monkeypatc
         )
         result = service.query("What affects filling capacity?")
 
-    assert provider.generate_with_tools_calls == 1
-    assert result.latency_trace["planner_call_count"] == 0
+    assert provider.generate_with_tools_calls == 0
+    assert result.latency_trace["run_coordinator_enabled"] is True
     assert result.latency_trace["executed_tool_call_count"] == 1
 
 

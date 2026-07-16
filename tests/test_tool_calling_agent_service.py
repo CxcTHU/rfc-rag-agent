@@ -700,7 +700,7 @@ def test_tool_calling_agent_searches_then_returns_cited_answer(tmp_path, monkeyp
     assert result.citations == [1]
     assert result.sources
     assert [call.tool_name for call in result.tool_calls] == ["hybrid_search_knowledge"]
-    assert result.latency_trace["llm_call_count"] == 2
+    assert result.latency_trace["llm_call_count"] == 1
     assert result.latency_trace["tool_call_count"] == 1
     assert "tool_calling_agent" in result.reasoning_summary
 
@@ -1138,7 +1138,7 @@ def test_tool_calling_agent_streams_after_first_successful_evidence_round(
     assert result.tool_calls[0].succeeded
     assert result.latency_trace["executed_tool_call_count"] == 1
     assert result.latency_trace["skipped_tool_call_count"] == 0
-    assert result.latency_trace["llm_call_count"] == 2
+    assert result.latency_trace["llm_call_count"] == 1
     assert result.latency_trace["streamed_token_count"] > 0
 
 
@@ -1174,15 +1174,10 @@ def test_tool_calling_agent_executes_one_search_per_iteration(tmp_path, monkeypa
         get_settings.cache_clear()
 
     assert not result.refused
-    assert [call.tool_name for call in result.tool_calls] == [
-        "search_knowledge",
-        "hybrid_search_knowledge",
-    ]
-    assert not result.tool_calls[0].succeeded
-    assert result.tool_calls[0].error == "per-iteration search tool budget reached"
-    assert result.tool_calls[1].succeeded
+    assert [call.tool_name for call in result.tool_calls] == ["hybrid_search_knowledge"]
+    assert result.tool_calls[0].succeeded
     assert result.latency_trace["executed_tool_call_count"] == 1
-    assert result.latency_trace["skipped_tool_call_count"] == 1
+    assert result.latency_trace["skipped_tool_call_count"] == 0
 
 
 def test_explicit_figure_intent_prioritizes_figure_tool_within_budget() -> None:
@@ -1316,7 +1311,10 @@ def test_tool_calling_agent_streams_safe_citation_suffix_for_uncited_answer(
     assert not result.refused
     assert result.citations == [1]
     assert result.answer.endswith("证据引用：[1]")
-    assert chat_provider.emitted_tokens == ["\n\n证据引用：[1]"]
+    assert chat_provider.emitted_tokens == [
+        "Filling capacity depends on SCC flowability.",
+        "\n\n证据引用：[1]",
+    ]
     assert result.latency_trace["citation_repair_count"] == 0
 
 
@@ -1371,7 +1369,11 @@ def test_tool_calling_agent_refuses_off_topic_before_tool_loop(tmp_path) -> None
     assert result.refused
     assert result.tool_calls == []
     assert result.workflow_steps[0].tool_name == "off_topic_gate"
-    assert "off-topic" in (result.refusal_reason or "")
+    assert result.refusal_reason == "off_topic"
+    assert "我是一个面向堆石混凝土" in result.answer
+    assert "番茄汤" in result.answer or "tomato soup" in result.answer
+    assert "可以改问" in result.answer
+    assert "off_topic" not in result.answer
 
 
 def test_pre_tool_gate_decision_refuses_off_topic_without_resume() -> None:
@@ -1402,6 +1404,25 @@ def test_pre_tool_gate_decision_allows_off_topic_resume() -> None:
         question="Give me a tomato soup recipe",
         runtime_state=runtime_state,
         resume_should_resume=True,
+        latency_trace=LatencyTrace(),
+    )
+
+    assert decision.action == "continue"
+    assert decision.result is None
+
+
+def test_pre_tool_gate_decision_allows_uploaded_image_support_question_before_analysis() -> None:
+    runtime_state = AgentRuntimeState(
+        context=RuntimeContext(
+            current_query="请结合知识库判断这张图是否能支撑 RFC 施工或质量问题。",
+        )
+    )
+
+    decision = build_tool_calling_pre_tool_gate_decision(
+        question="请结合知识库判断这张图是否能支撑 RFC 施工或质量问题。",
+        runtime_state=runtime_state,
+        resume_should_resume=False,
+        image_path="data/user_uploads/example.png",
         latency_trace=LatencyTrace(),
     )
 
@@ -1749,7 +1770,7 @@ def test_service_passes_auto_resume_run_id_to_coordinator_request(
             )
 
     monkeypatch.setattr(
-        "app.services.agent.tool_calling_service.decide_resume",
+        "app.services.agent.tool_calling_service_runtime.decide_resume",
         lambda **_kwargs: SimpleNamespace(
             should_resume=True,
             run=stopped_run,
@@ -1757,7 +1778,7 @@ def test_service_passes_auto_resume_run_id_to_coordinator_request(
         ),
     )
     monkeypatch.setattr(
-        "app.services.agent.tool_calling_service.RunCoordinator",
+        "app.services.agent.tool_calling_service_runtime.RunCoordinator",
         CapturingCoordinator,
     )
 
@@ -2001,7 +2022,7 @@ def test_run_coordinator_generates_hyde_on_semantic_cache_miss(
     assert result.latency_trace["run_coordinator_enabled"] is True
 
 
-def test_service_query_marks_run_coordinator_disabled_when_feature_flag_off(
+def test_service_query_ignores_retired_run_coordinator_feature_flag(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -2015,8 +2036,8 @@ def test_service_query_marks_run_coordinator_disabled_when_feature_flag_off(
     finally:
         get_settings.cache_clear()
 
-    assert result.latency_trace["run_coordinator_enabled"] is False
-    assert result.latency_trace["run_coordinator_skip_reason"] == "disabled"
+    assert result.latency_trace["run_coordinator_enabled"] is True
+    assert result.latency_trace["run_coordinator_skip_reason"] == ""
 
 
 def test_run_coordinator_preflights_explicit_table_request(
@@ -2245,7 +2266,7 @@ def test_run_coordinator_preflights_explicit_figure_request(
     assert tool_result_event.payload["selected_count"] == 1
 
 
-def test_run_coordinator_enabled_uploaded_image_uses_legacy_multimodal_path(
+def test_run_coordinator_enabled_uploaded_image_runs_inside_coordinator(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -2294,11 +2315,8 @@ def test_run_coordinator_enabled_uploaded_image_uses_legacy_multimodal_path(
     assert calls == [("uploads/user/image.png", "请分析这张堆石混凝土图片")]
     assert result.answer == "图片显示堆石混凝土相关现象。"
     assert result.tool_calls[0].tool_name == "analyze_user_image"
-    assert result.latency_trace["run_coordinator_enabled"] is False
-    assert (
-        result.latency_trace["run_coordinator_skip_reason"]
-        == "uploaded_image_uses_legacy_multimodal_path"
-    )
+    assert result.latency_trace["run_coordinator_enabled"] is True
+    assert result.latency_trace["run_coordinator_skip_reason"] == ""
     assert result.image_analysis == {"domain_relevance": "in_scope"}
 
 
@@ -2475,6 +2493,9 @@ def test_tool_calling_agent_respects_responsibility_gate(tmp_path) -> None:
     assert result.refused
     assert result.tool_calls == []
     assert result.workflow_steps[0].tool_name == "responsibility_gate"
+    assert "我是一个面向堆石混凝土" in result.answer
+    assert "不能替代规范审查" in result.answer
+    assert "可以改问" in result.answer
 
 
 def test_tool_calling_structured_final_answer_prompt_is_default() -> None:

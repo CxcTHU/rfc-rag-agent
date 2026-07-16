@@ -447,6 +447,47 @@ def test_phase64_final_provider_applies_output_budget_without_mutating_planner(m
     assert final_provider.max_tokens == 1200
 
 
+def test_final_provider_applies_output_budget_when_short_loop_is_disabled(monkeypatch) -> None:
+    monkeypatch.setenv("AGENT_SHORT_LOOP_ENABLED", "false")
+    monkeypatch.setenv("AGENT_FINAL_MAX_TOKENS", "900")
+    get_settings.cache_clear()
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="deepseek-v4-pro",
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+        max_tokens=None,
+    )
+
+    final_provider = phase64_final_answer_provider(provider, get_settings())
+
+    assert provider.max_tokens is None
+    assert final_provider is not provider
+    assert final_provider.max_tokens == 900
+
+
+def test_final_provider_disables_deepseek_thinking_when_short_loop_is_disabled(monkeypatch) -> None:
+    monkeypatch.setenv("AGENT_SHORT_LOOP_ENABLED", "false")
+    monkeypatch.setenv("PHASE64_FINAL_NON_THINKING_ENABLED", "true")
+    monkeypatch.setenv("AGENT_FINAL_MAX_TOKENS", "600")
+    get_settings.cache_clear()
+    provider = OpenAICompatibleChatModelProvider(
+        model_name="deepseek-v4-pro",
+        api_key="test-key",
+        base_url="https://api.deepseek.com",
+        extra_body={"existing": "preserved"},
+    )
+
+    final_provider = phase64_final_answer_provider(provider, get_settings())
+
+    assert provider.extra_body == {"existing": "preserved"}
+    assert final_provider is not provider
+    assert final_provider.max_tokens == 600
+    assert final_provider.extra_body == {
+        "existing": "preserved",
+        "thinking": {"type": "disabled"},
+    }
+
+
 def test_phase64_final_provider_disables_deepseek_thinking_only_for_route_first_b(monkeypatch) -> None:
     monkeypatch.setenv("AGENT_SHORT_LOOP_ENABLED", "true")
     monkeypatch.setenv("PHASE64_ROUTE_FIRST_ENABLED", "true")

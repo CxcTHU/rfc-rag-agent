@@ -59,6 +59,7 @@ def test_runtime_contracts_expose_only_data_fields() -> None:
         "iteration",
         "completed_tool_ids",
         "deadline_monotonic",
+        "image_path",
     ]
     assert [field.name for field in fields(ToolExecutionOutcome)] == [
         "result",
