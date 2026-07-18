@@ -1,6 +1,34 @@
 # RFC-RAG-Agent
 
-## Phase 66 Tool Calling Runtime Slimming（收口同步已授权）
+## Phase 67 CPU Migration（部署补正完成，等待阶段 67 人工验收）
+
+The replacement CPU now runs the complete user-accepted Phase 66 runtime under
+`/home/ubuntu/rfc-rag-agent-stage44-smoke`. Runtime files come from merged GitHub
+commit `1af07fc1`, including the post-acceptance production defaults and frontend
+artifact fix. The live image is `rfc-rag-agent:phase66-1af07fc1` (image
+`1296fcc926a0`) and carries the full merge commit as an OCI revision label.
+
+The first migration had reused the old app image because Docker Hub timed out;
+that image did not contain Phase 66 even though the host source directory did.
+The correction rebuilt an offline overlay on the verified old production base.
+Phase 66 has no `pyproject.toml` dependency delta, so the overlay replaces only
+the merged application code, migrations, scripts, and built frontend assets.
+The former image remains tagged `pre-phase66-79aec024` for rollback.
+
+The replacement app, database, and Redis containers are healthy. The app keeps
+host networking, while PostgreSQL and Redis remain loopback-only on ports 15432
+and 16379. A real authenticated Agent request used `deepseek-v4-flash` and a
+follow-up Judge request completed successfully. All four production hostnames
+return health 200 and the public frontend serves `index-DDE0lgzL.js`.
+
+Public ingress continues to use Cloudflare Tunnel, not direct cloud security
+group exposure. Cloudflare and Tailscale services are both active and enabled;
+the old Cloudflare connector is inactive and disabled. The stable `rfc-cpu`
+alias resolves to the replacement Tailnet node, while `rfc-cpu-old` preserves
+the old rollback node. Phase 66 is accepted; Phase 67 migration acceptance and
+old-CPU retirement remain separate user decisions.
+
+## Phase 66 Tool Calling Runtime Slimming（人工验收通过并已上线）
 
 Phase 66 completes the real Tool Calling slimming pass requested after the
 Phase 65 modularization review. The production path is now a single coordinator
@@ -32,8 +60,10 @@ judge packet in `output/phase66/evaluation_pg_judge_fixed/`: 30 text + 4 image
 cases per lane completed with no query or judge failures, and candidate B
 improved overall quality versus baseline A (`0.870343137254902` vs
 `0.8264705882352942`). The user authorized Phase 66 closeout synchronization on
-2026-07-16. This does not claim a broad latency release gate; high-cost full
-baseline reruns were intentionally not repeated.
+2026-07-16. The post-acceptance defaults and frontend artifact correction were
+merged through PR #43 and are now live on the replacement CPU. This does not
+claim a broad latency release gate; high-cost full baseline reruns were
+intentionally not repeated.
 
 ## Phase 64 Mainstream-Agent Latency（功能人工验收 PASS）
 

@@ -19,6 +19,58 @@
 - 验收后增量已提交为 `999dbda4` 并创建 PR #43。GitHub frontend check 的 unit/lint/build 本身均通过，
   失败仅发生在 build 后的 `git diff --exit-code -- dist`：Windows 生成并归一化的 `dist/index.html`
   比 Linux Vite 输出多一个空行。用户已确认单行生成产物修正；PR 尚未合并，Phase66 tag 尚未创建。
+- CI 产物差异已由 `d86dd0e1` 修复；PR #43 的十项 GitHub checks 全部通过并于 2026-07-18 合并，
+  merge commit 为 `1af07fc1`。`phase-66-complete` 已创建并推送，指向 `d86dd0e1`。
+
+## Phase 67 CPU 服务器迁移
+
+- 新 CPU 已建立 `rfc-cpu-new` 公钥维护入口，部署目录仍为
+  `/home/ubuntu/rfc-rag-agent-stage44-smoke`。代码来自 GitHub Phase 66 合并版本 `1af07fc1`，未包含
+  本地脏改动、`.git` 或临时输出。
+- `.env.prod`、一致性 PostgreSQL dump 和约 6.8 GiB `data/` 资产均通过旧机到新机的加密链路直传，
+  未复制回本地或写入仓库。排除持续写入的 `data/logs/` 后，rsync dry-run 为零差异；图片
+  `17013` 个、FAISS 文件 `4` 个、知识图文件 `1` 个，新旧一致。
+- Docker Hub 在新机超时，首次迁移因而复用了旧 app 镜像 `79aec024f642`。后续容器内外比对发现，
+  该镜像创建于 Phase 66 之前：宿主机源码已有新标记，但 live container 仍缺生产默认提升、最终模型
+  等待态和新前端资产。不能再用宿主源码或旧机镜像摘要代替 live image 证明。
+- 已将 GitHub 合并版本的 385 个 runtime 文件重新 rsync 到新机，并构建离线覆盖镜像
+  `rfc-rag-agent:phase66-1af07fc1` / `1296fcc926a0`。Phase 66 的 `pyproject.toml` 无依赖变化；镜像基于
+  已验证旧生产 base，仅覆盖 merged app、Alembic、scripts 与 `frontend/dist`，OCI revision 绑定
+  `1af07fc145e32ed2cbf1a79d59f0877d802c408d`。旧镜像保留 `pre-phase66-79aec024` 回滚标签。
+- 切换后 app/db/redis 三容器 healthy；app 使用 host network，PostgreSQL/Redis 只绑定
+  `127.0.0.1:15432/16379`。live short-loop、route-first、retrieval fan-out 均为 true，默认 Agent
+  模型为 `deepseek-v4-flash`，`final_answer_generating` 与 `index-DDE0lgzL.js` 均生效。
+- PostgreSQL 恢复后关键计数与旧机一致：documents `1153`、chunks `51738`、
+  chunk_embeddings `74067`、users `61`、conversations `28`、messages `220`；Redis dbsize 为 `0`。
+- 内部 smoke 通过：app/Nginx `/health` 200，React `/app-v2` 307 后 200，匿名 Agent 401；短期内存
+  JWT 的认证原图 200，真实 `tool_calling_agent` 查询 200，产生非空答案、4 条引用和 12 个来源。
+- 重新审计旧机全部 system/user systemd 后确认公网入口是 `cloudflared-rfc-rag-agent.service`，同一
+  Tunnel 将四个生产域名转发至 `127.0.0.1:8044`。Cloudflare 2026.6.1、配置、凭据与服务已通过
+  服务器间加密链路迁移，哈希一致；新 connector 已建立 4 条连接并 enabled/active，旧 connector
+  已 disabled/inactive。
+- 四个生产域名 `/health` 均为 200；专用 User-Agent marker 在新 Nginx 命中 4 次、旧机 0 次。
+  经 `https://rag.rfc-agent.com` 的前端、认证原图和真实 Agent 查询均为 200，Agent 返回
+  `tool_calling_agent`、非空答案、4 条引用和 12 个来源。
+- Redis 在恢复点与旧机均为 dbsize 0；切流 smoke 后新机出现 4 个 string key，全部带约 7.5 分钟 TTL，
+  属于运行时短期键，不是未迁移的持久状态。
+- 旧机实际工作的 provider 备用出口是系统级 Python forward；两个用户级 SSH 隧道已因目标 SSH
+  超时分别 restart-loop 约 3.2 万/1.7 万次，并非健康依赖。新机已禁用这两个失效单元，改为启用系统级
+  forward，`172.18.0.1:18443/18444` 正常监听且 `NRestarts=0`；旧机同类失效单元也已停用，两个系统级
+  forward 保持健康。新机不再需要的 BGE SSH 私钥已删除。当前生产仍按 `.env.prod` 直连 SaaS provider。
+- Tailscale 1.98.8 已按独立节点身份加入 tailnet，没有复制旧机状态。`rfc-cpu-new` 已改为通过
+  Tailscale SSH 连接并验证 Agent/Cloudflare 健康；`rfc-cpu-new-public` 保留公网 SSH 回退。旧
+  CPU 的 app/db/redis 保持健康作为回滚源，禁止在用户核验前删除。
+- 用户已授权维护入口切换：稳定 `rfc-cpu` 现在指向新机 Tailnet 节点；`rfc-cpu-old` 指向旧机回滚节点，
+  `rfc-cpu-new` 继续作为新机兼容别名。四个别名的解析与新旧 Agent 健康均已验证。
+- 一次性旧机到新机迁移私钥和新机对应 authorized_keys 条目均已删除；本机 `rfc-cpu-new` 公钥入口复测成功。
+- Phase 66 已通过用户人工验收，增补提交 `999dbda4` 与 `d86dd0e1` 已随 PR #43 合并。补正后的真实
+  认证 Agent 为 200、`tool_calling_agent`、3 citations/12 sources，Judge 为 200/completed；只记录
+  状态与计数，未保存 raw answer、provider response、reasoning 或 token。四域名 health 200，公网前端
+  已服务 `index-DDE0lgzL.js`。
+- Cloudflare、Tailscale 与 provider forward 均 active/enabled，旧 Cloudflare connector
+  inactive/disabled。Tailscale key expiry 为 2027-01-14；若要求长期免维护 SSH，仍需在管理台关闭
+  节点 key expiry。新 CPU 尚未建立经验证的定时异机备份；这两项是阶段 67 后续风险，不影响 Phase 66
+  代码上线结论。
 
 ## Phase 65 已完成实现
 

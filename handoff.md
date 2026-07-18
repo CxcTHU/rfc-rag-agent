@@ -20,6 +20,40 @@
 - GitHub PR #43 当前 frontend check 阻塞：unit/lint/build 已通过，但 Linux build 证明已提交的
   `frontend/dist/index.html` 在 `</div>` 后多一个空行。用户已确认删除该空行、重跑前端 build/diff gate
   并推送；PR 尚未合并、`phase-66-complete` tag 尚未创建。
+- 上述 CI 问题已由 `d86dd0e1` 修复，PR #43 十项 checks 全部通过并合并为 `1af07fc1`；
+  `phase-66-complete` 已推送并指向 `d86dd0e1`。
+
+## Phase 67 CPU 迁移现场
+
+- 旧维护入口仍是 `rfc-cpu`（Tailscale + SSH key），部署目录
+  `/home/ubuntu/rfc-rag-agent-stage44-smoke`；旧三容器健康，app network mode 为 host，DB/Redis
+  只绑定 `127.0.0.1:15432/16379`。旧 `data/` 约 6.8 GiB，Docker volumes 约 2.6 GiB。
+- 新机维护入口为 `rfc-cpu-new`，现在通过独立 Tailscale 节点连接；`rfc-cpu-new-public` 是公网 SSH
+  回退。部署目录同上，Docker/Compose/Nginx/Cloudflare/Tailscale 均已安装并验证。旧机
+  `/var/lib/tailscale` 身份状态没有复制。
+- 用户授权后，稳定维护别名已完成切换：`rfc-cpu` 与 `rfc-cpu-new` 均连接新 CPU；
+  `rfc-cpu-old` 明确保留旧 CPU 回滚入口，`rfc-cpu-new-public` 保留新 CPU 公网 SSH 回退。
+- 首次迁移直接导入的 app 镜像 `79aec024f642` 创建于 Phase 66 之前；尽管宿主机源码已有
+  `1af07fc1` 标记，容器内仍缺少 Phase 66 默认值与新前端资产。该错误已补正：当前 live image 为
+  `rfc-rag-agent:phase66-1af07fc1` / `1296fcc926a0`，OCI revision 绑定完整 merge commit。Phase 66
+  无 `pyproject.toml` 依赖变化，因此在 Docker Hub 超时条件下基于旧镜像离线覆盖全部合并 runtime
+  代码、Alembic、scripts 与 `frontend/dist`；旧镜像保留 `pre-phase66-79aec024` 标签。
+- 当前 app/db/redis 均 healthy；app 为 host network，DB/Redis 仅监听回环。live 配置确认 short-loop、
+  route-first、retrieval fan-out 均为 true，默认模型为 `deepseek-v4-flash`，新等待态和
+  `index-DDE0lgzL.js` 均已生效。认证 Agent 与 Judge 分别 200，Judge 为 completed。
+- PostgreSQL 关键表计数完全一致：`1153 / 51738 / 74067 / 61 / 28 / 220`；Redis dbsize 均为 0。
+  durable `data/` 排除易变 `logs/` 后 rsync dry-run 无差异，images/FAISS/KG 文件数一致。
+- 公网入口已按旧机真实拓扑补正为 Cloudflare Tunnel，而不是开放安全组端口。新
+  `cloudflared-rfc-rag-agent.service` active/enabled、4 connections；四域名健康 200，认证原图和
+  真实 Agent 域名链路 200。旧 Cloudflare connector inactive/disabled，保留配置供回滚。
+- 新机禁用了两个长期连接超时的用户级 SSH 隧道，启用与旧机实际工作方式一致的系统级 Python provider
+  forward；18443/18444 正常监听。旧机同类失效单元也已停用，新机不再需要的 BGE SSH 私钥已删除。
+  当前生产 `.env.prod` 仍直接使用 SaaS provider，因此系统级 forward 是备用出口。
+- 旧 CPU、旧数据库和旧服务保持在线；新机 DB dump 与旧机 transfer 备份暂留到用户验收后再清理。
+  一次性服务器间迁移密钥已双端删除，本机 `rfc-cpu-new` 公钥入口正常。
+- Cloudflare、Tailscale 与 provider forward 均 active/enabled；旧 Cloudflare connector
+  inactive/disabled。Tailscale 节点密钥当前到期时间为 2027-01-14，若要长期免维护连接，仍需在
+  Tailscale 管理台关闭该节点 key expiry。新 CPU 尚无经验证的异机/定时备份，这是迁移后的持久化风险。
 
 ## Phase 66 收口状态
 

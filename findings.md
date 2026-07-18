@@ -1,3 +1,25 @@
+# Phase 67 CPU 迁移补正已验证事实
+
+更新时间：2026-07-18
+
+- Phase 66 最终本地 tree `d86dd0e1^{tree}` 与 GitHub merge commit `1af07fc1^{tree}` 均为
+  `40867422d7f7d830e22c7c845c49f36c2b4c3aff`；增补提交 `999dbda4` 与 `d86dd0e1` 没有遗漏。
+- 首次迁移 app image `79aec024f642` 创建于 2026-07-14，容器内无 `agent_default_chat_model`，仍服务
+  `index-pLE_BYIm.js`；宿主机源码存在 Phase 66 标记不能证明运行容器已更新。
+- Phase 66 相对 Phase 65 无 `pyproject.toml` 差异。Docker Hub 超时后，以旧镜像为离线依赖 base、
+  覆盖 GitHub 合并 runtime 文件是有界且可验证的替代构建路径。
+- 当前 live image 为 `rfc-rag-agent:phase66-1af07fc1` / `1296fcc926a0`，OCI revision 为完整
+  `1af07fc145e32ed2cbf1a79d59f0877d802c408d`；旧镜像保留 `pre-phase66-79aec024` 标签。
+- canary 与 live container 均确认 short-loop、route-first、retrieval fan-out 为 true，默认 Agent
+  模型为 `deepseek-v4-flash`，`final_answer_generating` 与 `index-DDE0lgzL.js` 存在。
+- 生产 app/db/redis healthy；app 为 host network，DB/Redis 仍只绑定回环。脱敏真实 Agent 为
+  200、3 citations/12 sources，Judge 为 200/completed；未保留答案、token、provider raw response
+  或 reasoning。
+- 四个生产域名 `/health` 均 200，公网前端服务 `index-DDE0lgzL.js`。Cloudflare、Tailscale 和 provider
+  forward 均 active/enabled；旧 Cloudflare connector inactive/disabled。
+- Tailscale 服务具备 systemd 持久化，但节点 key 当前到期时间为 2027-01-14；若要长期免维护连接，
+  需在 Tailscale 管理台关闭该节点 key expiry。新 CPU 尚无经验证的定时异机备份。
+
 # Phase 65 规划期已验证事实
 
 更新时间：2026-07-14
