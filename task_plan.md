@@ -23,6 +23,8 @@
 | 前端使用了不存在的 `npm test` script | 1 | 读取 `package.json` scripts 后改用仓库定义的测试命令，不重复该命令。 |
 | Vite build 在 Windows 将 `frontend/dist/index.html` 写成 CRLF，`git diff --check` 报行尾空白 | 1 | 对该生成文件做一次机械 LF 归一化，再重跑 build 产物与 diff gate。 |
 | 首次 LF 归一化命令中的 PowerShell 反引号被 JavaScript 模板字符串解析 | 1 | 改用 `[char]13/[char]10` 表达换行，归一化与 diff gate 成功。 |
+| GitHub frontend check 在 `git diff --exit-code -- dist` 失败 | 1 | 已定位为 Windows build 产物 `frontend/dist/index.html` 比 Linux Vite 输出多一个空行；用户已批准删除该空行并重建/复核。 |
+| `inspect_pr_checks.py` 在 Windows 用 GBK 解码 Actions UTF-8 日志失败 | 1 | 改用 `gh api` 读取具体 job 日志，成功取得根因；不重复该脚本路径。 |
 
 ## 当前阶段
 

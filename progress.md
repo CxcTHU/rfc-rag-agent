@@ -16,6 +16,9 @@
 - 验证：完整后端 `1936 passed, 1 skipped`；前端 `32 passed`，lint/build 通过。
 - 用户于 2026-07-18 明确授权本地、Obsidian、GitHub 与新 CPU 同步；提交前仍需 fresh 全量
   回归、前端检查、结构 gate、diff/sensitive scan。两题延迟复测仍只是定向证据，不夸大为广义发布门禁。
+- 验收后增量已提交为 `999dbda4` 并创建 PR #43。GitHub frontend check 的 unit/lint/build 本身均通过，
+  失败仅发生在 build 后的 `git diff --exit-code -- dist`：Windows 生成并归一化的 `dist/index.html`
+  比 Linux Vite 输出多一个空行。用户已确认单行生成产物修正；PR 尚未合并，Phase66 tag 尚未创建。
 
 ## Phase 65 已完成实现
 

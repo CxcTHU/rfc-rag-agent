@@ -17,6 +17,9 @@
 - 用户于 2026-07-18 已授权本地、Obsidian、GitHub 与新 CPU 同步。提交范围仍不得包含既有
   `.playwright-cli/`、`output/`、根目录 PNG 或 Phase 64 Obsidian 的无关格式化改动。
 - 两题复测是定向性能证据，不是广义 latency release gate；不得夸大验收范围。
+- GitHub PR #43 当前 frontend check 阻塞：unit/lint/build 已通过，但 Linux build 证明已提交的
+  `frontend/dist/index.html` 在 `</div>` 后多一个空行。用户已确认删除该空行、重跑前端 build/diff gate
+  并推送；PR 尚未合并、`phase-66-complete` tag 尚未创建。
 
 ## Phase 66 收口状态
 
