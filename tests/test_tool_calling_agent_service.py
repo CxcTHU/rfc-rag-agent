@@ -42,6 +42,10 @@ from app.services.agent.runtime import (
     RuntimeContext,
     assemble_runtime_context,
 )
+from app.services.agent.route_first import (
+    RouteDecision,
+    enforce_phase64_route_intent_floor,
+)
 from app.core.config import get_settings
 from app.services.generation.chat_model import (
     ChatMessage,
@@ -356,7 +360,18 @@ class IdentityAndHydeProvider(RuntimeIdentityProvider):
     def generate(self, messages: list[ChatMessage]) -> ChatModelResult:
         latest = messages[-1].content if messages else ""
         if "required_json_schema" in latest:
-            return super().generate(messages)
+            return ChatModelResult(
+                answer=(
+                    '{"entity_key":"rock-filled concrete",'
+                    '"intent_key":"crack_phenomena",'
+                    '"canonical_query":"堆石混凝土 rock-filled concrete 裂缝 缝隙 裂纹 开裂",'
+                    '"confidence":0.9,'
+                    '"safe_for_cache_reuse":true,'
+                    '"hyde_passage":"Rock-filled concrete crack phenomena may involve defects, interfaces, aggregate voids, and damage characterization."}'
+                ),
+                provider=self.provider_name,
+                model_name=self.model_name,
+            )
         return ChatModelResult(
             answer=(
                 "Rock-filled concrete crack phenomena may involve defects, "
@@ -472,7 +487,7 @@ def test_tool_calling_agent_uses_llm_runtime_identity_for_open_synonyms(tmp_path
             db,
             runtime_identity_provider=RuntimeIdentityProvider(),
         ).query(
-            "堆石混凝土的裂纹问题",
+            "哪些因素导致堆石混凝土的裂纹问题",
             max_tool_calls=2,
         )
 
@@ -563,13 +578,19 @@ def test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection(
         trace.set_value("evidence_canonical_query", "堆石混凝土 rock-filled concrete 裂缝 缝隙 裂纹 开裂")
         token = set_current_latency_trace(trace)
         identity = refine_evidence_query_identity_with_llm(
-            "堆石混凝土缝隙问题",
-            base_identity=build_evidence_query_identity("堆石混凝土缝隙问题"),
+            "哪些因素导致堆石混凝土缝隙问题",
+            base_identity=build_evidence_query_identity(
+                "哪些因素导致堆石混凝土缝隙问题"
+            ),
             provider=RuntimeIdentityProvider(),
+        )
+        routed_intent = enforce_phase64_route_intent_floor(
+            identity.retrieval_intent,
+            RouteDecision(kind="complex", reason="relational_reasoning"),
         )
         retrieval_token = set_current_retrieval_plan(
             build_retrieval_plan(
-                identity.retrieval_intent,
+                routed_intent,
                 identity.canonical_query,
                 get_settings(),
             )
@@ -588,7 +609,7 @@ def test_tool_calling_agent_semantic_evidence_cache_hit_skips_tool_selection(
             chat_provider=CachedEvidenceAnswerProvider(),
             runtime_identity_provider=RuntimeIdentityProvider(),
         ).query(
-            "堆石混凝土缝隙问题",
+            "哪些因素导致堆石混凝土缝隙问题",
             max_tool_calls=2,
             conversation_id=101,
             event_sink=events.append,
@@ -668,7 +689,7 @@ def test_tool_calling_agent_generates_hyde_only_on_semantic_cache_miss(
             db,
             runtime_identity_provider=IdentityAndHydeProvider(),
         ).query(
-            "堆石混凝土裂纹问题",
+            "哪些因素导致堆石混凝土裂纹问题",
             max_tool_calls=2,
         )
 
@@ -676,7 +697,7 @@ def test_tool_calling_agent_generates_hyde_only_on_semantic_cache_miss(
     assert result.latency_trace["semantic_cache_hit"] is False
     assert result.latency_trace["hyde_generated"] is True
     assert result.latency_trace["hyde_used_for_vector"] is True
-    assert result.latency_trace["hyde_model"] == "runtime-identity-test/identity-hyde-test-v1"
+    assert result.latency_trace["hyde_model"] == "identity-hyde-test-v1"
     assert all("Hypothetical evidence" not in (source.content or "") for source in result.sources)
 
 
@@ -2007,7 +2028,7 @@ def test_run_coordinator_generates_hyde_on_semantic_cache_miss(
             result = make_service(
                 db,
                 runtime_identity_provider=IdentityAndHydeProvider(),
-            ).query("堆石混凝土裂缝现象", max_tool_calls=2)
+            ).query("哪些因素导致堆石混凝土裂缝现象", max_tool_calls=2)
     finally:
         get_settings.cache_clear()
 
@@ -2015,10 +2036,7 @@ def test_run_coordinator_generates_hyde_on_semantic_cache_miss(
     assert result.latency_trace["semantic_cache_hit"] is False
     assert result.latency_trace["hyde_generated"] is True
     assert result.latency_trace["hyde_used_for_vector"] is True
-    assert (
-        result.latency_trace["hyde_model"]
-        == "runtime-identity-test/identity-hyde-test-v1"
-    )
+    assert result.latency_trace["hyde_model"] == "identity-hyde-test-v1"
     assert result.latency_trace["run_coordinator_enabled"] is True
 
 

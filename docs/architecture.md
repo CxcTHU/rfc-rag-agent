@@ -4936,8 +4936,8 @@ diagnostics and continues with keyword/vector evidence.
 
 ## Phase 64 Mainstream-Agent Latency Addendum
 
-Phase 64 adds an opt-in B execution graph while preserving the Phase 63
-default graph as the frozen A reference:
+Phase 64 originally introduced the following B execution policy behind A/B
+flags while preserving the Phase 63 policy as a frozen reference:
 
 ```text
 user question + bounded history
@@ -4951,7 +4951,15 @@ user question + bounded history
 -> cited streaming final generation
 ```
 
-When `AGENT_SHORT_LOOP_ENABLED` is true, the B path constructs and grounds
+After Phase 66 runtime acceptance, `AGENT_SHORT_LOOP_ENABLED`,
+`PHASE64_ROUTE_FIRST_ENABLED`, and `PHASE64_RETRIEVAL_FANOUT_ENABLED` are true
+by default, so ordinary uvicorn and Docker startup use this latency-optimized
+policy without shell overrides. Explicit false values remain available only
+for bounded diagnostics and historical A/B tooling; they do not restore a
+second Tool Calling coordinator. Runtime rollback remains rollback through
+Git.
+
+When `AGENT_SHORT_LOOP_ENABLED` is true, the default path constructs and grounds
 one accepted high-level retrieval call instead of asking the final model to
 perform a second tool-selection round. A fast path may escalate once before
 final generation if evidence is insufficient. Complex paths can execute

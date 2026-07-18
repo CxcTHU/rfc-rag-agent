@@ -34,6 +34,21 @@ The production `agent_run_coordinator_enabled` switch is deleted. There is no
 second online Tool Calling runtime to silently fall back to. Rollback is
 rollback through Git after review, not a hidden branch inside production code.
 
+## Post-acceptance production default
+
+After user acceptance, a local replay exposed that ordinary uvicorn startup
+still left the Phase 64 latency policy disabled even though requests correctly
+used the unified Phase 66 `RunCoordinator`. The accepted production policy is
+now the default: short-loop, route-first, and retrieval fan-out all start as
+enabled. Explicit false values remain only as bounded diagnostic/A/B
+overrides; they do not select another coordinator.
+
+The two reported questions were replayed without persisting answer or evidence
+text. Under concurrent load, backend `time_to_final_ms` changed from
+`56240 / 54839` to `26741 / 18573`, while the model remained
+`deepseek-v4-flash` and final prompts retained 12 selected sources. This is a
+targeted post-acceptance regression check, not a broad latency release gate.
+
 ## Size and responsibility gates
 
 Final local structure snapshot:

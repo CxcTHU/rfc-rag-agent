@@ -30,6 +30,10 @@
   2026-07-16 授权阶段 66 收口同步。
 - Phase66 仍不能被夸大为广义 latency release gate：常用回归集已建立并暴露过 contract
   violations，纯图检索和 Flash 默认修复只是定向收敛；Phase65 holdout/judge 总门禁仍独立。
+- 2026-07-18 验收后复核确认，55 秒级本地延迟并非模块化函数调用开销，而是普通 uvicorn
+  启动仍默认关闭 short-loop、route-first 与 retrieval fan-out。两题并发定向复测的
+  `time_to_final_ms` 从 `56240 / 54839` 降到 `26741 / 18573`；据用户确认，三个策略现已
+  提升为默认生产行为。显式 false 只用于有界诊断/A/B，不代表第二套 runtime。
 
 ## 当前门禁可信度
 
