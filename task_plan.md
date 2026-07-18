@@ -2,6 +2,46 @@
 
 更新时间：2026-07-18
 
+## Phase 67：CPU 服务器迁移
+
+目标：以 GitHub 已合并的 Phase 66 版本为应用代码真相源，以现有 `rfc-cpu` 生产运行态为服务器
+本地状态真相源，将 Agent、`.env.prod`、PostgreSQL、Redis 与 `data/` 运行资产整体迁移到新 CPU。
+
+1. [x] 盘点新旧 CPU 的容量、Docker/Compose、部署目录、容器、网络、服务与资产规模。
+2. [x] 在新 CPU 安装本机维护公钥，配置独立 `rfc-cpu-new` SSH 入口；旧 `rfc-cpu` 保持不变。
+3. [x] 从 `origin/main` 生成不含 Git/本地脏改动的部署包并传到新 CPU。
+4. [x] 在旧 CPU 生成一致性 PostgreSQL dump 与 Redis/运行资产迁移收据，不把凭据复制回本地。
+5. [x] 通过旧 CPU 到新 CPU 的加密链路传输 `.env.prod`、数据库备份与 `data/` 资产。
+6. [x] 在新 CPU 安装缺失依赖，恢复部署目录、PostgreSQL、Redis 与运行资产。
+7. [x] 使用旧机已验证的相同镜像摘要启动生产 compose，确认 app 为 host network，DB/Redis 仅绑定回环地址。
+8. [x] 执行脱敏内网 smoke：`/health`、前端、认证保护、代表性 Agent 查询、来源/图片原文打开，并核对关键计数。
+9. [x] 更新 Phase 67 普通文档、Obsidian、工作记忆与交接；旧 CPU 在用户核验前保持在线作为回滚源。
+10. [x] 补迁并切换 Cloudflare Tunnel：新 connector 建立 4 条连接，四个生产域名健康检查 200；旧 connector 已停止并禁用。
+11. [x] 新机以独立身份加入 tailnet；`rfc-cpu-new` 已切到 Tailscale SSH 并验证，`rfc-cpu-new-public` 保留公网回退。
+12. [x] 将稳定 `rfc-cpu` 维护别名切向新机；旧机保存为 `rfc-cpu-old`，并分别验证主机身份和 Agent 健康。
+13. [x] 复核 live container 而不只检查宿主源码，识别首次迁移仍运行 Phase 66 之前的旧 app image。
+14. [x] 从 GitHub merge tree 同步全部 Phase 66 runtime 文件，构建带 revision 的离线覆盖镜像并保留旧镜像回滚标签。
+15. [x] 先做 18045 canary，再切生产 app；验证配置默认值、等待态、前端 asset、容器网络与健康状态。
+16. [x] 执行脱敏真实 Agent + Judge smoke，并复核四域名、Cloudflare/Tailscale/provider forward 的 active/enabled。
+17. [x] 完成本地/Obsidian 收口、显式暂存、测试、安全扫描与提交 `6fe16606`；推送分支并创建 PR #45。
+18. [ ] 等待 PR #45 最终 HEAD checks，通过后按授权 merge；失败时不得强行合并。
+19. [ ] 用户确认阶段 67 观察期结束后，决定何时清理旧机与迁移备份。
+
+### Phase 67 错误记录
+
+| 错误 | 尝试 | 处理 |
+| --- | --- | --- |
+| 旧 CPU 首次盘点命令的嵌套 SQL/SSH 引号被 PowerShell 提前解析 | 1 | 已改为 literal here-string 和拆分命令，主机盘点成功。 |
+| tag 推送后的 `git show phase-66-complete^{commit}` 被 PowerShell 误解析 | 1 | 改用 `git rev-list -n 1 phase-66-complete` 验证目标为 `d86dd0e1`。 |
+| 新机从 Docker Hub 拉取 Redis 镜像超时 | 1 | 从旧机加密直传并导入三份已验证镜像，镜像摘要与旧机完全一致。 |
+| 用宿主源码标记和旧机镜像摘要误判 Phase 66 已上线 | 1 | 对比 host/live container/image creation/frontend asset，确认旧 app image 不含 Phase 66；改用带 Git revision 的独立镜像并验证 live container。 |
+| 标准 Docker build 即使 `--pull=false` 仍查询 `python:3.11-slim` 并因 Docker Hub 超时失败 | 1 | 证明 Phase 66 无依赖声明变化后，以旧生产镜像为离线 base，只覆盖合并 runtime 文件；canary 通过后切换。 |
+| `data/logs/request_traces.jsonl` 在旧机运行期间持续变化 | 1 | 将其按服务器本地易变日志处理；排除 `logs/` 后 durable data rsync dry-run 为零差异。 |
+| readiness 脚本对 SaaS reranker 调用不存在的 `/health` 返回错误 | 1 | 不把该通用 private-BGE 探针作为 SaaS 门禁；改用真实认证 Agent 查询验证当前 provider/rerank 链。 |
+| 将旧机公网入口误判为云安全组/NAT，而遗漏 Cloudflare Tunnel | 1 | 重新审计所有 system/user systemd 服务，定位 `cloudflared-rfc-rag-agent.service`；补迁后经四域名与 Nginx marker 验证切流。 |
+| PowerShell 双引号命令提前执行 `$(...)`，首次临时公钥安装被本地 shell 解析 | 1 | 停止后续安装，确认真实 authorized_keys 路径后改用无命令替换的分步公钥写入。 |
+| 新机复制的两个用户级 SSH 隧道持续连接超时 | 1 | 对照旧机日志发现同类服务已重启 1.7 万/3.2 万次；禁用失效单元，补上旧机真正工作的系统级 Python provider forward。 |
+
 ## Phase 66 验收后增量：低延迟生产默认提升
 
 1. [x] 用 TDD 锁定干净环境下 short-loop、route-first、retrieval fan-out 默认开启。
@@ -13,8 +53,8 @@
 7. [x] 用户于 2026-07-18 明确授权本地、Obsidian、GitHub 与新 CPU 同步。
 8. [x] 将验收后默认提升、最终模型等待态和验证边界同步到 Phase 66 Obsidian/评审/交接。
 9. [x] 仅暂存 Phase 66 范围文件，并通过 staged diff 与敏感信息扫描。
-10. [ ] 提交、推送并创建 Phase 66 验收后增量 PR。
-11. [ ] 等 GitHub checks 通过后合并，创建并推送 `phase-66-complete` tag。
+10. [x] 提交并推送 Phase 66 验收后增量，创建 PR #43。
+11. [x] GitHub 十项 checks 通过后合并 PR #43；创建并推送 `phase-66-complete` tag，目标 `d86dd0e1`。
 
 ### Phase 66 收口错误记录
 

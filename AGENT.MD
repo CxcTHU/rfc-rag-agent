@@ -1062,6 +1062,25 @@ CPU 应用目录: /home/ubuntu/rfc-rag-agent-stage44-smoke
 同步方式: rsync
 ```
 
+Phase 67 迁移后，生产公网入口不是云安全组直连，而是 Cloudflare Tunnel：
+
+```text
+Cloudflare systemd: cloudflared-rfc-rag-agent.service
+Cloudflare config: /etc/cloudflared/config.yml
+Cloudflare origin: http://127.0.0.1:8044
+stable maintenance host: rfc-cpu (new CPU through Tailscale)
+replacement compatibility host: rfc-cpu-new
+old rollback host: rfc-cpu-old
+replacement public SSH fallback: rfc-cpu-new-public
+```
+
+迁移或重建 CPU 时，除 Docker/Nginx/Tailscale 外必须显式盘点所有 active/enabled 的 system 和 user
+systemd 服务，尤其是 `cloudflared-rfc-rag-agent.service`。不得因为公网 IP 存在就假设 80/8044 可由安全组
+开放；不得把 Cloudflare 凭据复制回本地或写入 Git/文档。切换 Tunnel connector 前必须证明新旧数据库
+可变表、持久资产和镜像版本一致；单库写入拓扑下只保留一个生产 connector active，旧 connector 停止并
+禁用但保留配置作为回滚。若发现旧服务处于长期 restart loop，必须先判断它是否仍是生产依赖，不得把失效
+状态原样迁移并宣称 healthy。
+
 同步前必须先完成本地验证、普通文档更新、本地 Obsidian 更新、GitHub merge/push。同步时必须排除或保留以下服务器本地状态：
 
 ```text

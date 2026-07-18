@@ -1,5 +1,41 @@
 # Project Progress
 
+## Latest Status: 2026-07-18 Phase 67 Replacement CPU Migration Correction
+
+The complete user-accepted Phase 66 runtime is now live on the replacement CPU.
+The first migration had imported app image `79aec024f642`, created before Phase
+66, because Docker Hub timed out. Host source markers alone were therefore an
+insufficient deployment proof. The corrected live image is
+`rfc-rag-agent:phase66-1af07fc1` / `1296fcc926a0`, labeled with merged GitHub
+commit `1af07fc145e32ed2cbf1a79d59f0877d802c408d`.
+
+Phase 66 introduced no dependency-manifest change. The replacement image was
+therefore built offline on the verified old production base while overlaying
+all merged runtime code, Alembic files, scripts, and built React assets. The old
+image remains tagged `pre-phase66-79aec024`. Live checks confirm short-loop,
+route-first, and retrieval fan-out are true, the default Agent model is
+`deepseek-v4-flash`, the final-model waiting event exists, and the frontend
+serves `index-DDE0lgzL.js`.
+
+All three containers are healthy. The application uses host networking;
+PostgreSQL and Redis remain loopback-only. Cutover restoration counts and the
+durable asset manifest matched the old CPU; mutable conversation/message state
+has since advanced normally on the replacement. A real authenticated Agent
+request returned 200 with citations/sources, and its Judge request returned
+200/completed. No raw answer, provider payload, token, or reasoning was stored.
+
+Cloudflare Tunnel remains the only public ingress. All four production
+hostnames return health 200 and the public frontend serves the new Phase 66
+asset. Cloudflare, Tailscale, and the provider forward are active and enabled;
+the old Cloudflare connector is inactive and disabled. Tailscale maintenance
+is persistent across service restarts, but its current node key expires on
+2027-01-14 unless key expiry is disabled in the Tailscale admin console.
+
+Phase 66 has user acceptance. Phase 67 migration acceptance, backup policy, and
+old-CPU retirement remain separate follow-up decisions.
+
+---
+
 ## Latest Status: 2026-07-18 Phase 66 Post-Acceptance Latency Default Promotion
 
 The user confirmed that the accepted latency-optimized execution policy should

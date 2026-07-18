@@ -1,5 +1,46 @@
 # 架构说明
 
+## Phase 67 Replacement CPU Deployment Topology
+
+```text
+Cloudflare edge
+-> cloudflared-rfc-rag-agent.service
+-> nginx 127.0.0.1:8044
+-> FastAPI/uvicorn :18044 (host network)
+-> PostgreSQL 127.0.0.1:15432
+-> Redis Stack 127.0.0.1:16379
+-> server-local data/ assets
+```
+
+The deployment directory remains `/home/ubuntu/rfc-rag-agent-stage44-smoke`.
+Tracked runtime code is sourced from merged GitHub commit `1af07fc1`; the live
+image `rfc-rag-agent:phase66-1af07fc1` is labeled with that full revision. Docker
+Hub was unavailable during correction, so the image uses the verified former
+production image as an offline dependency base and overlays the merged `app/`,
+`frontend/dist/`, `scripts/`, and Alembic files. This is valid because Phase 66
+has no `pyproject.toml` dependency delta. `.env.prod`, PostgreSQL/Redis state,
+corpus assets, and operational logs remain server-local. Database and Redis
+ports must not be exposed publicly.
+
+The Cloudflare connector is the only production public ingress; CPU security
+group exposure of 80/8044 is neither required nor assumed. Only one connector
+is kept active because old and replacement CPUs have independent PostgreSQL
+volumes. The old CPU remains an independent rollback node until user
+acceptance. The replacement has a separate SSH alias and a fresh optional
+Tailscale identity. `rfc-cpu-new` resolves to its Tailnet address, while
+`rfc-cpu-new-public` preserves public-IP maintenance fallback. Copying the old
+Tailscale state directory remains forbidden because that would clone node
+identity.
+
+Maintenance alias ownership after cutover:
+
+```text
+rfc-cpu            -> replacement CPU through Tailscale
+rfc-cpu-new        -> replacement CPU compatibility alias
+rfc-cpu-new-public -> replacement CPU public SSH fallback
+rfc-cpu-old        -> old CPU rollback through Tailscale
+```
+
 ## Phase 62 Architecture Delta: React Feature Modules And Message-Scoped Evidence
 
 2026-07-11 route adjustment: React is now served from `/` with root BrowserRouter
