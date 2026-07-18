@@ -1,5 +1,25 @@
 # RFC-RAG-Agent
 
+## Built with OpenAI Codex and GPT-5.6
+
+OpenAI Codex served as the primary engineering agent for this project, while
+GPT-5.6 supported architecture reasoning, implementation, debugging, testing,
+documentation, and deployment verification.
+
+Key contributions included:
+
+- Designing and refactoring the Tool Calling Agent and retrieval runtime.
+- Implementing backend APIs and the React workbench.
+- Diagnosing RAG quality, latency, citation, and Judge-model issues.
+- Generating and running pytest, Vitest, Playwright, and evaluation workflows.
+- Preparing Docker, PostgreSQL, Redis, Cloudflare Tunnel, and Tailscale
+  deployment and migration procedures.
+- Reviewing migration evidence and production health without exposing API keys
+  or private corpus content.
+
+All AI-assisted changes were reviewed, tested, and accepted by the project
+maintainer before being merged or deployed.
+
 ## Phase 66 Tool Calling Runtime Slimming（收口同步已授权）
 
 Phase 66 completes the real Tool Calling slimming pass requested after the
