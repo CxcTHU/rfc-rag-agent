@@ -71,6 +71,8 @@
   inactive/disabled。Tailscale key expiry 为 2027-01-14；若要求长期免维护 SSH，仍需在管理台关闭
   节点 key expiry。新 CPU 尚未建立经验证的定时异机备份；这两项是阶段 67 后续风险，不影响 Phase 66
   代码上线结论。
+- 本地/Obsidian 收口提交为 `6fe16606`，分支 `codex/phase-67-cpu-migration` 已推送；GitHub PR #45
+  已创建，当前等待最终 HEAD checks，通过后再按用户授权 merge。
 
 ## Phase 65 已完成实现
 

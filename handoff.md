@@ -54,6 +54,8 @@
 - Cloudflare、Tailscale 与 provider forward 均 active/enabled；旧 Cloudflare connector
   inactive/disabled。Tailscale 节点密钥当前到期时间为 2027-01-14，若要长期免维护连接，仍需在
   Tailscale 管理台关闭该节点 key expiry。新 CPU 尚无经验证的异机/定时备份，这是迁移后的持久化风险。
+- 阶段 67 本地/Obsidian 收口提交 `6fe16606` 已推送到 `codex/phase-67-cpu-migration`；GitHub PR #45
+  已创建，等待最终 HEAD checks。只有 checks 全部通过后才按授权 merge。
 
 ## Phase 66 收口状态
 

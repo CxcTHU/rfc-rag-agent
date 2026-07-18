@@ -23,8 +23,9 @@
 14. [x] 从 GitHub merge tree 同步全部 Phase 66 runtime 文件，构建带 revision 的离线覆盖镜像并保留旧镜像回滚标签。
 15. [x] 先做 18045 canary，再切生产 app；验证配置默认值、等待态、前端 asset、容器网络与健康状态。
 16. [x] 执行脱敏真实 Agent + Judge smoke，并复核四域名、Cloudflare/Tailscale/provider forward 的 active/enabled。
-17. [ ] 完成本地/Obsidian 阶段 67 收口、显式暂存、测试、安全扫描、GitHub PR/checks/merge。
-18. [ ] 用户确认阶段 67 观察期结束后，决定何时清理旧机与迁移备份。
+17. [x] 完成本地/Obsidian 收口、显式暂存、测试、安全扫描与提交 `6fe16606`；推送分支并创建 PR #45。
+18. [ ] 等待 PR #45 最终 HEAD checks，通过后按授权 merge；失败时不得强行合并。
+19. [ ] 用户确认阶段 67 观察期结束后，决定何时清理旧机与迁移备份。
 
 ### Phase 67 错误记录
 
