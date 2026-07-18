@@ -846,6 +846,12 @@ def run_coordinator_once(coordinator: object, request: CoordinatorRequest) -> An
                 evidence,
             )
         else:
+            _emit_agent_step(
+                request,
+                iteration=final_iteration,
+                action="final_answer_generating",
+                step_summary="waiting_final_model",
+            )
             final_outcome = _normalize_final_outcome(
                 coordinator._final_answers.generate(final_request),
                 evidence,

@@ -1,6 +1,24 @@
 # 当前进度
 
-更新时间：2026-07-15
+更新时间：2026-07-18
+
+## Phase 66 验收后低延迟生产默认提升
+
+- 用户确认：已经验收的 short-loop、route-first、retrieval fan-out 应成为默认生产行为，
+  不应要求人工启动时逐项设置环境变量。
+- `Settings` 的三个默认值已从 `false` 提升为 `true`；显式 `false` 仅保留为有界诊断/A/B
+  兼容覆盖，不会恢复另一套 Tool Calling coordinator。
+- TDD 红灯先证明干净环境默认仍为 false；实现后默认与显式 false 覆盖测试均通过。
+- 默认切换暴露 4 个旧测试假设：普通文本现在正确走 fast route；相关 identity/cache/HyDE
+  测试已改为显式因果 complex route，并使用统一 identity + HyDE 合同与一致 plan digest。
+- 普通 uvicorn 命令已在 8000 启动，受保护 retrieval-contract 返回三个默认值均为 true；
+  当前 PID 20024。Agent 省略模型默认仍是 `deepseek-v4-flash`。
+- 验证：完整后端 `1936 passed, 1 skipped`；前端 `32 passed`，lint/build 通过。
+- 用户于 2026-07-18 明确授权本地、Obsidian、GitHub 与新 CPU 同步；提交前仍需 fresh 全量
+  回归、前端检查、结构 gate、diff/sensitive scan。两题延迟复测仍只是定向证据，不夸大为广义发布门禁。
+- 验收后增量已提交为 `999dbda4` 并创建 PR #43。GitHub frontend check 的 unit/lint/build 本身均通过，
+  失败仅发生在 build 后的 `git diff --exit-code -- dist`：Windows 生成并归一化的 `dist/index.html`
+  比 Linux Vite 输出多一个空行。用户已确认单行生成产物修正；PR 尚未合并，Phase66 tag 尚未创建。
 
 ## Phase 65 已完成实现
 

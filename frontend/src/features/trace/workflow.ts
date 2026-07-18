@@ -153,6 +153,7 @@ export function userFacingAgentSummary(summary: string, context: Partial<AgentWo
   if (normalized.includes('near-duplicate')) return `已跳过：${localizeAgentAction(stepName(context))}；原因：与已执行检索重复`
   if (normalized.includes('existing evidence available')) return `已跳过：${localizeAgentAction(stepName(context))}；原因：已有可用证据`
   if (normalized.includes('model request failed') || normalized.includes('provider')) return '模型服务暂时不可用，已进入错误处理'
+  if (normalized === 'waiting_final_model') return '正在等待最终模型返回'
   return stripInternalDiagnostics(text)
 }
 
@@ -194,6 +195,7 @@ function localizeAgentAction(action: string) {
     answer_with_citations: '引用式回答',
     rewrite_query: '改写查询',
     refuse: '安全拒答',
+    final_answer_generating: '正在生成最终回答',
     final_answer: '最终回答',
   }
   return labels[action] || action || 'Agent 步骤'

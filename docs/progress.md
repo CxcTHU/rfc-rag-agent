@@ -1,5 +1,28 @@
 # Project Progress
 
+## Latest Status: 2026-07-18 Phase 66 Post-Acceptance Latency Default Promotion
+
+The user confirmed that the accepted latency-optimized execution policy should
+be the default production behavior. `agent_short_loop_enabled`,
+`phase64_route_first_enabled`, and `phase64_retrieval_fanout_enabled` now
+default to true; explicit false values remain bounded diagnostic/A/B overrides
+and do not restore a second Tool Calling coordinator.
+
+A clean `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000` start,
+without shell overrides, returned all three fields as true from the protected
+retrieval contract. Agent model omission still resolves to
+`deepseek-v4-flash`; the global `CHAT_MODEL_NAME` health field is a separate
+provider setting.
+
+Verification before closeout recorded `1936 passed, 1 skipped` backend;
+frontend `8 files / 32 tests` passed; frontend lint and production build
+passed. This is a targeted default promotion and does not convert the
+two-question latency replay into a broad latency release gate. On 2026-07-18,
+the user authorized local, Obsidian, GitHub, and new-CPU synchronization; the
+GitHub commit/PR/check receipts are recorded during this closeout.
+
+---
+
 ## Latest Status: 2026-07-11 Phase 62 React Frontend Engineering (manual acceptance PASS)
 
 Branch: codex/phase-62-react-frontend-engineering. User manual verification passed and the user authorized local docs/Obsidian sync, GitHub merge, and phase-62-complete tag.

@@ -1,6 +1,30 @@
 # 当前执行计划
 
-更新时间：2026-07-15
+更新时间：2026-07-18
+
+## Phase 66 验收后增量：低延迟生产默认提升
+
+1. [x] 用 TDD 锁定干净环境下 short-loop、route-first、retrieval fan-out 默认开启。
+2. [x] 将三个生产默认值提升为 true，并保留显式 false 的有界兼容覆盖。
+3. [x] 同步 `.env.example`、README、架构与 Phase 66 review 的默认行为说明。
+4. [x] 修正默认切换暴露的 complex-route identity、semantic cache 与统一 HyDE 测试合同。
+5. [x] 使用无 shell 覆盖的普通 uvicorn 命令启动 8000，并从受保护健康契约验证默认值。
+6. [x] 完整后端回归 `1936 passed, 1 skipped`；前端单测、lint、build 通过。
+7. [x] 用户于 2026-07-18 明确授权本地、Obsidian、GitHub 与新 CPU 同步。
+8. [x] 将验收后默认提升、最终模型等待态和验证边界同步到 Phase 66 Obsidian/评审/交接。
+9. [x] 仅暂存 Phase 66 范围文件，并通过 staged diff 与敏感信息扫描。
+10. [ ] 提交、推送并创建 Phase 66 验收后增量 PR。
+11. [ ] 等 GitHub checks 通过后合并，创建并推送 `phase-66-complete` tag。
+
+### Phase 66 收口错误记录
+
+| 错误 | 尝试 | 处理 |
+| --- | --- | --- |
+| 前端使用了不存在的 `npm test` script | 1 | 读取 `package.json` scripts 后改用仓库定义的测试命令，不重复该命令。 |
+| Vite build 在 Windows 将 `frontend/dist/index.html` 写成 CRLF，`git diff --check` 报行尾空白 | 1 | 对该生成文件做一次机械 LF 归一化，再重跑 build 产物与 diff gate。 |
+| 首次 LF 归一化命令中的 PowerShell 反引号被 JavaScript 模板字符串解析 | 1 | 改用 `[char]13/[char]10` 表达换行，归一化与 diff gate 成功。 |
+| GitHub frontend check 在 `git diff --exit-code -- dist` 失败 | 1 | 已定位为 Windows build 产物 `frontend/dist/index.html` 比 Linux Vite 输出多一个空行；用户已批准删除该空行并重建/复核。 |
+| `inspect_pr_checks.py` 在 Windows 用 GBK 解码 Actions UTF-8 日志失败 | 1 | 改用 `gh api` 读取具体 job 日志，成功取得根因；不重复该脚本路径。 |
 
 ## 当前阶段
 

@@ -66,9 +66,12 @@ class Settings(BaseSettings):
     runtime_identity_model_base_url: str = ""
     runtime_identity_model_temperature: float = 0.0
     runtime_identity_model_timeout_seconds: float = 10.0
-    agent_short_loop_enabled: bool = False
+    # Phase 66 acceptance promoted the latency-optimized execution policy to
+    # the production default. Explicit false values remain a bounded
+    # compatibility override; they do not restore a second coordinator.
+    agent_short_loop_enabled: bool = True
     agent_default_chat_model: str = "deepseek-v4-flash"
-    phase64_route_first_enabled: bool = False
+    phase64_route_first_enabled: bool = True
     phase64_execution_graph_schema: str = "phase64-route-first-v1"
     phase64_fast_path_min_selected_sources: int = 2
     phase64_final_non_thinking_enabled: bool = True
@@ -136,7 +139,7 @@ class Settings(BaseSettings):
     reranking_fallback_base_url: str = "https://llmapi.paratera.com/v1/p002"
     reranking_fallback_timeout_seconds: float = 30.0
     hybrid_multichannel_enabled: bool = True
-    phase64_retrieval_fanout_enabled: bool = False
+    phase64_retrieval_fanout_enabled: bool = True
     phase64_retrieval_max_workers: int = 5
     phase64_retrieval_max_inflight: int = 8
     hybrid_graph_channel_enabled: bool = True

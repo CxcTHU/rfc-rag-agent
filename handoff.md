@@ -1,6 +1,25 @@
 # 现场快照
 
-更新时间：2026-07-16
+更新时间：2026-07-18
+
+## Phase 66 验收后低延迟默认提升现场
+
+- 用户已明确确认：已验收的低延迟链路应成为默认生产行为。
+- `agent_short_loop_enabled`、`phase64_route_first_enabled`、
+  `phase64_retrieval_fanout_enabled` 现在代码默认均为 true；显式 false 只用于有界诊断/A/B。
+- 普通命令 `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000` 的验收复核没有通过 shell
+  注入上述三个变量；当时的受控服务已停止，PID 20024 当前不再运行。
+- 该次受保护 `/health/retrieval-contract` 返回三个值均为 true；Agent 省略模型默认仍为
+  `deepseek-v4-flash`，不要把全局 `CHAT_MODEL_NAME` 与 Agent 默认混为一谈。
+- UI 新增 `final_answer_generating / waiting_final_model`，避免最终模型 TTFT 被显示成
+  `evidence_sufficient` 卡住；React 生产包已重建。
+- 验证：完整后端 `1936 passed, 1 skipped`；前端 `32 passed`，lint/build 通过。
+- 用户于 2026-07-18 已授权本地、Obsidian、GitHub 与新 CPU 同步。提交范围仍不得包含既有
+  `.playwright-cli/`、`output/`、根目录 PNG 或 Phase 64 Obsidian 的无关格式化改动。
+- 两题复测是定向性能证据，不是广义 latency release gate；不得夸大验收范围。
+- GitHub PR #43 当前 frontend check 阻塞：unit/lint/build 已通过，但 Linux build 证明已提交的
+  `frontend/dist/index.html` 在 `</div>` 后多一个空行。用户已确认删除该空行、重跑前端 build/diff gate
+  并推送；PR 尚未合并、`phase-66-complete` tag 尚未创建。
 
 ## Phase 66 收口状态
 

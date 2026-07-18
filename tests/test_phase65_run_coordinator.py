@@ -1120,13 +1120,62 @@ def test_coordinator_event_sink_accepts_runtime_event_callable() -> None:
     )
 
     assert coordinator.run(request) == "final-result"
-    assert [event.name for event in events] == ["agent_step", "agent_step", "agent_step"]
+    assert [event.name for event in events] == [
+        "agent_step",
+        "agent_step",
+        "agent_step",
+        "agent_step",
+    ]
     assert all(event.stage == "planning" for event in events)
+    assert events[-2].payload == {
+        "iteration": 1,
+        "action": "final_answer_generating",
+        "step_summary": "waiting_final_model",
+    }
     assert events[-1].payload == {
         "iteration": 1,
         "action": "final_answer",
         "step_summary": "completed",
     }
+
+
+def test_coordinator_emits_final_generation_wait_before_calling_model() -> None:
+    events: list[RuntimeEvent] = []
+
+    def generate(_request):
+        assert events[-1].payload == {
+            "iteration": 1,
+            "action": "final_answer_generating",
+            "step_summary": "waiting_final_model",
+        }
+        return SimpleNamespace(result="final-result", stop_reason="completed")
+
+    coordinator = RunCoordinator(
+        planning_policy=SimpleNamespace(
+            plan=lambda _: SimpleNamespace(
+                action=SimpleNamespace(required_tool=None, forbidden_tools=()),
+                canonical_task="任务",
+            )
+        ),
+        checkpoints=SimpleNamespace(start=lambda *_: "run-1", complete=lambda *_: None),
+        tool_executor=SimpleNamespace(execute=lambda _: SimpleNamespace(result="tool-result")),
+        evidence_machine=SimpleNamespace(
+            evaluate=lambda **_: SimpleNamespace(
+                action="answer",
+                sanitized_detail="evidence_sufficient",
+            )
+        ),
+        final_answers=SimpleNamespace(generate=generate),
+        final_request_builder=lambda *args: "final-request",
+    )
+
+    assert coordinator.run(_request_with_event_sink(events.append)) == "final-result"
+    assert [event.payload["action"] for event in events] == [
+        "plan",
+        "evidence_answer",
+        "final_answer_generating",
+        "final_answer",
+    ]
 
 
 def test_coordinator_fails_closed_when_a_second_escalation_is_requested() -> None:

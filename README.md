@@ -1112,6 +1112,10 @@ python -m pip install -e ".[dev]"
 python -m uvicorn app.main:app --reload
 ```
 
+普通启动默认使用已验收的低延迟生产策略：short-loop、route-first 和检索 fan-out
+均为开启状态，不需要额外设置环境变量。`.env` 中显式写入对应的 `false` 仅用于有界诊断
+或历史 A/B 工具，不会切换到另一套 Tool Calling coordinator。
+
 ## Docker Quick Start
 
 阶段 39 起，Docker 默认入口是 FastAPI + uvicorn：

@@ -203,9 +203,9 @@ def test_retrieval_contract_health_is_safe_and_content_free(tmp_path, monkeypatc
     assert payload["embedding_provider"]
     assert payload["embedding_model_name"]
     assert payload["embedding_dimension"] > 0
-    assert payload["agent_short_loop_enabled"] is False
-    assert payload["phase64_route_first_enabled"] is False
-    assert payload["phase64_retrieval_fanout_enabled"] is False
+    assert payload["agent_short_loop_enabled"] is True
+    assert payload["phase64_route_first_enabled"] is True
+    assert payload["phase64_retrieval_fanout_enabled"] is True
     assert payload["phase64_final_non_thinking_enabled"] is True
     assert payload["phase64_execution_graph_schema"]
     assert payload["retrieval_runtime_schema"]
