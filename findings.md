@@ -14,6 +14,13 @@
 - 小型集合采用三类恢复路径：新合同 6 步 + 页面 reload、新合同无来源路径 + logout/login cache 清空、旧 metadata 合同 2 步兼容回退；每例均比较恢复前后的步骤数与展开标签序列。
 - 首个单例 E2E 红灯得到刷新前 3 步、刷新后 2 步，证明测试能捕获原缺陷。
 - 新增 `workflow-persistence-cases.json` 后，Chromium 评测为 `3 passed`：6-step reload、4-step reauth/cache reset、legacy 2-step fallback 均保持恢复前后数量与标签序列一致。
+- GitHub PR #46 的 push/pull_request 两套 10 个 checks 全部通过，已合并为 `29711f0fb1aeb78b4483be58fecbbb9ad3436c14`。
+- 新 CPU 部署前只读检查：app/db/redis healthy，磁盘余量约 73 GiB，Tailscale 与 Cloudflare 均 active/enabled；当前 production 镜像 revision 仍为 `1af07fc1...`，需要部署本增补。
+- 一次只读 Compose 配置检查在终端输出中展开了生产环境变量；没有形成文件或 Git 变更。后续部署命令禁止打印 compose config/env，并应在部署后安排相关生产凭据轮换。
+- 新 CPU 已切换 production image `2e8957f449c2`，OCI revision 为 PR #46 merge；旧镜像 `1296fcc926a0` 保留为 `pre-workflow-1296fcc9`，精确 rollout 临时目录已验证后删除。
+- canary、live app `18044`、Nginx `8044`、公网 `https://rag.rfc-agent.com/health` 均为 200；公网首页加载 `index-fStOq9jX.js`，匿名 Agent 请求为 401。
+- 真实认证持久化 smoke 的 stream 与 GET messages 均为 6 条安全步骤，动作序列和摘要哈希一致；临时会话删除返回 200，没有保存或输出 raw answer、source text、token、provider payload。
+- Tailscale 为 active/enabled；Cloudflare 实际 unit 是 `cloudflared-rfc-rag-agent.service`，同样 active/enabled。不要用不存在的通用 `cloudflared.service` 判断持久化状态。
 
 # Phase 67 CPU 迁移补正已验证事实
 

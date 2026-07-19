@@ -1,4 +1,4 @@
-# 阶段 67 增补：真实运行步骤持久化一致性修复（2026-07-19，四端同步中）
+# 阶段 67 增补：真实运行步骤持久化一致性修复（2026-07-19，四端同步完成）
 
 当前分支：`codex/fix-workflow-step-persistence`。
 
@@ -6,7 +6,9 @@
 
 小型 Playwright E2E 评测集位于 `frontend/e2e/fixtures/workflow-persistence-cases.json`，只含合成问题、短回答预期和安全步骤摘要。红灯先复现刷新前 3 步、刷新后 2 步；实现后 3 个 Chromium case 覆盖 6-step reload、4-step logout/login Query cache reset、legacy 2-step fallback，均要求恢复前后步骤数和标签序列一致。用户已授权在 fresh 门禁通过后同步本地 Git、Obsidian、GitHub 与新 CPU；阶段 67 总体验收、旧 CPU 清理和异机备份仍是独立事项。
 
-本地提交 `309b96ad` 已推送到 `codex/fix-workflow-step-persistence`，GitHub PR #46 为 `https://github.com/CxcTHU/rfc-rag-agent/pull/46`。只有最终 HEAD checks 通过后才能合并；新 CPU 必须从合并 commit 部署并直接验证 live container。
+本地提交 `309b96ad` 已推送到 `codex/fix-workflow-step-persistence`；GitHub PR #46 的 10 个 checks 全部通过并合并为 `29711f0fb1aeb78b4483be58fecbbb9ad3436c14`。新 CPU 当前生产镜像为 `rfc-rag-agent:production` / `2e8957f449c2`，OCI revision 指向该 merge commit，旧镜像保留为 `rfc-rag-agent:pre-workflow-1296fcc9`。canary、live container、Cloudflare 公网、Tailscale 维护入口和真实认证 conversation persistence smoke 均通过；6 条安全运行步骤经消息回读保持数量、动作序列与摘要哈希一致，临时会话已删除。
+
+一次只读 Compose 配置检查曾在受控终端输出中展开生产环境变量；没有写入文件、Git、文档或评测产物，后续检查已改为只读取容器 ID、hash 与布尔状态。必须安排相关生产凭据轮换。该安全后续与阶段 67 总体验收、旧 CPU 清理、异机备份仍是独立事项。
 
 # 阶段 57 多通道混合检索与默认链路真实评测最新交班状态（2026-06-29，用户人工核验 PASS 后提交中）
 

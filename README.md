@@ -6,6 +6,8 @@ Completed streaming answers now persist the safe runtime event projection in a s
 
 The bounded browser evaluation set under `frontend/e2e/fixtures/workflow-persistence-cases.json` uses synthetic data only. It covers a six-step page reload, a four-step logout/login Query-cache reset, and a legacy two-step fallback. Each case compares both step count and expanded labels before and after recovery. No external corpus, provider request, real credential, raw answer, full chunk, or private log is part of this evaluation.
 
+PR #46 passed all 10 GitHub checks and merged as `29711f0f`. The replacement CPU now runs image `2e8957f449c2`, labeled with that merge revision; a real authenticated production smoke confirmed six display-safe runtime steps remain identical after conversation-message hydration, then deleted its temporary conversation. The public Cloudflare endpoint serves `index-fStOq9jX.js`; the application, Tailscale, and `cloudflared-rfc-rag-agent.service` are healthy/active and enabled. The former image remains tagged `pre-workflow-1296fcc9`. A controlled read-only deployment check exposed production environment values in terminal output only, so related production credentials must be rotated even though no values entered Git or artifacts.
+
 ## Phase 67 CPU Migration（部署补正完成，等待阶段 67 人工验收）
 
 The replacement CPU now runs the complete user-accepted Phase 66 runtime under

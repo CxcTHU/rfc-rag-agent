@@ -12,14 +12,22 @@
 4. [x] 更新 Phase 67 四类 Obsidian 阶段文件、普通文档与根计划/发现/进度/交接，准确记录验收边界。
 5. [x] fresh 运行后端相关回归、前端 unit/lint/build/E2E、Ruff、diff check 与定向敏感扫描，全部通过；敏感扫描只命中文档中的禁止项说明。
 6. [x] 仅暂存本增补相关代码、测试、构建产物和文档，创建本地 commit `309b96ad`。
-7. [ ] 已推送当前分支并创建 PR #46 到 main；等待最终 HEAD checks，通过后合并并记录最终状态。
-8. [ ] 从合并后的 main 构建并部署新 CPU，保留当前镜像回滚标签；验证 live image、Cloudflare、Tailscale、认证 Agent 和重载步骤一致性。
+7. [x] 已推送当前分支并创建 PR #46 到 main；10 个 checks 全部通过，合并为 `29711f0fb1aeb78b4483be58fecbbb9ad3436c14`。
+8. [x] 已从合并 commit 构建并部署新 CPU，保留旧镜像回滚标签；live image、Cloudflare、Tailscale、认证 Agent 和 6 步数据库回读一致性均通过。
 
 ### Phase 67 增补错误记录
 
 | 错误 | 尝试 | 处理 |
 | --- | --- | --- |
 | 首个 Playwright 重载断言从实时 3 步降为持久化 2 步 | 1 | 红灯符合预期，证明现有 mock server 仍模拟旧合同；下一步以独立 `runtime_workflow_steps` 更新合成持久化并扩为 3-case 评测集。 |
+| 首次 live inspect 使用了不存在的固定容器名 `rfc-rag-agent-app` | 1 | Compose 实际容器名含项目目录前缀；后续统一用 `docker compose ... ps -q app` 动态解析，不重复硬编码。 |
+| PowerShell 双引号提前执行远端 `$(docker compose ...)` | 1 | 未修改服务器；改用 single-quoted literal here-string 将脚本原样传给 `ssh rfc-cpu`。 |
+| `docker compose config` 只读检查输出了生产环境变量 | 1 | 未写入文件/Git/产物；立即停止该检查方式，后续只查询容器 ID、hash 与布尔状态，并将生产凭据轮换列为安全后续。 |
+| Docker image label inspect 的 Go template 引号转义失败 | 1 | 镜像已成功构建；改用 `{{json .Config.Labels}}` 安全读取固定 OCI 标签，不重复嵌套 index 转义。 |
+| 生产 smoke 首次在宿主机调用 `python` 解析 JSON | 1 | 宿主机无 Python；先清理固定标题的临时会话，再统一通过 app 容器的 `docker exec -i ... python` 做内存解析。 |
+| 尾检首次未给 Compose 指定 `.env.prod` | 1 | 命令在配置插值阶段停止，未执行删除；随后使用现有 env-file，只输出容器 ID 与状态并完成精确临时目录清理。 |
+| 尾检误查不存在的 `cloudflared.service` | 1 | 公网一直正常；按 unit 清单定位实际 `cloudflared-rfc-rag-agent.service`，复核为 active/enabled。 |
+| 首次收口 PR 命令的 Markdown 反引号被本地编排层解析 | 1 | 命令在执行前停止，未 fetch/push/create PR；改用不含反引号的正文并重新执行。 |
 
 ## Phase 67：CPU 服务器迁移
 

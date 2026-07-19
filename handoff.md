@@ -5,8 +5,10 @@
 - 当前分支为 `codex/fix-workflow-step-persistence`，基于已合并 Phase 67 的 `origin/main`。
 - 后端把白名单过滤的 SSE 运行事件作为独立 `runtime_workflow_steps` 持久化；前端 reload/refetch 优先恢复它，旧会话回退到现有两级合同。
 - E2E 红灯先复现 `3 -> 2`；3-case Chromium 集合随后覆盖 6-step reload、4-step logout/login cache reset 与 legacy 2-step fallback，均保持数量和标签序列一致。
-- 用户已授权 fresh 门禁通过后完成本地、Obsidian、GitHub、新 CPU 四端同步。当前尚未提交、推送或部署；不得提前标记为上线完成。
-- 本地提交为 `309b96ad`；分支已推送，GitHub PR #46 为 `https://github.com/CxcTHU/rfc-rag-agent/pull/46`，当前等待最终 HEAD checks。新 CPU 尚未部署本增补。
+- 用户已授权且本地、Obsidian、GitHub、新 CPU 四端同步均已完成。实现提交为 `309b96ad`；PR #46 的 10 个 checks 全部通过，合并 commit 为 `29711f0fb1aeb78b4483be58fecbbb9ad3436c14`。
+- 新 CPU live image 为 `rfc-rag-agent:production` / `2e8957f449c2`，revision 指向 PR #46 merge；回滚标签为 `rfc-rag-agent:pre-workflow-1296fcc9`。公网 health/asset、匿名 401、Tailscale 与 `cloudflared-rfc-rag-agent.service` 均复核通过。
+- 真实认证 smoke 已证明 6 条安全 runtime steps 经数据库消息 hydration 后保持数量、动作序列和摘要哈希一致，临时会话已删除。
+- 一次只读 Compose 检查曾在终端展开生产环境值；没有写入文件或仓库，但必须轮换相关生产凭据。Phase 67 总体验收、旧 CPU 清理和异机备份仍未完成。
 - 既有 Phase 64 Obsidian 格式变更、`.playwright-cli/`、`output/` 与根目录 PNG 均为无关工作区内容，不得暂存。
 
 更新时间：2026-07-18
