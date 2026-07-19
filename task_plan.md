@@ -11,8 +11,8 @@
 3. [x] 运行 E2E 评测并核对“实时步骤数 = 重载步骤数”；3-case Chromium 评测全部通过。
 4. [x] 更新 Phase 67 四类 Obsidian 阶段文件、普通文档与根计划/发现/进度/交接，准确记录验收边界。
 5. [x] fresh 运行后端相关回归、前端 unit/lint/build/E2E、Ruff、diff check 与定向敏感扫描，全部通过；敏感扫描只命中文档中的禁止项说明。
-6. [ ] 仅暂存本增补相关代码、测试、构建产物和文档，创建本地 commit。
-7. [ ] 推送当前分支，创建 PR 到 main；检查通过后合并并记录链接与最终状态。
+6. [x] 仅暂存本增补相关代码、测试、构建产物和文档，创建本地 commit `309b96ad`。
+7. [ ] 已推送当前分支并创建 PR #46 到 main；等待最终 HEAD checks，通过后合并并记录最终状态。
 8. [ ] 从合并后的 main 构建并部署新 CPU，保留当前镜像回滚标签；验证 live image、Cloudflare、Tailscale、认证 Agent 和重载步骤一致性。
 
 ### Phase 67 增补错误记录

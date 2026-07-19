@@ -10,6 +10,7 @@
 - 已建立 3-case 合成 E2E 集合并升级 mock server 到独立 `runtime_workflow_steps` 合同；定向 Chromium 运行 `3 passed (6.9s)`，恢复前后步骤数与展开标签序列完全一致。
 - fresh 收口验证进度：生产前端 build 通过；oxlint 通过；Vitest `8 files / 33 tests passed`；完整 Playwright Chromium `10 passed`；后端 Agent API/stream/runtime-events 相关回归 `60 passed in 216.35s`。
 - Ruff 定向检查通过，`git diff --check` 通过；定向敏感扫描只命中 AGENT/README/架构/数据边界中的禁止项说明，没有真实凭据、token、provider raw response、raw answer、`reasoning_content`、完整 chunk 或私有日志。
+- 仅显式暂存本增补 25 个文件并提交为 `309b96ad`；已推送 `codex/fix-workflow-step-persistence`，创建 GitHub PR #46：`https://github.com/CxcTHU/rfc-rag-agent/pull/46`。等待最终 HEAD checks，未强行合并。
 
 更新时间：2026-07-18
 
