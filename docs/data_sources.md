@@ -1,5 +1,11 @@
 # 数据来源登记
 
+## Phase 67 Workflow Persistence E2E Data Boundary
+
+This addendum introduces no corpus source, crawler, PDF, database content, model weight, embedding, provider call, or user profile. The committed `frontend/e2e/fixtures/workflow-persistence-cases.json` contains three synthetic browser cases with ids, short mock questions, expected UI text/counts, recovery modes, and display-safe runtime step summaries.
+
+Playwright traces, screenshots, video, and HTML reports remain under ignored `frontend/test-results/` and `frontend/playwright-report/`. The fixture and persisted runtime contract must not contain real credentials, bearer/API tokens, provider raw responses, raw answers, `reasoning_content`, hidden reasoning, complete chunks, restricted full text, private logs, or raw uploaded images.
+
 ## Phase 66 Tool Calling Runtime Evaluation Data Boundary
 
 Phase 66 adds no external corpus, crawler, PDF, source registry entry, model

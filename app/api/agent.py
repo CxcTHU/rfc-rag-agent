@@ -26,6 +26,7 @@ from app.schemas.agent import (
     AgentJudgeResponse,
     AgentQueryRequest,
     AgentQueryResponse,
+    AgentRuntimeWorkflowStepItem,
     AgentSearchResultItem,
     AgentSourceItem,
     AgentToolCallItem,
@@ -34,6 +35,7 @@ from app.schemas.agent import (
 from app.services.agent.chitchat import ChitchatResult, detect_chitchat
 from app.services.agent import intent_router
 from app.services.agent.refusal_explainer import build_refusal_explanation
+from app.services.agent.runtime_events import ToolCallingRuntimeEvent
 from app.services.agent.service import AgentQueryResult
 from app.services.agent.tools import image_url_from_source_image_path, page_number_from_source_image_path
 from app.services.agent.tool_calling_service import ToolCallingAgentService
@@ -62,6 +64,7 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 FIGURE_EVIDENCE_LIMIT = 4
 AGENT_STREAM_HEARTBEAT_SECONDS = 10.0
+MAX_PERSISTED_RUNTIME_WORKFLOW_STEPS = 64
 agent_logger = logging.getLogger("rfc_rag_agent.agent")
 
 
@@ -635,6 +638,7 @@ def stream_non_chitchat_agent_response(
     producer.start()
 
     streamed_token_count = 0
+    runtime_workflow_steps: list[AgentRuntimeWorkflowStepItem] = []
     wait_started = time.perf_counter()
     while True:
         try:
@@ -650,10 +654,14 @@ def stream_non_chitchat_agent_response(
             yield sse_event("token", {"text": payload})
             continue
         if event_type == "agent_event":
+            runtime_workflow_steps.append(runtime_workflow_step_from_event(payload))
+            if len(runtime_workflow_steps) > MAX_PERSISTED_RUNTIME_WORKFLOW_STEPS:
+                runtime_workflow_steps.pop(0)
             yield sse_event(payload.event, payload.payload)
             continue
         if event_type == "response":
             producer.join()
+            payload.runtime_workflow_steps = runtime_workflow_steps
             return payload, streamed_token_count
         if event_type == "error":
             producer.join()
@@ -661,6 +669,43 @@ def stream_non_chitchat_agent_response(
 
         producer.join()
         raise RuntimeError("unknown stream event")
+
+
+def runtime_workflow_step_from_event(
+    event: ToolCallingRuntimeEvent,
+) -> AgentRuntimeWorkflowStepItem:
+    """Convert an already-sanitized SSE projection into its persisted form."""
+    payload = event.payload
+    tool_name = payload.get("tool_name")
+    action_name = payload.get("action")
+    name = (
+        tool_name
+        if isinstance(tool_name, str)
+        else action_name
+        if isinstance(action_name, str)
+        else event.event
+    )
+    return AgentRuntimeWorkflowStepItem(
+        name=name,
+        action=event.event,
+        step_id=_runtime_string(payload.get("step_id")),
+        tool_name=_runtime_string(tool_name),
+        input_summary=_runtime_string(payload.get("input_summary")),
+        output_summary=_runtime_string(payload.get("output_summary")),
+        observation_summary=_runtime_string(payload.get("observation_summary")),
+        step_summary=_runtime_string(payload.get("step_summary")),
+        succeeded=(
+            payload.get("succeeded")
+            if isinstance(payload.get("succeeded"), bool)
+            else None
+        ),
+        skipped=payload.get("skipped") is True,
+        error=_runtime_string(payload.get("error")),
+    )
+
+
+def _runtime_string(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 FOLLOWUP_TRANSFORM_TRIGGERS = (
@@ -1617,6 +1662,7 @@ def assistant_metadata_from_response(response: AgentQueryResponse) -> dict[str, 
             "reasoning_summary",
             "mode",
             "workflow_steps",
+            "runtime_workflow_steps",
             "iteration_count",
             "invalid_citations",
             "refusal_category",

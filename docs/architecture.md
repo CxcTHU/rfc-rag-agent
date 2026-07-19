@@ -1,5 +1,21 @@
 # 架构说明
 
+## Phase 67 Addendum: Runtime Workflow Persistence
+
+```text
+RuntimeEventBus safe projection
+-> SSE agent_step / tool_call_start / tool_call_result
+-> stream adapter bounded capture (last 64)
+-> AgentQueryResponse.runtime_workflow_steps
+-> assistant metadata_json
+-> conversation message hydration
+-> completed ThinkingPanel
+```
+
+`runtime_workflow_steps` is deliberately separate from final `workflow_steps` and `tool_calls`. The former preserves display-safe execution history; the latter two retain final result/tool-record semantics. The stream adapter only converts the already-whitelisted runtime projection and never accepts provider raw responses, model reasoning, full chunks, or arbitrary payload objects. Old stored messages without the new field continue through `workflow_steps`, then `tool_calls`, without migration.
+
+The frontend reconciles live in-memory events with the persisted runtime list while the answer remains in the current session. After reload or Query cache reset, it normalizes the persisted runtime list directly, including tool start/result lifecycle merging, so the displayed count and labels remain stable.
+
 ## Phase 67 Replacement CPU Deployment Topology
 
 ```text

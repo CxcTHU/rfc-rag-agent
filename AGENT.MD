@@ -1,3 +1,13 @@
+# 阶段 67 增补：真实运行步骤持久化一致性修复（2026-07-19，四端同步中）
+
+当前分支：`codex/fix-workflow-step-persistence`。
+
+本增补修复 React 工作台完成态的步骤一致性：实时 SSE 期间前端能显示完整真实运行步骤，但会话重载后数据库仅恢复最终 `workflow_steps`，导致步骤数缩减。后端现在把经过 `RuntimeEventBus` 白名单过滤的事件独立保存为 `runtime_workflow_steps`；前端完成态和会话恢复优先使用该字段，旧会话仍回退到 `workflow_steps` / `tool_calls`。不得把运行步骤混入 `tool_calls`，不得持久化 provider raw response、raw answer、`reasoning_content`、完整 chunk、密钥或私有日志。
+
+小型 Playwright E2E 评测集位于 `frontend/e2e/fixtures/workflow-persistence-cases.json`，只含合成问题、短回答预期和安全步骤摘要。红灯先复现刷新前 3 步、刷新后 2 步；实现后 3 个 Chromium case 覆盖 6-step reload、4-step logout/login Query cache reset、legacy 2-step fallback，均要求恢复前后步骤数和标签序列一致。用户已授权在 fresh 门禁通过后同步本地 Git、Obsidian、GitHub 与新 CPU；阶段 67 总体验收、旧 CPU 清理和异机备份仍是独立事项。
+
+本地提交 `309b96ad` 已推送到 `codex/fix-workflow-step-persistence`，GitHub PR #46 为 `https://github.com/CxcTHU/rfc-rag-agent/pull/46`。只有最终 HEAD checks 通过后才能合并；新 CPU 必须从合并 commit 部署并直接验证 live container。
+
 # 阶段 57 多通道混合检索与默认链路真实评测最新交班状态（2026-06-29，用户人工核验 PASS 后提交中）
 
 当前分支：`codex/phase-57-multichannel-hybrid-retrieval`。

@@ -54,16 +54,16 @@ export type AgentSource = {
 
 export type AgentWorkflowStep = {
   name: string
-  step_id?: string
-  input_summary?: string
-  output_summary?: string
-  step_summary?: string
-  observation_summary?: string
+  step_id?: string | null
+  input_summary?: string | null
+  output_summary?: string | null
+  step_summary?: string | null
+  observation_summary?: string | null
   action?: string
   phase?: string
-  tool_name?: string
+  tool_name?: string | null
   payload?: Record<string, unknown>
-  succeeded?: boolean
+  succeeded?: boolean | null
   skipped?: boolean
   error?: string | null
   client_event_at?: number
@@ -79,6 +79,7 @@ export type AgentQueryResponse = {
   refusal_reason?: string | null
   mode: string
   workflow_steps: AgentWorkflowStep[]
+  runtime_workflow_steps?: AgentWorkflowStep[]
   tool_calls?: AgentWorkflowStep[]
   iteration_count?: number
   invalid_citations?: number[]

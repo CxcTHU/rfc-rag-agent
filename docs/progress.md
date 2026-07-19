@@ -5146,3 +5146,8 @@ refusal-answer strategy. This authorization allows local commit, GitHub PR, and
 merge after checks pass. It does not claim that the broader Phase 65
 holdout/judge gate has passed, and it does not replace a future formal
 high-cost latency release gate.
+# Phase 67 Addendum: Workflow Persistence Consistency
+
+The completed-message workflow mismatch is fixed locally. Streaming-safe runtime events are retained separately as `runtime_workflow_steps`, persisted in assistant metadata, and preferred by the React conversation hydrator. Existing `workflow_steps` and `tool_calls` remain unchanged compatibility contracts.
+
+A red Playwright case first reproduced `3 live steps -> 2 restored steps`. The bounded three-case Chromium set now passes for page reload, logout/login cache reset, and legacy fallback while comparing both counts and expanded labels. This is a targeted persistence/UI regression result, not a broad Agent-quality or Phase 67 migration acceptance claim.

@@ -1,3 +1,20 @@
+# Phase 67 增补：步骤持久化 E2E 与同步发现
+
+更新时间：2026-07-19
+
+- 当前修复分支为 `codex/fix-workflow-step-persistence`，基于已合并 Phase 67 的 `origin/main`。
+- 已有修复把安全 SSE 运行步骤保存到独立 `runtime_workflow_steps`，前端会话恢复优先使用该字段；最终 `workflow_steps` 与 `tool_calls` 的既有语义不变。
+- 四端同步授权已由用户明确给出，但必须先通过小型 E2E 评测和 fresh 收口门禁。
+- 既有 Phase 64 Obsidian 格式变更、`.playwright-cli/`、`output/` 与根目录截图不属于本增补，禁止暂存或覆盖。
+- 新 CPU 稳定维护入口为 `rfc-cpu`（Tailscale），部署目录为 `/home/ubuntu/rfc-rag-agent-stage44-smoke`；公网入口继续由 Cloudflare Tunnel 提供。
+- 现有 Playwright 使用 `frontend/e2e/mock-server.mjs` 在 4173 提供合成认证、会话、SSE 和静态生产包，测试为单 worker Chromium；可直接扩展，无需接触真实服务或真实数据。
+- 当前 mock SSE 实时发送 planning + tool start/result，但持久化 metadata 仍只有两条 `workflow_steps`，恰好可作为本 bug 的旧行为对照；修复后的 E2E fixture 应增加独立 `runtime_workflow_steps`。
+- `ThinkingPanel` 的完成态摘要稳定暴露“`N 个真实步骤`”，展开后每步为 `.thinking-step`；可在 reload 前后同时比较数量和标签序列。
+- Auth logout 会清空 TanStack Query cache，而 active conversation id 单独保存在 localStorage；“退出后重新登录”可作为比单纯 reload 更强的数据库恢复路径，验证前端不依赖旧内存 events。
+- 小型集合采用三类恢复路径：新合同 6 步 + 页面 reload、新合同无来源路径 + logout/login cache 清空、旧 metadata 合同 2 步兼容回退；每例均比较恢复前后的步骤数与展开标签序列。
+- 首个单例 E2E 红灯得到刷新前 3 步、刷新后 2 步，证明测试能捕获原缺陷。
+- 新增 `workflow-persistence-cases.json` 后，Chromium 评测为 `3 passed`：6-step reload、4-step reauth/cache reset、legacy 2-step fallback 均保持恢复前后数量与标签序列一致。
+
 # Phase 67 CPU 迁移补正已验证事实
 
 更新时间：2026-07-18

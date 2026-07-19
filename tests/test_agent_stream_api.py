@@ -191,10 +191,20 @@ def test_agent_stream_api_persists_completed_conversation_messages(tmp_path) -> 
         messages_response = client.get(f"/conversations/{conversation['id']}/messages")
 
     assert response.status_code == 200
+    events = parse_sse_events(response.text)
+    metadata = next(payload for name, payload in events if name == "metadata")
+    runtime_event_names = [
+        name
+        for name, _payload in events
+        if name in {"agent_step", "tool_call_start", "tool_call_result"}
+    ]
     messages = messages_response.json()["messages"]
     assert [message["role"] for message in messages] == ["user", "assistant"]
     assert messages[0]["content"] == "What affects filling capacity?"
     assert messages[1]["metadata"]["citations"] == [1]
+    assert [step["action"] for step in metadata["runtime_workflow_steps"]] == runtime_event_names
+    assert messages[1]["metadata"]["runtime_workflow_steps"] == metadata["runtime_workflow_steps"]
+    assert len(metadata["runtime_workflow_steps"]) > len(metadata["workflow_steps"])
 
 
 def test_agent_stream_api_default_routes_to_tool_calling(tmp_path) -> None:

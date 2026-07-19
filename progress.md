@@ -1,5 +1,17 @@
 # 当前进度
 
+## 2026-07-19 Phase 67 增补：步骤持久化 E2E 与四端同步
+
+- 用户要求建立小型 E2E 评测集，先验证“实时真实步骤在会话重载后不缩减”，通过后完成本地 Git、Obsidian、GitHub 和新 CPU 四端同步。
+- 已恢复任务上下文并确认工作分支 `codex/fix-workflow-step-persistence`；修复代码及后端/前端回归仍在工作区，尚未暂存、提交、推送或部署。
+- 已在 `task_plan.md` 建立 8 步执行计划。下一步复核现有 Playwright mock server/test fixture，设计不少于 3 个有界 E2E case。
+- 安全边界不变：E2E 仅使用合成用户、短问题、短回答和安全步骤摘要，不保存真实 token、答案、完整 chunk、provider raw response、`reasoning_content` 或私有日志。
+- E2E 红灯已复现：新增的浏览器断言在刷新前看到 `3 个真实步骤`，刷新后只恢复 `2 个真实步骤`；Playwright 1 test failed，失败位置为重载后的步骤数断言。
+- 已建立 3-case 合成 E2E 集合并升级 mock server 到独立 `runtime_workflow_steps` 合同；定向 Chromium 运行 `3 passed (6.9s)`，恢复前后步骤数与展开标签序列完全一致。
+- fresh 收口验证进度：生产前端 build 通过；oxlint 通过；Vitest `8 files / 33 tests passed`；完整 Playwright Chromium `10 passed`；后端 Agent API/stream/runtime-events 相关回归 `60 passed in 216.35s`。
+- Ruff 定向检查通过，`git diff --check` 通过；定向敏感扫描只命中 AGENT/README/架构/数据边界中的禁止项说明，没有真实凭据、token、provider raw response、raw answer、`reasoning_content`、完整 chunk 或私有日志。
+- 仅显式暂存本增补 25 个文件并提交为 `309b96ad`；已推送 `codex/fix-workflow-step-persistence`，创建 GitHub PR #46：`https://github.com/CxcTHU/rfc-rag-agent/pull/46`。等待最终 HEAD checks，未强行合并。
+
 更新时间：2026-07-18
 
 ## Phase 66 验收后低延迟生产默认提升

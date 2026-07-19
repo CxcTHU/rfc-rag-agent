@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { hydrateConversationMessages } from '@/features/chat/model'
 import { stepLabel, stepSummary, workflowStepsForMessage } from '@/features/trace/workflow'
 import type { ChatMessage } from '@/lib/types'
 
@@ -51,5 +52,45 @@ describe('workflowStepsForMessage', () => {
 
     expect(stepLabel(step)).toBe('正在生成最终回答')
     expect(stepSummary(step)).toBe('正在等待最终模型返回')
+  })
+
+  it('restores the complete persisted runtime after a conversation reload', () => {
+    const message = hydrateConversationMessages([
+      { id: 1, conversation_id: 1, role: 'user', content: 'q' },
+      {
+        id: 2,
+        conversation_id: 1,
+        role: 'assistant',
+        content: 'answer',
+        mode: 'tool_calling_agent',
+        metadata: {
+          sources: [], citations: [], refused: false,
+          mode: 'tool_calling_agent',
+          workflow_steps: [
+            { name: 'hybrid_search_knowledge', step_id: 'call-1' },
+            { name: 'final_answer', step_id: 'final' },
+          ],
+          runtime_workflow_steps: [
+            { name: 'llm_with_tools', action: 'agent_step', step_summary: 'planning' },
+            {
+              name: 'hybrid_search_knowledge', action: 'tool_call_start',
+              tool_name: 'hybrid_search_knowledge', step_id: 'call-1', input_summary: 'query=q',
+            },
+            {
+              name: 'hybrid_search_knowledge', action: 'tool_call_result',
+              tool_name: 'hybrid_search_knowledge', step_id: 'call-1',
+              observation_summary: 'returned 6 results', succeeded: true,
+            },
+            { name: 'final_answer', action: 'agent_step', step_summary: 'completed' },
+          ],
+        },
+      },
+    ])[1]
+
+    expect(workflowStepsForMessage(message).map((step) => step.name)).toEqual([
+      'llm_with_tools',
+      'hybrid_search_knowledge',
+      'final_answer',
+    ])
   })
 })

@@ -165,6 +165,22 @@ class AgentWorkflowStepItem(BaseModel):
     error: str | None
 
 
+class AgentRuntimeWorkflowStepItem(BaseModel):
+    """Display-safe runtime event persisted separately from final tool records."""
+
+    name: str
+    action: str
+    step_id: str | None = None
+    tool_name: str | None = None
+    input_summary: str | None = None
+    output_summary: str | None = None
+    observation_summary: str | None = None
+    step_summary: str | None = None
+    succeeded: bool | None = None
+    skipped: bool = False
+    error: str | None = None
+
+
 class AgentJudgeSourceItem(BaseModel):
     title: str = ""
     content: str | None = None
@@ -201,6 +217,7 @@ class AgentQueryResponse(BaseModel):
     reasoning_summary: str
     mode: str = "tool_calling_agent"
     workflow_steps: list[AgentWorkflowStepItem] = Field(default_factory=list)
+    runtime_workflow_steps: list[AgentRuntimeWorkflowStepItem] = Field(default_factory=list)
     iteration_count: int = 0
     invalid_citations: list[int] = Field(default_factory=list)
     refusal_category: str | None = None
