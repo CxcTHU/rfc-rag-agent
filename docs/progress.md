@@ -1,5 +1,31 @@
 # Project Progress
 
+## Latest Status: 2026-07-19 Runtime Workflow Persistence Production Rollout
+
+The runtime-step persistence fix was merged through PR #46 after all 10 GitHub
+checks passed. Merge commit `29711f0fb1aeb78b4483be58fecbbb9ad3436c14` is now
+the OCI revision of replacement-CPU production image `2e8957f449c2`; the prior
+image is retained as `rfc-rag-agent:pre-workflow-1296fcc9`.
+
+Fresh local gates passed: 60 related backend tests, 33 frontend unit tests,
+frontend lint/build, all 10 Chromium E2E tests (including the new 3-case
+persistence set), Ruff, diff check, and a targeted sensitive-data scan. A real
+authenticated live smoke produced six display-safe runtime actions and proved
+the stream receipt and hydrated conversation message have identical counts,
+action order, and summary hash. Its temporary conversation was deleted without
+printing or storing the answer, source text, token, or provider payload.
+
+Public `https://rag.rfc-agent.com/health` returns 200, the frontend serves
+`index-fStOq9jX.js`, and anonymous Agent access remains 401. The app container is
+healthy; Tailscale and the actual `cloudflared-rfc-rag-agent.service` unit are
+active and enabled. One controlled read-only Compose inspection expanded
+production environment values into terminal output. Nothing was written to Git
+or artifacts, but related production credentials must be rotated. Phase 67
+overall acceptance, old-CPU retirement, and tested off-host backup remain
+separate decisions.
+
+---
+
 ## Latest Status: 2026-07-18 Phase 67 Replacement CPU Migration Correction
 
 The complete user-accepted Phase 66 runtime is now live on the replacement CPU.
