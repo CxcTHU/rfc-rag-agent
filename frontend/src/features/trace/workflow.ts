@@ -26,11 +26,13 @@ export function sseEventToWorkflowStep(event: AgentStreamEvent): AgentWorkflowSt
 
 export function workflowStepsForMessage(message: ChatMessage) {
   if (message.pending) return normalizeActualSteps(message.events || [])
-  const authoritative = message.result?.workflow_steps?.length
-    ? message.result.workflow_steps
-    : message.result?.tool_calls?.length
-      ? message.result.tool_calls
-      : message.events || []
+  const authoritative = message.result?.runtime_workflow_steps?.length
+    ? message.result.runtime_workflow_steps
+    : message.result?.workflow_steps?.length
+      ? message.result.workflow_steps
+      : message.result?.tool_calls?.length
+        ? message.result.tool_calls
+        : message.events || []
   return reconcileWorkflowSteps(message.events || [], authoritative)
 }
 

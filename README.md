@@ -1,5 +1,11 @@
 # RFC-RAG-Agent
 
+## Phase 67 Addendum: Persisted Runtime Workflow Steps
+
+Completed streaming answers now persist the safe runtime event projection in a separate `runtime_workflow_steps` response/metadata field. The React workbench prefers this field after completion and conversation hydration, while retaining `workflow_steps` and `tool_calls` as compatibility fallbacks for older messages. This prevents a completed answer from showing the full live workflow and later shrinking to only the final tool/answer records after reload or refetch.
+
+The bounded browser evaluation set under `frontend/e2e/fixtures/workflow-persistence-cases.json` uses synthetic data only. It covers a six-step page reload, a four-step logout/login Query-cache reset, and a legacy two-step fallback. Each case compares both step count and expanded labels before and after recovery. No external corpus, provider request, real credential, raw answer, full chunk, or private log is part of this evaluation.
+
 ## Phase 67 CPU Migration（部署补正完成，等待阶段 67 人工验收）
 
 The replacement CPU now runs the complete user-accepted Phase 66 runtime under

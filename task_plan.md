@@ -1,6 +1,25 @@
 # 当前执行计划
 
-更新时间：2026-07-18
+更新时间：2026-07-19
+
+## Phase 67 增补：运行步骤持久化 E2E 验证与四端同步
+
+目标：用小型浏览器 E2E 评测集证明 Agent 完成态在会话重载前后保持相同的真实步骤，随后仅同步本增补范围到本地 Git、Obsidian、GitHub 和新 CPU。
+
+1. [x] 复核现有 Playwright 测试架构、认证 mock、SSE mock 和重载会话 mock 能力。
+2. [x] 以不少于 3 个有界 case 建立 E2E 评测集，覆盖完成后刷新、Query cache 清空后重新认证和旧会话兼容回退。
+3. [x] 运行 E2E 评测并核对“实时步骤数 = 重载步骤数”；3-case Chromium 评测全部通过。
+4. [x] 更新 Phase 67 四类 Obsidian 阶段文件、普通文档与根计划/发现/进度/交接，准确记录验收边界。
+5. [x] fresh 运行后端相关回归、前端 unit/lint/build/E2E、Ruff、diff check 与定向敏感扫描，全部通过；敏感扫描只命中文档中的禁止项说明。
+6. [ ] 仅暂存本增补相关代码、测试、构建产物和文档，创建本地 commit。
+7. [ ] 推送当前分支，创建 PR 到 main；检查通过后合并并记录链接与最终状态。
+8. [ ] 从合并后的 main 构建并部署新 CPU，保留当前镜像回滚标签；验证 live image、Cloudflare、Tailscale、认证 Agent 和重载步骤一致性。
+
+### Phase 67 增补错误记录
+
+| 错误 | 尝试 | 处理 |
+| --- | --- | --- |
+| 首个 Playwright 重载断言从实时 3 步降为持久化 2 步 | 1 | 红灯符合预期，证明现有 mock server 仍模拟旧合同；下一步以独立 `runtime_workflow_steps` 更新合成持久化并扩为 3-case 评测集。 |
 
 ## Phase 67：CPU 服务器迁移
 
@@ -24,7 +43,7 @@
 15. [x] 先做 18045 canary，再切生产 app；验证配置默认值、等待态、前端 asset、容器网络与健康状态。
 16. [x] 执行脱敏真实 Agent + Judge smoke，并复核四域名、Cloudflare/Tailscale/provider forward 的 active/enabled。
 17. [x] 完成本地/Obsidian 收口、显式暂存、测试、安全扫描与提交 `6fe16606`；推送分支并创建 PR #45。
-18. [ ] 等待 PR #45 最终 HEAD checks，通过后按授权 merge；失败时不得强行合并。
+18. [x] PR #45 最终 HEAD checks 通过并合并为 `490620f0`。
 19. [ ] 用户确认阶段 67 观察期结束后，决定何时清理旧机与迁移备份。
 
 ### Phase 67 错误记录

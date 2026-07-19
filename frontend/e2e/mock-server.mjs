@@ -6,6 +6,16 @@ import { fileURLToPath } from 'node:url'
 const directory = path.dirname(fileURLToPath(import.meta.url))
 const distRoot = path.resolve(directory, '../dist')
 const port = 4173
+const workflowPersistenceCases = JSON.parse(
+  await readFile(path.resolve(directory, 'fixtures/workflow-persistence-cases.json'), 'utf8'),
+)
+
+const defaultRuntimeWorkflowSteps = [
+  { name: 'llm_with_tools', action: 'agent_step', step_summary: 'Real backend planning event' },
+  { name: 'search_knowledge', action: 'tool_call_start', tool_name: 'search_knowledge', input_summary: 'Search mock corpus' },
+  { name: 'search_knowledge', action: 'tool_call_result', tool_name: 'search_knowledge', observation_summary: 'Returned real mock sources', succeeded: true },
+  { name: 'final_answer', action: 'agent_step', step_summary: 'Compose final answer from returned sources' },
+]
 
 let nextConversationId = 1
 let nextMessageId = 1
@@ -39,6 +49,34 @@ function user() {
   return { id: 42, username: 'mock-user', email: 'mock@example.test', is_active: true, created_at: '2026-01-01T00:00:00Z' }
 }
 
+function workflowPersistenceCaseFor(question) {
+  return workflowPersistenceCases.find((item) => item.question === question)
+}
+
+function runtimeWorkflowStepsFor(question) {
+  return workflowPersistenceCaseFor(question)?.runtimeWorkflowSteps || defaultRuntimeWorkflowSteps
+}
+
+function sseProjectionFor(step) {
+  if (step.action === 'agent_step') {
+    return {
+      event: step.action,
+      payload: { action: step.name, step_summary: step.step_summary },
+    }
+  }
+  return {
+    event: step.action,
+    payload: {
+      step_id: step.step_id,
+      tool_name: step.tool_name || step.name,
+      input_summary: step.input_summary,
+      observation_summary: step.observation_summary,
+      succeeded: step.succeeded,
+      skipped: step.skipped === true,
+    },
+  }
+}
+
 function resultFor(question) {
   const withoutSources = question.includes('no sources')
   const ordinal = question.includes('second') ? 'second answer' : question.includes('judge failure') ? 'judge failure answer' : 'first answer'
@@ -52,7 +90,7 @@ function resultFor(question) {
     content: 'Short sanitized browser-test evidence.',
     score: 0.93,
   }]
-  return {
+  const result = {
     question,
     answer: withoutSources ? `${ordinal} has no returned sources.` : `${ordinal} cites browser-test evidence [1].`,
     sources,
@@ -69,6 +107,11 @@ function resultFor(question) {
     chat_provider: 'mock',
     chat_model: 'mock-model',
   }
+  const workflowCase = workflowPersistenceCaseFor(question)
+  if (workflowCase?.persistRuntime !== false) {
+    result.runtime_workflow_steps = runtimeWorkflowStepsFor(question)
+  }
+  return result
 }
 
 function persistExchange(conversationId, question, result) {
@@ -95,9 +138,10 @@ async function streamAgent(request, response, payload) {
     if (!response.destroyed) response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
   }
   await send('heartbeat', { at: Date.now() }, 20)
-  await send('agent_step', { action: 'llm_with_tools', step_summary: 'Real backend planning event' })
-  await send('tool_call_start', { tool_name: 'search_knowledge', input_summary: 'Search mock corpus' })
-  await send('tool_call_result', { tool_name: 'search_knowledge', output_summary: `Returned ${result.sources.length} real mock sources`, succeeded: true })
+  for (const step of runtimeWorkflowStepsFor(result.question)) {
+    const projected = sseProjectionFor(step)
+    await send(projected.event, projected.payload)
+  }
   const midpoint = Math.max(1, Math.floor(result.answer.length / 2))
   await send('token', { text: result.answer.slice(0, midpoint) })
   await send('token', { text: result.answer.slice(midpoint) })

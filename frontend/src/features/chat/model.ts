@@ -16,6 +16,7 @@ export const emptyResult: AgentQueryResponse = {
   refused: false,
   mode: 'tool_calling_agent',
   workflow_steps: [],
+  runtime_workflow_steps: [],
 }
 
 export function hydrateConversationMessages(records: ConversationMessage[]): ChatMessage[] {
@@ -57,6 +58,7 @@ export function resultFromStoredAssistant(record: ConversationMessage, fallbackQ
     sources: Array.isArray(metadata.sources) ? metadata.sources : [],
     citations: Array.isArray(metadata.citations) ? metadata.citations : [],
     workflow_steps: Array.isArray(metadata.workflow_steps) ? metadata.workflow_steps : [],
+    runtime_workflow_steps: Array.isArray(metadata.runtime_workflow_steps) ? metadata.runtime_workflow_steps : [],
     tool_calls: Array.isArray(metadata.tool_calls) ? metadata.tool_calls : [],
     invalid_citations: Array.isArray(metadata.invalid_citations) ? metadata.invalid_citations : [],
     latency_trace: metadata.latency_trace || {},

@@ -1,0 +1,47 @@
+[
+  {
+    "id": "six-step-page-reload",
+    "question": "workflow persistence six step question",
+    "expectedAnswer": "first answer cites browser-test evidence",
+    "expectedStepCount": 6,
+    "recovery": "reload",
+    "persistRuntime": true,
+    "runtimeWorkflowSteps": [
+      { "name": "llm_with_tools", "action": "agent_step", "step_summary": "Plan the safe mock run" },
+      { "name": "plan_retrieval", "action": "agent_step", "step_summary": "Select the mock retrieval route" },
+      { "name": "search_knowledge", "action": "tool_call_start", "tool_name": "search_knowledge", "input_summary": "Search mock corpus" },
+      { "name": "search_knowledge", "action": "tool_call_result", "tool_name": "search_knowledge", "observation_summary": "Returned 1 real mock source", "succeeded": true },
+      { "name": "evidence_answer", "action": "agent_step", "step_summary": "Evidence is sufficient" },
+      { "name": "final_answer_generating", "action": "agent_step", "step_summary": "waiting_final_model" },
+      { "name": "final_answer", "action": "agent_step", "step_summary": "Completed the cited answer" }
+    ]
+  },
+  {
+    "id": "four-step-cache-reset",
+    "question": "workflow persistence no sources question",
+    "expectedAnswer": "first answer has no returned sources",
+    "expectedStepCount": 4,
+    "recovery": "reauth",
+    "persistRuntime": true,
+    "runtimeWorkflowSteps": [
+      { "name": "llm_with_tools", "action": "agent_step", "step_summary": "Plan the safe mock run" },
+      { "name": "search_knowledge", "action": "tool_call_start", "tool_name": "search_knowledge", "input_summary": "Search mock corpus" },
+      { "name": "search_knowledge", "action": "tool_call_result", "tool_name": "search_knowledge", "observation_summary": "Returned 0 real mock sources", "succeeded": true },
+      { "name": "evidence_insufficient", "action": "agent_step", "step_summary": "No mock evidence was returned" },
+      { "name": "final_answer", "action": "agent_step", "step_summary": "Completed the bounded answer" }
+    ]
+  },
+  {
+    "id": "legacy-two-step-fallback",
+    "question": "workflow persistence legacy compatibility question",
+    "expectedAnswer": "first answer cites browser-test evidence",
+    "expectedStepCount": 2,
+    "recovery": "reload",
+    "persistRuntime": false,
+    "runtimeWorkflowSteps": [
+      { "name": "search_knowledge", "action": "tool_call_start", "tool_name": "search_knowledge", "input_summary": "Search mock corpus" },
+      { "name": "search_knowledge", "action": "tool_call_result", "tool_name": "search_knowledge", "observation_summary": "Returned 1 real mock source", "succeeded": true },
+      { "name": "final_answer", "action": "agent_step", "step_summary": "Compose final answer from returned sources" }
+    ]
+  }
+]

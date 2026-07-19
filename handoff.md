@@ -1,5 +1,13 @@
 # 现场快照
 
+## 2026-07-19 Phase 67 增补：运行步骤持久化
+
+- 当前分支为 `codex/fix-workflow-step-persistence`，基于已合并 Phase 67 的 `origin/main`。
+- 后端把白名单过滤的 SSE 运行事件作为独立 `runtime_workflow_steps` 持久化；前端 reload/refetch 优先恢复它，旧会话回退到现有两级合同。
+- E2E 红灯先复现 `3 -> 2`；3-case Chromium 集合随后覆盖 6-step reload、4-step logout/login cache reset 与 legacy 2-step fallback，均保持数量和标签序列一致。
+- 用户已授权 fresh 门禁通过后完成本地、Obsidian、GitHub、新 CPU 四端同步。当前尚未提交、推送或部署；不得提前标记为上线完成。
+- 既有 Phase 64 Obsidian 格式变更、`.playwright-cli/`、`output/` 与根目录 PNG 均为无关工作区内容，不得暂存。
+
 更新时间：2026-07-18
 
 ## Phase 66 验收后低延迟默认提升现场
