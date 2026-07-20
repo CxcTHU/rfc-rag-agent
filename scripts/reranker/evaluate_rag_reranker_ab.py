@@ -48,7 +48,7 @@ SUMMARY_NAME = "stage3_reranker_ab_summary.csv"
 SNAPSHOT_NAME = "stage3_reranker_candidate_snapshot.jsonl"
 DEFAULT_RERANKERS = ["none", "deterministic"]
 DEFAULT_REMOTE_BGE_MODEL = "bge-reranker-base-rfc-lora"
-PHASE51_CASE_SOURCE = "phase51_performance_cases"
+TOOL_CALLING_CASE_SOURCE = "tool_calling_eval_cases"
 
 
 @dataclass(frozen=True)
@@ -121,7 +121,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate-pool-size", type=int, default=25)
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--limit", type=int, default=0, help="Optional query limit for smoke runs.")
-    parser.add_argument("--include-phase51-cases", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--include-tool-calling-cases",
+        "--include-phase51-cases",
+        dest="include_tool_calling_cases",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Include the current neutral Tool Calling evaluation cases. "
+            "--include-phase51-cases is retained only as a legacy CLI alias."
+        ),
+    )
     parser.add_argument("--execute-glm", action="store_true")
     parser.add_argument("--remote-bge-url", default="")
     parser.add_argument("--remote-bge-api-key", default="")
@@ -139,7 +149,7 @@ def main() -> None:
         candidate_pool_size=args.candidate_pool_size,
         top_k=args.top_k,
         limit=args.limit,
-        include_phase51_cases=args.include_phase51_cases,
+        include_tool_calling_cases=args.include_tool_calling_cases,
         execute_glm=args.execute_glm,
         remote_bge_url=args.remote_bge_url,
         remote_bge_api_key=args.remote_bge_api_key,
@@ -157,7 +167,7 @@ def evaluate_rag_reranker_ab(
     candidate_pool_size: int = 25,
     top_k: int = 5,
     limit: int = 0,
-    include_phase51_cases: bool = True,
+    include_tool_calling_cases: bool = True,
     execute_glm: bool = False,
     remote_bge_url: str = "",
     remote_bge_api_key: str = "",
@@ -172,7 +182,7 @@ def evaluate_rag_reranker_ab(
     if limit < 0:
         raise ValueError("limit must be greater than or equal to 0")
 
-    queries = load_queries(query_paths, include_phase51_cases=include_phase51_cases)
+    queries = load_queries(query_paths, include_tool_calling_cases=include_tool_calling_cases)
     if limit:
         queries = queries[:limit]
     rerankers = build_rerankers(
@@ -260,7 +270,7 @@ def build_rerankers(
     return rerankers
 
 
-def load_queries(paths: list[Path], *, include_phase51_cases: bool = True) -> list[EvalQuery]:
+def load_queries(paths: list[Path], *, include_tool_calling_cases: bool = True) -> list[EvalQuery]:
     queries: list[EvalQuery] = []
     for path in paths:
         if not path.exists():
@@ -285,31 +295,31 @@ def load_queries(paths: list[Path], *, include_phase51_cases: bool = True) -> li
                         expected_refused=parse_bool(row.get("expected_refused", "")),
                     )
                 )
-    if include_phase51_cases:
-        queries.extend(load_phase51_cases())
+    if include_tool_calling_cases:
+        queries.extend(load_tool_calling_cases())
     if not queries:
         raise ValueError("no evaluation queries loaded")
     return queries
 
 
-def load_phase51_cases() -> list[EvalQuery]:
-    from scripts.evaluate_phase51_performance import EVAL_CASES
+def load_tool_calling_cases() -> list[EvalQuery]:
+    from scripts.tool_calling_eval_cases import EVAL_CASES
 
     return [
         EvalQuery(
             query_id=case.query_id,
             question=case.question,
-            dataset=PHASE51_CASE_SOURCE,
+            dataset=TOOL_CALLING_CASE_SOURCE,
             category=case.category,
             expected_source_type="any",
-            expected_terms=phase51_expected_terms(case.question, case.category),
+            expected_terms=tool_calling_expected_terms(case.question, case.category),
             expected_refused="refusal" in case.category or "insufficient" in case.category,
         )
         for case in EVAL_CASES
     ]
 
 
-def phase51_expected_terms(question: str, category: str) -> tuple[str, ...]:
+def tool_calling_expected_terms(question: str, category: str) -> tuple[str, ...]:
     normalized = f"{question} {category}".casefold()
     if "off_topic" in normalized:
         return ()

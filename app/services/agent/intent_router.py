@@ -79,6 +79,34 @@ REFUSAL_EXPLANATION_TRIGGERS = (
     "why refuse",
 )
 
+FIGURE_QUERY_TERMS = (
+    "figure",
+    "fig.",
+    "image",
+    "photo",
+    "picture",
+    "chart",
+    "plot",
+    "curve",
+    "diagram",
+    "flowchart",
+    "microstructure",
+    "show me",
+    "visual",
+    "图",
+    "图片",
+    "图表",
+    "曲线",
+    "流程图",
+    "示意图",
+    "照片",
+    "形态",
+    "破坏",
+    "微观",
+    "给我看",
+    "展示",
+)
+
 
 def classify_conversation_intent(question: str) -> ConversationIntent:
     if classify_meta_intent(question) in {
@@ -116,6 +144,11 @@ def is_followup_transform_request(question: str) -> bool:
             pronoun in normalized for pronoun in FOLLOWUP_PRONOUNS
         )
     return False
+
+
+def should_search_figures(question: str) -> bool:
+    normalized = question.casefold()
+    return any(term in normalized for term in FIGURE_QUERY_TERMS)
 
 
 def strip_assistant_history_prefix(item: str) -> str | None:

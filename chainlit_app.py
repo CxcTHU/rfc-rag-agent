@@ -72,9 +72,9 @@ def sources_markdown(response: AgentQueryResponse) -> str:
 
 def workflow_markdown(response: AgentQueryResponse) -> str:
     if not response.workflow_steps:
-        return "本轮走 default AgentService，没有 agentic workflow 步骤。"
+        return "本轮走 tool_calling_agent，未返回可展示的运行步骤。"
 
-    lines = ["# Agentic Workflow"]
+    lines = ["# Tool Calling Workflow"]
     for index, step in enumerate(response.workflow_steps, start=1):
         status = "ok" if step.succeeded else "failed"
         lines.append(f"{index}. {step.name} - {status}")

@@ -5,7 +5,6 @@ import json
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
 
 from sqlalchemy.orm import sessionmaker
 
@@ -16,14 +15,12 @@ if str(ROOT) not in sys.path:
 from app.core.config import get_settings  # noqa: E402
 from app.db.repositories import QuestionAnswerLogCreate, QuestionAnswerLogRepository  # noqa: E402
 from app.db.session import create_database_engine  # noqa: E402
-from app.services.agent.react_service import ReActAgentService  # noqa: E402
-from app.services.agent.service import AgentQueryResult, AgentService  # noqa: E402
+from app.services.agent.service import AgentQueryResult  # noqa: E402
 from app.services.agent.tool_calling_service import ToolCallingAgentService  # noqa: E402
 from app.services.generation.chat_model import create_chat_model_provider  # noqa: E402
 from app.services.retrieval.embedding import create_embedding_provider  # noqa: E402
 from scripts.reranker.export_training_pairs import DEFAULT_OUTPUT_DIR, normalize_text  # noqa: E402
 
-AgentMode = Literal["tool_calling_agent", "react_agent", "default"]
 DEFAULT_EVAL_QUERIES = DEFAULT_OUTPUT_DIR / "eval_queries.jsonl"
 DEFAULT_OUTPUT = DEFAULT_OUTPUT_DIR / "real_agent_cases.jsonl"
 
@@ -146,8 +143,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--database-url", default="")
     parser.add_argument("--limit", type=int, default=50)
-    parser.add_argument("--mode", choices=["tool_calling_agent", "react_agent", "default"], default="tool_calling_agent")
-    parser.add_argument("--top-k", type=int, default=6)
     parser.add_argument("--max-tool-calls", type=int, default=3)
     parser.add_argument("--execute", action="store_true", help="Call the configured real providers.")
     parser.add_argument("--log-answers", action="store_true", help="Persist answers to qa_logs; requires --execute.")
@@ -164,8 +159,6 @@ def main() -> None:
         output_path=args.output,
         database_url=args.database_url,
         limit=args.limit,
-        mode=args.mode,
-        top_k=args.top_k,
         max_tool_calls=args.max_tool_calls,
         execute=args.execute,
         log_answers=args.log_answers,
@@ -183,8 +176,6 @@ def collect_real_agent_cases(
     output_path: Path,
     database_url: str = "",
     limit: int = 50,
-    mode: AgentMode = "tool_calling_agent",
-    top_k: int = 6,
     max_tool_calls: int = 3,
     execute: bool = False,
     log_answers: bool = False,
@@ -205,7 +196,7 @@ def collect_real_agent_cases(
                     query_id=str(query.get("query_id", "")),
                     question=str(query.get("question", "")),
                     category=str(query.get("category", "")),
-                    mode=mode,
+                    mode="tool_calling_agent",
                     status="dry_run",
                     refused=False,
                     citation_count=0,
@@ -241,9 +232,7 @@ def collect_real_agent_cases(
                 try:
                     result = run_agent_case(
                         db=db,
-                        mode=mode,
                         question=question,
-                        top_k=top_k,
                         max_tool_calls=max_tool_calls,
                         chat_provider=chat_provider,
                         embedding_provider=embedding_provider,
@@ -258,7 +247,7 @@ def collect_real_agent_cases(
                                 citations=result.citations,
                                 model_provider=chat_provider.provider_name,
                                 model_name=chat_provider.model_name,
-                                retrieval_mode=mode,
+                                retrieval_mode="tool_calling_agent",
                                 refused=result.refused,
                                 refusal_reason=result.refusal_reason,
                             )
@@ -268,7 +257,7 @@ def collect_real_agent_cases(
                         query_id=str(query.get("query_id", "")),
                         question=question,
                         category=str(query.get("category", "")),
-                        mode=mode,
+                        mode="tool_calling_agent",
                         status="completed",
                         refused=result.refused,
                         citation_count=len(result.citations),
@@ -281,7 +270,7 @@ def collect_real_agent_cases(
                         query_id=str(query.get("query_id", "")),
                         question=question,
                         category=str(query.get("category", "")),
-                        mode=mode,
+                        mode="tool_calling_agent",
                         status="error",
                         refused=False,
                         citation_count=0,
@@ -298,33 +287,17 @@ def collect_real_agent_cases(
 def run_agent_case(
     *,
     db,
-    mode: AgentMode,
     question: str,
-    top_k: int,
     max_tool_calls: int,
     chat_provider,
     embedding_provider,
 ) -> AgentQueryResult:
-    if mode == "tool_calling_agent":
-        return ToolCallingAgentService(
-            db=db,
-            embedding_provider=embedding_provider,
-            chat_model_provider=chat_provider,
-            log_answers=False,
-        ).query(question, max_tool_calls=max_tool_calls)
-    if mode == "react_agent":
-        return ReActAgentService(
-            db=db,
-            embedding_provider=embedding_provider,
-            chat_model_provider=chat_provider,
-            log_answers=False,
-        ).query(question, top_k=top_k, max_tool_calls=max_tool_calls)
-    return AgentService(
+    return ToolCallingAgentService(
         db=db,
         embedding_provider=embedding_provider,
         chat_model_provider=chat_provider,
         log_answers=False,
-    ).query(question, top_k=top_k, max_tool_calls=max_tool_calls)
+    ).query(question, max_tool_calls=max_tool_calls)
 
 
 def select_balanced_queries(rows: list[dict[str, object]], *, limit: int) -> list[dict[str, object]]:

@@ -1,5 +1,32 @@
 # Project Progress
 
+## Latest Status: 2026-07-20 Phase 68 Final Agent Code Cleanup
+
+Phase 68 is in closeout on `codex/phase-68-code-cleanup`, based on latest
+`origin/main` `0c0f042d`. The original workspace's unrelated Phase 67 edits and
+output artifacts remain untouched in a separate worktree.
+
+The production path is now exclusively `/agent/query -> ToolCallingAgentService
+-> RunCoordinator -> ToolExecutor -> tool_registry/adapters -> AgentToolbox`.
+Retired default `AgentService`, ReAct, both LangGraph implementations, old Agent
+`memory_context`, checkpoint code, exclusive tests/evaluators, and LangGraph
+dependencies are removed. API/SSE/meta results report `tool_calling_agent`;
+retired request modes return 422.
+
+`legacy_toolbox.py` was audited and retained because current `AgentToolbox`
+inherits it and all four production tools still live there. The current
+conversation summary memory and Redis-backed caches/rate limiting are also
+retained. Current Tool Calling Judge scripts were decoupled from retired ReAct
+comparison helpers into neutral evaluation-case and judge-support modules.
+
+Baseline receipts before cleanup were `1936 passed, 1 skipped` backend and
+`8 files / 33 tests passed` frontend. The Phase 68 focused cleanup/default-chain
+packet currently passes `102 tests`; full post-change backend/frontend/E2E and
+safety gates remain required before commit. Rollback is Git source rollback and
+dependency reinstall, not an online mode switch.
+
+---
+
 ## Latest Status: 2026-07-19 Runtime Workflow Persistence Production Rollout
 
 The runtime-step persistence fix was merged through PR #46 after all 10 GitHub
@@ -673,7 +700,7 @@ Phase 52 now includes the semantic memory upgrade requested after the initial Ag
 MemoryIntentClassifier -> LLM JSON classifier + deterministic fallback
 PriorEvidenceRelevanceGate -> embedding similarity gate, no source_count >= 3 magic number
 SessionMemory -> MemoryItem(text, turn_index, importance) with recency decay
-graph_nodes.py -> AgentMemoryContext typed memory path, no memory_context Any/getattr target hits
+graph_nodes.py -> historical AgentMemoryContext typed memory path, no memory_context Any/getattr target hits; retired by Phase 68
 phase52 memory regression -> 32 cases
 ```
 
@@ -693,14 +720,14 @@ Boundary remains unchanged: long-term memory is disabled/read-none/write-none; m
 
 Current branch: `codex/phase-52-agent-memory-context`.
 
-Phase 52 starts from the Phase 51 merge baseline `main / origin/main -> 3b34e23e`. The `phase-51-complete` tag exists and remains unmoved. The phase unifies short-lived conversation memory from Phase 43 and LangGraph prior evidence from Phase 51 into `AgentMemoryContext`.
+Historical Phase 52 starts from the Phase 51 merge baseline `main / origin/main -> 3b34e23e`. The `phase-51-complete` tag exists and remains unmoved. The phase unified short-lived conversation memory from Phase 43 and LangGraph prior evidence from Phase 51 into `AgentMemoryContext`; Phase 68 removed that old Agent `memory_context` and LangGraph planner path.
 
 Completed so far:
 
 ```text
-app/services/agent/memory_context.py -> AgentMemoryContext / MemoryPolicyDecision / PriorEvidenceMemory / DisabledLongTermMemoryProvider
-LangGraphAgentService.query() -> builds memory_context after checkpoint prior evidence load
-planner_node -> reads memory_context for prior evidence, session anchors, stale anchors
+app/services/agent/memory_context.py -> historical AgentMemoryContext / MemoryPolicyDecision / PriorEvidenceMemory / DisabledLongTermMemoryProvider; retired by Phase 68
+LangGraphAgentService.query() -> historical memory_context build after checkpoint prior evidence load; retired by Phase 68
+planner_node -> historical memory_context use for prior evidence, session anchors, stale anchors; retired by Phase 68
 search_knowledge_node -> can add retrieval-only session memory hints for contextual follow-ups
 generate_answer_node -> reuses prior evidence only when memory rules allow it
 latency_trace -> memory_context_present, counts, policy route, usage flags, long-term disabled flag, decision hint
@@ -741,14 +768,14 @@ Submission: user authorized commit, `phase-51-complete` tag, GitHub push, PR cre
 
 Current branch: `codex/phase-50-langgraph-redis`.
 
-Phase 50 Phase 16-17 is complete before user human verification. It adds an optional planner fast-model lane for `mode="langgraph_agent"` without changing the default `tool_calling_agent`, explicit `react_agent`, or legacy `default` modes.
+Historical Phase 50 Phase 16-17 added a LangGraph planner experiment alongside the then-existing ReAct/default modes. Phase 68 removes those online paths; this entry is retained only as experiment history.
 
 Implementation summary:
 
 ```text
 app/services/agent/graph_nodes.py -> _CURRENT_PLANNER_PROVIDER ContextVar, planner JSON prompt/parse/fallback
-app/services/agent/graph_builder.py -> LangGraphAgentService(planner_chat_provider=...)
-app/api/agent.py -> langgraph_agent sync + SSE paths pass planner_chat_provider
+app/services/agent/graph_builder.py -> historical LangGraphAgentService(planner_chat_provider=...); retired by Phase 68
+app/api/agent.py -> historical langgraph_agent sync + SSE paths pass planner_chat_provider; retired by Phase 68
 app/services/observability/latency_trace.py -> planner_model default field
 tests/test_phase50_langgraph_planner.py -> planner valid/invalid/None/reset coverage
 .env.example + .env.dev.example -> PLANNER_CHAT_MODEL_* examples
@@ -772,7 +799,7 @@ Current branch: `codex/phase-50-langgraph-redis`.
 
 Phase 50 starts from `main / origin/main -> 0671a31b Merge pull request #14 from CxcTHU/codex/phase-49-local-postgresql-cloud-sync`. The `phase-49-complete` annotated tag still points to `a044ce0c Complete phase 49 local PostgreSQL cloud sync` and was not moved.
 
-The phase adds explicit `mode="langgraph_agent"` while preserving the existing default `tool_calling_agent`, explicit `react_agent`, and legacy `default` modes. Redis 7 is added to local and production compose files. Redis query embedding cache falls back to the existing in-memory cache when unavailable. LangGraph checkpointing tries RedisSaver and falls back to `MemorySaver` when Redis is not configured, unreachable, or missing RedisJSON / RediSearch support.
+Historical Phase 50 introduced a LangGraph/ReAct/default comparison matrix and Redis checkpoint experiment. Phase 68 deletes the graph modes and checkpoint code. Redis query-embedding cache with in-memory fallback remains current and independent.
 
 Main implementation:
 
@@ -781,9 +808,9 @@ app/services/cache/redis_client.py -> optional Redis connection factory
 app/services/cache/embedding_cache.py -> Redis query embedding cache with memory fallback
 app/services/agent/graph_state.py -> LangGraphAgentState / route literals
 app/services/agent/graph_nodes.py -> node wrappers reusing AgentToolbox
-app/services/agent/graph_builder.py -> StateGraph and LangGraphAgentService
+app/services/agent/graph_builder.py -> historical StateGraph and LangGraphAgentService; retired by Phase 68
 app/services/agent/graph_checkpointer.py -> RedisSaver / MemorySaver selection
-app/api/agent.py + app/schemas/agent.py -> mode="langgraph_agent" normal and SSE routes
+app/api/agent.py + app/schemas/agent.py -> historical mode="langgraph_agent" normal and SSE routes; retired by Phase 68
 scripts/evaluate_phase50_langgraph_vs_react.py -> deterministic ReAct vs LangGraph comparison
 docker-compose.dev.yml + docker-compose.prod.yml -> Redis 7 services
 docs/deployment_guide.md -> Redis/LangGraph deployment and fallback notes
@@ -948,12 +975,12 @@ Boundary: still stopped before user human verification. No `git add`, commit, ta
 
 Completed extension highlights:
 
-- ReAct read-only `search_figures(query, top_k=4)` tool over `image_description` chunks.
+- Historical ReAct read-only `search_figures(query, top_k=4)` tool over `image_description` chunks; current production keeps `AgentToolbox.search_figures` under `tool_calling_agent`.
 - `MIN_IMAGE_RELEVANCE_SCORE=0.50`, calibrated from the image retrieval evaluation results.
 - Nullable `chunks.page_number` migration and full local backfill: `15628/15628` image chunks parsed and updated, `failed_to_parse=0`.
 - Agent/search/chat/document schemas and retrieval result objects propagate `page_number`.
 - Frontend figure evidence cards show `图 X — 第 N 页 — 《文档标题》` and use captions as figure titles.
-- `ENABLE_AUTO_FIGURE_ENRICHMENT=false` by default; `react_agent` never calls the legacy automatic enrich fallback.
+- `ENABLE_AUTO_FIGURE_ENRICHMENT=false` by default; the old `react_agent` fallback rule is historical because ReAct was removed in Phase 68.
 - 32-question image retrieval evaluation set covers `must_have_image`, `image_helpful`, `text_only`, and `no_image`.
 - Deterministic evaluation output: `image_precision=1.0000`, `image_recall=1.0000`, `image_suppression=1.0000`, `image_quality_rate=1.0000`, `caption_coverage=1.0000`, `page_number_coverage=1.0000`.
 
@@ -1253,7 +1280,7 @@ Current boundary: do not run `git add`, commit, tag, push, or create a PR before
 
 Current branch: `codex/phase-38-tool-calling-generation-quality`.
 
-Phase 38 starts from `main / origin/main -> 25344a8 Merge phase 37 tool calling loop migration` and focuses on the default `tool_calling_agent` chain. It expands the evaluation set from 8 to 24 cases across 16 categories, implements `baseline` vs `structured_final_answer` final synthesis strategies, runs real Judge A/B, locks the default query/stream entrances to `tool_calling_agent`, and preserves explicit `mode="react_agent"` as rollback.
+Historical Phase 38 focused on `tool_calling_agent` quality but still kept a ReAct comparison route. Phase 68 deletes that route; rollback is now Git rollback only.
 
 Main result:
 
@@ -1273,7 +1300,7 @@ Decision: keep `tool_calling_agent` as the default chain because Phase 5 found n
 
 Current branch: `codex/phase-37-tool-calling-loop-migration`.
 
-Phase 37 adds a parallel `mode="tool_calling_agent"` with OpenAI-compatible `tools/tool_calls` and a lightweight loop. It keeps `react_agent` and default routing unchanged, does not introduce LangGraph, and does not change Stage 30 rules, providers, provider topology, or data sources.
+Historical Phase 37 added a parallel `mode="tool_calling_agent"` with OpenAI-compatible `tools/tool_calls` and a lightweight loop beside the then-existing ReAct/default routes. Phase 68 promotes this path to the only production Agent mode and removes the retired comparison routes.
 
 Verification:
 
@@ -1377,7 +1404,7 @@ python scripts/score_stage30_quality.py: overall=91.52 grade=A release_decision=
 
 当前阶段：阶段 34。在 `codex/phase-34-rag-diagnosis-embedding-judge` 分支已完成 RAG 性能瓶颈诊断、Embedding 迁移决策、真实 Judge 质量复核，并在阶段中追加 LLM-driven planner 切换 + Paratera DeepSeek-V4-Flash (planner) / DeepSeek-V4-Pro (answer) 分层 chat provider 落地。阶段 34 从 `main / origin/main -> c06d0a3 Merge phase 33 rag performance embedding validation` 出发；已确认 `phase-33-complete -> 0bad9e1 Complete phase 33 rag performance embedding validation` 是 `main` 的祖先，未移动任何已有阶段 tag。
 
-react_agent 真实延迟相对 MIMO 基线：p50 87.9s → 39.1s（-55%），p90 95.2s → 55.0s（-42%），10/10 完成；refusal_boundary 由 LLM 第 1 轮即正确 refuse（3.5s）。chat provider 改动通过新增 `PLANNER_CHAT_*` 配置 + `ReActAgentService(planner_chat_provider=...)` 注入实现；planner_chat_provider=None 时保留 elif 短路 + chat_model_provider 旧行为，向后兼容 deterministic 测试与 agentic / default 路径。
+Historical react_agent 真实延迟相对 MIMO 基线：p50 87.9s → 39.1s（-55%），p90 95.2s → 55.0s（-42%），10/10 完成；refusal_boundary 由 LLM 第 1 轮即正确 refuse（3.5s）。chat provider 改动通过新增 `PLANNER_CHAT_*` 配置 + `ReActAgentService(planner_chat_provider=...)` 注入实现；Phase 68 删除 ReAct、agentic、default 在线 Agent 路径后，这些只作为历史性能背景。
 
 阶段 34 完成内容：
 
@@ -1475,11 +1502,11 @@ desktop: Agent 查询 final answer present, collapsible thought panel present, h
 阶段 32 完成内容：
 
 - 新增 `docs/stage32_react_agent_observability.md`，说明 ReAct action、工具权限、SSE 事件、安全边界、循环控制、评测方式和完成标准。
-- 新增 `app/services/agent/react_actions.py` 和 `app/services/agent/react_service.py`，实现受控 ReAct action loop，默认最多 3 轮，并带重复 query 防护和异常收敛。
-- `/agent/query` 新增显式 `mode="react_agent"`；default AgentService 和旧 `agentic` LangGraph 路径保留，`/chat` 默认链路不变。
+- 历史新增 `app/services/agent/react_actions.py` 和 `app/services/agent/react_service.py`，实现受控 ReAct action loop；Phase 68 已删除这些在线实现。
+- 历史阶段 32 曾新增 ReAct/default/agentic 对照入口；Phase 68 已删除这些在线路径，`/chat` 仍保持独立。
 - `/agent/query/stream` 新增 `agent_step`、`tool_call_start`、`tool_call_result`，同时保留 `token`、`metadata`、`done`、`error`。
-- 前端 Agent 面板默认使用 `react_agent`，运行中实时显示步骤、工具准备和工具返回摘要；最终 metadata 继续回填 `workflow_steps` 工具卡。
-- 新增 `scripts/evaluate_stage32_react_agent.py` 和 `tests/test_stage32_react_eval.py`，对照 `default`、`agentic_langgraph`、`react_agent`，默认 deterministic，不依赖真实 provider。
+- 历史前端 Agent 面板默认使用 `react_agent`；Phase 68 后前端不再发送退休 mode。
+- 历史新增 `scripts/evaluate_stage32_react_agent.py` 和 `tests/test_stage32_react_eval.py`，对照 `default`、`agentic_langgraph`、`react_agent`；Phase 68 已删除这些专属测试/评测。
 
 阶段 32 验证：
 
@@ -1500,7 +1527,7 @@ Browser smoke: desktop and 390x844 mobile collapsible thought panel present, liv
 
 遗留风险与人工核验重点：
 
-- Agent 面板现在默认走 `react_agent`，但显式 `mode="default"` 和 `mode="agentic"` 仍可作为 API 对照/回退；人工核验重点检查是否符合预期产品默认策略。
+- 历史人工核验重点曾包括 `react_agent` 默认和 `default`/`agentic` 对照回退；Phase 68 后这些在线入口均已删除。
 - ReAct 只展示安全摘要，不展示 hidden thought；人工核验重点检查前端、日志和 CSV 中没有供应商原始响应、敏感凭据、授权头或受限全文。
 - 自动验证使用 deterministic 服务实例；真实 provider smoke 只能由用户显式触发，不作为 CI 或本地全量测试前提。
 
@@ -1861,7 +1888,7 @@ Git / tag / main 起点：
 阶段 27 完成内容：
 
 - 新增 `docs/stage27_chainlit_docker_ci.md`，固定 Chainlit 双入口设计、service 层复用、流式映射、workflow/citations 可视化、Docker/CI 安全边界和完成标准。
-- 新增 `chainlit_app.py`，用 `@cl.on_chat_start` 和 `@cl.on_message` 接入 `ConversationRepository`、闲聊短路、default `AgentService`、agentic LangGraph 路径、流式 token、metadata、citations 与 workflow 展示。
+- 新增 `chainlit_app.py`，用 `@cl.on_chat_start` 和 `@cl.on_message` 接入 `ConversationRepository`、闲聊短路、历史 default `AgentService`、agentic LangGraph 路径、流式 token、metadata、citations 与 workflow 展示；这些旧 Agent 路径已由 Phase 68 删除。
 - 新增 `.chainlit/config.toml` 和 `chainlit.md`，用于 Chainlit 2.11.1 运行配置和欢迎页；配置包含当前版本需要的 `[meta] generated_by`。
 - `pyproject.toml` 新增 `chainlit>=2.0.0` 和 `asyncpg>=0.30.0`。`asyncpg` 是 Chainlit 运行时设置接口会加载的数据层依赖，即使本项目当前不启用外部 Postgres，也需安装以避免 `/project/settings` 500。
 - 新增 `Dockerfile`、`docker-compose.yml` 和 `.dockerignore`。Docker 镜像不包含 `.env`、SQLite 数据文件、`data/raw`、`data/fulltext` 或 Obsidian 知识库；运行时通过 `env_file` 与 `./data:/app/data` 挂载外部配置和数据。
@@ -2053,7 +2080,7 @@ Git / tag / main 起点：
 
 - 新增 `docs/stage25_chitchat_and_sse_streaming.md`，固定路由层闲聊短路、provider 流式协议、SSE 事件格式、前端消费方式、会话持久化时机和安全边界。
 - 新增 `app/services/agent/chitchat.py`，覆盖 greeting、thanks、goodbye、acknowledgment、help 五类社交意图。
-- `/agent/query` 在加载会话后、`classify_query_complexity()` 前执行 `detect_chitchat()`；命中后直接返回预设友好回复，不调用 LLM、不检索、不进入 default/agentic RAG。
+- 历史 `/agent/query` 在加载会话后、`classify_query_complexity()` 前执行 `detect_chitchat()`；命中后直接返回预设友好回复，不调用 LLM、不检索、不进入 default/agentic RAG。Phase 68 已删除旧复杂度分流模块。
 - `persist_agent_conversation_messages()` 新增 `summarize` 参数；闲聊持久化时保存 user/assistant 消息但跳过摘要压缩。
 - 从 `AgentService.detect_intent()` 移除已提升的 greeting 分支，避免 default service 与路由层重复承担社交意图。
 - `ChatModelProvider` Protocol 新增 `stream_generate(messages) -> Iterator[str]`；deterministic provider 稳定分段 yield，OpenAI-compatible provider 使用 `stream=true` 并解析 SSE `delta.content`。
@@ -2204,9 +2231,9 @@ Git / tag / main 起点：
 - 新增 `docs/stage23_agentic_eval_and_auto_routing.md` 设计文档，固定评测修复、对照结论、路由规则、API 自动分流、前端只读指示器、安全边界和完成标准。
 - 新增 `scripts/evaluate_stage23_agentic_auto_routing.py`，使用 deterministic provider 与 in-memory SQLite fixture 隔离阶段 21 SSL/真实 provider 错误。
 - 新增 `data/evaluation/stage23_agentic_auto_routing_results.csv`、`stage23_agentic_auto_routing_summary.csv`、`stage23_agentic_auto_routing_decision.csv`。
-- 新增 `app/services/agent/routing.py`，实现 `classify_query_complexity()`，规则式区分 `simple` / `complex`，输出 score、reasons、signals。
-- `/agent/query` 在未传 `mode` 时自动分流：simple 走 default `AgentService`，complex 走 agentic LangGraph；显式 `mode=default` / `mode=agentic` 仍尊重用户选择。
-- default `detect_intent` 内部逻辑保持不变；自动路由只决定是否进入 default AgentService。
+- 历史新增 `app/services/agent/routing.py`，实现 `classify_query_complexity()`，规则式区分 `simple` / `complex`，输出 score、reasons、signals；Phase 68 已删除该模块。
+- 历史 `/agent/query` 在未传 `mode` 时自动分流：simple 走 default `AgentService`，complex 走 agentic LangGraph；显式 `mode=default` / `mode=agentic` 仍尊重用户选择。Phase 68 已删除该在线分流。
+- 历史 default `detect_intent` 内部逻辑保持不变；自动路由只决定是否进入 default AgentService。Phase 68 后当前生产 Agent 入口不再使用这一路径。
 - 前端 Agent 面板移除 mode 下拉框，新增只读 `data-agent-mode-status`；`submitAgent()` 不再发送 `mode`，响应后显示本次实际 `mode`。
 - 保留 `workflow_steps`、`iteration_count`、`invalid_citations`、`refusal_category` 只读可观测字段。
 
@@ -2259,7 +2286,7 @@ mobile 390x844: no select[data-agent-mode], data-agent-mode-status=系统自动,
 面试表达：
 
 ```text
-阶段 23 我先把阶段 21 的 agentic 评测不稳定问题闭环掉：不用真实 provider 做默认门槛，而是用 deterministic provider 和 in-memory SQLite fixture 复现 default AgentService 与 agentic LangGraph 的差异，得到 error_rate=0 的可靠对照。然后我没有把 agentic 粗暴设成全局默认，而是新增 classify_query_complexity，用规则式信号判断 simple/complex；/agent/query 只有在 mode 为空时自动分流，显式 mode 仍保留调试能力。前端也从“让用户选内部链路”改成“只读显示系统本次实际走了哪条链路”。最后用 463 个全量测试和桌面/移动浏览器检查证明 search、chat、agent、quality-report 等入口没有被破坏。
+阶段 23 我先把阶段 21 的 agentic 评测不稳定问题闭环掉：不用真实 provider 做默认门槛，而是用 deterministic provider 和 in-memory SQLite fixture 复现 default AgentService 与 agentic LangGraph 的差异，得到 error_rate=0 的可靠对照。然后我没有把 agentic 粗暴设成全局默认，而是新增 classify_query_complexity，用规则式信号判断 simple/complex；当时 `/agent/query` 只有在 mode 为空时自动分流，显式 mode 仍保留调试能力。Phase 68 已删除这些在线 Agent 路径；这段只保留历史表达。
 ```
 
 ## 历史状态：2026-06-11（阶段 22 前端 Agentic 可视化与可观测增强，已完成并合并）
@@ -2314,7 +2341,7 @@ mobile 390x844: Agent controls collapse to one column, mode/button visible, no h
 面试表达：
 
 ```text
-阶段 22 我没有改默认 RAG 链路，而是把阶段 21 的 LangGraph Agentic RAG 作为 opt-in 能力接到前端。后端先把 agentic 的内部状态整理成稳定响应契约，包括 workflow_steps、iteration_count、invalid_citations 和 refusal_category；default 模式返回兼容默认值，所以旧调用不会坏。前端新增 default/agentic 模式切换，只有用户显式选 agentic 才传 mode=\"agentic\"，并把 retrieve、grade、rewrite、re_retrieve、generate、citation_check 展示成步骤列表。最后用 451 个全量测试和桌面/移动浏览器检查证明 search、chat、agent、quality-report 等入口没有被破坏。
+阶段 22 我没有改默认 RAG 链路，而是把阶段 21 的 LangGraph Agentic RAG 作为 opt-in 能力接到前端。后端先把 agentic 的内部状态整理成稳定响应契约，包括 workflow_steps、iteration_count、invalid_citations 和 refusal_category；当时 default 模式返回兼容默认值，所以旧调用不会坏。Phase 68 已删除 default/agentic 在线 Agent mode；这段只保留历史表达。
 ```
 
 ## 历史状态：2026-06-11（阶段 21 LangGraph Agentic RAG，已完成并合并）
@@ -2325,8 +2352,8 @@ mobile 390x844: Agent controls collapse to one column, mode/button visible, no h
 
 - `docs/stage21_langgraph_agentic_rag.md` 设计文档。
 - `pyproject.toml` 加 `langgraph>=0.2.0` 依赖。
-- `app/services/agentic/` LangGraph agentic RAG 模块：状态图 retrieve → grade → rewrite → re-retrieve → generate → citation_check，硬迭代上界 MAX_ITERATIONS=3。
-- `/agent/query` 新增 `mode="agentic"` 可选参数，不替换默认链路。
+- `app/services/agentic/` 历史 LangGraph agentic RAG 模块：状态图 retrieve → grade → rewrite → re-retrieve → generate → citation_check，硬迭代上界 MAX_ITERATIONS=3；Phase 68 已删除该模块。
+- `/agent/query` 曾新增 `mode="agentic"` 可选参数，不替换默认链路；Phase 68 后该参数不再受理。
 - `scripts/evaluate_stage21_agentic_rag.py` agentic vs baseline 对照评测。
 - 首次评测受 SSL 错误影响，决策为 `inconclusive_high_error_rate`。
 - 全量测试 **449 passed**。
@@ -4280,7 +4307,7 @@ python -m pytest -q -> 694 passed
 /quality-report rebuilt -> 91.52 / A / pass
 GET /health, /quality-report, /quality-report/data.json, /quality-report/export.csv -> 200
 POST /search/hybrid -> 200
-POST /agent/query mode=react_agent -> refused=false, marker=false
+POST /agent/query mode=react_agent -> refused=false, marker=false (historical Phase 35 smoke; retired by Phase 68)
 ```
 
 Submission boundary: user approved commit, push, and GitHub merge for Phase 35; do not create or move phase tags unless separately requested.
@@ -4469,7 +4496,7 @@ Completed:
 
 - Alembic `20260621_0005` adds `chunks.content_bbox_json` and `qa_feedback`.
 - Table workflow adds `TableChunk`, PyMuPDF table extraction, `scripts/backfill_phase47_tables.py`, and `search_tables`.
-- User image workflow adds `/agent/upload-image`, `UserImageStorage`, `UserImageAnalyzer`, and ReAct `analyze_user_image`. The analyzer now performs vision description, domain-relevance gating, and then retrieval only for in-scope RFC/hydraulic concrete/dam/concrete defect/table/curve/engineering-diagram images.
+- User image workflow adds `/agent/upload-image`, `UserImageStorage`, `UserImageAnalyzer`, and the current `AgentToolbox.analyze_user_image` capability. This originated as ReAct `analyze_user_image`, but Phase 68 keeps the tool under `tool_calling_agent` and removes the ReAct service.
 - Citation workflow adds `CitationLocator`, `scripts/backfill_phase47_chunk_bbox.py`, and `content_bbox` propagation to API responses.
 - Feedback workflow adds `FeedbackService`, keyword extraction, `/feedback/export`, and sanitized eval CSV export.
 - Frontend adds image attachment, drag-and-drop image upload, table evidence cards, image analysis cards, citation location links, and feedback buttons. Refused image-analysis responses suppress normal evidence cards and feedback controls, and deterministic vision descriptions are labeled as test mode.
@@ -4490,7 +4517,7 @@ Boundary: user uploads stay under `data/user_uploads/` and are gitignored. Phase
 
 Current branch: `codex/phase-50-langgraph-redis`.
 
-Phase 50 Phase 10-14 is complete before user human verification. The update upgrades Redis to `redis/redis-stack-server:latest`, verifies real RedisSaver checkpoint persistence, adds optional Redis ZSET Rate Limiting, and preserves existing `tool_calling_agent`, `react_agent`, and `default` behavior. The old answer-level Semantic Cache experiment is removed in the current runtime.
+Historical Phase 50 Phase 10-14 is complete before user human verification. The update upgraded Redis to `redis/redis-stack-server:latest`, verified real RedisSaver checkpoint persistence, added optional Redis ZSET Rate Limiting, and then preserved existing `tool_calling_agent`, `react_agent`, and `default` behavior. Phase 68 removes the LangGraph checkpoint runtime and retired Agent modes; Redis cache/rate limiting remains current.
 
 Verification:
 

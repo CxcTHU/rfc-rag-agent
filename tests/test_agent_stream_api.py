@@ -108,7 +108,7 @@ def test_agent_stream_api_short_circuits_model_meta(tmp_path) -> None:
     assert metadata["answer"] == streamed_answer
     assert metadata["tool_calls"] == []
     assert metadata["sources"] == []
-    assert metadata["mode"] == "meta"
+    assert metadata["mode"] == "tool_calling_agent"
     assert "deterministic / rule-based-chat-v1" in metadata["answer"]
     assert "agent_meta" in metadata["reasoning_summary"]
 

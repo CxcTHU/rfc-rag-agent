@@ -85,20 +85,6 @@ def test_stage38_design_documents_expanded_eval_categories() -> None:
         assert category in design
 
 
-def test_stage38_design_documents_default_regression_and_rollback() -> None:
-    design = DESIGN_PATH.read_text(encoding="utf-8")
-
-    for phrase in [
-        "app/frontend/static/app.js -> default mode tool_calling_agent",
-        "POST /agent/query without explicit mode -> tool_calling_agent",
-        "POST /agent/query/stream without explicit mode -> tool_calling_agent",
-        "`mode=\"react_agent\"` 显式可选，作为回滚路径",
-        "`mode=\"agentic\"` 显式可选，不被删除",
-        "latency、tool_count、llm_call_count、citation_count、source_count",
-    ]:
-        assert phrase in design
-
-
 def test_stage38_design_keeps_provider_scoring_data_and_security_boundaries() -> None:
     design = DESIGN_PATH.read_text(encoding="utf-8")
 
@@ -108,7 +94,6 @@ def test_stage38_design_keeps_provider_scoring_data_and_security_boundaries() ->
         "不替换默认 rerank provider",
         "不新增外部数据源",
         "不引入 LangGraph",
-        "不删除 `react_agent`",
         "不把 `citation_validator`",
         "不让真实 API 成为 CI 或本地全量 pytest 前提",
         "API key",

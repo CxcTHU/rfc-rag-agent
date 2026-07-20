@@ -15,7 +15,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -28,14 +27,14 @@ from app.services.agent.tool_calling_service import (  # noqa: E402
     ToolCallingFinalAnswerStrategy,
 )
 from app.services.retrieval.embedding import create_embedding_provider  # noqa: E402
-from scripts.evaluate_stage37_tool_calling_vs_react import build_planner_provider  # noqa: E402
-from scripts.evaluate_stage38_tool_calling_quality import EVAL_CASES as STAGE38_CASES  # noqa: E402
+from scripts.tool_calling_eval_cases import EVAL_CASES as STAGE38_CASES  # noqa: E402
 from scripts.evaluate_stage41_post_import_retrieval import (  # noqa: E402
     QUERY_PATH as STAGE41_QUERY_PATH,
     load_queries as load_stage41_queries,
 )
-from scripts.judge_stage34_generation_quality import (  # noqa: E402
-    OpenAICompatibleStage34JudgeClient,
+from scripts.tool_calling_eval_support import (  # noqa: E402
+    OpenAICompatibleJudgeClient,
+    build_tool_calling_provider,
     sanitize_text,
     source_summary,
 )
@@ -231,7 +230,7 @@ def build_rows(
             for case in cases
         ]
 
-    judge = OpenAICompatibleStage34JudgeClient(
+    judge = OpenAICompatibleJudgeClient(
         provider=args.judge_provider or "not_configured",
         model=args.judge_model or "not_configured",
         api_key=args.judge_api_key,
@@ -263,7 +262,7 @@ def build_strategy_answers(
         dimension=settings.embedding_dimension or None,
         timeout_seconds=settings.embedding_timeout_seconds,
     )
-    planner_provider = build_planner_provider(settings)
+    planner_provider = build_tool_calling_provider(settings)
     answers: dict[str, StrategyAnswer] = {}
     with SessionLocal() as db:
         service = ToolCallingAgentService(

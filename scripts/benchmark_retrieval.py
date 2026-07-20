@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.db.models import Chunk, ChunkEmbedding  # noqa: E402
 from app.db.session import SessionLocal, init_db  # noqa: E402
-from app.services.agent.service import AgentService  # noqa: E402
+from app.services.agent.tool_calling_service import ToolCallingAgentService  # noqa: E402
 from app.services.generation.chat_model import DeterministicChatModelProvider  # noqa: E402
 from app.services.retrieval.embedding import EmbeddingProvider  # noqa: E402
 from app.services.retrieval.hybrid_search import HybridSearchService  # noqa: E402
@@ -124,7 +124,7 @@ def benchmark_query(
     keyword_service = KeywordSearchService(db)
     vector_service = VectorSearchService(db, provider)
     hybrid_service = HybridSearchService(db, provider)
-    agent_service = AgentService(
+    agent_service = ToolCallingAgentService(
         db=db,
         embedding_provider=provider,
         chat_model_provider=DeterministicChatModelProvider(),
@@ -153,7 +153,7 @@ def benchmark_query(
                 lambda: reranker.rerank(query, rerank_candidates, top_k=top_k),
             )
         )
-    timings.append(time_operation("agent_query", runs, lambda: agent_service.query(query, top_k=top_k)))
+    timings.append(time_operation("agent_query", runs, lambda: agent_service.query(query)))
     return BenchmarkResult(
         query=query,
         chunk_count=chunk_count,

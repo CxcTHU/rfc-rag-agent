@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db.models import Base
 from app.db.session import create_sqlite_engine, get_db
 from app.main import app
-from app.services.agent.react_actions import parse_react_action_json
 
 
 @contextmanager
@@ -71,25 +70,3 @@ def test_feedback_api_rejects_negative_feedback_without_reason(tmp_path) -> None
         )
 
     assert response.status_code == 422
-
-
-def test_phase47_react_action_reservations_parse() -> None:
-    table_action = parse_react_action_json(
-        {
-            "action": "search_tables",
-            "query": "28 day compressive strength table",
-            "reasoning_summary": "The user asks for tabular strength data.",
-        }
-    )
-    image_action = parse_react_action_json(
-        {
-            "action": "analyze_user_image",
-            "image_path": "data/user_uploads/2026-06-20/example.png",
-            "question": "Is this crack severe?",
-            "reasoning_summary": "The user uploaded an image.",
-        }
-    )
-
-    assert table_action.action == "search_tables"
-    assert image_action.action == "analyze_user_image"
-    assert image_action.safe_input_summary() == "question=Is this crack severe?"

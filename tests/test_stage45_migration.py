@@ -108,7 +108,7 @@ def seed_source_database(database_url: str) -> None:
             conversation=conversation,
             role="assistant",
             content="可以。",
-            mode="react_agent",
+            mode="tool_calling_agent",
             metadata_json='{"safe": true}',
         )
         db.add(qa_log)

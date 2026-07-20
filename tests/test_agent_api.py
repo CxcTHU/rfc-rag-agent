@@ -9,7 +9,6 @@ from app.api.agent import (
     get_agent_chat_model_provider,
     get_agent_embedding_provider,
     get_agent_judge_model_provider,
-    get_agent_planner_chat_model_provider,
     resolve_agent_chat_model_provider,
 )
 import app.api.agent as agent_api_module
@@ -66,7 +65,6 @@ def make_test_client(tmp_path) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_agent_chat_model_provider] = override_chat_model_provider
     app.dependency_overrides[get_agent_embedding_provider] = override_embedding_provider
-    app.dependency_overrides[get_agent_planner_chat_model_provider] = lambda: None
     app.dependency_overrides[get_chat_model_provider] = override_chat_model_provider
     app.dependency_overrides[get_chat_embedding_provider] = override_embedding_provider
     try:
@@ -292,7 +290,7 @@ def seed_agent_conversation_messages(conversation_id: int, count: int) -> None:
                     conversation_id=conversation_id,
                     role="user" if index % 2 == 0 else "assistant",
                     content=f"历史消息 {index}",
-                    mode="default" if index % 2 else None,
+                    mode="tool_calling_agent" if index % 2 else None,
                 )
             )
     finally:
@@ -312,7 +310,7 @@ def seed_refused_assistant_message(conversation_id: int) -> None:
                 conversation_id=conversation_id,
                 role="assistant",
                 content="Refused.",
-                mode="agentic",
+                mode="tool_calling_agent",
                 metadata={
                     "refused": True,
                     "refusal_category": "off_topic",
@@ -355,15 +353,6 @@ def test_agent_api_defaults_to_tool_calling_with_citations(tmp_path) -> None:
     assert "tool_calling_agent" in payload["reasoning_summary"]
 
 
-def test_agent_query_request_drops_langgraph_agent_mode() -> None:
-    request = AgentQueryRequest(
-        question="What affects filling capacity?",
-        mode="LANGGRAPH_AGENT",
-    )
-
-    assert "mode" not in request.model_dump()
-
-
 def test_agent_api_answers_model_meta_without_retrieval(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post("/agent/query", json={"question": "你用的什么大模型？"})
@@ -373,7 +362,7 @@ def test_agent_api_answers_model_meta_without_retrieval(tmp_path) -> None:
     assert payload["refused"] is False
     assert payload["tool_calls"] == []
     assert payload["sources"] == []
-    assert payload["mode"] == "meta"
+    assert payload["mode"] == "tool_calling_agent"
     assert "当前运行模型配置" in payload["answer"]
     assert "对话模型" in payload["answer"]
     assert "向量模型" in payload["answer"]
@@ -397,7 +386,7 @@ def test_agent_api_accepts_chat_model_preset_override(tmp_path) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["mode"] == "meta"
+    assert payload["mode"] == "tool_calling_agent"
     assert payload["chat_model"] == "deepseek-v4-pro"
     assert payload["latency_trace"]["chat_model"] == "deepseek-v4-pro"
     assert "deepseek-v4-pro" in payload["answer"]
@@ -410,7 +399,7 @@ def test_agent_api_defaults_openai_compatible_agent_requests_to_flash(monkeypatc
         lambda: SimpleNamespace(
             chat_model_provider="openai-compatible",
             chat_model_name="deepseek-v4-pro",
-            chat_model_api_key="test-key",
+            chat_model_api_key="dummy",
             chat_model_base_url="https://example.test/v1",
             chat_model_temperature=0.2,
             chat_model_timeout_seconds=30.0,
@@ -419,7 +408,7 @@ def test_agent_api_defaults_openai_compatible_agent_requests_to_flash(monkeypatc
     )
     provider = OpenAICompatibleChatModelProvider(
         model_name="deepseek-v4-pro",
-        api_key="test-key",
+        api_key="dummy",
         base_url="https://example.test/v1",
     )
 
@@ -444,43 +433,6 @@ def test_agent_api_rejects_unknown_chat_model_preset(tmp_path) -> None:
     assert response.status_code == 422
 
 
-def test_agent_api_default_model_meta_hides_configured_planner(tmp_path) -> None:
-    with make_test_client(tmp_path) as client:
-        app.dependency_overrides[get_agent_planner_chat_model_provider] = lambda: DeterministicChatModelProvider(
-            model_name="deepseek-v4-flash",
-            provider_name="openai-compatible",
-        )
-
-        response = client.post("/agent/query", json={"question": "你生成用的什么模型？"})
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["mode"] == "meta"
-    assert "tool_calling_agent" in payload["answer"]
-    assert "deepseek-v4-flash" not in payload["answer"]
-    assert "\u89c4\u5212\u6a21\u578b" not in payload["answer"]
-
-
-def test_agent_api_model_meta_keeps_the_unified_runtime_when_planner_is_configured(tmp_path) -> None:
-    with make_test_client(tmp_path) as client:
-        app.dependency_overrides[get_agent_planner_chat_model_provider] = lambda: DeterministicChatModelProvider(
-            model_name="deepseek-v4-flash",
-            provider_name="openai-compatible",
-        )
-
-        response = client.post(
-            "/agent/query",
-            json={"question": "你生成用的什么模型？", "mode": "langgraph_agent"},
-        )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["mode"] == "meta"
-    assert "tool_calling_agent" in payload["answer"]
-    assert "deepseek-v4-flash" not in payload["answer"]
-    assert "tool_calling_agent" in payload["answer"]
-
-
 def test_agent_api_answers_capability_help_in_chinese_by_default(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post("/agent/query", json={"question": "What can you do?"})
@@ -490,7 +442,7 @@ def test_agent_api_answers_capability_help_in_chinese_by_default(tmp_path) -> No
     assert payload["refused"] is False
     assert payload["tool_calls"] == []
     assert payload["sources"] == []
-    assert payload["mode"] == "meta"
+    assert payload["mode"] == "tool_calling_agent"
     assert "我可以围绕本项目资料库回答" in payload["answer"]
     assert "拒答分类" in payload["answer"]
     assert "I can answer" not in payload["answer"]
@@ -510,7 +462,7 @@ def test_agent_api_explains_previous_refusal_reason(tmp_path) -> None:
     payload = response.json()
     assert payload["refused"] is False
     assert payload["tool_calls"] == []
-    assert payload["mode"] == "meta"
+    assert payload["mode"] == "tool_calling_agent"
     assert "上一轮回答被拒答" in payload["answer"]
     assert "拒答分类：off_topic" in payload["answer"]
     assert "原始原因：Question appears off-topic." in payload["answer"]
@@ -527,7 +479,6 @@ def test_agent_api_transforms_previous_answer_without_retrieval(tmp_path) -> Non
                 "question": "What affects filling capacity?",
                 "top_k": 2,
                 "conversation_id": conversation["id"],
-                "mode": "default",
             },
         )
         app.dependency_overrides[get_agent_chat_model_provider] = (
@@ -590,7 +541,6 @@ def test_agent_api_followup_respects_requested_point_count(tmp_path) -> None:
                 "question": "What affects filling capacity?",
                 "top_k": 2,
                 "conversation_id": conversation["id"],
-                "mode": "default",
             },
         )
         app.dependency_overrides[get_agent_chat_model_provider] = (
@@ -739,7 +689,6 @@ def test_agent_api_summarizes_long_conversation_after_query(tmp_path) -> None:
                 "question": "What affects filling capacity?",
                 "top_k": 2,
                 "conversation_id": conversation["id"],
-                "mode": "default",
             },
         )
         messages_response = client.get(f"/conversations/{conversation['id']}/messages")
@@ -808,7 +757,6 @@ def test_agent_api_retires_default_summary_path_with_runtime_fallback(
                     "question": "What affects filling capacity?",
                     "top_k": 2,
                     "conversation_id": conversation["id"],
-                    "mode": "default",
                 },
             )
             messages_response = client.get(f"/conversations/{conversation['id']}/messages")
@@ -832,7 +780,6 @@ def test_agent_api_unified_runtime_exposes_observability_fields(tmp_path) -> Non
             json={
                 "question": "What affects filling capacity in rock-filled concrete?",
                 "top_k": 2,
-                "mode": "agentic",
             },
         )
 
@@ -865,69 +812,6 @@ def test_agent_api_default_routes_to_tool_calling(tmp_path) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["mode"] == "tool_calling_agent"
-
-
-def test_agent_api_explicit_default_overrides_tool_calling_default(tmp_path) -> None:
-    with make_test_client(tmp_path) as client:
-        response = client.post(
-            "/agent/query",
-            json={
-                "question": (
-                    "Search and compare filling capacity and thermal control "
-                    "mechanisms in rock-filled concrete."
-                ),
-                "top_k": 2,
-                "mode": "default",
-            },
-        )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["mode"] == "tool_calling_agent"
-    assert [step["name"] for step in payload["workflow_steps"]] == [
-        "hybrid_search_knowledge",
-        "final_answer",
-    ]
-    assert payload["tool_calls"][0]["tool_name"] == "hybrid_search_knowledge"
-
-
-def test_agent_api_explicit_agentic_overrides_auto_simple_route(tmp_path) -> None:
-    with make_test_client(tmp_path) as client:
-        response = client.post(
-            "/agent/query",
-            json={
-                "question": "What affects filling capacity in rock-filled concrete?",
-                "top_k": 2,
-                "mode": "agentic",
-            },
-        )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["mode"] == "tool_calling_agent"
-    assert payload["workflow_steps"]
-
-
-def test_agent_api_explicit_react_agent_mode_uses_react_service(tmp_path) -> None:
-    with make_test_client(tmp_path) as client:
-        response = client.post(
-            "/agent/query",
-            json={
-                "question": "What affects filling capacity in rock-filled concrete?",
-                "top_k": 2,
-                "max_tool_calls": 3,
-                "mode": "react_agent",
-            },
-        )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["mode"] == "tool_calling_agent"
-    assert payload["citations"] == [1]
-    assert [call["tool_name"] for call in payload["tool_calls"]] == ["hybrid_search_knowledge"]
-    assert payload["workflow_steps"]
-    assert payload["iteration_count"] >= 2
-    assert "tool_calling_agent" in payload["reasoning_summary"]
 
 
 def test_agent_api_explicit_tool_calling_agent_mode_uses_tool_loop(tmp_path) -> None:
@@ -966,39 +850,12 @@ def test_agent_api_explicit_tool_calling_agent_mode_uses_tool_loop(tmp_path) -> 
     assert "reasoning_content" not in serialized
 
 
-def test_agent_api_explicit_langgraph_agent_mode_uses_graph_service(tmp_path) -> None:
-    with make_test_client(tmp_path) as client:
-        response = client.post(
-            "/agent/query",
-            json={
-                "question": "What affects filling capacity in rock-filled concrete?",
-                "top_k": 2,
-                "max_tool_calls": 3,
-                "mode": "langgraph_agent",
-            },
-        )
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["mode"] == "tool_calling_agent"
-    assert payload["refused"] is False
-    assert payload["citations"] == [1]
-    assert [call["tool_name"] for call in payload["tool_calls"]] == ["hybrid_search_knowledge"]
-    assert [step["name"] for step in payload["workflow_steps"]] == [
-        "hybrid_search_knowledge",
-        "final_answer",
-    ]
-    assert payload["iteration_count"] == 2
-    assert "tool_calling_agent" in payload["reasoning_summary"]
-
-
 def test_agent_api_agentic_refusal_category_marks_responsibility_gate(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query",
             json={
                 "question": "请判定本工程的堆石混凝土配合比设计是否符合规范要求？",
-                "mode": "agentic",
             },
         )
 
@@ -1044,7 +901,7 @@ def test_auto_figure_enrichment_is_disabled_by_default(monkeypatch) -> None:
         refused=False,
         refusal_reason=None,
         reasoning_summary="test",
-        mode="default",
+        mode="tool_calling_agent",
         workflow_steps=[],
         iteration_count=0,
         invalid_citations=[],
@@ -1071,7 +928,7 @@ def test_auto_figure_enrichment_is_disabled_by_default(monkeypatch) -> None:
             db=None,
             question=response.question,
             response=response,
-            effective_mode="default",
+            effective_mode="tool_calling_agent",
         )
         is response
     )
@@ -1139,7 +996,7 @@ def test_auto_figure_enrichment_records_workflow_step() -> None:
         refused=False,
         refusal_reason=None,
         reasoning_summary="test",
-        mode="langgraph_agent",
+        mode="tool_calling_agent",
         workflow_steps=[],
         iteration_count=0,
         invalid_citations=[],
@@ -1162,7 +1019,7 @@ def test_agent_api_off_topic_refusal_includes_safe_rewrite_suggestion(tmp_path) 
     with make_test_client(tmp_path) as client:
         response = client.post(
             "/agent/query",
-            json={"question": "How should I cook pasta for dinner?", "mode": "default"},
+            json={"question": "How should I cook pasta for dinner?"},
         )
 
     assert response.status_code == 200
@@ -1187,7 +1044,6 @@ def test_agent_api_unified_runtime_returns_cited_evidence_for_in_scope_query(tmp
                 "question": (
                     "filling capacity alpha beta gamma delta epsilon zeta eta theta iota kappa"
                 ),
-                "mode": "default",
             },
         )
 
@@ -1222,7 +1078,6 @@ def test_agent_api_ignores_retired_source_id_control(tmp_path) -> None:
             json={
                 "question": "检索 filling capacity 相关资料",
                 "source_id": "rfc_source_001",
-                "mode": "default",
             },
         )
 

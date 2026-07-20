@@ -2928,7 +2928,6 @@ async function submitAgent() {
     const uploadedImage = await uploadSelectedAgentImage();
     if (uploadedImage?.path) {
       body.image_path = uploadedImage.path;
-      body.mode = "react_agent";
       body.max_tool_calls = 5;
       imageWasSubmitted = true;
     }

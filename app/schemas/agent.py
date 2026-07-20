@@ -1,12 +1,15 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AgentQueryRequest(BaseModel):
-    # Removed fields are deliberately ignored at this boundary so an older
-    # browser cannot select a retired runtime while deployments roll forward.
+    # Retired mode values are rejected. Other removed retrieval knobs remain
+    # ignored because Retrieval Runtime, not the browser, owns those budgets.
     model_config = ConfigDict(extra="ignore")
 
     question: str = Field(min_length=1, max_length=4000)
+    mode: Literal["tool_calling_agent"] | None = None
     max_tool_calls: int = Field(default=2, ge=1, le=5)
     history: list[str] = Field(default_factory=list, max_length=50)
     chat_model: str | None = None

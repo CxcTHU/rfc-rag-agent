@@ -39,7 +39,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--provider", default="deterministic", help="Embedding provider used for candidate recall.")
     parser.add_argument("--combo", action="append", default=[], help="Pool/top-k pair, for example 50:8.")
     parser.add_argument("--limit", type=int, default=0, help="Optional query limit for smoke runs.")
-    parser.add_argument("--include-phase51-cases", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--include-tool-calling-cases",
+        "--include-phase51-cases",
+        dest="include_tool_calling_cases",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Include the current neutral Tool Calling evaluation cases. "
+            "--include-phase51-cases is retained only as a legacy CLI alias."
+        ),
+    )
     parser.add_argument("--remote-bge-url", required=True)
     parser.add_argument("--remote-bge-api-key", default="")
     parser.add_argument("--remote-bge-model", default=stage3_ab.DEFAULT_REMOTE_BGE_MODEL)
@@ -54,7 +64,7 @@ def main() -> None:
         provider_name=args.provider,
         combos=parse_combos(args.combo),
         limit=args.limit,
-        include_phase51_cases=args.include_phase51_cases,
+        include_tool_calling_cases=args.include_tool_calling_cases,
         remote_bge_url=args.remote_bge_url,
         remote_bge_api_key=args.remote_bge_api_key,
         remote_bge_model=args.remote_bge_model,
@@ -93,7 +103,7 @@ def evaluate_pool_ab(
     provider_name: str,
     combos: list[tuple[int, int]],
     limit: int = 0,
-    include_phase51_cases: bool = True,
+    include_tool_calling_cases: bool = True,
     remote_bge_url: str,
     remote_bge_api_key: str = "",
     remote_bge_model: str = stage3_ab.DEFAULT_REMOTE_BGE_MODEL,
@@ -103,7 +113,7 @@ def evaluate_pool_ab(
     for candidate_pool_size, top_k in combos:
         validate_combo(candidate_pool_size, top_k)
 
-    queries = stage3_ab.load_queries(query_paths, include_phase51_cases=include_phase51_cases)
+    queries = stage3_ab.load_queries(query_paths, include_tool_calling_cases=include_tool_calling_cases)
     if limit:
         queries = queries[:limit]
     reranker = stage3_ab.build_rerankers(

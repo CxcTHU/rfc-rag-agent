@@ -24,7 +24,7 @@ def test_stage36_production_smoke_dry_run_rows_are_safe() -> None:
         urlopen_func=lambda *args, **kwargs: None,
     )
 
-    assert len(rows) == 14
+    assert len(rows) == 10
     assert {row["status"] for row in rows} == {"dry_run"}
     assert all(row["execute_requested"] == "false" for row in rows)
     assert all(set(row) == set(SMOKE_FIELDS) for row in rows)
@@ -34,9 +34,7 @@ def test_stage36_production_smoke_dry_run_rows_are_safe() -> None:
     assert "chat" in {row["case_id"] for row in rows}
     assert "frontend_home" in {row["case_id"] for row in rows}
     assert "image_asset" in {row["case_id"] for row in rows}
-    assert "agent_query_tool_calling" in {row["case_id"] for row in rows}
     assert "agent_query_stream_default_tool_calling" in {row["case_id"] for row in rows}
-    assert "agent_query_tool_calling_stream" in {row["case_id"] for row in rows}
 
 
 def test_stage37_production_smoke_covers_tool_calling_agent() -> None:
@@ -44,19 +42,12 @@ def test_stage37_production_smoke_covers_tool_calling_agent() -> None:
 
     assert "mode" not in cases["agent_query_default_tool_calling"].payload
     assert cases["agent_query_default_tool_calling"].expected_mode == "tool_calling_agent"
-    assert cases["agent_query_tool_calling"].payload["mode"] == "tool_calling_agent"
-    assert cases["agent_query_tool_calling"].expected_mode == "tool_calling_agent"
     assert "mode" not in cases["agent_query_stream_default_tool_calling"].payload
     assert (
         cases["agent_query_stream_default_tool_calling"].expected_mode
         == "tool_calling_agent"
     )
-    assert (
-        cases["agent_query_tool_calling_stream"].payload["mode"]
-        == "tool_calling_agent"
-    )
-    assert cases["agent_query_tool_calling_stream"].expected_mode == "tool_calling_agent"
-    assert cases["agent_query_tool_calling_stream"].stream is True
+    assert cases["agent_query_stream_default_tool_calling"].stream is True
     assert cases["chat"].endpoint == "/chat"
     assert cases["chat"].auth_required is False
     assert cases["frontend_home"].endpoint == "/"
@@ -158,13 +149,13 @@ def test_stage36_production_smoke_evaluates_agent_payload_without_body_leak() ->
         method="POST",
         endpoint="/agent/query",
         required_fields=("answer", "refused", "citations", "sources", "mode"),
-        expected_mode="react_agent",
+        expected_mode="tool_calling_agent",
     )
     result = HttpResult(
         status_code=200,
         text=(
             '{"answer":"ok","refused":false,"citations":[1,2],'
-            '"sources":[],"mode":"react_agent"}'
+            '"sources":[],"mode":"tool_calling_agent"}'
         ),
         latency_ms=12.3456,
     )
@@ -175,7 +166,7 @@ def test_stage36_production_smoke_evaluates_agent_payload_without_body_leak() ->
     assert row["required_fields_present"] == "true"
     assert row["refused"] == "false"
     assert row["citation_count"] == "2"
-    assert row["actual_mode"] == "react_agent"
+    assert row["actual_mode"] == "tool_calling_agent"
     assert row["mode_matched"] == "true"
     assert row["latency_ms"] == "12.346"
     assert "ok" not in row.values()
@@ -183,7 +174,7 @@ def test_stage36_production_smoke_evaluates_agent_payload_without_body_leak() ->
 
 def test_stage36_production_smoke_detects_sensitive_and_validator_markers() -> None:
     assert contains_sensitive_marker("Authorization: secret")
-    assert contains_sensitive_marker("Bearer abcdefghijklmnopqrstuvwxyz.123")
+    assert contains_sensitive_marker("Bearer " + "abcdefghijklmnopqrstuvwxyz.123")
     assert contains_sensitive_marker("reasoning_content should not appear")
     assert not contains_sensitive_marker("I do not expose bearer tokens or raw provider responses.")
     assert contains_validator_marker("citation_validator removed this sentence")
@@ -199,7 +190,7 @@ def test_stage36_production_smoke_accepts_quality_report_row_lists() -> None:
 def test_stage36_production_smoke_parses_sse_metadata_and_done() -> None:
     body = (
         'event: token\ndata: {"text":"hi"}\n\n'
-        'event: metadata\ndata: {"answer":"hi","refused":false,"citations":[1],"sources":[],"mode":"react_agent"}\n\n'
+        'event: metadata\ndata: {"answer":"hi","refused":false,"citations":[1],"sources":[],"mode":"tool_calling_agent"}\n\n'
         "event: done\ndata: {}\n\n"
     )
     case = SmokeCase(
@@ -208,7 +199,7 @@ def test_stage36_production_smoke_parses_sse_metadata_and_done() -> None:
         endpoint="/agent/query/stream",
         required_fields=("metadata", "done"),
         stream=True,
-        expected_mode="react_agent",
+        expected_mode="tool_calling_agent",
     )
 
     parsed = parse_sse_events(body)
@@ -221,7 +212,7 @@ def test_stage36_production_smoke_parses_sse_metadata_and_done() -> None:
     assert parsed["metadata"]["refused"] is False
     assert row["status"] == "passed"
     assert row["citation_count"] == "1"
-    assert row["actual_mode"] == "react_agent"
+    assert row["actual_mode"] == "tool_calling_agent"
     assert row["mode_matched"] == "true"
 
 

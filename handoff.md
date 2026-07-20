@@ -1,5 +1,17 @@
 # 现场快照
 
+## 2026-07-20 Phase 68：最终代码清洗
+
+- 工作分支为 `codex/phase-68-code-cleanup`，隔离工作树为 `G:\Codex\program\rfc-rag-agent-phase68-cleanup`，基于 `origin/main` `0c0f042d`；不要切回原脏工作区继续本阶段。
+- 唯一生产 Agent 链路已收敛为 `/agent/query -> ToolCallingAgentService -> RunCoordinator -> ToolExecutor -> registry/adapters -> AgentToolbox`。
+- ReAct、两套 LangGraph、旧 Agent memory/checkpointer、default `AgentService` 执行器及专属测试/评测已删除；`AgentQueryResult` 仍暂留 `service.py` 作为当前共用数据合同。
+- `legacy_toolbox.py` 已确认是当前四个生产工具的实现基座，必须保留。当前 conversation summary memory 和 Redis cache/rate limit 同样不在删除范围。
+- request `mode` 只允许省略或 `tool_calling_agent`；退休值为 422。meta/chitchat/follow-up 与 SSE metadata 也统一返回 `tool_calling_agent`。
+- 清洗前基线：后端 `1936 passed, 1 skipped`，前端 `8 files / 33 tests passed`。当前 post-change 已验证：最终后端全量 `1736 passed, 1 warning`；前端 unit `33 passed`、lint/build 通过、Playwright `10 passed`；聚焦默认链路/清洗包 `120 passed, 1 warning`；定向 Ruff 本次 Python 文件通过；compileall 与 `git diff --check` 通过；定向敏感扫描高风险命中为 0。
+- 首次定向回归暴露 4 个预期清洗后断言差异（空 agentic 目录 pycache、meta mode、smoke 数量/重复显式 mode case），均已修正。后续还修复 Chainlit 旧 mode fixture、旧 Stage34/evaluate_agent 专属测试和 reranker Phase51 case 懒加载。
+- 禁止暂存原工作区的 `.playwright-cli/`、`output/`、根目录截图和 Phase 64 无关格式变更；也不得提交 `.env`、token、provider raw response、raw answer、reasoning、完整 chunk 或私有日志。
+- 下一步：显式暂存、复核 staged diff，提交、push、创建 PR 到 main，等待 checks 后合并。
+
 ## 2026-07-19 Phase 67 增补：运行步骤持久化
 
 - 当前分支为 `codex/fix-workflow-step-persistence`，基于已合并 Phase 67 的 `origin/main`。

@@ -65,20 +65,20 @@ def test_stage3_parse_args_defaults_to_local_only_provider(monkeypatch) -> None:
     args = ab.parse_args()
 
     assert args.provider == "deterministic"
-    assert args.include_phase51_cases is True
+    assert args.include_tool_calling_cases is True
     assert args.limit == 0
 
 
-def test_stage3_load_queries_can_include_phase51_cases() -> None:
-    queries = ab.load_queries([], include_phase51_cases=True)
+def test_stage3_load_queries_can_include_tool_calling_cases() -> None:
+    queries = ab.load_queries([], include_tool_calling_cases=True)
 
-    assert any(query.dataset == ab.PHASE51_CASE_SOURCE for query in queries)
+    assert any(query.dataset == ab.TOOL_CALLING_CASE_SOURCE for query in queries)
     assert any(query.expected_refused for query in queries)
 
 
 def test_stage3_load_queries_rejects_empty_inputs_without_phase51() -> None:
     with pytest.raises(ValueError, match="no evaluation queries"):
-        ab.load_queries([], include_phase51_cases=False)
+        ab.load_queries([], include_tool_calling_cases=False)
 
 
 def test_stage3_remote_bge_uses_explicit_url_without_local_model(monkeypatch) -> None:

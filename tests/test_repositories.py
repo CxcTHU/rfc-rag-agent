@@ -197,7 +197,7 @@ def test_conversation_repository_creates_lists_and_appends_messages(tmp_path) ->
                 conversation_id=conversation.id,
                 role="assistant",
                 content="填充性能主要与流动性、骨料孔隙和施工控制有关。",
-                mode="agentic",
+                mode="tool_calling_agent",
                 metadata={"citations": ["[1]"], "iteration_count": 1},
             )
         )
@@ -210,7 +210,7 @@ def test_conversation_repository_creates_lists_and_appends_messages(tmp_path) ->
     assert saved_conversation.title == "请解释堆石混凝土的填充性能。"
     assert [item.id for item in conversations] == [conversation.id]
     assert [message.id for message in messages] == [user_message.id, assistant_message.id]
-    assert messages[1].mode == "agentic"
+    assert messages[1].mode == "tool_calling_agent"
     assert deserialize_metadata(messages[1].metadata_json) == {
         "citations": ["[1]"],
         "iteration_count": 1,
