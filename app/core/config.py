@@ -10,12 +10,10 @@ class Settings(BaseSettings):
     # SQLite remains the safe fallback; Phase 49 local development should set
     # DATABASE_URL to the PostgreSQL dev container for dev/prod parity.
     database_url: str = "sqlite:///./data/app.sqlite"
-    # Redis is optional. When unset or unreachable, embedding cache and
-    # LangGraph checkpoints must fall back to in-process memory.
+    # Redis is optional. When unset or unreachable, active runtime caches
+    # fall back to in-process memory.
     redis_url: str = ""
     redis_socket_timeout_seconds: float = 1.0
-    langgraph_checkpoint_ttl_minutes: int = 60
-    langgraph_checkpoint_refresh_on_read: bool = True
     layered_cache_namespace: str = "phase56-v1"
     retrieval_candidate_cache_enabled: bool = True
     retrieval_candidate_cache_ttl_seconds: int = 900
@@ -47,12 +45,8 @@ class Settings(BaseSettings):
     chat_model_temperature: float = 0.2
     chat_model_timeout_seconds: float = 30.0
 
-    # Optional dedicated planner provider for ReAct LLM-driven planning.
-    # When planner_chat_model_provider is empty the ReAct service falls back
-    # to the deterministic short-circuit + chat_model_provider behavior.
-    # When set, the ReAct service uses this provider for every planner
-    # decision and disables the deterministic short-circuit so the LLM
-    # truly drives action selection.
+    # Legacy planner names remain configuration aliases for the current
+    # runtime-identity model until operators migrate to RUNTIME_IDENTITY_*.
     planner_chat_model_provider: str = ""
     planner_chat_model_name: str = ""
     planner_chat_model_api_key: str = ""

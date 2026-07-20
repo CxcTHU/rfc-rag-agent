@@ -938,21 +938,21 @@ chunks 19118
 sources 673
 chunk_embeddings 25432
 stage30_quality_overall 83.17
-stage32_eval_modes default / agentic_langgraph / react_agent
+stage32_eval_modes default / agentic_langgraph / react_agent (historical only; retired by Phase 68)
 ```
 
-阶段 32 新增派生产物与脚本：
+阶段 32 历史新增派生产物与脚本；Phase 68 删除 ReAct/agentic/default 在线 Agent 路径与专属评测脚本，以下只保留数据来源记录：
 
 - `docs/stage32_react_agent_observability.md`：阶段 32 ReAct action、工具权限、SSE 事件、安全边界和完成标准设计文档。
-- `scripts/evaluate_stage32_react_agent.py`：deterministic 三路对照评测脚本，使用 in-memory SQLite fixture，不读取真实 API key，不调用真实 provider，不写业务数据库。
+- `scripts/evaluate_stage32_react_agent.py`：历史 deterministic 三路对照评测脚本，使用 in-memory SQLite fixture，不读取真实 API key，不调用真实 provider，不写业务数据库；Phase 68 已删除该脚本。
 - `data/evaluation/stage32_react_agent_results.csv`：逐问题、逐模式评测结果，只保存 query_id、category、mode、错误、是否 answer-like、拒答匹配、来源数量、引用有效性、工具调用数、迭代数和 workflow step 数。
 - `data/evaluation/stage32_react_agent_summary.csv`：`default`、`agentic_langgraph`、`react_agent` 汇总指标，只保存错误率、回答数、拒答匹配、平均工具调用、平均迭代和 decision。
 - `/agent/query/stream` 新增运行事件 `agent_step`、`tool_call_start`、`tool_call_result`，这些事件是请求内即时传输的安全摘要，不是新的持久数据源。
 
 数据安全边界：
 
-- ReAct 工具仍只读，只能走 `search_knowledge`、`rewrite_query`、`answer_with_citations`、`refuse`、`final_answer`；不新增写入型工具。
-- ReAct 检索和回答必须复用 `AgentToolbox`、Brain、citation、sources、evidence confidence、responsibility_gate 和 refusal 链路。
+- 历史 ReAct 工具只读，只能走 `search_knowledge`、`rewrite_query`、`answer_with_citations`、`refuse`、`final_answer`；Phase 68 已删除 ReAct 在线路径。
+- 历史 ReAct 检索和回答必须复用 `AgentToolbox`、Brain、citation、sources、evidence confidence、responsibility_gate 和 refusal 链路；当前这些边界由 `tool_calling_agent` 生产链路承载。
 - SSE 和前端只展示 `step_summary`、`input_summary`、`observation_summary`、`decision_summary` 等安全摘要，不展示 hidden thought。
 - `stage32_react_agent_results.csv` 和 `stage32_react_agent_summary.csv` 不得包含敏感凭据、授权头、供应商原始响应或受限全文。
 

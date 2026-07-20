@@ -44,7 +44,6 @@ from app.services.observability.latency_trace import (
     bind_agent_conversation_cache_scope,
 )
 from app.services.agent.runtime_checkpoint import AgentRuntimeRunRepository
-from app.services.agentic.state import AgenticResult
 from app.services.conversation.history import (
     history_from_messages,
     summarize_conversation_if_needed,
@@ -108,26 +107,6 @@ def resolve_agent_chat_model_provider(
         base_url=settings.chat_model_base_url,
         temperature=settings.chat_model_temperature,
         timeout_seconds=settings.chat_model_timeout_seconds,
-    )
-
-
-def get_agent_planner_chat_model_provider() -> ChatModelProvider | None:
-    """Optional lightweight planner provider for ReAct LLM-driven planning.
-
-    Returns None when no dedicated planner is configured, in which case
-    ReActAgentService falls back to the deterministic short-circuit plus the
-    main chat model provider.
-    """
-    settings = get_settings()
-    if not settings.planner_chat_model_provider.strip():
-        return None
-    return create_chat_model_provider(
-        provider_name=settings.planner_chat_model_provider,
-        model_name=settings.planner_chat_model_name,
-        api_key=settings.planner_chat_model_api_key,
-        base_url=settings.planner_chat_model_base_url,
-        temperature=settings.planner_chat_model_temperature,
-        timeout_seconds=settings.planner_chat_model_timeout_seconds,
     )
 
 
@@ -339,8 +318,6 @@ def query_agent(
         question=request.question,
         chat_model_provider=chat_model_provider,
         embedding_provider=embedding_provider,
-        planner_chat_provider=None,
-        effective_mode="tool_calling_agent",
         conversation_messages=conversation_messages,
     )
     if meta_response is not None:
@@ -522,8 +499,6 @@ def stream_agent_query_events(
             question=request.question,
             chat_model_provider=chat_model_provider,
             embedding_provider=embedding_provider,
-            planner_chat_provider=None,
-            effective_mode="tool_calling_agent",
             conversation_messages=conversation_messages or [],
         )
         if meta_response is not None:
@@ -785,8 +760,6 @@ def build_agent_meta_response(
     question: str,
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
-    planner_chat_provider: ChatModelProvider | None,
-    effective_mode: str,
     conversation_messages: Sequence[Message],
 ) -> AgentQueryResponse | None:
     intent = intent_router.classify_meta_intent(question)
@@ -795,19 +768,10 @@ def build_agent_meta_response(
 
     normalized_question = question.strip()
     if intent == "agent_meta":
-        planner_line = ""
-        if effective_mode != "tool_calling_agent":
-            planner_text = (
-                f"{planner_chat_provider.provider_name} / {planner_chat_provider.model_name}"
-                if planner_chat_provider is not None
-                else "未单独配置；planner 使用确定性兜底逻辑"
-            )
-            planner_line = f"- 规划模型：{planner_text}\n"
         answer = (
             "当前运行模型配置：\n"
-            f"- 默认链路：{effective_mode}\n"
+            "- 默认链路：tool_calling_agent\n"
             f"- 对话模型：{chat_model_provider.provider_name} / {chat_model_provider.model_name}\n"
-            f"{planner_line}"
             f"- 向量模型：{embedding_provider.provider_name} / {embedding_provider.model_name}\n"
             "我不会在聊天回答中暴露 API key、授权令牌、供应商原始响应、隐藏推理或受限全文。"
         )
@@ -835,7 +799,7 @@ def build_agent_meta_response(
             "refused": False,
             "refusal_reason": None,
             "reasoning_summary": summary,
-            "mode": "meta",
+            "mode": "tool_calling_agent",
             "workflow_steps": [],
             "iteration_count": 0,
             "invalid_citations": [],
@@ -1223,7 +1187,6 @@ def build_agent_query_response(
     conversation_history: list[str],
     chat_model_provider: ChatModelProvider,
     embedding_provider: EmbeddingProvider,
-    planner_chat_provider: ChatModelProvider | None = None,
     event_sink=None,
     latency_trace: LatencyTrace | None = None,
 ) -> AgentQueryResponse:
@@ -1361,96 +1324,6 @@ def agent_response_from_chitchat(
     )
 
 
-def agent_response_from_agentic_result(result: AgenticResult) -> AgentQueryResponse:
-    sources = [
-        AgentSourceItem(
-            source_id=f"chunk:{s.chunk_id}",
-            title=s.document_title,
-            source_type=s.source_type,
-            status=None,
-            trust_level=None,
-            fulltext_permission=None,
-            document_id=s.document_id,
-            chunk_id=s.chunk_id,
-            chunk_index=s.chunk_index,
-            url=None,
-            doi=None,
-            content=s.content,
-            score=s.score,
-            chunk_type=getattr(s, "chunk_type", "text"),
-            source_image_path=getattr(s, "source_image_path", None),
-            image_url=image_url_from_source_image_path(getattr(s, "source_image_path", None)),
-            caption=getattr(s, "caption", None),
-            page_number=page_number_from_source_image_path(getattr(s, "source_image_path", None)),
-            table_content=getattr(s, "content", None) if getattr(s, "chunk_type", "text") == "table" else None,
-            image_analysis=getattr(s, "image_analysis", None),
-            content_bbox=getattr(s, "content_bbox", None),
-        )
-        for s in result.sources
-    ]
-    tool_calls = [
-        AgentToolCallItem(
-            tool_name=step.name,
-            input_summary=step.input_summary,
-            output_summary=step.output_summary,
-            succeeded=step.succeeded,
-            error=step.error,
-        )
-        for step in result.workflow_steps
-    ]
-    workflow_steps = [
-        AgentWorkflowStepItem(
-            name=step.name,
-            step_id=getattr(step, "step_id", None) or None,
-            input_summary=step.input_summary,
-            output_summary=step.output_summary,
-            succeeded=step.succeeded,
-            error=step.error,
-        )
-        for step in result.workflow_steps
-    ]
-    response = AgentQueryResponse(
-        question=result.question,
-        answer=result.answer,
-        tool_calls=tool_calls,
-        search_results=[
-            AgentSearchResultItem(
-                document_id=s.document_id,
-                document_title=s.document_title,
-                source_type=s.source_type,
-                source_path=s.source_path,
-                file_name=s.file_name,
-                chunk_id=s.chunk_id,
-                chunk_index=s.chunk_index,
-                content=s.content,
-                heading_path=s.heading_path,
-                score=s.score,
-                chunk_type=getattr(s, "chunk_type", "text"),
-                source_image_path=getattr(s, "source_image_path", None),
-                image_url=image_url_from_source_image_path(getattr(s, "source_image_path", None)),
-                caption=getattr(s, "caption", None),
-                page_number=page_number_from_source_image_path(getattr(s, "source_image_path", None)),
-                table_content=getattr(s, "content", None) if getattr(s, "chunk_type", "text") == "table" else None,
-                image_analysis=getattr(s, "image_analysis", None),
-                content_bbox=getattr(s, "content_bbox", None),
-            )
-            for s in result.sources
-        ],
-        sources=sources,
-        citations=result.citations,
-        refused=result.refused,
-        refusal_reason=result.refusal_reason,
-        reasoning_summary=f"agentic RAG, iterations={result.iteration_count}",
-        mode="agentic",
-        workflow_steps=workflow_steps,
-        iteration_count=result.iteration_count,
-        invalid_citations=result.invalid_citations,
-        refusal_category=refusal_category_from_agentic_result(result),
-        latency_trace={},
-    )
-    return with_refusal_explanation(response)
-
-
 def agent_response_from_result(result: AgentQueryResult) -> AgentQueryResponse:
     refusal_category = refusal_category_from_refusal(
         refused=result.refused,
@@ -1559,14 +1432,6 @@ def with_refusal_explanation(response: AgentQueryResponse) -> AgentQueryResponse
         update={
             "reasoning_summary": f"{response.reasoning_summary}{separator}{explanation}",
         }
-    )
-
-
-def refusal_category_from_agentic_result(result: AgenticResult) -> str | None:
-    return refusal_category_from_refusal(
-        refused=result.refused,
-        refusal_reason=result.refusal_reason,
-        responsibility_gate_triggered=result.responsibility_gate_triggered,
     )
 
 

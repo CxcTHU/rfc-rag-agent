@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy.orm import sessionmaker
 
-from app.api.image_upload import router as image_upload_router
 from app.core.config import get_settings
 from app.db.models import Base
 from app.db.repositories import ChunkCreate, DocumentCreate, DocumentRepository
@@ -19,7 +18,6 @@ from app.services.agent.image_storage import (
     ImageTooLargeError,
     UserImageStorage,
 )
-from app.services.agent.react_service import ReActAgentService
 from app.services.agent.tools import AgentToolbox
 from app.services.agent.image_analysis import (
     UserImageAnalyzer,
@@ -165,29 +163,6 @@ def test_agent_toolbox_analyze_user_image_flags_deterministic_vision_as_test_mod
     assert result.image_analysis["is_test_vision"] is True
     assert result.image_analysis["vision_provider"] == "deterministic"
     assert result.image_analysis["domain_relevance"] == "test_vision"
-
-
-def test_react_agent_analyzes_image_when_image_path_is_present(tmp_path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    upload_path = tmp_path / "data" / "user_uploads" / "2026-06-20" / "crack.png"
-    upload_path.parent.mkdir(parents=True, exist_ok=True)
-    upload_path.write_bytes(make_png_bytes())
-    TestingSessionLocal = make_session(tmp_path)
-
-    with TestingSessionLocal() as db:
-        result = ReActAgentService(
-            db=db,
-            embedding_provider=DeterministicEmbeddingProvider(),
-            chat_model_provider=DeterministicChatModelProvider(),
-        ).query(
-            "Please analyze this image.",
-            image_path=upload_path.as_posix(),
-            max_tool_calls=1,
-        )
-
-    assert result.tool_calls[0].tool_name == "analyze_user_image"
-    assert result.refused is True
-    assert result.image_analysis is not None
 
 
 def test_assess_image_domain_relevance_uses_description_and_question() -> None:
@@ -388,26 +363,3 @@ def test_agent_toolbox_analyze_user_image_returns_concise_answer(tmp_path, monke
     assert result.image_analysis["related_text_count"] == 0
     assert result.image_analysis["similar_figure_count"] == 0
     assert "text_results=0" in result.call.output_summary
-
-
-def test_react_agent_image_analysis_returns_after_single_tool_call(tmp_path, monkeypatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    upload_path = tmp_path / "data" / "user_uploads" / "2026-06-20" / "crack.png"
-    upload_path.parent.mkdir(parents=True, exist_ok=True)
-    upload_path.write_bytes(make_png_bytes())
-    TestingSessionLocal = make_session(tmp_path)
-
-    with TestingSessionLocal() as db:
-        result = ReActAgentService(
-            db=db,
-            embedding_provider=DeterministicEmbeddingProvider(),
-            chat_model_provider=DeterministicChatModelProvider(),
-        ).query(
-            "Please analyze this concrete crack image.",
-            image_path=upload_path.as_posix(),
-            max_tool_calls=3,
-        )
-
-    assert [call.tool_name for call in result.tool_calls] == ["analyze_user_image"]
-    assert result.iteration_count == 1
-    assert result.refused is True

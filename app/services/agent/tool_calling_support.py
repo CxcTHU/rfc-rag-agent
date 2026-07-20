@@ -4,13 +4,9 @@ import json
 import logging
 import re
 import time
-import uuid
 from collections.abc import Callable, Sequence
-from dataclasses import replace
-from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
-from sqlalchemy.orm import Session
 
 from app.services.agent.service import AgentQueryResult
 from app.services.agent.tools import (
@@ -18,114 +14,43 @@ from app.services.agent.tools import (
     AgentSourceReference,
     AgentToolCallRecord,
     AgentToolResult,
-    AgentToolbox,
     truncate_text,
 )
-from app.services.agent.react_actions import should_search_figures
-from app.services.agent.runtime import AgentRuntime, AgentRuntimeState
+from app.services.agent.runtime import AgentRuntimeState
 from app.services.agent.runtime_events import (
     RuntimeEventBus,
-    RuntimeEventName,
     ToolCallingRuntimeEvent,
-    publish_tool_call_result,
-    project_tool_calling_event,
 )
-from app.services.agent.planning_policy import (
-    PlanningPolicy,
-    PlanningRequest,
-    phase64_runtime_identity_provider,
-)
-from app.services.agent.run_coordinator import (
-    RunCoordinator,
-    build_final_answer_request,
-)
-from app.services.agent.evidence_state_machine import EvidenceStateMachine
 from app.services.agent.final_answer_controller import FinalAnswerController
 from app.services.agent.final_result_assembler import (
     build_final_generation_failure_result,
-    build_pre_tool_refusal_result,
     build_tool_calling_result,
 )
 from app.services.agent.final_prompt import (
-    TOOL_CALLING_DEFAULT_FINAL_ANSWER_STRATEGY,
     TOOL_RESULT_MAX_SOURCES,
     TOOL_RESULT_SNIPPET_LIMIT,
-    FinalPromptShape,
     ToolCallingFinalAnswerStrategy,
     citation_repair_messages,
     evidence_answer_messages,
-    final_answer_strategy_instruction,
-    phase64_final_answer_provider,
-    phase64_final_prompt_budgets,
-    tool_calling_messages,
-)
-from app.services.agent.checkpoint_repository import (
-    AgentRuntimeRunRepository,
-    CheckpointRepository,
-    CheckpointSnapshot,
-    decide_resume,
-    is_explicit_continue,
-    load_runtime_state,
-    runtime_resume_diagnostics,
 )
 from app.services.agent.runtime_contracts import (
-    CoordinatorRequest,
     FinalAnswerRequest,
     FinalAnswerOutcome,
-    PreToolGateDecision,
-    RunBudget,
     RuntimeStopReason,
-    ToolExecutionRequest,
 )
-from app.services.agent.pre_tool_gates import (
-    ToolCallingCoordinatorGateAdapter,
-    build_tool_calling_combined_pre_tool_gate_decision,
-    build_tool_calling_pre_tool_gate_decision,
-    build_tool_calling_resume_gate_decision,
-    build_tool_calling_semantic_cache_gate_decision,
-    result_from_runtime_checkpoint,
-    runtime_checkpoint_state,
-)
-from app.services.agent.tool_executor import ToolExecutor
-from app.services.agent.tool_calling_composition import tool_calling_tool_definitions
-from app.services.agent.tool_result_merge import merge_search_results, merge_sources
 from app.services.agent.tool_registry import TEXT_TOOL_NAMES
 from app.core.config import get_settings
-from app.core.structured_logging import log_event, safe_text_summary
 from app.services.brain.workflow import (
-    RESPONSIBILITY_REFUSAL_ANSWER,
-    evaluate_responsibility_gate,
     extract_citations,
-    has_topic_anchor,
 )
 from app.services.generation.chat_model import (
     ChatMessage,
     ChatModelProvider,
     ChatToolCall,
-    ToolCallingChatModelResult,
     create_chat_model_provider,
 )
 from app.services.observability.latency_trace import (
     LatencyTrace,
-    bind_agent_conversation_cache_scope,
-    bind_user_question_cache_key,
-    get_current_latency_trace,
-    reset_current_latency_trace,
-    set_current_latency_trace,
-)
-from app.services.retrieval.embedding import EmbeddingProvider
-from app.services.retrieval.route_context import (
-    reset_phase64_route_kind,
-    set_phase64_route_kind,
-)
-from app.services.retrieval.hybrid_search import (
-    reset_current_hyde_vector_query,
-    set_current_hyde_vector_query,
-)
-from app.services.retrieval.runtime import (
-    retrieval_runtime_result_limit,
-    reset_current_retrieval_plan,
-    set_current_retrieval_plan,
 )
 
 

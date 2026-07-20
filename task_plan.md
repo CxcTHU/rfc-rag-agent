@@ -1,6 +1,33 @@
 # 当前执行计划
 
-更新时间：2026-07-19
+更新时间：2026-07-20
+
+## Phase 68：最终代码清洗
+
+目标：生产在线 Agent 仅保留 `/agent/query -> ToolCallingAgentService -> RunCoordinator -> ToolExecutor -> tool_registry / AgentToolbox`，移除已退休的 default `AgentService`、ReAct、LangGraph、旧 `memory_context` 及专属验证资产，同时保持四个生产工具行为不变。
+
+1. [x] 完整阅读规则、项目主文档、工作记忆、Git 状态与近期提交；从最新 `origin/main` 建立隔离工作树和 `codex/phase-68-code-cleanup` 分支。
+2. [x] 完成后端/前端基线与只读引用盘点，确认当前链路、删除边界、依赖和文档兼容承诺。
+3. [x] 先新增 Phase 68 单链路契约测试并观察红灯，再迁移仍被生产使用的中性 helper。
+4. [x] 删除退休服务、图节点/状态/checkpointer、旧 memory、专属测试/评测脚本，并移除不再使用的 LangGraph 依赖。
+5. [x] 清理 API、旧前端、生产 smoke 与当前测试中的退休 mode 兼容承诺；响应 mode 固定为 `tool_calling_agent`。
+6. [x] 更新 README、架构、进度、handoff 和 Phase 68 Obsidian 四类文件，记录保留链路、删除范围、回滚方式与风险。
+7. [x] fresh 运行默认链路后端回归及全量后端、前端 unit/lint/build/E2E、Ruff/结构检查、`git diff --check` 和定向敏感扫描。
+8. [ ] 仅显式暂存 Phase 68 文件，提交并推送；创建到 `main` 的 PR，等待全部检查通过后合并。
+
+### Phase 68 错误记录
+
+| 错误 | 尝试 | 处理 |
+| --- | --- | --- |
+| planning-with-files catch-up 默认解释器 `C:\Users\admin\.venv\Scripts\python.exe` 不存在 | 1 | 改用当前环境可用的 `python` 成功恢复上下文；未改项目文件。 |
+| 首次批量 `rg` 使用 PowerShell 双引号导致正则括号被错误解析 | 1 | 拆成单引号 `-e` 表达式后成功完成引用盘点。 |
+| Phase 66 Obsidian 目录名按旧称猜测失败 | 1 | 只读列出阶段目录，确认实际名称为“阶段 66 - Tool Calling Runtime 真正瘦身”；未修改文件。 |
+| 首轮聚焦回归 `tests/test_chainlit_app.py` 仍用 `mode=default` fixture | 1 | 将 Chainlit fixture 和文案更新为 `tool_calling_agent`，重跑聚焦包通过。 |
+| 首轮全量后端仍有 3 个已删除旧评测脚本的专属测试 | 1 | 删除 `test_evaluate_agent.py`、Stage34 decision/latency collection 测试，重跑后进入执行阶段。 |
+| 全量后端在 reranker Stage3 懒加载已删除 `evaluate_phase51_performance` 时失败 | 1 | 将默认内置 case 改为当前 `tool_calling_eval_cases`，保留旧 CLI 名为兼容别名；定向 reranker 测试通过。 |
+| 首次 `git diff --check` 报 Vite Windows 产物空白与删除测试后的 EOF 空行 | 1 | 归一化 `frontend/dist/index.html`，移除两个测试文件多余 EOF 空行，复查通过。 |
+| 项目 venv 与系统 PATH 均无 `ruff` | 1 | 改用 `uvx ruff` 临时运行；全仓存在 232 个既有 Ruff 问题，本次范围定向 Ruff 清理并通过。 |
+| 定向 pytest 命令误包含不存在的 pool A/B 测试文件 | 1 | 改为真实存在的 `tests/test_rfc_domain_reranker_stage3.py`，`13 passed`。 |
 
 ## Phase 67 增补：运行步骤持久化 E2E 验证与四端同步
 

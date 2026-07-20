@@ -47,7 +47,7 @@ def make_response() -> AgentQueryResponse:
         refused=False,
         refusal_reason=None,
         reasoning_summary="default",
-        mode="default",
+        mode="tool_calling_agent",
         workflow_steps=[],
         iteration_count=0,
         invalid_citations=[],
@@ -74,11 +74,11 @@ def test_sources_markdown_lists_citations_without_full_sensitive_payload() -> No
     assert "score=0.9100" in markdown
 
 
-def test_workflow_markdown_describes_default_and_agentic_paths() -> None:
-    default_markdown = chainlit_app.workflow_markdown(make_response())
-    agentic_response = make_response().model_copy(
+def test_workflow_markdown_describes_tool_calling_steps() -> None:
+    empty_steps_markdown = chainlit_app.workflow_markdown(make_response())
+    tool_calling_response = make_response().model_copy(
         update={
-            "mode": "agentic",
+            "mode": "tool_calling_agent",
             "workflow_steps": [
                 AgentWorkflowStepItem(
                     name="retrieve",
@@ -91,15 +91,15 @@ def test_workflow_markdown_describes_default_and_agentic_paths() -> None:
         }
     )
 
-    assert "default AgentService" in default_markdown
-    assert "retrieve - ok" in chainlit_app.workflow_markdown(agentic_response)
+    assert "tool_calling_agent" in empty_steps_markdown
+    assert "retrieve - ok" in chainlit_app.workflow_markdown(tool_calling_response)
 
 
 def test_response_metadata_keeps_display_safe_fields_only() -> None:
     metadata = chainlit_app.response_metadata(make_response())
 
     assert metadata == {
-        "mode": "default",
+        "mode": "tool_calling_agent",
         "refused": False,
         "refusal_category": None,
         "citations": [1],

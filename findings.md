@@ -1,3 +1,20 @@
+# Phase 68：最终代码清洗发现
+
+更新时间：2026-07-20
+
+- Phase 68 在独立工作树 `G:\Codex\program\rfc-rag-agent-phase68-cleanup` 上执行，分支 `codex/phase-68-code-cleanup` 基于最新 `origin/main` `0c0f042d`；原工作区的 Phase 67 未提交文件和输出均不触碰。
+- 当前同步/流式 API 都直接构造 `ToolCallingAgentService`；实际生产链路为 `/agent/query -> ToolCallingAgentService -> RunCoordinator -> ToolExecutor -> default_tool_registry -> AgentToolbox`。
+- `app/services/agent/tools.py` 仍从 `legacy_toolbox.py` 导入并继承 `_legacy.AgentToolbox`；四个生产工具 `hybrid_search_knowledge`、`search_tables`、`search_figures`、`analyze_user_image` 仍由该实现提供，因此 Phase 68 必须保留 `legacy_toolbox.py`。
+- 退休模块包括旧 `AgentService` 执行器、`ReActAgentService`、`LangGraphAgentService`、两套 LangGraph 图、`graph_*`、旧 Agent `memory_context`、adaptive ReAct 映射与专属测试/评测脚本。
+- 当前链路对退休模块仅有两处残余借用：`tool_calling_support.py` 从 `react_actions.py` 导入图片意图判断；`app/api/agent.py` 保留未被在线入口调用的 `AgenticResult` 响应转换。前者应迁移为中性 helper，后者应删除。
+- `app/services/conversation/session_memory.py` 属于当前会话摘要链路，不是本次删除目标；Redis 仍服务当前 query/evidence cache 和限流，也不能随 LangGraph checkpointer 一并删除。
+- `langgraph` 与 `langgraph-checkpoint-redis` 目前只服务退休图路径；清洗引用后可从 Python 依赖移除。
+- React 新工作台已不发送 `mode`；旧静态前端上传图片仍显式发送 `react_agent`。生产 smoke 也仍把 `react_agent` 当回滚路径，应同步改为唯一模式契约。
+- 当前 request schema 已把 `mode` 收窄为唯一字面量 `tool_calling_agent`：省略或显式当前值可用，退休 mode 返回 422；其他已移除的检索预算字段继续由 `extra="ignore"` 吞掉，因为预算所有权属于 Retrieval Runtime，不属于浏览器。
+- `app/services/agent/routing.py` 的旧 default/agentic 自动复杂度分流已确认只被专属测试引用，不在当前生产链路中；Phase 68 将其与 `tests/test_agent_routing.py` 一并删除。
+- `scripts/reranker/evaluate_rag_reranker_ab.py` 的 `--include-phase51-cases` 曾懒加载已删除的 Phase51 LangGraph 性能评测；当前改为加载中性 `scripts/tool_calling_eval_cases.py`，旧 CLI 名仅作为别名。
+- 全仓 Ruff 当前仍有大量既有历史问题；Phase 68 只要求并完成本次新增/修改 Python 文件的定向 Ruff 清理。
+
 # Phase 67 增补：步骤持久化 E2E 与同步发现
 
 更新时间：2026-07-19

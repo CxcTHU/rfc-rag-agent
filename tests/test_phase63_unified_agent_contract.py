@@ -37,18 +37,18 @@ class CountingPhase63ToolPlanningProvider:
         return self.delegate.generate_with_tools(messages, tools)
 
 
-def test_agent_request_drops_retired_retrieval_controls() -> None:
-    assert "mode" not in AgentQueryRequest.model_fields
+def test_agent_request_exposes_only_the_production_mode() -> None:
+    assert AgentQueryRequest.model_fields["mode"].annotation is not None
     assert "top_k" not in AgentQueryRequest.model_fields
     assert "source_id" not in AgentQueryRequest.model_fields
 
     request = AgentQueryRequest(
         question="堆石混凝土",
-        mode="react_agent",
+        mode="tool_calling_agent",
         top_k=1,
         source_id="legacy-source",
     )
-    assert "mode" not in request.model_dump()
+    assert request.mode == "tool_calling_agent"
     assert "top_k" not in request.model_dump()
     assert "source_id" not in request.model_dump()
 
@@ -82,7 +82,7 @@ def test_retired_run_coordinator_flag_keeps_runtime_owned_tool_selection(tmp_pat
     assert result.latency_trace["executed_tool_call_count"] == 1
 
 
-def test_unified_agent_api_ignores_legacy_mode_and_top_k(tmp_path) -> None:
+def test_unified_agent_api_rejects_retired_mode_and_ignores_top_k(tmp_path) -> None:
     with make_test_client(tmp_path) as client:
         mode_response = client.post(
             "/agent/query",
@@ -93,9 +93,8 @@ def test_unified_agent_api_ignores_legacy_mode_and_top_k(tmp_path) -> None:
             json={"question": "What affects filling capacity?", "top_k": 1},
         )
 
-    assert mode_response.status_code == 200
+    assert mode_response.status_code == 422
     assert top_k_response.status_code == 200
-    assert mode_response.json()["mode"] == "tool_calling_agent"
 
 
 def test_tool_calling_agent_handles_uploaded_image_without_react_mode(tmp_path, monkeypatch) -> None:

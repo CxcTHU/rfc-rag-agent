@@ -1,5 +1,19 @@
 # 当前进度
 
+## 2026-07-20 Phase 68：最终代码清洗
+
+- 已完整阅读 `AGENT.MD`、`AGENTS.md`、README、`docs/progress.md`、`docs/architecture.md`、`docs/data_sources.md`、根计划/发现/进度/交接，并检查开工 Git 状态和最近五次提交。
+- 原工作区存在 Phase 67 未提交文件与输出；依据工作树规则，从最新 `origin/main` `0c0f042d` 建立隔离工作树和 `codex/phase-68-code-cleanup`，当前工作树干净。
+- 前端基线 `npm ci` 成功，Vitest 基线为 `8 files / 33 tests passed`；清洗前完整后端基线为 `1936 passed, 1 skipped`。
+- 已完成默认链路只读盘点：同步/流式入口都直接进入 `ToolCallingAgentService -> RunCoordinator -> ToolExecutor -> registry/adapters -> AgentToolbox`。
+- 已确认 `legacy_toolbox.py` 是当前 `AgentToolbox` 的真实实现来源且承载全部四个生产工具，本次保留；只迁移 `react_actions.py` 中仍被 Tool Calling 使用的图片意图 helper。
+- 已删除退休服务、两套图、旧 Agent memory/default executor、旧复杂度自动分流、专属测试/评测，以及 API/旧静态前端/生产 smoke/历史当前说明中的退休 mode 承诺。
+- 当前实现保留 `legacy_toolbox.py` 和四个生产工具；`tool_calling_eval_cases.py` / `tool_calling_eval_support.py` 替代旧 ReAct 对比评测依赖。
+- Fresh 本地验证进度：最终后端全量 `1736 passed, 1 warning`；前端 Vitest `33 passed`、oxlint 通过、build 通过、Playwright `10 passed`；聚焦默认链路/清洗包 `120 passed, 1 warning`；定向 Ruff 本次 Python 文件 `All checks passed`；`compileall` 通过；`git diff --check` 通过（仅 Windows autocrlf warning）；定向敏感扫描高风险命中为 0，禁止项只命中文档/测试中的边界说明。
+- 已修复收口过程中的 Chainlit 旧 mode fixture、旧 Stage34/evaluate_agent 专属测试、reranker Phase51 case 懒加载和 Windows build 空白问题；错误均记录在 `task_plan.md`。
+- 尚待：显式暂存/staged diff 复核、commit、push、PR、checks、merge。
+- 安全边界：不读取、不暂存、不输出 `.env`、密钥/token、provider raw response、raw answer、`reasoning_content`、完整 chunk、私有日志或 `output/` 产物。
+
 ## 2026-07-19 Phase 67 增补：步骤持久化 E2E 与四端同步
 
 - 用户要求建立小型 E2E 评测集，先验证“实时真实步骤在会话重载后不缩减”，通过后完成本地 Git、Obsidian、GitHub 和新 CPU 四端同步。

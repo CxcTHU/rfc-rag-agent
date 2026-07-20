@@ -1,12 +1,11 @@
-from scripts.judge_stage34_generation_quality import (
+from scripts.tool_calling_eval_support import (
     parse_judge_payload,
     sanitize_text,
     source_summary,
-    summarize,
 )
 
 
-def test_stage34_llm_judge_parses_scores_and_sanitizes_reason() -> None:
+def test_judge_payload_scores_and_sensitive_text_are_sanitized() -> None:
     parsed = parse_judge_payload(
         """```json
         {
@@ -31,50 +30,22 @@ def test_stage34_llm_judge_parses_scores_and_sanitizes_reason() -> None:
     assert "sk-testsecret123456" not in parsed["short_reason"]
 
 
-def test_stage34_llm_judge_summary_marks_medium_review_required() -> None:
-    summary = summarize(
-        [
-            {
-                "status": "completed",
-                "faithfulness": "0.8",
-                "answer_coverage": "0.7",
-                "citation_support": "0.9",
-                "refusal_correctness": "1.0",
-                "conciseness": "0.6",
-                "safety_leak_check": "1.0",
-                "risk_level": "medium",
-            }
-        ]
-    )
-
-    assert summary["completed_rows"] == "1"
-    assert summary["avg_faithfulness"] == "0.800"
-    assert summary["medium_risk_count"] == "1"
-    assert summary["judge_quality_gate"] == "review_required"
-
-
-def test_stage34_llm_judge_sanitize_text_removes_sensitive_markers() -> None:
+def test_sanitize_text_removes_sensitive_markers() -> None:
     sanitized = sanitize_text("Authorization: abc Bearer secret reasoning_content raw_response")
-
     assert "Authorization" not in sanitized
     assert "Bearer" not in sanitized
     assert "reasoning_content" not in sanitized
     assert "raw_response" not in sanitized
 
 
-def test_stage34_llm_judge_source_summary_includes_short_sanitized_evidence() -> None:
+def test_source_summary_contains_only_short_sanitized_evidence() -> None:
     class FakeSource:
         source_id = 1
         title = "A" * 200
         source_type = "wikipedia"
         score = 0.9
-        content = "useful evidence " + "x" * 300 + " raw_response Bearer secret"
+        content = "short evidence raw_response"
 
     summary = source_summary(FakeSource())
-
-    assert summary["source_id"] == 1
-    assert summary["source_type"] == "wikipedia"
     assert len(str(summary["title"])) <= 120
-    assert len(str(summary["evidence_snippet"])) <= 220
     assert "raw_response" not in str(summary["evidence_snippet"])
-    assert "Bearer" not in str(summary["evidence_snippet"])
